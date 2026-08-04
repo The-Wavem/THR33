@@ -1,0 +1,993 @@
+.container {
+  width: 100%;
+  background-color: var(--bg-concrete, #9BA3A9);
+  color: #000000;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  min-height: 100vh;
+  padding-bottom: 3rem;
+  position: relative;
+}
+
+.wrapper {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  padding-top: 1rem;
+}
+
+.toast {
+  position: fixed;
+  top: 5rem;
+  right: 1.5rem;
+  z-index: 100;
+  background-color: #F2E3B3;
+  color: #000000;
+  border: 2px solid #000000;
+  padding: 0.75rem 1.25rem;
+  box-shadow: 4px 4px 0px #000000;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* HERO SECTION */
+.heroSection {
+  max-width: 1400px;
+  margin: 0.5rem auto;
+  padding: 0 1rem;
+}
+
+.heroBox {
+  width: 100%;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  position: relative;
+  overflow: hidden;
+  height: 70vh;
+  min-height: 500px;
+  max-height: 760px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 8px 8px 0px #000000;
+}
+
+.slideImageWrapper {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.slideImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.7) contrast(1.15);
+}
+
+.slideVignette {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.7), transparent 50%, rgba(0,0,0,0.2));
+  pointer-events: none;
+}
+
+.heroTopTagBar {
+  position: relative;
+  z-index: 20;
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Space Mono', monospace;
+}
+
+.tagBadge {
+  background-color: #FFFFFF;
+  color: #000000;
+  padding: 0.25rem 0.875rem;
+  font-weight: 700;
+  font-size: 0.625rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  border: 1px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+}
+
+.subBadge {
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 1px solid #000000;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.625rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.heroContentBlock {
+  position: relative;
+  z-index: 20;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+
+.heroCard {
+  background-color: #FFFFFF;
+  color: #000000;
+  border: 2px solid #000000;
+  padding: 1.5rem;
+  box-shadow: 8px 8px 0px #000000;
+  max-width: 36rem;
+}
+
+.heroTitle {
+  font-family: 'Arial Black', sans-serif;
+  font-weight: 900;
+  font-size: 2.25rem;
+  line-height: 1;
+  text-transform: uppercase;
+  margin-bottom: 0.75rem;
+}
+
+.heroCaption {
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  color: rgba(0,0,0,0.8);
+  margin-bottom: 1.25rem;
+  text-transform: uppercase;
+}
+
+.heroButtons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.btnPrimary {
+  padding: 0.75rem 1.5rem;
+  background-color: #000000;
+  color: #FFFFFF;
+  font-weight: 900;
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  border: 1px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnPrimary:hover {
+  background-color: #F2E3B3;
+  color: #000000;
+}
+
+.btnSecondary {
+  padding: 0.75rem 1.25rem;
+  background-color: #FFFFFF;
+  color: #000000;
+  font-weight: 900;
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  border: 1px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnSecondary:hover {
+  background-color: #000000;
+  color: #FFFFFF;
+}
+
+.heroControls {
+  position: relative;
+  z-index: 20;
+  padding: 1rem 1.5rem;
+  background-color: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(4px);
+  border-top: 1px solid #000000;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.indicators {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.indicatorActive {
+  height: 0.5rem;
+  width: 2.5rem;
+  background-color: #000000;
+  border: 1px solid #000000;
+  cursor: pointer;
+}
+
+.indicatorInactive {
+  height: 0.5rem;
+  width: 0.75rem;
+  background-color: rgba(0,0,0,0.2);
+  border: 1px solid #000000;
+  cursor: pointer;
+}
+
+.arrows {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btnArrow {
+  padding: 0.5rem;
+  background-color: #FFFFFF;
+  color: #000000;
+  border: 1px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  cursor: pointer;
+}
+
+.btnArrow:hover {
+  background-color: #000000;
+  color: #FFFFFF;
+}
+
+/* LANÇAMENTOS GRID */
+.gridSection {
+  max-width: 1400px;
+  margin: 2.5rem auto;
+  padding: 0 1rem;
+}
+
+.sectionHeader {
+  width: 100%;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 6px 6px 0px #000000;
+  font-family: 'Space Mono', monospace;
+}
+
+.sectionHeaderLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.sectionHeaderLeft h2 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.5rem;
+  text-transform: uppercase;
+}
+
+.dotPulse {
+  width: 0.75rem;
+  height: 0.75rem;
+  border-radius: 50%;
+  background-color: #F2E3B3;
+  border: 1px solid #000000;
+}
+
+.productGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.5rem;
+}
+
+.productCard {
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  position: relative;
+  box-shadow: 6px 6px 0px #000000;
+  transition: all 0.2s ease-out;
+}
+
+.productCardHovered {
+  border-color: #F2E3B3;
+  box-shadow: 0 0 25px rgba(242, 227, 179, 0.85), 6px 6px 0px #000000;
+}
+
+.cardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  font-family: 'Space Mono', monospace;
+}
+
+.prodTag {
+  background-color: #000000;
+  color: #FFFFFF;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.btnWishlist {
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.starFilled {
+  fill: #F2E3B3;
+  color: #000000;
+}
+
+.imageFrame {
+  position: relative;
+  width: 100%;
+  height: 320px;
+  background-color: #F5F5F5;
+  border: 1px solid #000000;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  cursor: pointer;
+}
+
+.prodImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.7) contrast(1.15);
+  transition: transform 0.5s;
+}
+
+.imageFrame:hover .prodImage {
+  transform: scale(1.05);
+}
+
+.priceBadge {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  background-color: #F2E3B3;
+  color: #000000;
+  font-family: 'Arial Black', sans-serif;
+  font-weight: 900;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.75rem;
+  border: 1px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+}
+
+.sizeBar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(255, 255, 255, 0.95);
+  border-top: 2px solid #000000;
+  padding: 0.625rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  font-family: 'Space Mono', monospace;
+}
+
+.sizeLabel {
+  font-size: 0.5rem;
+  font-weight: 700;
+  color: rgba(0,0,0,0.6);
+}
+
+.sizeButtons {
+  display: flex;
+  gap: 0.375rem;
+  width: 100%;
+}
+
+.sizeBtn {
+  flex: 1;
+  padding: 0.25rem 0;
+  font-size: 0.625rem;
+  font-weight: 700;
+  background-color: #FFFFFF;
+  border: 1px solid rgba(0,0,0,0.4);
+  cursor: pointer;
+}
+
+.sizeBtnActive {
+  flex: 1;
+  padding: 0.25rem 0;
+  font-size: 0.625rem;
+  font-weight: 900;
+  background-color: #F2E3B3;
+  border: 1px solid #000000;
+  box-shadow: 1px 1px 0px #000000;
+  cursor: pointer;
+}
+
+.cardDetails {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  flex: 1;
+  font-family: 'Space Mono', monospace;
+}
+
+.prodTitle {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.125rem;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+
+.prodSub {
+  font-size: 0.5625rem;
+  color: rgba(0,0,0,0.6);
+  margin-bottom: 0.75rem;
+}
+
+.btnBuy {
+  width: 100%;
+  padding: 0.75rem 0;
+  background-color: #000000;
+  color: #FFFFFF;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  border: 1px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnBuyHovered {
+  width: 100%;
+  padding: 0.75rem 0;
+  background-color: #F2E3B3;
+  color: #000000;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  border: 1px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+/* BENTO SECTION */
+.bentoSection {
+  max-width: 1400px;
+  margin: 2.5rem auto;
+  padding: 0 1rem;
+}
+
+.bentoHeader {
+  border-bottom: 2px solid #000000;
+  padding-bottom: 1rem;
+  margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-family: 'Space Mono', monospace;
+}
+
+.bentoPreTitle {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: rgba(0,0,0,0.7);
+  display: block;
+  margin-bottom: 0.25rem;
+}
+
+.bentoHeader h2 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 2.5rem;
+  text-transform: uppercase;
+}
+
+.bentoBadge {
+  background-color: #000000;
+  color: #FFFFFF;
+  padding: 0.375rem 0.875rem;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+}
+
+.greenPulse {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background-color: #F2E3B3;
+}
+
+.bentoGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 2rem;
+}
+
+.manifestoCard {
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 2px solid #000000;
+  padding: 3rem 2.5rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: 6px 6px 0px #000000;
+  font-family: 'Space Mono', monospace;
+  min-height: 520px;
+}
+
+.manifestoTag {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  margin-bottom: 1.5rem;
+}
+
+.amberDot {
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 50%;
+  background-color: #F2E3B3;
+}
+
+.manifestoTag span {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #F2E3B3;
+  text-transform: uppercase;
+}
+
+.manifestoTitle {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 4rem;
+  line-height: 1;
+  text-transform: uppercase;
+  margin-bottom: 1.5rem;
+}
+
+.manifestoSub {
+  font-size: 1.125rem;
+  font-weight: 700;
+  border-left: 2px solid #F2E3B3;
+  padding-left: 1rem;
+  margin-bottom: 1.5rem;
+  text-transform: uppercase;
+}
+
+.manifestoBody {
+  font-size: 0.875rem;
+  color: #E0E0E0;
+  line-height: 1.6;
+  text-transform: uppercase;
+}
+
+.manifestoFooter {
+  border-top: 1px solid rgba(255,255,255,0.2);
+  padding-top: 1.5rem;
+  margin-top: 2.5rem;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6875rem;
+  color: #A0A0A0;
+  font-weight: 700;
+}
+
+.lifestyleCard {
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  padding: 0.75rem;
+  box-shadow: 6px 6px 0px #000000;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 520px;
+}
+
+.lifestyleFrame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 460px;
+  background-color: #1A1A1A;
+  border: 1px solid #000000;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.lifestyleImage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.6) contrast(1.25);
+  transition: transform 0.7s;
+}
+
+.lifestyleFrame:hover .lifestyleImage {
+  transform: scale(1.05);
+}
+
+.lifestyleTopTag {
+  position: relative;
+  z-index: 10;
+  margin: 1rem;
+  align-self: flex-end;
+  background-color: #F2E3B3;
+  color: #000000;
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 0.375rem 1rem;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+}
+
+.lifestyleBottomLabel {
+  position: relative;
+  z-index: 10;
+  margin: 1.5rem;
+  align-self: flex-start;
+  background-color: #FFFFFF;
+  color: #000000;
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 0.5rem 1rem;
+  border: 2px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.blackDot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background-color: #000000;
+}
+
+/* ARCHIVE & NEWSLETTER */
+.archiveRow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+.archiveCard {
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  padding: 1.5rem;
+  box-shadow: 6px 6px 0px #000000;
+  font-family: 'Space Mono', monospace;
+}
+
+.archiveHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+}
+
+.archTag {
+  background-color: #000000;
+  color: #FFFFFF;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.5625rem;
+  font-weight: 700;
+}
+
+.archSub {
+  font-size: 0.5625rem;
+  color: rgba(0,0,0,0.6);
+  font-weight: 700;
+}
+
+.archiveFrame {
+  position: relative;
+  width: 100%;
+  height: 180px;
+  background-color: #F5F5F5;
+  border: 1px solid #000000;
+  overflow: hidden;
+  margin-bottom: 1rem;
+}
+
+.archImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(0.6) contrast(1.2);
+}
+
+.archOverlay {
+  position: absolute;
+  inset: 0;
+  background-color: rgba(0,0,0,0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem;
+}
+
+.archBadge {
+  background-color: #F2E3B3;
+  color: #000000;
+  border: 2px solid #000000;
+  padding: 0.5rem 0.75rem;
+  transform: rotate(-6deg);
+  box-shadow: 3px 3px 0px #000000;
+  text-align: center;
+}
+
+.archBadgeTitle {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+  display: block;
+}
+
+.archBadgeSub {
+  font-size: 0.5rem;
+  display: block;
+}
+
+.archSubText {
+  font-size: 0.5625rem;
+  color: rgba(0,0,0,0.6);
+  margin-bottom: 0.75rem;
+}
+
+.btnRestock {
+  width: 100%;
+  padding: 0.625rem 0;
+  border: 1px solid #000000;
+  background-color: #FFFFFF;
+  color: #000000;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.625rem;
+  font-weight: 700;
+  box-shadow: 2px 2px 0px #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  cursor: pointer;
+}
+
+.btnRestock:hover {
+  background-color: #F2E3B3;
+}
+
+.newsletterCard {
+  grid-column: span 2;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  padding: 2rem;
+  box-shadow: 6px 6px 0px #000000;
+  font-family: 'Space Mono', monospace;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+
+.newsTag {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.newsletterCard h3 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.newsletterCard p {
+  font-size: 0.75rem;
+  color: rgba(0,0,0,0.7);
+  margin-bottom: 1rem;
+}
+
+.newsForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.newsForm input {
+  width: 100%;
+  background-color: #FAFAFA;
+  border: 1px solid #000000;
+  padding: 0.75rem 1rem;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  outline: none;
+}
+
+.btnNews {
+  width: 100%;
+  padding: 0.875rem 0;
+  background-color: #000000;
+  color: #FFFFFF;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.875rem;
+  text-transform: uppercase;
+  border: 1px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnNews:hover {
+  background-color: #F2E3B3;
+  color: #000000;
+}
+
+.newsSuccess {
+  background-color: #F2E3B3;
+  color: #000000;
+  font-size: 0.625rem;
+  font-weight: 700;
+  padding: 0.75rem;
+  border: 1px solid #000000;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* MODAL OVERLAY */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background-color: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.modalBox {
+  width: 100%;
+  max-width: 32rem;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  padding: 2rem;
+  position: relative;
+  box-shadow: 12px 12px 0px #000000;
+  font-family: 'Space Mono', monospace;
+  color: #000000;
+}
+
+.btnClose {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  padding: 0.375rem;
+  border: 1px solid #000000;
+  background-color: #FFFFFF;
+  cursor: pointer;
+}
+
+.btnClose:hover {
+  background-color: #000000;
+  color: #FFFFFF;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.modalBox h3 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.875rem;
+  margin-bottom: 0.5rem;
+}
+
+.modalText {
+  font-size: 0.75rem;
+  color: rgba(0,0,0,0.7);
+  margin-bottom: 1.5rem;
+}
+
+.btnValidate {
+  width: 100%;
+  padding: 1rem 0;
+  background-color: #000000;
+  color: #FFFFFF;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.875rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  border: 2px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.btnValidate:hover {
+  background-color: #F2E3B3;
+  color: #000000;
+}
+
+.modalSuccess {
+  background-color: #F2E3B3;
+  color: #000000;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 1rem;
+  border: 2px solid #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+@media (max-width: 900px) {
+  .newsletterCard {
+    grid-column: span 1;
+  }
+
+  .heroTitle {
+    font-size: 1.75rem;
+  }
+
+  .manifestoTitle {
+    font-size: 2.5rem;
+  }
+}

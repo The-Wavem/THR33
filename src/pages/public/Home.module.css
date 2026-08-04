@@ -7,79 +7,20 @@
 
 .mainContent {
   flex: 1;
+  width: 100%;
+}
+
+.showcaseSection {
   padding: 40px 32px;
   max-width: 1400px;
   margin: 0 auto;
   width: 100%;
 }
 
-.heroBanner {
-  background-color: var(--bg-white);
-  border: 1px solid var(--border-black);
-  padding: 48px 36px;
-  box-shadow: 8px 8px 0px rgba(0, 0, 0, 0.9);
-  margin-bottom: 40px;
-  position: relative;
-  overflow: hidden;
-}
-
-.heroBadge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: var(--text-black);
-  color: var(--bg-white);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  padding: 6px 12px;
-  letter-spacing: 1.5px;
-  margin-bottom: 16px;
-}
-
-.heroTitle {
-  font-size: clamp(32px, 6vw, 64px);
-  font-weight: 700;
-  letter-spacing: -1px;
-  line-height: 1;
-  text-transform: uppercase;
-  margin-bottom: 16px;
-}
-
-.heroDescription {
-  font-family: var(--font-mono);
-  font-size: 14px;
-  line-height: 1.6;
-  max-width: 600px;
-  color: #333;
-  margin-bottom: 24px;
-}
-
-.actionBtn {
-  background: var(--text-black);
-  color: var(--bg-white);
-  border: 1px solid var(--border-black);
-  padding: 14px 28px;
-  font-family: var(--font-mono);
-  font-weight: 700;
-  font-size: 13px;
-  letter-spacing: 1.5px;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  box-shadow: 4px 4px 0px var(--accent-amber);
-}
-
-.actionBtn:hover {
-  background: var(--accent-amber);
-  color: var(--text-black);
-  box-shadow: 4px 4px 0px var(--border-black);
-}
-
 .gridSection {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: 24px;
-  margin-bottom: 40px;
 }
 
 .card {
@@ -128,11 +69,7 @@
 }
 
 @media (max-width: 768px) {
-  .mainContent {
+  .showcaseSection {
     padding: 20px 16px;
-  }
-  
-  .heroBanner {
-    padding: 28px 20px;
   }
 }
