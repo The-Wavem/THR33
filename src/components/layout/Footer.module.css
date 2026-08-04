@@ -1,0 +1,52 @@
+.footerContainer {
+  width: 100%;
+  background-color: var(--bg-white);
+  border-top: 1px solid var(--border-black);
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-black);
+  z-index: 100;
+}
+
+.copyrightText {
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+}
+
+.antiBotBadge {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background-color: var(--bg-white);
+  border: 1px solid var(--border-black);
+  padding: 6px 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  font-size: 10px;
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.8);
+  text-transform: uppercase;
+}
+
+.shieldDot {
+  width: 6px;
+  height: 6px;
+  background-color: #10B981;
+  border-radius: 50%;
+  display: inline-block;
+  box-shadow: 0 0 6px #10B981;
+}
+
+@media (max-width: 768px) {
+  .footerContainer {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 16px 20px;
+    gap: 12px;
+  }
+}

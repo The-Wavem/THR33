@@ -1,0 +1,340 @@
+.navbarContainer {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  width: 100%;
+  background-color: var(--bg-white);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* Top Marquee Ticker (Line 1) */
+.topTicker {
+  width: 100%;
+  background-color: var(--bg-white);
+  border-bottom: 1px solid var(--border-black);
+  overflow: hidden;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  user-select: none;
+}
+
+.tickerTrack {
+  display: flex;
+  white-space: nowrap;
+  animation: marquee 24s linear infinite;
+  will-change: transform;
+}
+
+.topTicker:hover .tickerTrack {
+  animation-play-state: paused;
+}
+
+.tickerItem {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-black);
+  padding-right: 48px;
+  text-transform: uppercase;
+}
+
+@keyframes marquee {
+  0% {
+    transform: translateX(0%);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+/* Main Bar (Line 2) */
+.mainBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 32px;
+  height: 64px;
+  background-color: var(--bg-white);
+  border-bottom: 1px solid var(--border-black);
+  position: relative;
+}
+
+/* Left Section: Navigation Links */
+.leftSection {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  flex: 1;
+}
+
+.navLink {
+  font-family: var(--font-main);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  color: var(--text-black);
+  text-decoration: none;
+  text-transform: uppercase;
+  position: relative;
+  padding: 4px 0;
+  transition: opacity 0.2s ease;
+}
+
+.navLink:hover {
+  opacity: 0.7;
+}
+
+.activeLink {
+  font-weight: 700;
+}
+
+.activeLink::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: var(--border-black);
+}
+
+/* Center Section: Piano Black Oval Emblem */
+.centerSection {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.brandEmblem {
+  background-color: var(--text-black);
+  color: var(--bg-white);
+  padding: 6px 22px;
+  border-radius: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  border: 1px solid var(--border-black);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.brandEmblem:hover {
+  transform: scale(1.04);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.emblemText {
+  font-family: var(--font-main);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 3px;
+  color: var(--bg-white);
+}
+
+/* Right Section: Actions */
+.rightSection {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+  justify-content: flex-end;
+}
+
+.iconBtn {
+  background: transparent;
+  border: 1px solid transparent;
+  padding: 6px 10px;
+  font-size: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.iconBtn:hover {
+  border-color: var(--border-black);
+  background-color: #F5F5F5;
+}
+
+.userBadge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-black);
+  background: #F0F0F0;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-black);
+}
+
+.userDot {
+  color: #10B981; /* Active online dot */
+  font-size: 10px;
+}
+
+.cartBtn {
+  background-color: var(--text-black);
+  color: var(--bg-white);
+  border: 1px solid var(--border-black);
+  padding: 8px 16px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease, transform 0.1s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.cartBtn:hover {
+  background-color: var(--accent-amber);
+  color: var(--text-black);
+}
+
+/* User Dropdown Menu */
+.userMenuWrapper {
+  position: relative;
+}
+
+.dropdownMenu {
+  position: absolute;
+  top: calc(100% + 12px);
+  right: 0;
+  width: 230px;
+  background-color: var(--bg-white);
+  border: 1px solid var(--border-black);
+  box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.9);
+  padding: 16px;
+  z-index: 2000;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: dropIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes dropIn {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dropdownHeader {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-black);
+  text-transform: uppercase;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border-black);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dropdownBtn {
+  width: 100%;
+  background: var(--bg-white);
+  border: 1px solid var(--border-black);
+  padding: 10px 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  text-align: left;
+  letter-spacing: 0.8px;
+  color: var(--text-black);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dropdownBtn:hover {
+  background-color: var(--text-black);
+  color: var(--bg-white);
+}
+
+.logoutBtn {
+  margin-top: 4px;
+  background-color: #FEF2F2;
+  color: #DC2626;
+  border: 1px solid #DC2626;
+}
+
+.logoutBtn:hover {
+  background-color: #DC2626;
+  color: #FFFFFF;
+}
+
+.demoToggle {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: #666;
+  background: #eee;
+  border: none;
+  padding: 2px 6px;
+  cursor: pointer;
+  border-radius: 2px;
+}
+
+.demoToggle:hover {
+  background: #ddd;
+}
+
+/* Mobile Responsiveness */
+.mobileMenuBtn {
+  display: none;
+  background: transparent;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .leftSection {
+    display: none;
+  }
+
+  .leftSection.mobileOpen {
+    display: flex;
+    flex-direction: column;
+    position: absolute;
+    top: 64px;
+    left: 0;
+    width: 100%;
+    background: var(--bg-white);
+    border-bottom: 1px solid var(--border-black);
+    padding: 20px;
+    gap: 16px;
+    align-items: flex-start;
+  }
+
+  .mobileMenuBtn {
+    display: block;
+  }
+
+  .centerSection {
+    position: static;
+    transform: none;
+  }
+}
