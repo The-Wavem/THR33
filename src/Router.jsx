@@ -3,7 +3,6 @@ import { Routes, Route } from 'react-router-dom';
 import { PublicLayout } from './layouts/PublicLayout';
 import { PrivateLayout } from './layouts/PrivateLayout';
 
-// Páginas
 import { Home } from './pages/public/Home';
 import { Catalogo } from './pages/public/Catalogo';
 import { ProdutoDetalhe } from './pages/public/ProdutoDetalhe';
@@ -18,7 +17,6 @@ export function AppRoutes({
 }) {
   return (
     <Routes>
-      {/* 1. ROTAS PÚBLICAS (HERDAM NAVBAR E FOOTER VIA PUBLICLAYOUT) */}
       <Route 
         element={
           <PublicLayout 
@@ -31,15 +29,15 @@ export function AppRoutes({
         }
       >
         <Route path="/" element={<Home onAddToCart={onAddToCart} />} />
+        
+        {/* ROTA PRINCIPAL E ROTA DINÂMICA DE CATEGORIA */}
         <Route path="/catalogo" element={<Catalogo onAddToCart={onAddToCart} />} />
-        <Route path="/lancamentos" element={<Catalogo defaultCategory="t-shirts" onAddToCart={onAddToCart} />} />
-        <Route path="/t-shirts" element={<Catalogo defaultCategory="t-shirts" onAddToCart={onAddToCart} />} />
-        <Route path="/calcas" element={<Catalogo defaultCategory="calcas" onAddToCart={onAddToCart} />} />
-        <Route path="/drops-passados" element={<Catalogo defaultCategory="drops-passados" onAddToCart={onAddToCart} />} />
+        <Route path="/categoria/:categorySlug" element={<Catalogo onAddToCart={onAddToCart} />} />
+        
+        {/* ROTA DINÂMICA DE PRODUTO */}
         <Route path="/produto/:slug" element={<ProdutoDetalhe onAddToCart={onAddToCart} />} />
       </Route>
 
-      {/* 2. ROTAS PRIVADAS (HERDAM VALIDACAO E ESTRUTURA PRIVADA) */}
       <Route 
         element={
           <PrivateLayout 

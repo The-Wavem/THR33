@@ -1,30 +1,50 @@
-import React, { useState, useMemo } from 'react';
-import { productsData } from '../../data/productsData';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { catalogService } from '../../services/catalogService';
 import { ProductCard } from '../../components/catalog/ProductCard';
 import { FilterSidebar } from '../../components/catalog/FilterSidebar';
 import styles from './Catalogo.module.css';
 
-export function Catalogo({ defaultCategory = null, onAddToCart }) {
-  const [selectedCategories, setSelectedCategories] = useState(
-    defaultCategory ? [defaultCategory] : []
-  );
+export function Catalogo({ onAddToCart }) {
+  const { categorySlug } = useParams();
+  const navigate = useNavigate();
+
+  // Buscar meta-dados dinâmicos do banco/serviço
+  const metadata = useMemo(() => catalogService.getDynamicMetadata(), []);
+
+  const [selectedCategories, setSelectedCategories] = useState([]);
   const [selectedFits, setSelectedFits] = useState([]);
-  const [maxPrice, setMaxPrice] = useState(500);
+  const [maxPrice, setMaxPrice] = useState(metadata.maxPrice);
   const [selectedSize, setSelectedSize] = useState(null);
   const [sortBy, setSortBy] = useState('destaques');
   const [wishlist, setWishlist] = useState([]);
 
-  // TOGGLE FILTERS
-  const handleCategoryChange = (catId) => {
-    setSelectedCategories(prev => 
-      prev.includes(catId) ? prev.filter(c => c !== catId) : [...prev, catId]
-    );
+  // Sincronizar parâmetro da URL com o estado de categorias
+  useEffect(() => {
+    if (categorySlug && categorySlug !== 'todos') {
+      setSelectedCategories([categorySlug.toLowerCase()]);
+    } else {
+      setSelectedCategories([]);
+    }
+  }, [categorySlug]);
+
+  const allProducts = useMemo(() => catalogService.getAllProducts(), []);
+
+  // TOGGLES
+  const handleCategoryChange = (catSlug) => {
+    setSelectedCategories(prev => {
+      const next = prev.includes(catSlug) ? prev.filter(c => c !== catSlug) : [...prev, catSlug];
+      if (next.length === 1) {
+        navigate(`/categoria/${next[0]}`);
+      } else {
+        navigate('/catalogo');
+      }
+      return next;
+    });
   };
 
   const handleFitChange = (fit) => {
-    setSelectedFits(prev => 
-      prev.includes(fit) ? prev.filter(f => f !== fit) : [...prev, fit]
-    );
+    setSelectedFits(prev => prev.includes(fit) ? prev.filter(f => f !== fit) : [...prev, fit]);
   };
 
   const handleSizeChange = (sz) => {
@@ -32,50 +52,49 @@ export function Catalogo({ defaultCategory = null, onAddToCart }) {
   };
 
   const handleToggleWishlist = (id) => {
-    setWishlist(prev => 
-      prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]
-    );
+    setWishlist(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
   };
 
   const handleResetFilters = () => {
     setSelectedCategories([]);
     setSelectedFits([]);
-    setMaxPrice(500);
+    setMaxPrice(metadata.maxPrice);
     setSelectedSize(null);
+    navigate('/catalogo');
   };
 
-  // FILTER & SORT ENGINE
+  // MOTOR DE FILTRAGEM DINÂMICO
   const filteredProducts = useMemo(() => {
-    return productsData.filter(item => {
-      // Category Filter
-      if (selectedCategories.length > 0) {
-        if (!selectedCategories.includes(item.category)) return false;
+    return allProducts.filter(item => {
+      if (selectedCategories.length > 0 && !selectedCategories.includes(item.category.toLowerCase())) {
+        return false;
       }
-      // Fit Filter
-      if (selectedFits.length > 0) {
-        if (!selectedFits.includes(item.fit)) return false;
+      if (selectedFits.length > 0 && !selectedFits.includes(item.fit)) {
+        return false;
       }
-      // Price Filter
-      if (item.priceNum > maxPrice) return false;
-      // Size Filter
-      if (selectedSize) {
-        if (!item.sizes.includes(selectedSize)) return false;
+      if (item.priceNum > maxPrice) {
+        return false;
+      }
+      if (selectedSize && !item.sizes.includes(selectedSize)) {
+        return false;
       }
       return true;
     }).sort((a, b) => {
       if (sortBy === 'menor-preco') return a.priceNum - b.priceNum;
       if (sortBy === 'maior-preco') return b.priceNum - a.priceNum;
-      return 0; // Destaques / Padrão
+      return 0;
     });
-  }, [selectedCategories, selectedFits, maxPrice, selectedSize, sortBy]);
+  }, [allProducts, selectedCategories, selectedFits, maxPrice, selectedSize, sortBy]);
 
   return (
     <div className={styles.catalogPage}>
       <div className={styles.container}>
-        {/* BREADCRUMB & SORT BAR */}
+        
+        {/* BREADCRUMB DINÂMICO */}
         <div className={styles.topControlBar}>
           <div className={styles.breadcrumb}>
-            HOME / CATÁLOGO / <strong>[{filteredProducts.length} PEÇAS ENCONTRADAS]</strong>
+            HOME / {categorySlug ? categorySlug.toUpperCase() : 'CATÁLOGO GERAL'} / 
+            <strong> [{filteredProducts.length} PEÇAS ENCONTRADAS]</strong>
           </div>
 
           <div className={styles.sortWrapper}>
@@ -92,10 +111,17 @@ export function Catalogo({ defaultCategory = null, onAddToCart }) {
           </div>
         </div>
 
-        {/* MAIN LAYOUT: SIDEBAR + GRID */}
+        {/* MAIN LAYOUT */}
         <div className={styles.mainGrid}>
           <div className={styles.sidebarCol}>
             <FilterSidebar 
+              availableFilters={{
+                categories: metadata.categories,
+                fits: metadata.fits,
+                sizes: metadata.sizes,
+                minPrice: metadata.minPrice,
+                maxPriceLimit: metadata.maxPrice
+              }}
               selectedCategories={selectedCategories}
               onCategoryChange={handleCategoryChange}
               selectedFits={selectedFits}
@@ -124,7 +150,7 @@ export function Catalogo({ defaultCategory = null, onAddToCart }) {
             ) : (
               <div className={styles.emptyState}>
                 <h3>NENHUMA PEÇA ENCONTRADA COM ESSES FILTROS</h3>
-                <p>Tente redefinir a faixa de preço ou limpar as categorias selecionadas.</p>
+                <p>O catálogo ajustou dinamicamente as opções para o estoque ativo.</p>
                 <button onClick={handleResetFilters} className={styles.btnResetState}>
                   LIMPAR FILTROS
                 </button>
@@ -132,6 +158,7 @@ export function Catalogo({ defaultCategory = null, onAddToCart }) {
             )}
           </div>
         </div>
+
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import {
   Package,
   Settings,
 } from "lucide-react";
+import { catalogService } from "../../services/catalogService";
 import styles from "./Navbar.module.css";
 
 export function Navbar({
@@ -22,6 +23,10 @@ export function Navbar({
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const navigate = useNavigate();
+
+  // Busca categorias ativas diretamente do serviço
+  const metadata = catalogService.getDynamicMetadata();
+  const activeCategories = metadata.categories;
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -52,36 +57,24 @@ export function Navbar({
       <div className={styles.mainNav}>
         {/* LEFT: NAVIGATION LINKS */}
         <nav className={styles.leftNav}>
-          <NavLink
-            to="/"
-            className={({ isActive }) =>
-              isActive
-                ? `${styles.navItem} ${styles.activeNavItem}`
-                : styles.navItem
-            }
+          <NavLink 
+            to="/catalogo" 
+            className={({ isActive }) => isActive ? `${styles.navItem} ${styles.activeNavItem}` : styles.navItem}
+            end
           >
-            LANÇAMENTOS
+            TODOS
           </NavLink>
-          <NavLink
-            to="/catalogo"
-            className={({ isActive }) =>
-              isActive
-                ? `${styles.navItem} ${styles.activeNavItem}`
-                : styles.navItem
-            }
-          >
-            CATÁLOGO
-          </NavLink>
-          <NavLink
-            to="/drops-passados"
-            className={({ isActive }) =>
-              isActive
-                ? `${styles.navItem} ${styles.activeNavItem}`
-                : styles.navItem
-            }
-          >
-            DROPS PASSADOS
-          </NavLink>
+
+          {/* DYNAMIC CATEGORY LINKS */}
+          {activeCategories.map((cat) => (
+            <NavLink 
+              key={cat.slug}
+              to={`/categoria/${cat.slug}`}
+              className={({ isActive }) => isActive ? `${styles.navItem} ${styles.activeNavItem}` : styles.navItem}
+            >
+              {cat.label}
+            </NavLink>
+          ))}
         </nav>
 
         {/* CENTER: THR33 CAPSULE LOGO */}
@@ -130,7 +123,7 @@ export function Navbar({
                     <button
                       onClick={() => {
                         setIsUserMenuOpen(false);
-                        navigate("/pedidos");
+                        navigate("/meus-pedidos");
                       }}
                       className={styles.dropdownLink}
                     >
