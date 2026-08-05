@@ -1,9 +1,10 @@
 export const currentDropConfig = {
   id: 'drop-cactus-01',
-  title: 'UTOPIA PROCESS // CACTUS STREETS',
-  subTitle: 'DROP 01 ★ HEAVYWEIGHT BASS & CONCRETE',
+  title: 'UTOPIA PROCESS',
+  subTitle: 'DROP 01 ★ CACTUS STREETS',
   releaseDate: '2026-08-20T00:00:00',
   coordinates: 'SP // BECO 03 ★ 23°33\'01"S',
+  teaserGifUrl: 'https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmxudmoyMjZzcGMwbzVuMWt6YWg5OXRzZDdiMHh3bjdtejhmZ2F5bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/p6wEQfSvYLuhxGnN2e/giphy.gif',
   theme: {
     bgPrimary: '#121110',
     bgCard: '#1A1816',

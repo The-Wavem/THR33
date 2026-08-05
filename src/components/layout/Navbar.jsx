@@ -14,16 +14,17 @@ import {
   Layers
 } from 'lucide-react';
 import { catalogService } from '../../services/catalogService';
+import { currentDropConfig } from '../../data/dropConfig';
 import styles from './Navbar.module.css';
 
 export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthModal }) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [isCatalogMenuOpen, setIsCatalogMenuOpen] = useState(false);
+  const [isLancamentosMenuOpen, setIsLancamentosMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
 
-  // Buscar categorias dinâmicas do serviço
   const metadata = catalogService.getDynamicMetadata();
   const activeCategories = metadata.categories || [];
 
@@ -53,17 +54,56 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
         {/* LEFT: FIXED NAVIGATION LINKS */}
         <nav className={styles.leftNav}>
           
-          {/* LINK: LANÇAMENTOS */}
-          <NavLink 
-            to="/lancamentos" 
-            className={({ isActive }) => isActive ? `${styles.navItem} ${styles.activeNavItem}` : styles.navItem}
+          {/* LINK: LANÇAMENTOS COM FLYOUT DE GIF PURO */}
+          <div 
+            className={styles.navHoverWrapper}
+            onMouseEnter={() => setIsLancamentosMenuOpen(true)}
+            onMouseLeave={() => setIsLancamentosMenuOpen(false)}
           >
-            LANÇAMENTOS
-          </NavLink>
+            <NavLink 
+              to="/lancamentos" 
+              className={({ isActive }) => 
+                isActive 
+                  ? `${styles.navItem} ${styles.activeNavItem}` 
+                  : isLancamentosMenuOpen 
+                    ? `${styles.navItem} ${styles.openMenuNavItem}` 
+                    : styles.navItem
+              }
+            >
+              <span>LANÇAMENTOS</span>
+              <span className={styles.dropLivePulse} />
+            </NavLink>
+
+            {/* FLYOUT COMPACTO: APENAS A MOLDURA DO GIF */}
+            <AnimatePresence>
+              {isLancamentosMenuOpen && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 6, scale: 0.96 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  className={styles.pureGifFlyout}
+                >
+                  <Link 
+                    to="/lancamentos" 
+                    onClick={() => setIsLancamentosMenuOpen(false)} 
+                    className={styles.gifLinkFrame}
+                    title="Acessar Lançamentos"
+                  >
+                    <img 
+                      src={currentDropConfig.teaserGifUrl || currentDropConfig.manifestoImage || currentDropConfig.heroImage} 
+                      alt="Preview do Drop" 
+                      className={styles.gifMediaElement}
+                    />
+                  </Link>
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
 
           {/* LINK: CATÁLOGO COM DROPDOWN NO HOVER */}
           <div 
-            className={styles.catalogHoverWrapper}
+            className={styles.navHoverWrapper}
             onMouseEnter={() => setIsCatalogMenuOpen(true)}
             onMouseLeave={() => setIsCatalogMenuOpen(false)}
           >
@@ -85,14 +125,14 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
               />
             </NavLink>
 
-            {/* MEGA-MENU DROPDOWN ANIMADO */}
+            {/* MEGA-MENU DROPDOWN ANIMADO DO CATÁLOGO */}
             <AnimatePresence>
               {isCatalogMenuOpen && (
                 <motion.div 
-                  initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 6, scale: 0.98 }}
-                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  exit={{ opacity: 0, y: 8, scale: 0.98 }}
+                  transition={{ duration: 0.18, ease: 'easeOut' }}
                   className={styles.catalogDropdown}
                 >
                   <div className={styles.dropdownHeaderBox}>
@@ -101,13 +141,12 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
                       <strong>MOSTRUÁRIO R.U.A</strong>
                     </div>
                     <span className={styles.activeBadge}>
-                      ● {metadata.categories.reduce((acc, c) => acc + c.count, 0)} PEÇAS ATIVAS
+                      ● {activeCategories.reduce((acc, c) => acc + c.count, 0)} PEÇAS ATIVAS
                     </span>
                   </div>
 
                   <div className={styles.dropdownDivider} />
 
-                  {/* BOTAO PARA O CATALOGO COMPLETO */}
                   <Link 
                     to="/catalogo" 
                     onClick={() => setIsCatalogMenuOpen(false)} 
@@ -117,7 +156,6 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
                     <ArrowRight size={14} />
                   </Link>
 
-                  {/* LISTA DINÂMICA DE CATEGORIAS */}
                   {activeCategories.length > 0 && (
                     <div className={styles.categoryGrid}>
                       <span className={styles.categorySectionLabel}>CATEGORIAS EM ESTOQUE:</span>
@@ -157,8 +195,6 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
 
         {/* RIGHT: ACTION ICONS & CART */}
         <div className={styles.rightActions}>
-          
-          {/* SEARCH BUTTON */}
           <button 
             onClick={() => setIsSearchOpen(!isSearchOpen)} 
             className={styles.iconBox}
@@ -167,7 +203,6 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
             <Search size={16} />
           </button>
 
-          {/* USER PROFILE BUTTON */}
           <div className={styles.userWrapper}>
             <button 
               onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} 
@@ -178,7 +213,6 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
               {user && <span className={styles.activeUserDot} />}
             </button>
 
-            {/* USER DROPDOWN MENU */}
             {isUserMenuOpen && (
               <div className={styles.userDropdown}>
                 {user ? (
@@ -218,7 +252,6 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
             )}
           </div>
 
-          {/* CART BUTTON */}
           <button onClick={onOpenCart} className={styles.cartBox}>
             <ShoppingBag size={14} />
             <span>CARRINHO ({String(cartCount).padStart(2, '0')})</span>
