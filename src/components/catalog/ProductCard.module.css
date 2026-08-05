@@ -1,0 +1,205 @@
+.card {
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 6px 6px 0px #000000;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  font-family: 'Space Mono', monospace;
+  position: relative;
+}
+
+.cardHovered {
+  border-color: #F2E3B3;
+  box-shadow: 0 0 20px rgba(242, 227, 179, 0.8), 6px 6px 0px #000000;
+  transform: translateY(-2px);
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.tagStandard {
+  background-color: #000000;
+  color: #FFFFFF;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  letter-spacing: 0.1em;
+}
+
+.tagArchived {
+  background-color: #F2E3B3;
+  color: #000000;
+  font-size: 0.5625rem;
+  font-weight: 900;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid #000000;
+}
+
+.wishlistBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.starInactive { color: #000000; }
+.starActive { fill: #F2E3B3; color: #000000; }
+
+.imageContainer {
+  position: relative;
+  width: 100%;
+  height: 280px;
+  background-color: #F0F0F0;
+  border: 1px solid #000000;
+  overflow: hidden;
+  margin-bottom: 0.875rem;
+}
+
+/* FOTOS COLORIDAS REAIS SEM FILTRO P&B */
+.productImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.3s ease;
+}
+
+.cardHovered .productImage {
+  transform: scale(1.04);
+}
+
+.fitBadge {
+  position: absolute;
+  bottom: 0.5rem;
+  left: 0.5rem;
+  background-color: #000000;
+  color: #FFFFFF;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  padding: 0.15rem 0.4rem;
+}
+
+.sizeOverlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: rgba(255, 255, 255, 0.95);
+  border-top: 2px solid #000000;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sizeTitle { font-size: 0.5rem; font-weight: 700; color: #666; }
+.sizeList { display: flex; gap: 0.375rem; }
+
+.sizeBtn {
+  flex: 1;
+  padding: 0.2rem 0;
+  font-size: 0.625rem;
+  background: #FFF;
+  border: 1px solid #000;
+  cursor: pointer;
+}
+
+.sizeActive {
+  flex: 1;
+  padding: 0.2rem 0;
+  font-size: 0.625rem;
+  background: #F2E3B3;
+  border: 1px solid #000;
+  font-weight: 900;
+}
+
+.cardContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.fabricText {
+  font-size: 0.5625rem;
+  color: #666;
+  font-weight: 700;
+}
+
+.productTitle {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1rem;
+  color: #000;
+  line-height: 1.2;
+}
+
+.priceRow {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.price {
+  font-size: 1.125rem;
+  font-weight: 900;
+  color: #000;
+}
+
+.installments {
+  font-size: 0.5625rem;
+  color: #666;
+}
+
+.actionButtons {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.btnQuickAdd {
+  flex: 1;
+  padding: 0.625rem;
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 1px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  cursor: pointer;
+}
+
+.btnQuickAdd:hover {
+  background-color: #F2E3B3;
+  color: #000000;
+}
+
+.btnDetails {
+  padding: 0.625rem 0.875rem;
+  background-color: #FFFFFF;
+  color: #000000;
+  border: 1px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.625rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+}
+
+.btnDetails:hover {
+  background-color: #000000;
+  color: #FFFFFF;
+}

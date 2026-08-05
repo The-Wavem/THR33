@@ -1,0 +1,96 @@
+.catalogPage {
+  width: 100%;
+  background-color: var(--bg-concrete, #9BA3A9);
+  min-height: 100vh;
+  padding: 1.5rem 2rem 4rem 2rem;
+  font-family: 'Space Mono', monospace;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.topControlBar {
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 6px 6px 0px #000000;
+  padding: 0.875rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+}
+
+.breadcrumb {
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.sortWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+}
+
+.sortSelect {
+  background-color: #FFFFFF;
+  border: 1px solid #000000;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  outline: none;
+  cursor: pointer;
+}
+
+.mainGrid {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.productsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.emptyState {
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 6px 6px 0px #000000;
+  padding: 3rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.emptyState h3 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.25rem;
+}
+
+.btnResetState {
+  padding: 0.625rem 1.25rem;
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 1px solid #000000;
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 3px 3px 0px #000000;
+}
+
+@media (max-width: 900px) {
+  .mainGrid {
+    grid-template-columns: 1fr;
+  }
+}

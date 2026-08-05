@@ -6,7 +6,7 @@ export default function Preloader({ onComplete }) {
   const [isFadingOut, setIsFadingOut] = useState(false);
 
   useEffect(() => {
-    const duration = 2400; // total duration in ms
+    const duration = 2400; // total duration in ms mas futuramente substituir por loading real dentro do router
     const intervalTime = 30;
     const increment = 100 / (duration / intervalTime);
 

@@ -1,0 +1,656 @@
+.pdpContainer {
+  width: 100%;
+  background-color: var(--bg-concrete, #9BA3A9);
+  min-height: 100vh;
+  padding: 2rem 3rem 5rem 3rem;
+  font-family: 'Space Mono', monospace;
+  color: #000000;
+}
+
+.wrapper {
+  max-width: 1300px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* BREADCRUMB */
+.breadcrumbBar {
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
+  padding: 0.75rem 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+}
+
+.breadLink {
+  color: #000000;
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.breadLink:hover { text-decoration: underline; }
+.breadSep { color: rgba(0,0,0,0.4); }
+.breadActive { font-weight: 900; }
+
+/* GRID REDIMENSIONADA (MAIS EQUILIBRO E ESPAÇAMENTO) */
+.pdpGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2.5rem;
+  align-items: start;
+}
+
+/* GALLERY COLUMN */
+.galleryColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.mainImageFrame {
+  position: relative;
+  width: 100%;
+  height: 500px;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 6px 6px 0px #000000;
+  overflow: hidden;
+  cursor: zoom-in;
+}
+
+.mainImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.tagBadge {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  background-color: #000000;
+  color: #FFFFFF;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  padding: 0.25rem 0.625rem;
+  letter-spacing: 0.15em;
+  border: 1px solid #000000;
+}
+
+.zoomHint {
+  position: absolute;
+  bottom: 0.875rem;
+  right: 0.875rem;
+  background-color: rgba(255, 255, 255, 0.95);
+  color: #000000;
+  border: 1px solid #000000;
+  padding: 0.35rem 0.625rem;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  box-shadow: 2px 2px 0px #000000;
+}
+
+.thumbnailRow {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.thumbBtn {
+  width: 76px;
+  height: 76px;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 0;
+  transition: transform 0.15s ease;
+}
+
+.thumbActive {
+  width: 76px;
+  height: 76px;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 0 0 12px rgba(242, 227, 179, 0.9), 3px 3px 0px #000000;
+  outline: 2px solid #F2E3B3;
+  cursor: pointer;
+  overflow: hidden;
+  padding: 0;
+}
+
+.thumbBtn img, .thumbActive img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* INFO COLUMN */
+.infoColumn {
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 6px 6px 0px #000000;
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.headerBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border-bottom: 1px solid #000000;
+  padding-bottom: 0.875rem;
+}
+
+.titleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.productTitle {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.625rem;
+  line-height: 1.15;
+  text-transform: uppercase;
+}
+
+.wishlistBtn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+}
+
+.starActive { fill: #F2E3B3; color: #000000; }
+
+.fabricSub {
+  font-size: 0.625rem;
+  color: #666;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.priceBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.priceText {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.875rem;
+  line-height: 1;
+}
+
+.installmentText {
+  font-size: 0.625rem;
+  color: #666;
+  font-weight: 700;
+}
+
+/* SIZES */
+.sizeBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sizeHeader {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.selectedSizeLabel { color: #000000; }
+
+.sizeGrid {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.sizeBtn {
+  flex: 1;
+  padding: 0.625rem 0;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sizeActive {
+  flex: 1;
+  padding: 0.625rem 0;
+  background-color: #F2E3B3;
+  border: 2px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.btnAddToCart {
+  width: 100%;
+  padding: 0.875rem 0;
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnAddToCart:hover {
+  background-color: #F2E3B3;
+  color: #000000;
+}
+
+/* TABS SYSTEM COM ANIMAÇÃO SLIDING */
+.tabsContainer {
+  border: 2px solid #000000;
+  margin-top: 0.5rem;
+}
+
+.tabsHeader {
+  display: flex;
+  border-bottom: 2px solid #000000;
+  background-color: #F5F5F5;
+  position: relative;
+}
+
+.tabBtn {
+  flex: 1;
+  padding: 0.625rem 0.25rem;
+  background: none;
+  border: none;
+  border-right: 1px solid #000000;
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tabBtn:last-child { border-right: none; }
+
+.tabBtnActive {
+  flex: 1;
+  padding: 0.625rem 0.25rem;
+  background: none;
+  border: none;
+  border-right: 1px solid #000000;
+  position: relative;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tabActiveBg {
+  position: absolute;
+  inset: 0;
+  background-color: #000000;
+  z-index: 1;
+}
+
+.tabLabel {
+  position: relative;
+  z-index: 2;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  transition: color 0.2s ease;
+}
+
+.tabBtnActive .tabLabel {
+  color: #FFFFFF;
+  font-weight: 900;
+}
+
+.tabBtn .tabLabel {
+  color: #000000;
+}
+
+.tabBody {
+  padding: 1rem 1.25rem;
+  background-color: #FFFFFF;
+  min-height: 150px;
+}
+
+.tabContent {
+  font-size: 0.6875rem;
+  line-height: 1.6;
+}
+
+.descParagraph {
+  margin-bottom: 0.75rem;
+  color: #333;
+}
+
+.specList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.625rem;
+}
+
+/* MEASUREMENTS TABLE */
+.measurementsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.875rem;
+}
+
+.tableWrapper { overflow-x: auto; }
+
+.measureTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.625rem;
+}
+
+.measureTable th, .measureTable td {
+  border: 1px solid #000000;
+  padding: 0.375rem 0.5rem;
+  text-align: center;
+}
+
+.measureTable th {
+  background-color: #000000;
+  color: #FFFFFF;
+}
+
+.rowHighlight {
+  background-color: #F2E3B3;
+}
+
+.diagramBox {
+  border: 1px solid #000000;
+  padding: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.375rem;
+  background-color: #FAFAFA;
+}
+
+.diagramBox img {
+  max-width: 100%;
+  height: 100px;
+  object-fit: cover;
+  border: 1px solid #000000;
+}
+
+.diagramBox span {
+  font-size: 0.5rem;
+  color: #666;
+  text-align: center;
+  font-weight: 700;
+}
+
+/* CARE LIST */
+.careList {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.careList li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.625rem;
+}
+
+.checkIcon { color: #000000; flex-shrink: 0; }
+
+/* POLICIES */
+.policiesList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.policyItem {
+  display: flex;
+  gap: 0.625rem;
+  align-items: flex-start;
+}
+
+.policyItem strong {
+  display: block;
+  font-size: 0.625rem;
+  margin-bottom: 0.125rem;
+}
+
+.policyItem p {
+  font-size: 0.5625rem;
+  color: #666;
+  margin: 0;
+}
+
+/* LIGHTBOX OVERLAY & CONTAINER */
+.lightboxOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background-color: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem;
+}
+
+.lightboxModal {
+  position: relative;
+  width: 100%;
+  max-width: 820px;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 12px 12px 0px #000000;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  font-family: 'Space Mono', monospace;
+}
+
+.closeLightboxBtn {
+  position: absolute;
+  top: -14px;
+  right: -14px;
+  width: 36px;
+  height: 36px;
+  background-color: #FFFFFF;
+  color: #000000;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 30;
+  transition: all 0.15s ease;
+}
+
+.closeLightboxBtn:hover {
+  background-color: #F2E3B3;
+  color: #000000;
+}
+
+/* SETAS LATERAIS DO CAROUSEL NO LIGHTBOX */
+.lightboxArrowLeft, .lightboxArrowRight {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 44px;
+  height: 44px;
+  background-color: #FFFFFF;
+  color: #000000;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 20;
+  transition: all 0.15s ease;
+}
+
+.lightboxArrowLeft { left: -22px; }
+.lightboxArrowRight { right: -22px; }
+
+.lightboxArrowLeft:hover, .lightboxArrowRight:hover {
+  background-color: #F2E3B3;
+  transform: translateY(-50%) scale(1.05);
+}
+
+/* LIGHTBOX CONTAINER & IMAGE HOVER ZOOM */
+.lightboxImageContainer {
+  position: relative;
+  width: 100%;
+  height: 65vh;
+  max-height: 600px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden; /* CORTA A IMAGEM QUANDO ELA ESCALA */
+  border: 1px solid #000000;
+  background-color: #F8F8F8;
+  cursor: crosshair; /* MIRA DE PRECISÃO */
+}
+
+.lightboxImage {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: transform 0.12s ease-out; /* MOVIMENTO FLUIDO QUE ACOMPANHA O MOUSE */
+  pointer-events: none; /* EVITA INTERFERÊNCIA NO EVENTO DE MOUSEMOVE */
+}
+
+/* BADGES DE STATUS DA LENTE TÁTIL */
+.zoomBadgeHint {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #000000;
+  border: 1px solid #000000;
+  padding: 0.35rem 0.625rem;
+  font-size: 0.5625rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  box-shadow: 2px 2px 0px #000000;
+  pointer-events: none;
+  transition: all 0.2s ease;
+}
+
+.zoomBadgeActive {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  background-color: #000000;
+  color: #F2E3B3;
+  border: 1px solid #000000;
+  padding: 0.35rem 0.625rem;
+  font-size: 0.5625rem;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  box-shadow: 2px 2px 0px #000000;
+  pointer-events: none;
+  letter-spacing: 0.05em;
+}
+
+/* FOOTER DO LIGHTBOX COM DETALHES E CONTADOR */
+.lightboxFooter {
+  width: 100%;
+  margin-top: 0.875rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.75rem;
+  border-top: 1px solid #000000;
+  padding-top: 0.75rem;
+}
+
+.lightboxDetails {
+  display: flex;
+  flex-direction: column;
+}
+
+.lightboxDetails strong {
+  font-family: 'Arial Black', sans-serif;
+  text-transform: uppercase;
+}
+
+.lightboxDetails span {
+  font-size: 0.625rem;
+  color: #666;
+}
+
+.lightboxCounter {
+  background-color: #000000;
+  color: #F2E3B3;
+  font-weight: 900;
+  padding: 0.35rem 0.75rem;
+  border: 1px solid #000000;
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+}
+
+.notFoundContainer {
+  padding: 4rem 2rem;
+  text-align: center;
+  font-family: 'Space Mono', monospace;
+}
+
+.btnBack {
+  margin-top: 1rem;
+  padding: 0.75rem 1.5rem;
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 1px solid #000000;
+  cursor: pointer;
+}
+
+@media (max-width: 900px) {
+  .pdpContainer { padding: 1rem; }
+  .pdpGrid { grid-template-columns: 1fr; gap: 1.5rem; }
+  .mainImageFrame { height: 380px; }
+  .lightboxArrowLeft { left: 8px; }
+  .lightboxArrowRight { right: 8px; }
+  .lightboxModal { padding: 0.5rem; }
+}

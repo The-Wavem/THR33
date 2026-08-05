@@ -1,0 +1,157 @@
+.sidebarContainer {
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 6px 6px 0px #000000;
+  padding: 1.25rem;
+  font-family: 'Space Mono', monospace;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.sidebarHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sidebarHeader h3 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.125rem;
+}
+
+.versionBadge {
+  font-size: 0.625rem;
+  color: #666;
+  font-weight: 700;
+}
+
+.divider {
+  height: 1px;
+  background-color: #000000;
+}
+
+.filterGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.groupLabel {
+  font-size: 0.6875rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+}
+
+.checkboxList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.checkboxItem {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.checkboxItem input {
+  accent-color: #000000;
+  cursor: pointer;
+}
+
+.fitGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.375rem;
+}
+
+.fitBtn {
+  padding: 0.375rem;
+  background-color: #FFFFFF;
+  border: 1px solid #000000;
+  font-size: 0.625rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.fitBtnActive {
+  padding: 0.375rem;
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 1px solid #000000;
+  font-size: 0.625rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.priceLabelRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.priceVal {
+  font-size: 0.75rem;
+  color: #000000;
+}
+
+.priceRangeInput {
+  accent-color: #000000;
+  cursor: pointer;
+}
+
+.priceMinMax {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.5625rem;
+  color: #666;
+}
+
+.sizeGrid {
+  display: flex;
+  gap: 0.375rem;
+}
+
+.sizeBox {
+  flex: 1;
+  padding: 0.5rem;
+  background-color: #FFFFFF;
+  border: 1px solid #000000;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sizeBoxActive {
+  flex: 1;
+  padding: 0.5rem;
+  background-color: #F2E3B3;
+  border: 1px solid #000000;
+  font-size: 0.75rem;
+  font-weight: 900;
+  box-shadow: 2px 2px 0px #000000;
+  cursor: pointer;
+}
+
+.actionBlock {
+  margin-top: 0.5rem;
+}
+
+.btnReset {
+  width: 100%;
+  padding: 0.5rem;
+  background: none;
+  border: 1px dashed #000000;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btnReset:hover {
+  background-color: #000000;
+  color: #FFFFFF;
+}
