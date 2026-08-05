@@ -4,7 +4,7 @@
   top: 0;
   z-index: 90;
   font-family: 'Space Mono', monospace;
-  background-color: var(--bg-white, #FFFFFF);
+  background-color: var(--bg-white, #ffffff);
 }
 
 /* TOP MARQUEE TICKER */
@@ -37,15 +37,15 @@
   justify-content: space-between;
   padding: 0.75rem 2rem;
   border-bottom: 2px solid #000000;
-  background-color: var(--bg-white, #FFFFFF);
+  background-color: var(--bg-white, #ffffff);
   position: relative;
 }
 
-/* LEFT LINKS */
+/* LEFT NAV LINKS */
 .leftNav {
   display: flex;
   align-items: center;
-  gap: 1.5rem;
+  gap: 1.25rem;
 }
 
 .navItem {
@@ -53,10 +53,13 @@
   text-decoration: none;
   font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.15em;
+  letter-spacing: 0.12em;
   padding: 0.4rem 0.75rem;
   transition: all 0.2s ease;
   border: 1px solid transparent;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .navItem:hover {
@@ -69,6 +72,148 @@
   color: #FFFFFF !important;
   border: 1px solid #000000 !important;
   box-shadow: 3px 3px 0px #000000;
+  font-weight: 900;
+}
+
+.openMenuNavItem {
+  border-color: #000000 !important;
+  background-color: #FFFFFF !important;
+  color: #000000 !important;
+  box-shadow: 2px 2px 0px #000000;
+  font-weight: 900;
+}
+
+.chevronIcon {
+  transition: transform 0.2s ease;
+}
+
+.chevronRotated {
+  transform: rotate(180deg);
+}
+
+/* HOVER CONTAINER E DROPDOWN DO CATÁLOGO */
+.catalogHoverWrapper {
+  position: relative;
+}
+
+.catalogDropdown {
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  left: 0;
+  width: 320px;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 6px 6px 0px #000000;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  z-index: 100;
+}
+
+/* PONTE INVISÍVEL DE HOVER PARA EVITAR QUE O DROPDOWN FECHE AO MOVER O MOUSE PARA BAIXO */
+.catalogDropdown::before {
+  content: '';
+  position: absolute;
+  top: -12px;
+  left: 0;
+  width: 100%;
+  height: 14px;
+  background: transparent;
+}
+
+.dropdownHeaderBox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.6875rem;
+}
+
+.dropdownTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-family: 'Arial Black', sans-serif;
+  text-transform: uppercase;
+}
+
+.activeBadge {
+  background-color: #000000;
+  color: #F2E3B3;
+  font-size: 0.5625rem;
+  font-weight: 900;
+  padding: 0.15rem 0.4rem;
+  letter-spacing: 0.05em;
+}
+
+.dropdownDivider {
+  height: 1px;
+  background-color: #000000;
+}
+
+.btnAllCatalog {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.625rem 0.75rem;
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 1px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
+  text-decoration: none;
+  font-size: 0.6875rem;
+  font-weight: 900;
+  letter-spacing: 0.1em;
+  transition: all 0.15s ease;
+}
+
+.btnAllCatalog:hover {
+  background-color: #F2E3B3;
+  color: #000000;
+}
+
+.categoryGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-top: 0.25rem;
+}
+
+.categorySectionLabel {
+  font-size: 0.5625rem;
+  font-weight: 700;
+  color: #666;
+  letter-spacing: 0.05em;
+  margin-bottom: 0.25rem;
+}
+
+.categoryItemLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.625rem;
+  background-color: #FAFAFA;
+  border: 1px solid #000000;
+  text-decoration: none;
+  color: #000000;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  transition: all 0.15s ease;
+}
+
+.categoryItemLink:hover {
+  background-color: #F2E3B3;
+  transform: translateX(3px);
+  box-shadow: 2px 2px 0px #000000;
+}
+
+.catLabel {
+  font-family: 'Arial Black', sans-serif;
+}
+
+.catCountBadge {
+  font-size: 0.625rem;
+  color: #000000;
   font-weight: 900;
 }
 
@@ -311,7 +456,6 @@
   background: none;
   border: 1px solid #000000;
   padding: 0.25rem;
-  cursor: pointer;
 }
 
 .closeSearchBtn:hover {

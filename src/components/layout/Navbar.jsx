@@ -1,80 +1,151 @@
-import React, { useState } from "react";
-import { NavLink, Link, useNavigate } from "react-router-dom";
-import {
-  Search,
-  User,
-  ShoppingBag,
-  X,
-  LogOut,
-  Package,
-  Settings,
-} from "lucide-react";
-import { catalogService } from "../../services/catalogService";
-import styles from "./Navbar.module.css";
+import React, { useState } from 'react';
+import { NavLink, Link, useNavigate } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Search, 
+  User, 
+  ShoppingBag, 
+  X, 
+  LogOut, 
+  Package, 
+  Settings, 
+  ChevronDown, 
+  ArrowRight,
+  Layers
+} from 'lucide-react';
+import { catalogService } from '../../services/catalogService';
+import styles from './Navbar.module.css';
 
-export function Navbar({
-  cartCount = 2,
-  onOpenCart,
-  user,
-  onLogout,
-  onOpenAuthModal,
-}) {
+export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthModal }) {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isCatalogMenuOpen, setIsCatalogMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
 
-  // Busca categorias ativas diretamente do serviço
+  // Buscar categorias dinâmicas do serviço
   const metadata = catalogService.getDynamicMetadata();
-  const activeCategories = metadata.categories;
+  const activeCategories = metadata.categories || [];
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
     if (searchQuery.trim()) {
       navigate(`/catalogo?search=${encodeURIComponent(searchQuery.trim())}`);
       setIsSearchOpen(false);
-      setSearchQuery("");
+      setSearchQuery('');
     }
   };
 
   return (
     <header className={styles.headerContainer}>
+      
       {/* 1. TOP MARQUEE TICKER */}
       <div className={styles.topMarquee}>
         <div className={styles.marqueeTrack}>
-          <span>
-            THR33: THE STREETS ARE OURS ★ FOR THE FEW ★ LEAK TWO ★ [BOT
-            VERIFICATION: PASS] ★ ATELIÊ R.U.A ★{" "}
-          </span>
-          <span>
-            THR33: THE STREETS ARE OURS ★ FOR THE FEW ★ LEAK TWO ★ [BOT
-            VERIFICATION: PASS] ★ ATELIÊ R.U.A ★{" "}
-          </span>
+          <span>THR33: THE STREETS ARE OURS ★ FOR THE FEW ★ LEAK TWO ★ [BOT VERIFICATION: PASS] ★ ATELIÊ R.U.A ★ </span>
+          <span>THR33: THE STREETS ARE OURS ★ FOR THE FEW ★ LEAK TWO ★ [BOT VERIFICATION: PASS] ★ ATELIÊ R.U.A ★ </span>
         </div>
       </div>
 
-      {/* 2. MAIN NAVBAR BAR */}
+      {/* 2. MAIN NAVBAR */}
       <div className={styles.mainNav}>
-        {/* LEFT: NAVIGATION LINKS */}
+        
+        {/* LEFT: FIXED NAVIGATION LINKS */}
         <nav className={styles.leftNav}>
+          
+          {/* LINK: LANÇAMENTOS */}
           <NavLink 
-            to="/catalogo" 
+            to="/lancamentos" 
             className={({ isActive }) => isActive ? `${styles.navItem} ${styles.activeNavItem}` : styles.navItem}
-            end
           >
-            TODOS
+            LANÇAMENTOS
           </NavLink>
 
-          {/* DYNAMIC CATEGORY LINKS */}
-          {activeCategories.map((cat) => (
+          {/* LINK: CATÁLOGO COM DROPDOWN NO HOVER */}
+          <div 
+            className={styles.catalogHoverWrapper}
+            onMouseEnter={() => setIsCatalogMenuOpen(true)}
+            onMouseLeave={() => setIsCatalogMenuOpen(false)}
+          >
             <NavLink 
-              key={cat.slug}
-              to={`/categoria/${cat.slug}`}
-              className={({ isActive }) => isActive ? `${styles.navItem} ${styles.activeNavItem}` : styles.navItem}
+              to="/catalogo" 
+              className={({ isActive }) => 
+                isActive 
+                  ? `${styles.navItem} ${styles.activeNavItem}` 
+                  : isCatalogMenuOpen 
+                    ? `${styles.navItem} ${styles.openMenuNavItem}` 
+                    : styles.navItem
+              }
+              end
             >
-              {cat.label}
+              <span>CATÁLOGO</span>
+              <ChevronDown 
+                size={12} 
+                className={`${styles.chevronIcon} ${isCatalogMenuOpen ? styles.chevronRotated : ''}`} 
+              />
             </NavLink>
-          ))}
+
+            {/* MEGA-MENU DROPDOWN ANIMADO */}
+            <AnimatePresence>
+              {isCatalogMenuOpen && (
+                <motion.div 
+                  initial={{ opacity: 0, y: 6, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: 6, scale: 0.98 }}
+                  transition={{ duration: 0.15, ease: 'easeOut' }}
+                  className={styles.catalogDropdown}
+                >
+                  <div className={styles.dropdownHeaderBox}>
+                    <div className={styles.dropdownTitleGroup}>
+                      <Layers size={14} />
+                      <strong>MOSTRUÁRIO R.U.A</strong>
+                    </div>
+                    <span className={styles.activeBadge}>
+                      ● {metadata.categories.reduce((acc, c) => acc + c.count, 0)} PEÇAS ATIVAS
+                    </span>
+                  </div>
+
+                  <div className={styles.dropdownDivider} />
+
+                  {/* BOTAO PARA O CATALOGO COMPLETO */}
+                  <Link 
+                    to="/catalogo" 
+                    onClick={() => setIsCatalogMenuOpen(false)} 
+                    className={styles.btnAllCatalog}
+                  >
+                    <span>[ EXPLORAR TODO O CATÁLOGO ]</span>
+                    <ArrowRight size={14} />
+                  </Link>
+
+                  {/* LISTA DINÂMICA DE CATEGORIAS */}
+                  {activeCategories.length > 0 && (
+                    <div className={styles.categoryGrid}>
+                      <span className={styles.categorySectionLabel}>CATEGORIAS EM ESTOQUE:</span>
+                      {activeCategories.map((cat) => (
+                        <Link 
+                          key={cat.slug} 
+                          to={`/categoria/${cat.slug}`}
+                          onClick={() => setIsCatalogMenuOpen(false)}
+                          className={styles.categoryItemLink}
+                        >
+                          <span className={styles.catLabel}>{cat.label}</span>
+                          <span className={styles.catCountBadge}>[{cat.count}]</span>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+
+          {/* LINK: DROPS PASSADOS */}
+          <NavLink 
+            to="/drops-passados" 
+            className={({ isActive }) => isActive ? `${styles.navItem} ${styles.activeNavItem}` : styles.navItem}
+          >
+            DROPS PASSADOS
+          </NavLink>
         </nav>
 
         {/* CENTER: THR33 CAPSULE LOGO */}
@@ -86,9 +157,10 @@ export function Navbar({
 
         {/* RIGHT: ACTION ICONS & CART */}
         <div className={styles.rightActions}>
+          
           {/* SEARCH BUTTON */}
-          <button
-            onClick={() => setIsSearchOpen(!isSearchOpen)}
+          <button 
+            onClick={() => setIsSearchOpen(!isSearchOpen)} 
             className={styles.iconBox}
             title="Buscar Peça"
           >
@@ -97,8 +169,8 @@ export function Navbar({
 
           {/* USER PROFILE BUTTON */}
           <div className={styles.userWrapper}>
-            <button
-              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+            <button 
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)} 
               className={styles.iconBox}
               title="Perfil de Usuário"
             >
@@ -112,40 +184,18 @@ export function Navbar({
                 {user ? (
                   <>
                     <div className={styles.dropdownHeader}>
-                      <span className={styles.passId}>
-                        PASSAPORTE {user.passId || "#0482"}
-                      </span>
-                      <strong className={styles.userName}>
-                        {user.name || "WESLLEY K."}
-                      </strong>
+                      <span className={styles.passId}>PASSAPORTE {user.passId || '#0482'}</span>
+                      <strong className={styles.userName}>{user.name || 'WESLLEY K.'}</strong>
                     </div>
                     <div className={styles.dropdownDivider} />
-                    <button
-                      onClick={() => {
-                        setIsUserMenuOpen(false);
-                        navigate("/meus-pedidos");
-                      }}
-                      className={styles.dropdownLink}
-                    >
+                    <button onClick={() => { setIsUserMenuOpen(false); navigate('/meus-pedidos'); }} className={styles.dropdownLink}>
                       <Package size={14} /> <span>MEUS PEDIDOS</span>
                     </button>
-                    <button
-                      onClick={() => {
-                        setIsUserMenuOpen(false);
-                        navigate("/configuracoes");
-                      }}
-                      className={styles.dropdownLink}
-                    >
+                    <button onClick={() => { setIsUserMenuOpen(false); navigate('/configuracoes'); }} className={styles.dropdownLink}>
                       <Settings size={14} /> <span>CONFIGURAÇÕES</span>
                     </button>
                     <div className={styles.dropdownDivider} />
-                    <button
-                      onClick={() => {
-                        setIsUserMenuOpen(false);
-                        if (onLogout) onLogout();
-                      }}
-                      className={styles.dropdownLogout}
-                    >
+                    <button onClick={() => { setIsUserMenuOpen(false); if(onLogout) onLogout(); }} className={styles.dropdownLogout}>
                       <LogOut size={14} /> <span>SAIR DA CONTA</span>
                     </button>
                   </>
@@ -156,22 +206,10 @@ export function Navbar({
                       <strong>VISITANTE // FOR THE FEW</strong>
                     </div>
                     <div className={styles.dropdownDivider} />
-                    <button
-                      onClick={() => {
-                        setIsUserMenuOpen(false);
-                        if (onOpenAuthModal) onOpenAuthModal();
-                      }}
-                      className={styles.btnAuthPrimary}
-                    >
+                    <button onClick={() => { setIsUserMenuOpen(false); if(onOpenAuthModal) onOpenAuthModal(); }} className={styles.btnAuthPrimary}>
                       [ 01. ENTRAR ]
                     </button>
-                    <button
-                      onClick={() => {
-                        setIsUserMenuOpen(false);
-                        if (onOpenAuthModal) onOpenAuthModal();
-                      }}
-                      className={styles.btnAuthSecondary}
-                    >
+                    <button onClick={() => { setIsUserMenuOpen(false); if(onOpenAuthModal) onOpenAuthModal(); }} className={styles.btnAuthSecondary}>
                       [ 02. CRIAR CONTA ]
                     </button>
                   </>
@@ -183,9 +221,10 @@ export function Navbar({
           {/* CART BUTTON */}
           <button onClick={onOpenCart} className={styles.cartBox}>
             <ShoppingBag size={14} />
-            <span>CARRINHO ({String(cartCount).padStart(2, "0")})</span>
+            <span>CARRINHO ({String(cartCount).padStart(2, '0')})</span>
           </button>
         </div>
+
       </div>
 
       {/* SEARCH BAR OVERLAY */}
@@ -193,23 +232,20 @@ export function Navbar({
         <div className={styles.searchOverlay}>
           <form onSubmit={handleSearchSubmit} className={styles.searchForm}>
             <Search size={18} className={styles.searchIcon} />
-            <input
-              type="text"
+            <input 
+              type="text" 
               placeholder="DIGITE O NOME DA PEÇA (EX: BOXY V.1, MOLETOM...)"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               autoFocus
             />
-            <button
-              type="button"
-              onClick={() => setIsSearchOpen(false)}
-              className={styles.closeSearchBtn}
-            >
+            <button type="button" onClick={() => setIsSearchOpen(false)} className={styles.closeSearchBtn}>
               <X size={18} />
             </button>
           </form>
         </div>
       )}
+
     </header>
   );
 }
