@@ -14,6 +14,7 @@ import {
   Zap
 } from 'lucide-react';
 import { currentDropConfig } from '../../data/dropConfig';
+import { fadeInUp, staggerContainer, buttonTactile } from '../../utils/motionVariants';
 import styles from './Lancamentos.module.css';
 
 export function Lancamentos({ onAddToCart, onOpenAuthModal, user }) {
@@ -127,7 +128,7 @@ export function Lancamentos({ onAddToCart, onOpenAuthModal, user }) {
         </div>
       </section>
 
-      {/* 2. SESSÃO MANIFESTO: FOTOGRAFIA MESCLADA DIRETO NO FUNDO (SEM CARD/BORDA) */}
+      {/* 2. SESSÃO MANIFESTO: FOTOGRAFIA MESCLADA DIRETO NO FUNDO */}
       <section id="manifesto" className={styles.blendedManifestoSection}>
         <div className={styles.blendedGrid}>
           
@@ -142,22 +143,28 @@ export function Lancamentos({ onAddToCart, onOpenAuthModal, user }) {
             </div>
           </div>
 
-          {/* TEXTO DO MANIFESTO IMPRESSO DIRETO NO CANVAS */}
-          <div className={styles.manifestoTextContent}>
-            <div className={styles.locationHeader} style={{ color: theme.accentAcid }}>
+          {/* TEXTO DO MANIFESTO IMPRESSO DIRETO NO CANVAS COM STAGGER & FADE-UP */}
+          <motion.div 
+            variants={staggerContainer}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-50px" }}
+            className={styles.manifestoTextContent}
+          >
+            <motion.div variants={fadeInUp} className={styles.locationHeader} style={{ color: theme.accentAcid }}>
               <MapPin size={16} />
               <span>{coordinates}</span>
-            </div>
+            </motion.div>
 
-            <h2 className={styles.manifestoHeading}>
+            <motion.h2 variants={fadeInUp} className={styles.manifestoHeading}>
               {manifestoHeading}
-            </h2>
+            </motion.h2>
 
-            <p className={styles.manifestoParagraph}>
+            <motion.p variants={fadeInUp} className={styles.manifestoParagraph}>
               {manifestoText}
-            </p>
+            </motion.p>
 
-            <div className={styles.rawSpecRow} style={{ borderColor: theme.borderColor }}>
+            <motion.div variants={fadeInUp} className={styles.rawSpecRow} style={{ borderColor: theme.borderColor }}>
               <div className={styles.specItem}>
                 <span>GRAMATURA</span>
                 <strong style={{ color: theme.accentAcid }}>280GSM HEAVY</strong>
@@ -170,13 +177,13 @@ export function Lancamentos({ onAddToCart, onOpenAuthModal, user }) {
                 <span>ESTOQUE</span>
                 <strong style={{ color: theme.accentAcid }}>33 UNIDADES</strong>
               </div>
-            </div>
+            </motion.div>
 
-            <div className={styles.vinylBadge}>
+            <motion.div variants={fadeInUp} className={styles.vinylBadge}>
               <Disc size={16} className={styles.spinningVinyl} style={{ color: theme.accentAcid }} />
               <span>GRAVAÇÃO ORIGINAL THR33 // TAPE 2026</span>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
 
         </div>
       </section>

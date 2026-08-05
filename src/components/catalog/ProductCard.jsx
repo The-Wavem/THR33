@@ -1,94 +1,107 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Star, ShoppingBag, ArrowRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ShoppingBag, Star, Check } from 'lucide-react';
+import { buttonTactile, arrowSlide, imageInnerZoom } from '../../utils/motionVariants';
 import styles from './ProductCard.module.css';
 
 export function ProductCard({ product, onAddToCart, onToggleWishlist, isWishlisted }) {
+  const [selectedSize, setSelectedSize] = useState('M');
   const [isHovered, setIsHovered] = useState(false);
-  const [selectedSize, setSelectedSize] = useState(product.sizes[0] || 'M');
-  const navigate = useNavigate();
+  const [justAdded, setJustAdded] = useState(false);
 
-  const handleCardClick = () => {
-    navigate(`/produto/${product.slug}`);
-  };
-
-  const handleQuickBuy = (e) => {
+  const handleQuickAdd = (e) => {
     e.stopPropagation();
     if (onAddToCart) {
       onAddToCart({ ...product, selectedSize });
     }
+    setJustAdded(true);
+    setTimeout(() => setJustAdded(false), 2000);
   };
 
   return (
-    <div 
-      className={`${styles.card} ${isHovered ? styles.cardHovered : ''}`}
+    <motion.div 
+      className={styles.cardContainer}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      onClick={handleCardClick}
+      initial="rest"
+      animate="rest"
+      whileHover="hover"
     >
-      {/* HEADER TAG & WISHLIST */}
+      {/* CARD TOP TAGS */}
       <div className={styles.cardHeader}>
-        <span className={product.isArchived ? styles.tagArchived : styles.tagStandard}>
-          {product.tag}
-        </span>
-        <button 
-          onClick={(e) => { e.stopPropagation(); onToggleWishlist(product.id); }}
+        <span className={styles.tagBadge}>{product.tag || 'FOR THE FEW'}</span>
+        
+        <motion.button 
+          whileTap={{ scale: 0.85 }}
+          onClick={() => onToggleWishlist && onToggleWishlist(product.id)}
           className={styles.wishlistBtn}
-          title="Guardar na Lista"
         >
-          <Star size={16} className={isWishlisted ? styles.starActive : styles.starInactive} />
-        </button>
+          <Star size={16} className={isWishlisted ? styles.starActive : ''} />
+        </motion.button>
       </div>
 
-      {/* NATURAL COLOR IMAGE FRAME */}
-      <div className={styles.imageContainer}>
-        <img 
+      {/* FRAME DA FOTO COM ZOOM SUTIL NO CONTAINER */}
+      <Link to={`/produto/${product.slug}`} className={styles.imageFrame}>
+        <motion.img 
+          variants={imageInnerZoom}
           src={isHovered && product.hoverImage ? product.hoverImage : product.image} 
           alt={product.title} 
-          className={styles.productImage} 
+          className={styles.prodImage}
         />
-        <div className={styles.fitBadge}>{product.fit} FIT</div>
         
-        {/* SIZE SELECTOR ON HOVER */}
-        {isHovered && (
-          <div className={styles.sizeOverlay} onClick={(e) => e.stopPropagation()}>
-            <span className={styles.sizeTitle}>TAMANHO:</span>
-            <div className={styles.sizeList}>
-              {product.sizes.map((sz) => (
-                <button
-                  key={sz}
-                  onClick={() => setSelectedSize(sz)}
-                  className={selectedSize === sz ? styles.sizeActive : styles.sizeBtn}
-                >
-                  {sz}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+        <div className={styles.priceTag}>{product.price}</div>
 
-      {/* CARD INFO & DETAILS */}
-      <div className={styles.cardContent}>
-        <span className={styles.fabricText}>{product.fabric}</span>
-        <h3 className={styles.productTitle}>{product.title}</h3>
-        <div className={styles.priceRow}>
-          <strong className={styles.price}>{product.price}</strong>
-          <span className={styles.installments}>6x de R$ {(product.priceNum / 6).toFixed(2)}</span>
+        {/* SELETOR DE TAMANHO SLIDE UP SUAVE */}
+        <AnimatePresence>
+          {isHovered && product.sizes && (
+            <motion.div 
+              initial={{ y: '100%', opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: '100%', opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className={styles.sizeSelectorBar}
+              onClick={(e) => e.preventDefault()}
+            >
+              <span className={styles.sizeLabel}>SELECIONAR TAMANHO:</span>
+              <div className={styles.sizeGrid}>
+                {product.sizes.map((sz) => (
+                  <motion.button
+                    key={sz}
+                    whileTap={{ scale: 0.92 }}
+                    onClick={(e) => {
+                      e.preventDefault();
+                      setSelectedSize(sz);
+                    }}
+                    className={selectedSize === sz ? styles.sizeActive : styles.sizeBtn}
+                  >
+                    {sz}
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </Link>
+
+      {/* DETALHES DA PEÇA & BOTÃO TÁTIL */}
+      <div className={styles.cardDetails}>
+        <div>
+          <h3 className={styles.productTitle}>{product.title}</h3>
+          <p className={styles.fabricSub}>{product.fabric || 'ALGODÃO 280GSM'}</p>
         </div>
 
-        <div className={styles.actionButtons}>
-          <button onClick={handleQuickBuy} className={styles.btnQuickAdd}>
-            <ShoppingBag size={14} />
-            <span>[ COMPRAR ]</span>
-          </button>
-          <button className={styles.btnDetails}>
-            <span>VER PEÇA</span>
-            <ArrowRight size={12} />
-          </button>
-        </div>
+        <motion.button 
+          variants={buttonTactile}
+          whileTap="tap"
+          onClick={handleQuickAdd}
+          className={styles.btnBuy}
+        >
+          {justAdded ? <Check size={14} /> : <ShoppingBag size={14} />}
+          <span>{justAdded ? 'ADICIONADO!' : `[ COMPRAR AGORA (${selectedSize}) ]`}</span>
+        </motion.button>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
