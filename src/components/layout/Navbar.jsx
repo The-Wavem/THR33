@@ -1,188 +1,185 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { NavLink, Link } from 'react-router-dom';
-import styles from './Navbar.module.css';
+import React, { useState } from "react";
+import { NavLink, Link, useNavigate } from "react-router-dom";
+import {
+  Search,
+  User,
+  ShoppingBag,
+  X,
+  LogOut,
+  Package,
+  Settings,
+} from "lucide-react";
+import styles from "./Navbar.module.css";
 
-export default function Navbar({
+export function Navbar({
   cartCount = 2,
-  initialLoggedIn = true,
-  userName = 'WESLLEY K.',
+  onOpenCart,
+  user,
+  onLogout,
+  onOpenAuthModal,
 }) {
-  const [isLoggedIn, setIsLoggedIn] = useState(initialLoggedIn);
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const dropdownRef = useRef(null);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const navigate = useNavigate();
 
-  // Close dropdown on click outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target)
-      ) {
-        setIsDropdownOpen(false);
-      }
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      navigate(`/catalogo?search=${encodeURIComponent(searchQuery.trim())}`);
+      setIsSearchOpen(false);
+      setSearchQuery("");
     }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  const marqueeText =
-    'THR33: THE STREETS ARE OURS ★ FOR THE FEW ★ LEAK TWO ★ [BOT VERIFICATION: PASS] ★ ';
+  };
 
   return (
-    <header className={styles.navbarContainer}>
-      {/* Top Marquee Ticker (Linha 1) */}
-      <div className={styles.topTicker}>
-        <div className={styles.tickerTrack}>
-          <span className={styles.tickerItem}>{marqueeText}</span>
-          <span className={styles.tickerItem}>{marqueeText}</span>
-          <span className={styles.tickerItem}>{marqueeText}</span>
-          <span className={styles.tickerItem}>{marqueeText}</span>
+    <header className={styles.headerContainer}>
+      {/* 1. TOP MARQUEE TICKER */}
+      <div className={styles.topMarquee}>
+        <div className={styles.marqueeTrack}>
+          <span>
+            THR33: THE STREETS ARE OURS ★ FOR THE FEW ★ LEAK TWO ★ [BOT
+            VERIFICATION: PASS] ★ ATELIÊ R.U.A ★{" "}
+          </span>
+          <span>
+            THR33: THE STREETS ARE OURS ★ FOR THE FEW ★ LEAK TWO ★ [BOT
+            VERIFICATION: PASS] ★ ATELIÊ R.U.A ★{" "}
+          </span>
         </div>
       </div>
 
-      {/* Main Navigation Bar (Linha 2) */}
-      <nav className={styles.mainBar}>
-        {/* Mobile menu toggle */}
-        <button
-          className={styles.mobileMenuBtn}
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-          aria-label="Toggle menu"
-        >
-          ☰
-        </button>
-
-        {/* Esquerda: Links de texto direto */}
-        <div
-          className={`${styles.leftSection} ${
-            mobileMenuOpen ? styles.mobileOpen : ''
-          }`}
-        >
+      {/* 2. MAIN NAVBAR BAR */}
+      <div className={styles.mainNav}>
+        {/* LEFT: NAVIGATION LINKS */}
+        <nav className={styles.leftNav}>
           <NavLink
-            to="/lancamentos"
+            to="/"
             className={({ isActive }) =>
-              `${styles.navLink} ${isActive ? styles.activeLink : ''}`
+              isActive
+                ? `${styles.navItem} ${styles.activeNavItem}`
+                : styles.navItem
             }
           >
             LANÇAMENTOS
           </NavLink>
-
           <NavLink
             to="/catalogo"
             className={({ isActive }) =>
-              `${styles.navLink} ${isActive ? styles.activeLink : ''}`
+              isActive
+                ? `${styles.navItem} ${styles.activeNavItem}`
+                : styles.navItem
             }
           >
             CATÁLOGO
           </NavLink>
-
           <NavLink
             to="/drops-passados"
             className={({ isActive }) =>
-              `${styles.navLink} ${isActive ? styles.activeLink : ''}`
+              isActive
+                ? `${styles.navItem} ${styles.activeNavItem}`
+                : styles.navItem
             }
           >
             DROPS PASSADOS
           </NavLink>
-        </div>
+        </nav>
 
-        {/* Centro: Emblem / Logo Oval THR33 em Preto Piano */}
-        <div className={styles.centerSection}>
-          <Link to="/" className={styles.brandEmblem} title="THR33 Home">
-            <span className={styles.emblemText}>THR33</span>
+        {/* CENTER: THR33 CAPSULE LOGO */}
+        <div className={styles.centerLogo}>
+          <Link to="/" className={styles.logoPill}>
+            <span>THR33</span>
           </Link>
         </div>
 
-        {/* Direita: Busca, Perfil com Dropdown e Carrinho */}
-        <div className={styles.rightSection}>
-          {/* Tag de usuário logado (exibida ao lado do ícone quando logado) */}
-          {isLoggedIn && (
-            <div className={styles.userBadge}>
-              <span className={styles.userDot}>●</span>
-              <span>{userName}</span>
-            </div>
-          )}
-
-          {/* Busca */}
+        {/* RIGHT: ACTION ICONS & CART */}
+        <div className={styles.rightActions}>
+          {/* SEARCH BUTTON */}
           <button
-            className={styles.iconBtn}
-            title="Buscar no site"
-            aria-label="Buscar"
+            onClick={() => setIsSearchOpen(!isSearchOpen)}
+            className={styles.iconBox}
+            title="Buscar Peça"
           >
-            🔍
+            <Search size={16} />
           </button>
 
-          {/* Perfil & Dropdown Terminal de Acesso */}
-          <div className={styles.userMenuWrapper} ref={dropdownRef}>
+          {/* USER PROFILE BUTTON */}
+          <div className={styles.userWrapper}>
             <button
-              className={styles.iconBtn}
-              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              title="Terminal de Acesso"
-              aria-label="Perfil do Usuário"
+              onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+              className={styles.iconBox}
+              title="Perfil de Usuário"
             >
-              👤
+              <User size={16} />
+              {user && <span className={styles.activeUserDot} />}
             </button>
 
-            {isDropdownOpen && (
-              <div className={styles.dropdownMenu}>
-                <div className={styles.dropdownHeader}>
-                  <span>TERMINAL DE ACESSO</span>
-                  <button
-                    className={styles.demoToggle}
-                    onClick={() => setIsLoggedIn(!isLoggedIn)}
-                    title="Alternar estado de login (Demo)"
-                  >
-                    {isLoggedIn ? 'LOGOUT DEMO' : 'LOGIN DEMO'}
-                  </button>
-                </div>
-
-                {!isLoggedIn ? (
-                  /* Estado Deslogado */
+            {/* USER DROPDOWN MENU */}
+            {isUserMenuOpen && (
+              <div className={styles.userDropdown}>
+                {user ? (
                   <>
+                    <div className={styles.dropdownHeader}>
+                      <span className={styles.passId}>
+                        PASSAPORTE {user.passId || "#0482"}
+                      </span>
+                      <strong className={styles.userName}>
+                        {user.name || "WESLLEY K."}
+                      </strong>
+                    </div>
+                    <div className={styles.dropdownDivider} />
                     <button
-                      className={styles.dropdownBtn}
-                      onClick={() => setIsLoggedIn(true)}
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        navigate("/pedidos");
+                      }}
+                      className={styles.dropdownLink}
+                    >
+                      <Package size={14} /> <span>MEUS PEDIDOS</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        navigate("/configuracoes");
+                      }}
+                      className={styles.dropdownLink}
+                    >
+                      <Settings size={14} /> <span>CONFIGURAÇÕES</span>
+                    </button>
+                    <div className={styles.dropdownDivider} />
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        if (onLogout) onLogout();
+                      }}
+                      className={styles.dropdownLogout}
+                    >
+                      <LogOut size={14} /> <span>SAIR DA CONTA</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div className={styles.dropdownHeader}>
+                      <span className={styles.passId}>TERMINAL DE ACESSO</span>
+                      <strong>VISITANTE // FOR THE FEW</strong>
+                    </div>
+                    <div className={styles.dropdownDivider} />
+                    <button
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        if (onOpenAuthModal) onOpenAuthModal();
+                      }}
+                      className={styles.btnAuthPrimary}
                     >
                       [ 01. ENTRAR ]
                     </button>
                     <button
-                      className={styles.dropdownBtn}
-                      onClick={() => alert('Abrir modal de cadastro')}
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        if (onOpenAuthModal) onOpenAuthModal();
+                      }}
+                      className={styles.btnAuthSecondary}
                     >
                       [ 02. CRIAR CONTA ]
-                    </button>
-                  </>
-                ) : (
-                  /* Estado Logado */
-                  <>
-                    <button
-                      className={styles.dropdownBtn}
-                      onClick={() => setIsDropdownOpen(false)}
-                    >
-                      [ 📦 MEUS PEDIDOS ]
-                    </button>
-                    <button
-                      className={styles.dropdownBtn}
-                      onClick={() => setIsDropdownOpen(false)}
-                    >
-                      [ ⚙ CONFIGURAÇÕES ]
-                    </button>
-                    <button
-                      className={styles.dropdownBtn}
-                      onClick={() => setIsDropdownOpen(false)}
-                    >
-                      [ 💳 ENDEREÇOS ]
-                    </button>
-                    <button
-                      className={`${styles.dropdownBtn} ${styles.logoutBtn}`}
-                      onClick={() => {
-                        setIsLoggedIn(false);
-                        setIsDropdownOpen(false);
-                      }}
-                    >
-                      [ → SAIR DA CONTA ]
                     </button>
                   </>
                 )}
@@ -190,12 +187,38 @@ export default function Navbar({
             )}
           </div>
 
-          {/* Carrinho em Badge Preta */}
-          <button className={styles.cartBtn}>
-            CARRINHO ({String(cartCount).padStart(2, '0')})
+          {/* CART BUTTON */}
+          <button onClick={onOpenCart} className={styles.cartBox}>
+            <ShoppingBag size={14} />
+            <span>CARRINHO ({String(cartCount).padStart(2, "0")})</span>
           </button>
         </div>
-      </nav>
+      </div>
+
+      {/* SEARCH BAR OVERLAY */}
+      {isSearchOpen && (
+        <div className={styles.searchOverlay}>
+          <form onSubmit={handleSearchSubmit} className={styles.searchForm}>
+            <Search size={18} className={styles.searchIcon} />
+            <input
+              type="text"
+              placeholder="DIGITE O NOME DA PEÇA (EX: BOXY V.1, MOLETOM...)"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setIsSearchOpen(false)}
+              className={styles.closeSearchBtn}
+            >
+              <X size={18} />
+            </button>
+          </form>
+        </div>
+      )}
     </header>
   );
 }
+
+export default Navbar;
