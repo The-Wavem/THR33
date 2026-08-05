@@ -1,0 +1,495 @@
+/* PRELOADER VIP */
+.vipPreloader {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Space Mono', monospace;
+}
+
+.loaderContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
+  width: 90%;
+  max-width: 400px;
+}
+
+.loaderLogoBox {
+  border: 2px solid;
+  padding: 1rem 2rem;
+  box-shadow: 6px 6px 0px #000;
+  background-color: #000;
+}
+
+.loaderLogoText {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.5rem;
+  color: #FFF;
+  letter-spacing: 0.1em;
+}
+
+.progressBarWrapper {
+  width: 100%;
+  height: 12px;
+  border: 2px solid;
+  background-color: #000;
+  padding: 2px;
+}
+
+.progressBarFill {
+  height: 100%;
+  transition: width 0.1s linear;
+}
+
+.loaderStatus {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+  text-align: center;
+}
+
+/* MAIN WRAPPER */
+.dropWrapper {
+  width: 100%;
+  min-height: 100vh;
+  font-family: 'Space Mono', monospace;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.grainTexture {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.18;
+  z-index: 1;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+}
+
+/* 1. HERO FULL BLEED */
+.heroFullBleed {
+  position: relative;
+  width: 100vw;
+  left: 50%;
+  right: 50%;
+  margin-left: -50vw;
+  margin-right: -50vw;
+  height: 85vh;
+  min-height: 550px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2rem 3rem;
+  z-index: 2;
+}
+
+.heroBackground {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.heroImage {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: contrast(1.15) brightness(0.8);
+}
+
+.heroOverlayGradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(18, 17, 16, 1) 0%, rgba(18, 17, 16, 0.2) 60%, rgba(18, 17, 16, 0.7) 100%);
+}
+
+.heroTopBar {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.dropBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.875rem;
+  font-size: 0.6875rem;
+  font-weight: 900;
+  border: 1px solid #000;
+  box-shadow: 3px 3px 0px #000;
+}
+
+.audioToggleBtn {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  border: 2px solid;
+  padding: 0.5rem 1rem;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.heroContent {
+  position: relative;
+  z-index: 10;
+  max-width: 1100px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.subTitleTag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+}
+
+.heroHeading {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 3.5rem;
+  line-height: 1.05;
+  color: #FFFFFF;
+  text-transform: uppercase;
+  letter-spacing: -0.03em;
+}
+
+.heroActions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.btnExplore {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 1rem 2rem;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.875rem;
+  text-decoration: none;
+  border: 2px solid #000;
+  box-shadow: 4px 4px 0px #000;
+}
+
+/* 2. SESSÃO MANIFESTO BLENDED (SEM CARD / FOTO MESCLADA AO FUNDO) */
+.blendedManifestoSection {
+  max-width: 1400px;
+  margin: 5rem auto;
+  padding: 0 2rem;
+  position: relative;
+  z-index: 2;
+}
+
+.blendedGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4rem;
+  align-items: center;
+}
+
+/* A MÁGICA DA MESCLAGEM NA IMAGEM DA ESQUERDA */
+.blendedImageWrapper {
+  position: relative;
+  width: 100%;
+  height: 520px;
+  overflow: hidden;
+}
+
+.blendedImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: contrast(1.25) saturate(0.85) grayscale(20%);
+  /* DISSOLVE AS BORDAS DA FOTO NO FUNDO */
+  mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 95%);
+  -webkit-mask-image: radial-gradient(circle at center, rgba(0,0,0,1) 50%, rgba(0,0,0,0) 95%);
+}
+
+.blendGradientMask {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 40%, #121110 98%);
+  pointer-events: none;
+}
+
+.floatingTag {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  background-color: rgba(18, 17, 16, 0.85);
+  backdrop-filter: blur(4px);
+  border: 1px solid;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* TEXTO IMPRESSO NO CANVAS */
+.manifestoTextContent {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.locationHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+}
+
+.manifestoHeading {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 2.25rem;
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: #FFFFFF;
+}
+
+.manifestoParagraph {
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: #D5D5D0;
+}
+
+.rawSpecRow {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  border-top: 1px solid;
+  border-bottom: 1px solid;
+  padding: 1.25rem 0;
+  margin-top: 0.5rem;
+}
+
+.specItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.specItem span {
+  font-size: 0.5625rem;
+  opacity: 0.6;
+  letter-spacing: 0.1em;
+}
+
+.specItem strong {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+}
+
+.vinylBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  opacity: 0.8;
+  letter-spacing: 0.1em;
+}
+
+.spinningVinyl {
+  animation: spin 8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 3. PRODUCTS SECTION */
+.productsSection {
+  max-width: 1400px;
+  margin: 5rem auto;
+  padding: 0 2rem;
+  position: relative;
+  z-index: 2;
+}
+
+.sectionHeader {
+  border-bottom: 2px solid;
+  padding-bottom: 1rem;
+  margin-bottom: 2rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.sectionHeader h2 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.75rem;
+}
+
+.sectionHeader span {
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+
+.productsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 2rem;
+}
+
+.productCard {
+  border: 2px solid;
+  box-shadow: 6px 6px 0px #000;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.serialTag {
+  font-size: 0.625rem;
+  font-weight: 900;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid #000;
+}
+
+.cardTag {
+  font-size: 0.625rem;
+  opacity: 0.8;
+}
+
+.cardImageContainer {
+  position: relative;
+  width: 100%;
+  height: 320px;
+  border: 1px solid #000;
+  overflow: hidden;
+}
+
+.cardImageContainer img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.cardPriceBadge {
+  position: absolute;
+  top: 0.75rem;
+  right: 0.75rem;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.875rem;
+  padding: 0.35rem 0.75rem;
+  border: 2px solid;
+  box-shadow: 2px 2px 0px #000;
+}
+
+.cardBody h3 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.125rem;
+}
+
+.cardBody p {
+  font-size: 0.75rem;
+  opacity: 0.8;
+  line-height: 1.5;
+  margin-top: 0.375rem;
+  margin-bottom: 1rem;
+}
+
+.btnBuy {
+  width: 100%;
+  padding: 0.875rem 0;
+  border: 2px solid #000;
+  box-shadow: 3px 3px 0px #000;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+/* 4. TICKET SECTION */
+.ticketSection {
+  max-width: 1400px;
+  margin: 4rem auto 6rem auto;
+  padding: 0 2rem;
+  position: relative;
+  z-index: 2;
+}
+
+.ticketCard {
+  border: 2px solid;
+  padding: 2.25rem;
+  box-shadow: 8px 8px 0px #000;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.ticketInfo {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.ticketInfo h3 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.25rem;
+}
+
+.ticketInfo p {
+  font-size: 0.75rem;
+  opacity: 0.8;
+}
+
+.btnClaim {
+  padding: 0.875rem 1.75rem;
+  border: 2px solid #000;
+  box-shadow: 3px 3px 0px #000;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.claimedBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border: 2px solid;
+  font-weight: 900;
+  font-size: 0.75rem;
+}
+
+@media (max-width: 900px) {
+  .heroHeading { font-size: 2.25rem; }
+  .blendedGrid { grid-template-columns: 1fr; }
+  .blendedImageWrapper { height: 360px; }
+  .heroFullBleed { padding: 1.5rem; }
+}

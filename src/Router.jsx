@@ -6,6 +6,7 @@ import { PrivateLayout } from './layouts/PrivateLayout';
 import { Home } from './pages/public/Home';
 import { Catalogo } from './pages/public/Catalogo';
 import { ProdutoDetalhe } from './pages/public/ProdutoDetalhe';
+import { Lancamentos } from './pages/public/Lancamentos';
 
 export function AppRoutes({ 
   user, 
@@ -29,6 +30,9 @@ export function AppRoutes({
         }
       >
         <Route path="/" element={<Home onAddToCart={onAddToCart} />} />
+        
+        {/* ROTA LANÇAMENTOS VIP */}
+        <Route path="/lancamentos" element={<Lancamentos onAddToCart={onAddToCart} onOpenAuthModal={onOpenAuthModal} user={user} />} />
         
         {/* ROTA PRINCIPAL E ROTA DINÂMICA DE CATEGORIA */}
         <Route path="/catalogo" element={<Catalogo onAddToCart={onAddToCart} />} />
