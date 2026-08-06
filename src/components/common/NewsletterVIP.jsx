@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Sparkles, ArrowRight, Check } from 'lucide-react';
 import styles from './NewsletterVIP.module.css';
 
 export function NewsletterVIP() {
@@ -13,46 +12,35 @@ export function NewsletterVIP() {
       setTimeout(() => {
         setSubmitted(false);
         setEmail('');
-      }, 4000);
+      }, 3500);
     }
   };
 
   return (
-    <section className={styles.sectionContainer}>
-      <div className={styles.cardBox}>
-        <div className={styles.textContent}>
-          <div className={styles.badgeRow}>
-            <Sparkles size={14} className={styles.acidIcon} />
-            <span>DROP PROTOCOL // PRE-RELEASE ACCESS</span>
-          </div>
-
-          <h3>RECEBA A SENHA DE ACESSO DO PRÓXIMO DROP</h3>
-          <p>
-            Cadastre seu e-mail para receber o link direto da sala VIP 15 minutos antes da abertura oficial do estoque.
-          </p>
+    <section className={styles.newsletterSection}>
+      <div className={styles.newsletterContainer}>
+        {/* LADO ESQUERDO: TÍTULO E SUBTÍTULO DIRETO */}
+        <div className={styles.textBlock}>
+          <h3 className={styles.title}>FIQUE POR DENTRO</h3>
+          <p className={styles.subtitle}>Se inscreva na newsletter da THR33.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className={styles.formRow}>
-          <input 
-            type="email" 
-            placeholder="DIGITE SEU E-MAIL AQUI..." 
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className={styles.emailInput}
-          />
-          <button type="submit" className={styles.btnSubmit}>
-            <span>ENTRAR NA LISTA VIP</span>
-            <ArrowRight size={16} />
-          </button>
-        </form>
-
-        {submitted && (
-          <div className={styles.successToast}>
-            <Check size={16} />
-            <span>✓ PROTOCOLO REGISTRADO COM SUCESSO! VOCÊ RECEBERÁ O ACESSO NO PRÓXIMO LOTE.</span>
+        {/* LADO DIREITO: FORMULÁRIO HORIZONTAL ULTRA-CLEAN */}
+        <form onSubmit={handleSubmit} className={styles.formBlock}>
+          <div className={styles.inputWrapper}>
+            <input 
+              type="email" 
+              placeholder="E-mail" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              className={styles.emailInput}
+            />
+            <button type="submit" className={styles.btnSubmit}>
+              {submitted ? 'CADASTRADO' : 'CADASTRAR'}
+            </button>
           </div>
-        )}
+        </form>
       </div>
     </section>
   );

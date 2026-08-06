@@ -88,12 +88,7 @@ export function Lancamentos({ onOpenAuthModal, user }) {
         <div className={styles.heroContent}>
           <span className={styles.subTitleTag} style={{ color: theme.accentAcid }}>{subTitle}</span>
           <h1 className={styles.heroHeading}>{title}</h1>
-          <div className={styles.heroActions}>
-            <a href="#showcase" className={styles.btnExplore} style={{ backgroundColor: theme.accentAcid, color: '#000' }}>
-              <span>EXPLORAR O LOTE VIP</span>
-              <ArrowRight size={16} />
-            </a>
-          </div>
+         
         </div>
       </section>
 
@@ -127,8 +122,8 @@ export function Lancamentos({ onOpenAuthModal, user }) {
       {/* 3. SHOWCASE EDITORIAL 50/50 */}
       <section id="showcase" className={styles.editorialShowcaseSection}>
         <div className={styles.showcaseHeader}>
-          <h2>ACERVO DO DROP // PEÇAS EXCLUSIVAS</h2>
-          <span style={{ color: theme.accentAcid }}>[ EDIÇÃO ULTRA LIMITADA • LOTE NUMERADO ]</span>
+          <h2>PEÇAS EXCLUSIVAS</h2>
+          <span style={{ color: theme.accentAcid }}>[ EDIÇÃO LIMITADA • LOTE NUMERADO ]</span>
         </div>
 
         <div className={styles.editorialList}>
