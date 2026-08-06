@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
-  ShoppingBag, 
   Lock, 
   Flame, 
   ShieldCheck, 
@@ -11,13 +11,15 @@ import {
   Check, 
   MapPin,
   Disc,
-  Zap
+  Zap,
+  Tag
 } from 'lucide-react';
 import { currentDropConfig } from '../../data/dropConfig';
-import { fadeInUp, staggerContainer, buttonTactile } from '../../utils/motionVariants';
+import { buttonTactile } from '../../utils/motionVariants';
 import styles from './Lancamentos.module.css';
 
-export function Lancamentos({ onAddToCart, onOpenAuthModal, user }) {
+export function Lancamentos({ onOpenAuthModal, user }) {
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
@@ -42,42 +44,32 @@ export function Lancamentos({ onAddToCart, onOpenAuthModal, user }) {
   if (isLoading) {
     return (
       <div className={styles.vipPreloader} style={{ backgroundColor: theme.bgPrimary }}>
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className={styles.loaderContent}
-        >
+        <div className={styles.loaderContent}>
           <div className={styles.loaderLogoBox} style={{ borderColor: theme.accentAcid }}>
             <span className={styles.loaderLogoText}>{loaderLogoText}</span>
           </div>
           <div className={styles.progressBarWrapper} style={{ borderColor: theme.accentAcid }}>
-            <div 
-              className={styles.progressBarFill} 
-              style={{ width: `${loadProgress}%`, backgroundColor: theme.accentAcid }} 
-            />
+            <div className={styles.progressBarFill} style={{ width: `${loadProgress}%`, backgroundColor: theme.accentAcid }} />
           </div>
           <span className={styles.loaderStatus} style={{ color: theme.accentAcid }}>
-            INICIALIZANDO DROP STREETWEAR // BASS & CONCRETE [{loadProgress}%]
+            INICIALIZANDO DROP STREETWEAR [{loadProgress}%]
           </span>
-        </motion.div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className={styles.dropWrapper} style={{ backgroundColor: theme.bgPrimary, color: theme.textMain }}>
-      
-      {/* BACKGROUND NOISE TEXTURE */}
       <div className={styles.grainTexture} />
 
-      {/* 1. HERO FULL-BLEED EDGE-TO-EDGE */}
+      {/* 1. HERO BANNER FULL BLEED */}
       <section className={styles.heroFullBleed}>
         <div className={styles.heroBackground}>
           <img src={currentDropConfig.heroImage} alt={title} className={styles.heroImage} />
           <div className={styles.heroOverlayGradient} />
         </div>
 
-        {/* TOP BAR OVERLAY */}
         <div className={styles.heroTopBar}>
           <div className={styles.dropBadge} style={{ backgroundColor: theme.accentAcid, color: '#000' }}>
             <Flame size={14} />
@@ -94,183 +86,135 @@ export function Lancamentos({ onAddToCart, onOpenAuthModal, user }) {
           </button>
         </div>
 
-        {/* HERO MAIN TEXT CONTENT */}
         <div className={styles.heroContent}>
-          <motion.span 
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className={styles.subTitleTag} 
-            style={{ color: theme.accentAcid }}
-          >
-            {subTitle}
-          </motion.span>
-
-          <motion.h1 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className={styles.heroHeading}
-          >
-            {title}
-          </motion.h1>
-
-          <motion.div 
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className={styles.heroActions}
-          >
-            <a href="#manifesto" className={styles.btnExplore} style={{ backgroundColor: theme.accentAcid, color: '#000' }}>
-              <span>VER CONCEITO DO DROP</span>
+          <span className={styles.subTitleTag} style={{ color: theme.accentAcid }}>{subTitle}</span>
+          <h1 className={styles.heroHeading}>{title}</h1>
+          <div className={styles.heroActions}>
+            <a href="#showcase" className={styles.btnExplore} style={{ backgroundColor: theme.accentAcid, color: '#000' }}>
+              <span>EXPLORAR O LOTE VIP</span>
               <ArrowRight size={16} />
             </a>
-          </motion.div>
+          </div>
         </div>
       </section>
 
-      {/* 2. SESSÃO MANIFESTO: FOTOGRAFIA MESCLADA DIRETO NO FUNDO */}
-      <section id="manifesto" className={styles.blendedManifestoSection}>
+      {/* 2. MANIFESTO BLENDED */}
+      <section className={styles.blendedManifestoSection}>
         <div className={styles.blendedGrid}>
-          
-          {/* FOTO FUSED/MESCLADA NO FUNDO COM DISSOLUÇÃO DE BORDAS */}
           <div className={styles.blendedImageWrapper}>
             <img src={manifestoImage} alt="Fotografia de Rua" className={styles.blendedImg} />
             <div className={styles.blendGradientMask} />
-            
             <div className={styles.floatingTag} style={{ borderColor: theme.accentAcid, color: theme.accentAcid }}>
               <Zap size={12} />
               <span>35MM NIGHT FLASH // STREET PHOTO</span>
             </div>
           </div>
 
-          {/* TEXTO DO MANIFESTO IMPRESSO DIRETO NO CANVAS COM STAGGER & FADE-UP */}
-          <motion.div 
-            variants={staggerContainer}
-            initial="hidden"
-            whileInView="visible"
-            viewport={{ once: true, margin: "-50px" }}
-            className={styles.manifestoTextContent}
-          >
-            <motion.div variants={fadeInUp} className={styles.locationHeader} style={{ color: theme.accentAcid }}>
+          <div className={styles.manifestoTextContent}>
+            <div className={styles.locationHeader} style={{ color: theme.accentAcid }}>
               <MapPin size={16} />
               <span>{coordinates}</span>
-            </motion.div>
-
-            <motion.h2 variants={fadeInUp} className={styles.manifestoHeading}>
-              {manifestoHeading}
-            </motion.h2>
-
-            <motion.p variants={fadeInUp} className={styles.manifestoParagraph}>
-              {manifestoText}
-            </motion.p>
-
-            <motion.div variants={fadeInUp} className={styles.rawSpecRow} style={{ borderColor: theme.borderColor }}>
-              <div className={styles.specItem}>
-                <span>GRAMATURA</span>
-                <strong style={{ color: theme.accentAcid }}>280GSM HEAVY</strong>
-              </div>
-              <div className={styles.specItem}>
-                <span>TINGIMENTO</span>
-                <strong>MINERAL REVERSO</strong>
-              </div>
-              <div className={styles.specItem}>
-                <span>ESTOQUE</span>
-                <strong style={{ color: theme.accentAcid }}>33 UNIDADES</strong>
-              </div>
-            </motion.div>
-
-            <motion.div variants={fadeInUp} className={styles.vinylBadge}>
+            </div>
+            <h2 className={styles.manifestoHeading}>{manifestoHeading}</h2>
+            <p className={styles.manifestoParagraph}>{manifestoText}</p>
+            <div className={styles.vinylBadge}>
               <Disc size={16} className={styles.spinningVinyl} style={{ color: theme.accentAcid }} />
               <span>GRAVAÇÃO ORIGINAL THR33 // TAPE 2026</span>
-            </motion.div>
-          </motion.div>
-
-        </div>
-      </section>
-
-      {/* 3. VITRINE DE PRODUTOS DO DROP */}
-      <section className={styles.productsSection}>
-        <div className={styles.sectionHeader} style={{ borderColor: theme.borderColor }}>
-          <h2>PEÇAS LIBERADAS DO DROP</h2>
-          <span style={{ color: theme.accentAcid }}>[ EDIÇÃO ULTRA LIMITADA ]</span>
-        </div>
-
-        <div className={styles.productsGrid}>
-          {products.map((item) => (
-            <motion.div 
-              key={item.id} 
-              whileHover={{ y: -4 }}
-              className={styles.productCard}
-              style={{ backgroundColor: theme.bgCard, borderColor: theme.borderColor }}
-            >
-              <div className={styles.cardHeader}>
-                <span className={styles.serialTag} style={{ backgroundColor: theme.accentAcid, color: '#000' }}>
-                  {item.serialCount}
-                </span>
-                <span className={styles.cardTag}>{item.tag}</span>
-              </div>
-
-              <div className={styles.cardImageContainer}>
-                <img src={item.image} alt={item.title} />
-                <div className={styles.cardPriceBadge} style={{ backgroundColor: '#000', color: theme.accentAcid, borderColor: theme.accentAcid }}>
-                  {item.price}
-                </div>
-              </div>
-
-              <div className={styles.cardBody}>
-                <h3>{item.title}</h3>
-                <p>{item.description}</p>
-
-                <button 
-                  onClick={() => onAddToCart && onAddToCart({ ...item, selectedSize: 'M' })}
-                  className={styles.btnBuy}
-                  style={{ backgroundColor: theme.accentAcid, color: '#000' }}
-                >
-                  <ShoppingBag size={16} />
-                  <span>GARANTIR PEÇA DO DROP</span>
-                </button>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </section>
-
-      {/* 4. PASSE VIP DIGITAL */}
-      <section className={styles.ticketSection}>
-        <div className={styles.ticketCard} style={{ borderColor: theme.accentAcid, backgroundColor: theme.bgCard }}>
-          <div className={styles.ticketInfo}>
-            <ShieldCheck size={32} style={{ color: theme.accentAcid }} />
-            <div>
-              <h3>PASSE DE MEMBRO // FOR THE FEW</h3>
-              <p>Emita o seu comprovante digital para prioridade de envio neste lote.</p>
             </div>
           </div>
-
-          <div>
-            {!ticketClaimed ? (
-              <button 
-                onClick={() => {
-                  if (!user) {
-                    onOpenAuthModal && onOpenAuthModal();
-                  } else {
-                    setTicketClaimed(true);
-                  }
-                }}
-                className={styles.btnClaim}
-                style={{ backgroundColor: theme.accentAcid, color: '#000' }}
-              >
-                <Lock size={16} />
-                <span>{user ? 'EMITIR TICKET DIGITAL' : 'FAZER LOGIN PARA EMITIR TICKET'}</span>
-              </button>
-            ) : (
-              <div className={styles.claimedBadge} style={{ color: theme.accentAcid, borderColor: theme.accentAcid }}>
-                <Check size={18} />
-                <span>TICKET #0482 AUTENTICADO // BEM-VINDO</span>
-              </div>
-            )}
-          </div>
         </div>
       </section>
+
+      {/* 3. NOVO SHOWCASE EDITORIAL 50/50 (INSPIRADO NO FIGMA) */}
+      <section id="showcase" className={styles.editorialShowcaseSection}>
+        <div className={styles.showcaseHeader}>
+          <h2>ACERVO DO DROP // PEÇAS EXCLUSIVAS</h2>
+          <span style={{ color: theme.accentAcid }}>[ EDIÇÃO ULTRA LIMITADA • LOTE NUMERADO ]</span>
+        </div>
+
+        <div className={styles.editorialList}>
+          {products.map((item, index) => {
+            const isEven = index % 2 === 1;
+
+            return (
+              <motion.div 
+                key={item.id}
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true, margin: '-50px' }}
+                transition={{ duration: 0.5 }}
+                className={`${styles.editorialBlock} ${isEven ? styles.editorialReversed : ''}`}
+                style={{ borderColor: theme.borderColor }}
+              >
+                {/* LADO A: TEXTO, CONCEITO E BOTÃO DETALHES */}
+                <div className={styles.editorialTextCol}>
+                  <div className={styles.itemMetaHeader}>
+                    <span className={styles.serialBadge} style={{ backgroundColor: theme.accentAcid, color: '#000' }}>
+                      {item.serialCount}
+                    </span>
+                    <span className={styles.priceTag}>{item.price}</span>
+                  </div>
+
+                  <div className={styles.itemTitleGroup}>
+                    <h3 className={styles.itemTitle}>{item.title}</h3>
+                    <h4 className={styles.itemSubtitle} style={{ color: theme.accentAcid }}>
+                      {item.subtitle}
+                    </h4>
+                  </div>
+
+                  <p className={styles.itemStoryParagraph}>
+                    {item.conceptStory}
+                  </p>
+
+                  {item.specs && (
+                    <div className={styles.itemSpecsBox}>
+                      <div className={styles.specLine}>
+                        <span>TECIDO:</span>
+                        <strong>{item.specs.fabric}</strong>
+                      </div>
+                      <div className={styles.specLine}>
+                        <span>CORTE:</span>
+                        <strong>{item.specs.fit}</strong>
+                      </div>
+                      <div className={styles.specLine}>
+                        <span>ESTAMPA:</span>
+                        <strong>{item.specs.print}</strong>
+                      </div>
+                    </div>
+                  )}
+
+                  <motion.button 
+                    variants={buttonTactile}
+                    initial="rest"
+                    whileHover="hover"
+                    whileTap="tap"
+                    onClick={() => navigate(`/produto/${item.slug}`)}
+                    className={styles.btnViewDetails}
+                    style={{ backgroundColor: theme.accentAcid, color: '#000' }}
+                  >
+                    <span>VER DETALHES DA PEÇA</span>
+                    <ArrowRight size={16} />
+                  </motion.button>
+                </div>
+
+                {/* DIVISOR VERTICAL TÁTICO */}
+                <div className={styles.editorialDivider} />
+
+                {/* LADO B: FOTOGRAFIA FULL-BLEED */}
+                <div className={styles.editorialImageCol}>
+                  <img src={item.image} alt={item.title} className={styles.editorialModelImg} />
+                  <div className={styles.imageOverlayTag}>
+                    <Tag size={12} />
+                    <span>{item.tag || 'VIP ITEM'}</span>
+                  </div>
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </section>
+
+      
 
     </div>
   );
