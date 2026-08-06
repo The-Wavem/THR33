@@ -7,8 +7,14 @@
   justify-content: space-between;
   box-shadow: 6px 6px 0px #000000;
   position: relative;
-  transition: border-color 0.2s ease;
+  transition: all 0.2s ease;
   font-family: 'Space Mono', monospace;
+  cursor: pointer;
+}
+
+.cardContainer:hover {
+  transform: translateY(-3px);
+  box-shadow: 8px 8px 0px #000000;
 }
 
 .cardHeader {
@@ -32,9 +38,13 @@
   border: none;
   cursor: pointer;
   padding: 0.25rem;
+  z-index: 2;
 }
 
-.starActive { fill: #F2E3B3; color: #000000; }
+.starActive { 
+  fill: #F2E3B3; 
+  color: #000000; 
+}
 
 .imageFrame {
   position: relative;
@@ -42,7 +52,7 @@
   height: 320px;
   background-color: #F8F8F8;
   border: 1px solid #000000;
-  overflow: hidden; /* CORTA O ZOOM SUTIL DA IMAGEM */
+  overflow: hidden;
   margin-bottom: 1rem;
   display: block;
 }
@@ -68,50 +78,6 @@
   box-shadow: 2px 2px 0px #000000;
 }
 
-.sizeSelectorBar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  background-color: rgba(255, 255, 255, 0.95);
-  border-top: 2px solid #000000;
-  padding: 0.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.sizeLabel {
-  font-size: 0.5rem;
-  font-weight: 700;
-  color: #666;
-}
-
-.sizeGrid {
-  display: flex;
-  gap: 0.375rem;
-}
-
-.sizeBtn {
-  flex: 1;
-  padding: 0.2rem 0;
-  font-size: 0.625rem;
-  background: #FFF;
-  border: 1px solid #000;
-  cursor: pointer;
-  font-family: 'Space Mono', monospace;
-}
-
-.sizeActive {
-  flex: 1;
-  padding: 0.2rem 0;
-  font-size: 0.625rem;
-  background: #F2E3B3;
-  border: 1px solid #000;
-  font-weight: 900;
-  font-family: 'Space Mono', monospace;
-}
-
 .cardDetails {
   display: flex;
   flex-direction: column;
@@ -123,6 +89,7 @@
   font-size: 1rem;
   color: #000000;
   line-height: 1.2;
+  text-transform: uppercase;
 }
 
 .fabricSub {
@@ -130,9 +97,10 @@
   color: #666666;
   font-weight: 700;
   margin-top: 0.2rem;
+  text-transform: uppercase;
 }
 
-.btnBuy {
+.btnDetails {
   width: 100%;
   padding: 0.75rem 0;
   background-color: #000000;
@@ -143,15 +111,17 @@
   letter-spacing: 0.1em;
   text-transform: uppercase;
   border: 1px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
   cursor: pointer;
   outline: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.btnBuy:hover {
+.btnDetails:hover {
   background-color: #F2E3B3;
   color: #000000;
 }

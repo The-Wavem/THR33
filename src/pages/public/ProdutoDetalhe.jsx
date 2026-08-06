@@ -6,15 +6,17 @@ import {
   Star, 
   Truck, 
   ShieldCheck, 
-  RefreshCw, 
+  RotateCcw, 
   Check, 
   X,
   ZoomIn,
   ChevronLeft,
   ChevronRight,
-  Search
+  Plus,
+  Minus
 } from 'lucide-react';
 import { productsData } from '../../data/productsData';
+import { buttonTactile } from '../../utils/motionVariants';
 import styles from './ProdutoDetalhe.module.css';
 
 export function ProdutoDetalhe({ onAddToCart }) {
@@ -25,6 +27,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedSize, setSelectedSize] = useState('M');
+  const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState('descricao');
   const [isAddedFeedback, setIsAddedFeedback] = useState(false);
   const [isWishlisted, setIsWishlisted] = useState(false);
@@ -39,6 +42,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
   useEffect(() => {
     if (product) {
       setSelectedImageIndex(0);
+      setQuantity(1);
       if (product.sizes && product.sizes.length > 0) {
         setSelectedSize(product.sizes[0]);
       }
@@ -93,7 +97,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
   const handleAddToCart = () => {
     if (onAddToCart) {
-      onAddToCart({ ...product, selectedSize });
+      onAddToCart(product, selectedSize, quantity);
     }
     setIsAddedFeedback(true);
     setTimeout(() => setIsAddedFeedback(false), 2500);
@@ -166,13 +170,14 @@ export function ProdutoDetalhe({ onAddToCart }) {
             <div className={styles.headerBlock}>
               <div className={styles.titleRow}>
                 <h1 className={styles.productTitle}>{product.title}</h1>
-                <button 
+                <motion.button 
+                  whileTap={{ scale: 0.85 }}
                   onClick={() => setIsWishlisted(!isWishlisted)} 
                   className={styles.wishlistBtn}
                   title="Guardar na Lista"
                 >
                   <Star size={18} className={isWishlisted ? styles.starActive : ''} />
-                </button>
+                </motion.button>
               </div>
               <span className={styles.fabricSub}>{product.fabric}</span>
             </div>
@@ -202,16 +207,48 @@ export function ProdutoDetalhe({ onAddToCart }) {
               </div>
             </div>
 
-            <button onClick={handleAddToCart} className={styles.btnAddToCart}>
-              <ShoppingBag size={16} />
-              <span>
-                {isAddedFeedback 
-                  ? `✓ ADICIONADO AO CARRINHO (${selectedSize})` 
-                  : `ADICIONAR AO CARRINHO (${selectedSize})`}
-              </span>
-            </button>
+            {/* 1. CONTROLE DE QUANTIDADE TÁTICO & BOTÃO ADICIONAR */}
+            <div className={styles.actionRow}>
+              <div className={styles.quantitySelector}>
+                <motion.button 
+                  type="button"
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
+                  className={styles.btnQty}
+                  title="Diminuir Quantidade"
+                >
+                  <Minus size={14} />
+                </motion.button>
+                <span className={styles.qtyNumDisplay}>{String(quantity).padStart(2, '0')}</span>
+                <motion.button 
+                  type="button"
+                  whileTap={{ scale: 0.9 }}
+                  onClick={() => setQuantity(prev => prev + 1)}
+                  className={styles.btnQty}
+                  title="Aumentar Quantidade"
+                >
+                  <Plus size={14} />
+                </motion.button>
+              </div>
 
-            {/* TABS SYSTEM */}
+              <motion.button 
+                variants={buttonTactile}
+                initial="rest"
+                whileHover="hover"
+                whileTap="tap"
+                onClick={handleAddToCart} 
+                className={styles.btnAddToCart}
+              >
+                <ShoppingBag size={16} />
+                <span>
+                  {isAddedFeedback 
+                    ? `✓ ADICIONADO (${quantity}x ${selectedSize})` 
+                    : `ADICIONAR AO CARRINHO (${quantity}x ${selectedSize})`}
+                </span>
+              </motion.button>
+            </div>
+
+            {/* 2. SISTEMA DE ABAS BRUTALISTA REFINADO */}
             <div className={styles.tabsContainer}>
               <div className={styles.tabsHeader}>
                 {[
@@ -223,126 +260,94 @@ export function ProdutoDetalhe({ onAddToCart }) {
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={activeTab === tab.id ? styles.tabBtnActive : styles.tabBtn}
+                    className={activeTab === tab.id ? styles.tabActive : styles.tabBtn}
                   >
-                    {activeTab === tab.id && (
-                      <motion.div 
-                        layoutId="activeTabIndicator"
-                        className={styles.tabActiveBg}
-                        transition={{ type: 'spring', stiffness: 400, damping: 30 }}
-                      />
-                    )}
-                    <span className={styles.tabLabel}>{tab.label}</span>
+                    {tab.label}
                   </button>
                 ))}
               </div>
 
-              <div className={styles.tabBody}>
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activeTab}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -6 }}
-                    transition={{ duration: 0.15 }}
-                  >
-                    {activeTab === 'descricao' && (
-                      <div className={styles.tabContent}>
-                        <p className={styles.descParagraph}>
-                          {product.description || 'Modelagem autêntica com caimento estruturado e fluido. Peça confeccionada em algodão pesado com tingimento industrial reverso e toque suave.'}
-                        </p>
-                        <ul className={styles.specList}>
-                          <li><strong>MODELAGEM:</strong> {product.fit || 'BOXY OVERSIZED'}</li>
-                          <li><strong>COMPOSIÇÃO:</strong> {product.fabric}</li>
-                          <li><strong>ORIGEM:</strong> FABRICADO NO BRASIL // ATELIÊ R.U.A</li>
-                        </ul>
-                      </div>
-                    )}
+              <div className={styles.tabContent}>
+                {activeTab === 'descricao' && (
+                  <div>
+                    <p className={styles.tabParagraph}>{product.description}</p>
+                    <ul className={styles.specList}>
+                      <li>▪ <strong>MODELAGEM:</strong> BOXY OVERSIZED</li>
+                      <li>▪ <strong>GRAMATURA:</strong> 280GSM HEAVYWEIGHT</li>
+                      <li>▪ <strong>GOLA:</strong> CANELADA REFORÇADA 3CM</li>
+                      <li>▪ <strong>PRODUÇÃO:</strong> EDIÇÃO LIMITADA NUMERADA</li>
+                    </ul>
+                  </div>
+                )}
 
-                    {activeTab === 'medidas' && (
-                      <div className={styles.tabContent}>
-                        <div className={styles.measurementsGrid}>
-                          <div className={styles.tableWrapper}>
-                            <table className={styles.measureTable}>
-                              <thead>
-                                <tr>
-                                  <th>TAM</th>
-                                  <th>LARGURA</th>
-                                  <th>COMPRIMENTO</th>
-                                  <th>MANGA</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {(product.measurements?.chart || [
-                                  { size: 'P', length: '72 cm', width: '56 cm', sleeve: '22 cm' },
-                                  { size: 'M', length: '74 cm', width: '59 cm', sleeve: '23 cm' },
-                                  { size: 'G', length: '76 cm', width: '62 cm', sleeve: '24 cm' },
-                                  { size: 'GG', length: '78 cm', width: '65 cm', sleeve: '25 cm' },
-                                ]).map((row) => (
-                                  <tr 
-                                    key={row.size} 
-                                    className={selectedSize === row.size ? styles.rowHighlight : ''}
-                                  >
-                                    <td><strong>{row.size}</strong></td>
-                                    <td>{row.width}</td>
-                                    <td>{row.length}</td>
-                                    <td>{row.sleeve}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                {activeTab === 'medidas' && (
+                  <div className={styles.tableWrapper}>
+                    <table className={styles.measureTable}>
+                      <thead>
+                        <tr>
+                          <th>TAMANHO</th>
+                          <th>TÓRAX (CM)</th>
+                          <th>COMPRIMENTO (CM)</th>
+                          <th>MANGA (CM)</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr><td>P</td><td>56</td><td>72</td><td>22</td></tr>
+                        <tr><td>M</td><td>59</td><td>75</td><td>23</td></tr>
+                        <tr><td>G</td><td>62</td><td>78</td><td>24</td></tr>
+                        <tr><td>GG</td><td>65</td><td>81</td><td>25</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
 
-                    {activeTab === 'cuidados' && (
-                      <div className={styles.tabContent}>
-                        <ul className={styles.careList}>
-                          {(product.care || [
-                            'Lavar à mão ou máquina em ciclo delicado com água fria.',
-                            'Não utilizar alvejante ou branqueadores ópticos.',
-                            'Secar à sombra em varal horizontal.',
-                            'Passar do avesso em temperatura média (máx 150°C).'
-                          ]).map((item, idx) => (
-                            <li key={idx}>
-                              <Check size={14} className={styles.checkIcon} />
-                              <span>{item}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
+                {activeTab === 'cuidados' && (
+                  <ul className={styles.specList}>
+                    <li>▪ <strong>LAVAGEM:</strong> Lavar à mão ou no ciclo delicado com água fria.</li>
+                    <li>▪ <strong>ALVEJANTE:</strong> Não utilizar produtos à base de cloro.</li>
+                    <li>▪ <strong>PASSADOR:</strong> Passar do avesso em temperatura média.</li>
+                    <li>▪ <strong>SECAGEM:</strong> Secar à sombra para conservar o pigmento original.</li>
+                  </ul>
+                )}
 
-                    {activeTab === 'politicas' && (
-                      <div className={styles.tabContent}>
-                        <div className={styles.policiesList}>
-                          <div className={styles.policyItem}>
-                            <Truck size={16} />
-                            <div>
-                              <strong>FRETE TÁTICO EXPRESSO</strong>
-                              <p>Envio prioritário em embalagem selada anti-violação.</p>
-                            </div>
-                          </div>
-                          <div className={styles.policyItem}>
-                            <ShieldCheck size={16} />
-                            <div>
-                              <strong>GARANTIA THR33 AUTHENTIC</strong>
-                              <p>Acompanha número de série exclusivo e selo da marca.</p>
-                            </div>
-                          </div>
-                          <div className={styles.policyItem}>
-                            <RefreshCw size={16} />
-                            <div>
-                              <strong>TROCA SIMPLIFICADA</strong>
-                              <p>30 dias para solicitação de troca com etiqueta intacta.</p>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-                  </motion.div>
-                </AnimatePresence>
+                {activeTab === 'politicas' && (
+                  <ul className={styles.specList}>
+                    <li>▪ <strong>FRETE DESPACHO:</strong> Envio expresso prioritário em até 48h úteis.</li>
+                    <li>▪ <strong>POLÍTICA DE TROCAS:</strong> 30 dias após recebimento mantendo o lacre.</li>
+                    <li>▪ <strong>GARANTIA R.U.A:</strong> Autenticidade garantida THR33 ATELIÊ.</li>
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            {/* 3. BARRA DE CONFIANÇA & SELOS (TRUST BADGES GRID) */}
+            <div className={styles.trustBannerGrid}>
+              <div className={styles.trustItem}>
+                <Truck size={18} className={styles.trustIcon} />
+                <div className={styles.trustTextGroup}>
+                  <strong>FRETE EXPRESSO</strong>
+                  <span>DESPACHO TÁTICO 48H</span>
+                </div>
+              </div>
+
+              <div className={styles.trustDivider} />
+
+              <div className={styles.trustItem}>
+                <ShieldCheck size={18} className={styles.trustIcon} />
+                <div className={styles.trustTextGroup}>
+                  <strong>PAGAMENTO SECURE</strong>
+                  <span>PIX OU ATÉ 6X</span>
+                </div>
+              </div>
+
+              <div className={styles.trustDivider} />
+
+              <div className={styles.trustItem}>
+                <RotateCcw size={18} className={styles.trustIcon} />
+                <div className={styles.trustTextGroup}>
+                  <strong>30 DIAS DE TROCA</strong>
+                  <span>GARANTIA TOTAL</span>
+                </div>
               </div>
             </div>
 
@@ -352,110 +357,51 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
       </div>
 
-      {/* FULLSCREEN LIGHTBOX MODAL WITH HOVER ZOOM LENS */}
+      {/* LIGHTBOX MODAL DA GALERIA */}
       <AnimatePresence>
         {isLightboxOpen && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className={styles.lightboxOverlay}
-            onClick={() => {
-              setIsLightboxOpen(false);
-              setIsZoomed(false);
-            }}
-          >
-            <motion.div 
-              initial={{ scale: 0.94, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.94, opacity: 0 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-              className={styles.lightboxModal}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* CLOSE BUTTON */}
+          <div className={styles.lightboxOverlay} onClick={() => { setIsLightboxOpen(false); setIsZoomed(false); }}>
+            <div className={styles.lightboxContent} onClick={(e) => e.stopPropagation()}>
               <button 
-                onClick={() => {
-                  setIsLightboxOpen(false);
-                  setIsZoomed(false);
-                }} 
-                className={styles.closeLightboxBtn}
-                title="Fechar (Esc)"
+                onClick={() => { setIsLightboxOpen(false); setIsZoomed(false); }} 
+                className={styles.btnCloseLightbox}
+                title="Fechar (ESC)"
               >
-                <X size={18} />
+                <X size={20} />
               </button>
 
-              {/* CAROUSEL ARROW PREV */}
-              {galleryList.length > 1 && (
-                <button 
-                  onClick={handlePrevImage} 
-                  className={styles.lightboxArrowLeft}
-                  title="Foto Anterior (Seta Esquerda)"
-                >
-                  <ChevronLeft size={22} />
-                </button>
-              )}
+              <button onClick={handlePrevImage} className={styles.lightboxNavLeft}>
+                <ChevronLeft size={24} />
+              </button>
 
-              {/* IMAGE CONTAINER WITH COORDINATE HOVER ZOOM */}
               <div 
-                className={styles.lightboxImageContainer}
-                onMouseEnter={() => setIsZoomed(true)}
-                onMouseLeave={() => setIsZoomed(false)}
+                className={`${styles.lightboxImageWrapper} ${isZoomed ? styles.zoomedActive : ''}`}
                 onMouseMove={handleMouseMove}
+                onClick={() => setIsZoomed(!isZoomed)}
               >
-                <AnimatePresence mode="wait">
-                  <motion.img 
-                    key={selectedImageIndex}
-                    src={currentImage} 
-                    alt={product.title} 
-                    initial={{ opacity: 0.3 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0.3 }}
-                    transition={{ duration: 0.15 }}
-                    className={styles.lightboxImage}
-                    style={{
-                      transformOrigin: `${mousePos.x}% ${mousePos.y}%`,
-                      transform: isZoomed ? 'scale(2.2)' : 'scale(1)'
-                    }}
-                  />
-                </AnimatePresence>
-
-                {/* ZOOM STATUS BADGE */}
-                <div className={isZoomed ? styles.zoomBadgeActive : styles.zoomBadgeHint}>
-                  <Search size={12} />
-                  <span>
-                    {isZoomed 
-                      ? `LENTE TÁTIL 2.2X // [${Math.round(mousePos.x)}%, ${Math.round(mousePos.y)}%]` 
-                      : 'PASSE O MOUSE PARA AMPLIAR O TECIDO'}
-                  </span>
-                </div>
+                <img 
+                  src={currentImage} 
+                  alt={product.title} 
+                  className={styles.lightboxImage}
+                  style={isZoomed ? {
+                    transformOrigin: `${mousePos.x}% ${mousePos.y}%`,
+                    transform: 'scale(2.4)'
+                  } : {}}
+                />
               </div>
 
-              {/* CAROUSEL ARROW NEXT */}
-              {galleryList.length > 1 && (
-                <button 
-                  onClick={handleNextImage} 
-                  className={styles.lightboxArrowRight}
-                  title="Próxima Foto (Seta Direita)"
-                >
-                  <ChevronRight size={22} />
-                </button>
-              )}
+              <button onClick={handleNextImage} className={styles.lightboxNavRight}>
+                <ChevronRight size={24} />
+              </button>
 
-              {/* FOOTER BAR */}
               <div className={styles.lightboxFooter}>
-                <div className={styles.lightboxDetails}>
-                  <strong>{product.title}</strong>
-                  <span>{product.fabric}</span>
-                </div>
-                {galleryList.length > 1 && (
-                  <span className={styles.lightboxCounter}>
-                    FOTO [{String(selectedImageIndex + 1).padStart(2, '0')} / {String(galleryList.length).padStart(2, '0')}]
-                  </span>
-                )}
+                <span>{product.title} // IMAGEM {selectedImageIndex + 1} DE {galleryList.length}</span>
+                <span className={styles.zoomToggleHint}>
+                  {isZoomed ? 'CLIQUE PARA REDUZIR' : 'CLIQUE EM QUALQUER PONTO PARA ZOOM LUPA (2.4X)'}
+                </span>
               </div>
-            </motion.div>
-          </motion.div>
+            </div>
+          </div>
         )}
       </AnimatePresence>
 

@@ -1,0 +1,203 @@
+.checkoutPage {
+  min-height: 80vh;
+  padding: 3rem 2rem;
+  background-color: #0F0E0D;
+  color: #FFFFFF;
+  font-family: 'Space Mono', monospace;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.stepperHeader {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 3rem;
+  flex-wrap: wrap;
+}
+
+.stepPill {
+  padding: 0.625rem 1.25rem;
+  background-color: #1A1816;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #888888;
+}
+
+.stepActive {
+  background-color: #E2FF00;
+  color: #000000;
+  border-color: #E2FF00;
+  font-weight: 900;
+}
+
+.mainGrid {
+  display: flex;
+  gap: 2rem;
+  flex-wrap: wrap;
+}
+
+.formCol { flex: 2; min-width: 320px; }
+.summaryCol { flex: 1; min-width: 280px; }
+
+.stepCard {
+  background-color: #161514;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  padding: 2rem;
+  box-shadow: 6px 6px 0px #000000;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.stepCardHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #E2FF00;
+}
+
+.itemsReviewList {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.itemReviewRow {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  background-color: #000000;
+  padding: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.reviewThumb { width: 50px; height: 60px; object-fit: cover; }
+.reviewInfo { flex: 1; display: flex; flex-direction: column; font-size: 0.6875rem; }
+
+.formGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.inputFull { width: 100%; background: #000; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 0.875rem; font-family: inherit; font-size: 0.75rem; }
+.inputHalf { width: calc(50% - 0.5rem); background: #000; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 0.875rem; font-family: inherit; font-size: 0.75rem; }
+.inputThird { width: calc(33.3% - 0.68rem); background: #000; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 0.875rem; font-family: inherit; font-size: 0.75rem; }
+.inputTwoThirds { width: calc(66.6% - 0.35rem); background: #000; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 0.875rem; font-family: inherit; font-size: 0.75rem; }
+
+.stepBtnRow {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.btnNextStep {
+  flex: 1;
+  padding: 1rem;
+  background-color: #E2FF00;
+  color: #000;
+  border: 1px solid #000;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.btnBackStep {
+  padding: 1rem 1.5rem;
+  background-color: #000;
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.2);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.75rem;
+}
+
+.paymentMethodsGrid {
+  display: flex;
+  gap: 1rem;
+}
+
+.methodBtn {
+  flex: 1;
+  padding: 1rem;
+  background-color: #000;
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.625rem;
+  cursor: pointer;
+}
+
+.methodActive {
+  flex: 1;
+  padding: 1rem;
+  background-color: #E2FF00;
+  border: 1px solid #000;
+  color: #000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.btnFinishOrder {
+  flex: 1;
+  padding: 1rem;
+  background-color: #E2FF00;
+  color: #000;
+  border: 1px solid #000;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.875rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* SUMMARY CARD */
+.summaryCard {
+  background-color: #161514;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.summaryDivider { height: 1px; background-color: rgba(255, 255, 255, 0.15); }
+.summaryRow { display: flex; justify-content: space-between; font-size: 0.75rem; }
+.summaryRowDiscount { display: flex; justify-content: space-between; font-size: 0.75rem; color: #E2FF00; }
+.freeTag { color: #E2FF00; }
+.totalRow { display: flex; justify-content: space-between; align-items: center; font-family: 'Arial Black', sans-serif; }
+.totalVal { color: #E2FF00; font-size: 1.25rem; }
+
+.successCard {
+  background-color: #161514;
+  border: 2px solid #E2FF00;
+  padding: 3rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.successIcon { color: #E2FF00; }
+.btnBackCatalog { padding: 1rem 2rem; background-color: #E2FF00; color: #000; border: none; font-family: 'Arial Black', sans-serif; cursor: pointer; }
+.emptyCheckoutContainer { text-align: center; padding: 5rem 2rem; color: #fff; font-family: 'Space Mono', monospace; display: flex; flex-direction: column; align-items: center; gap: 1rem; }

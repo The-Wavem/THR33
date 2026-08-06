@@ -7,17 +7,24 @@
   display: flex;
   flex-direction: column;
   gap: 1rem;
+  box-sizing: border-box;
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .sidebarHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .sidebarHeader h3 {
   font-family: 'Arial Black', sans-serif;
   font-size: 1.125rem;
+  letter-spacing: -0.02em;
+  margin: 0;
 }
 
 .versionBadge {
@@ -29,18 +36,22 @@
 .divider {
   height: 1px;
   background-color: #000000;
+  width: 100%;
 }
 
 .filterGroup {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .groupLabel {
   font-size: 0.6875rem;
   font-weight: 900;
   letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .checkboxList {
@@ -66,41 +77,53 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 0.375rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .fitBtn {
-  padding: 0.375rem;
+  padding: 0.5rem 0.25rem;
   background-color: #FFFFFF;
   border: 1px solid #000000;
   font-size: 0.625rem;
   font-weight: 700;
   cursor: pointer;
+  text-align: center;
+  transition: all 0.15s ease;
+}
+
+.fitBtn:hover {
+  background-color: #F2E3B3;
 }
 
 .fitBtnActive {
-  padding: 0.375rem;
+  padding: 0.5rem 0.25rem;
   background-color: #000000;
   color: #FFFFFF;
   border: 1px solid #000000;
   font-size: 0.625rem;
   font-weight: 900;
   cursor: pointer;
+  text-align: center;
 }
 
 .priceLabelRow {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
 }
 
 .priceVal {
   font-size: 0.75rem;
   color: #000000;
+  font-weight: 900;
 }
 
 .priceRangeInput {
   accent-color: #000000;
   cursor: pointer;
+  width: 100%;
 }
 
 .priceMinMax {
@@ -110,45 +133,62 @@
   color: #666;
 }
 
+/* SIZE GRID: REPETE EM 4 COLUNAS RESPONSIVAS E NÃO VAZA FORA DO CONTAINER */
 .sizeGrid {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.375rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .sizeBox {
-  flex: 1;
-  padding: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.25rem;
   background-color: #FFFFFF;
   border: 1px solid #000000;
-  font-size: 0.75rem;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
   font-weight: 700;
   cursor: pointer;
+  text-align: center;
+  box-sizing: border-box;
+  transition: all 0.15s ease;
+}
+
+.sizeBox:hover {
+  background-color: #F2E3B3;
 }
 
 .sizeBoxActive {
-  flex: 1;
-  padding: 0.5rem;
+  width: 100%;
+  padding: 0.5rem 0.25rem;
   background-color: #F2E3B3;
   border: 1px solid #000000;
-  font-size: 0.75rem;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
   font-weight: 900;
   box-shadow: 2px 2px 0px #000000;
   cursor: pointer;
+  text-align: center;
+  box-sizing: border-box;
 }
 
 .actionBlock {
   margin-top: 0.5rem;
+  width: 100%;
 }
 
 .btnReset {
   width: 100%;
-  padding: 0.5rem;
+  padding: 0.625rem;
   background: none;
   border: 1px dashed #000000;
   font-family: 'Space Mono', monospace;
   font-size: 0.6875rem;
   font-weight: 700;
   cursor: pointer;
+  transition: all 0.15s ease;
 }
 
 .btnReset:hover {
