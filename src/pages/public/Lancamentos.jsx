@@ -18,13 +18,11 @@ import { currentDropConfig } from '../../data/dropConfig';
 import { buttonTactile } from '../../utils/motionVariants';
 import styles from './Lancamentos.module.css';
 
-export function Lancamentos({ onOpenAuthModal, user }) {
+export function Lancamentos() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [ticketClaimed, setTicketClaimed] = useState(false);
-
   useEffect(() => {
     const interval = setInterval(() => {
       setLoadProgress((prev) => {
@@ -213,9 +211,6 @@ export function Lancamentos({ onOpenAuthModal, user }) {
           })}
         </div>
       </section>
-
-      
-
     </div>
   );
 }
