@@ -1,8 +1,8 @@
 .checkoutPage {
   min-height: 80vh;
   padding: 3rem 2rem;
-  background-color: #0F0E0D;
-  color: #FFFFFF;
+  background-color: #E5E5E5;
+  color: #000000;
   font-family: 'Space Mono', monospace;
 }
 
@@ -14,24 +14,34 @@
 .stepperHeader {
   display: flex;
   gap: 1rem;
-  margin-bottom: 3rem;
+  margin-bottom: 2.5rem;
   flex-wrap: wrap;
 }
 
 .stepPill {
-  padding: 0.625rem 1.25rem;
-  background-color: #1A1816;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.75rem 1.25rem;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
   font-size: 0.6875rem;
   font-weight: 700;
-  color: #888888;
+  color: #666666;
+  transition: all 0.15s ease;
 }
 
 .stepActive {
-  background-color: #E2FF00;
-  color: #000000;
-  border-color: #E2FF00;
+  background-color: #000000;
+  color: #FFFFFF;
+  border-color: #000000;
   font-weight: 900;
+  box-shadow: 4px 4px 0px #000000;
+}
+
+.stepCompleted {
+  background-color: #F2E3B3;
+  color: #000000;
+  border-color: #000000;
+  font-weight: 700;
 }
 
 .mainGrid {
@@ -44,8 +54,8 @@
 .summaryCol { flex: 1; min-width: 280px; }
 
 .stepCard {
-  background-color: #161514;
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
   padding: 2rem;
   box-shadow: 6px 6px 0px #000000;
   display: flex;
@@ -53,11 +63,17 @@
   gap: 1.5rem;
 }
 
+.stepCard h3 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.125rem;
+  color: #000000;
+}
+
 .stepCardHeader {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  color: #E2FF00;
+  color: #000000;
 }
 
 .itemsReviewList {
@@ -70,13 +86,37 @@
   display: flex;
   align-items: center;
   gap: 1rem;
-  background-color: #000000;
-  padding: 0.75rem;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: #F8F8F8;
+  padding: 0.875rem;
+  border: 1px solid #000000;
+  box-shadow: 2px 2px 0px #000000;
 }
 
-.reviewThumb { width: 50px; height: 60px; object-fit: cover; }
-.reviewInfo { flex: 1; display: flex; flex-direction: column; font-size: 0.6875rem; }
+.reviewThumb { 
+  width: 55px; 
+  height: 65px; 
+  object-fit: cover; 
+  border: 1px solid #000000;
+}
+
+.reviewInfo { 
+  flex: 1; 
+  display: flex; 
+  flex-direction: column; 
+  font-size: 0.6875rem; 
+  color: #000000;
+}
+
+.reviewInfo strong {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+}
+
+.reviewInfo span {
+  color: #555555;
+  margin-top: 0.2rem;
+}
 
 .formGrid {
   display: flex;
@@ -84,10 +124,49 @@
   gap: 1rem;
 }
 
-.inputFull { width: 100%; background: #000; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 0.875rem; font-family: inherit; font-size: 0.75rem; }
-.inputHalf { width: calc(50% - 0.5rem); background: #000; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 0.875rem; font-family: inherit; font-size: 0.75rem; }
-.inputThird { width: calc(33.3% - 0.68rem); background: #000; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 0.875rem; font-family: inherit; font-size: 0.75rem; }
-.inputTwoThirds { width: calc(66.6% - 0.35rem); background: #000; border: 1px solid rgba(255,255,255,0.2); color: #fff; padding: 0.875rem; font-family: inherit; font-size: 0.75rem; }
+.inputFull { 
+  width: 100%; 
+  background: #FFFFFF; 
+  border: 2px solid #000000; 
+  color: #000000; 
+  padding: 0.875rem; 
+  font-family: inherit; 
+  font-size: 0.75rem;
+  outline: none; 
+}
+
+.inputHalf { 
+  width: calc(50% - 0.5rem); 
+  background: #FFFFFF; 
+  border: 2px solid #000000; 
+  color: #000000; 
+  padding: 0.875rem; 
+  font-family: inherit; 
+  font-size: 0.75rem;
+  outline: none; 
+}
+
+.inputThird { 
+  width: calc(33.3% - 0.68rem); 
+  background: #FFFFFF; 
+  border: 2px solid #000000; 
+  color: #000000; 
+  padding: 0.875rem; 
+  font-family: inherit; 
+  font-size: 0.75rem;
+  outline: none; 
+}
+
+.inputTwoThirds { 
+  width: calc(66.6% - 0.35rem); 
+  background: #FFFFFF; 
+  border: 2px solid #000000; 
+  color: #000000; 
+  padding: 0.875rem; 
+  font-family: inherit; 
+  font-size: 0.75rem;
+  outline: none; 
+}
 
 .stepBtnRow {
   display: flex;
@@ -99,9 +178,10 @@
 .btnNextStep {
   flex: 1;
   padding: 1rem;
-  background-color: #E2FF00;
-  color: #000;
-  border: 1px solid #000;
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
   font-family: 'Arial Black', sans-serif;
   font-size: 0.75rem;
   cursor: pointer;
@@ -109,16 +189,29 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  transition: all 0.15s ease;
+}
+
+.btnNextStep:hover {
+  background-color: #F2E3B3;
+  color: #000000;
 }
 
 .btnBackStep {
   padding: 1rem 1.5rem;
-  background-color: #000;
-  color: #fff;
-  border: 1px solid rgba(255,255,255,0.2);
+  background-color: #FFFFFF;
+  color: #000000;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
   cursor: pointer;
   font-family: inherit;
   font-size: 0.75rem;
+  font-weight: 700;
+  transition: all 0.15s ease;
+}
+
+.btnBackStep:hover {
+  background-color: #F2E3B3;
 }
 
 .paymentMethodsGrid {
@@ -129,23 +222,30 @@
 .methodBtn {
   flex: 1;
   padding: 1rem;
-  background-color: #000;
-  border: 1px solid rgba(255,255,255,0.2);
-  color: #fff;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  color: #000000;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
   font-size: 0.625rem;
+  font-weight: 700;
   cursor: pointer;
+  box-shadow: 3px 3px 0px #000000;
+  transition: all 0.15s ease;
+}
+
+.methodBtn:hover {
+  background-color: #F2E3B3;
 }
 
 .methodActive {
   flex: 1;
   padding: 1rem;
-  background-color: #E2FF00;
-  border: 1px solid #000;
-  color: #000;
+  background-color: #000000;
+  border: 2px solid #000000;
+  color: #FFFFFF;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -153,14 +253,30 @@
   font-size: 0.625rem;
   font-weight: 900;
   cursor: pointer;
+  box-shadow: 4px 4px 0px #000000;
+}
+
+.pixBox {
+  background-color: #F8F8F8;
+  border: 1px solid #000000;
+  padding: 1rem;
+  font-size: 0.75rem;
+  color: #333333;
+}
+
+.cardForm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
 }
 
 .btnFinishOrder {
   flex: 1;
   padding: 1rem;
-  background-color: #E2FF00;
-  color: #000;
-  border: 1px solid #000;
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
   font-family: 'Arial Black', sans-serif;
   font-size: 0.875rem;
   cursor: pointer;
@@ -168,36 +284,108 @@
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
+  transition: all 0.15s ease;
+}
+
+.btnFinishOrder:hover {
+  background-color: #F2E3B3;
+  color: #000000;
 }
 
 /* SUMMARY CARD */
 .summaryCard {
-  background-color: #161514;
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 6px 6px 0px #000000;
   padding: 1.5rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
 }
 
-.summaryDivider { height: 1px; background-color: rgba(255, 255, 255, 0.15); }
-.summaryRow { display: flex; justify-content: space-between; font-size: 0.75rem; }
-.summaryRowDiscount { display: flex; justify-content: space-between; font-size: 0.75rem; color: #E2FF00; }
-.freeTag { color: #E2FF00; }
-.totalRow { display: flex; justify-content: space-between; align-items: center; font-family: 'Arial Black', sans-serif; }
-.totalVal { color: #E2FF00; font-size: 1.25rem; }
+.summaryCard h3 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1rem;
+  color: #000000;
+}
+
+.summaryDivider { 
+  height: 2px; 
+  background-color: #000000; 
+}
+
+.summaryRow { 
+  display: flex; 
+  justify-content: space-between; 
+  font-size: 0.75rem; 
+  color: #333333;
+}
+
+.summaryRowDiscount { 
+  display: flex; 
+  justify-content: space-between; 
+  font-size: 0.75rem; 
+  color: #000000;
+  font-weight: 700;
+}
+
+.freeTag { 
+  color: #000000; 
+  font-weight: 900;
+}
+
+.totalRow { 
+  display: flex; 
+  justify-content: space-between; 
+  align-items: center; 
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.875rem;
+  color: #000000;
+}
+
+.totalVal { 
+  color: #000000; 
+  font-size: 1.25rem; 
+}
 
 .successCard {
-  background-color: #161514;
-  border: 2px solid #E2FF00;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 6px 6px 0px #000000;
   padding: 3rem;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 1rem;
+  color: #000000;
 }
 
-.successIcon { color: #E2FF00; }
-.btnBackCatalog { padding: 1rem 2rem; background-color: #E2FF00; color: #000; border: none; font-family: 'Arial Black', sans-serif; cursor: pointer; }
-.emptyCheckoutContainer { text-align: center; padding: 5rem 2rem; color: #fff; font-family: 'Space Mono', monospace; display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+.successIcon { color: #000000; }
+
+.btnBackCatalog { 
+  padding: 1rem 2rem; 
+  background-color: #000000; 
+  color: #FFFFFF; 
+  border: 2px solid #000000; 
+  box-shadow: 4px 4px 0px #000000;
+  font-family: 'Arial Black', sans-serif; 
+  cursor: pointer; 
+  transition: all 0.15s ease;
+}
+
+.btnBackCatalog:hover {
+  background-color: #F2E3B3;
+  color: #000000;
+}
+
+.emptyCheckoutContainer { 
+  text-align: center; 
+  padding: 5rem 2rem; 
+  color: #000000; 
+  font-family: 'Space Mono', monospace; 
+  display: flex; 
+  flex-direction: column; 
+  align-items: center; 
+  gap: 1rem; 
+}
