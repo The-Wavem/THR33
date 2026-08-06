@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { PublicLayout } from './layouts/PublicLayout';
 import { PrivateLayout } from './layouts/PrivateLayout';
 
@@ -8,15 +8,21 @@ import { Catalogo } from './pages/public/Catalogo';
 import { ProdutoDetalhe } from './pages/public/ProdutoDetalhe';
 import { Lancamentos } from './pages/public/Lancamentos';
 import { Checkout } from './pages/public/Checkout';
+import { Auth } from './pages/public/Auth';
 import { CartDrawer } from './components/cart/CartDrawer';
 import { useCart } from './context/CartContext';
+import { useAuth } from './context/AuthContext';
 
-export function AppRoutes({ 
-  user, 
-  onLogout, 
-  onOpenAuthModal 
-}) {
+export function AppRoutes() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const { totalItemsCount, setIsCartOpen, addToCart } = useCart();
+  const { user, logout } = useAuth();
+
+  const handleOpenAuth = (originPath = null, tab = 'login') => {
+    const from = originPath || location.pathname;
+    navigate('/auth', { state: { from, tab } });
+  };
 
   return (
     <>
@@ -25,17 +31,17 @@ export function AppRoutes({
           element={
             <PublicLayout 
               user={user}
-              onLogout={onLogout}
+              onLogout={logout}
               cartCount={totalItemsCount}
               onOpenCart={() => setIsCartOpen(true)}
-              onOpenAuthModal={onOpenAuthModal}
+              onOpenAuthModal={handleOpenAuth}
             />
           }
         >
           <Route path="/" element={<Home onAddToCart={addToCart} onOpenCart={() => setIsCartOpen(true)} />} />
           
           {/* ROTA LANÇAMENTOS VIP */}
-          <Route path="/lancamentos" element={<Lancamentos onAddToCart={addToCart} onOpenAuthModal={onOpenAuthModal} user={user} />} />
+          <Route path="/lancamentos" element={<Lancamentos onAddToCart={addToCart} onOpenAuthModal={handleOpenAuth} user={user} />} />
           
           {/* ROTA PRINCIPAL E ROTA DINÂMICA DE CATEGORIA */}
           <Route path="/catalogo" element={<Catalogo onAddToCart={addToCart} />} />
@@ -45,14 +51,18 @@ export function AppRoutes({
           <Route path="/produto/:slug" element={<ProdutoDetalhe onAddToCart={addToCart} />} />
 
           {/* ROTA DE CHECKOUT */}
-          <Route path="/checkout" element={<Checkout user={user} onOpenAuthModal={onOpenAuthModal} />} />
+          <Route path="/checkout" element={<Checkout user={user} onOpenAuthModal={handleOpenAuth} />} />
+
+          {/* ROTA DE AUTENTICAÇÃO TÁTICA (LOGIN & CADASTRO) */}
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/login" element={<Auth />} />
         </Route>
 
         <Route 
           element={
             <PrivateLayout 
               user={user}
-              onLogout={onLogout}
+              onLogout={logout}
               cartCount={totalItemsCount}
               onOpenCart={() => setIsCartOpen(true)}
             />

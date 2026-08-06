@@ -259,10 +259,10 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
                       <strong>VISITANTE // FOR THE FEW</strong>
                     </div>
                     <div className={styles.dropdownDivider} />
-                    <button onClick={() => { setIsUserMenuOpen(false); if(onOpenAuthModal) onOpenAuthModal(); }} className={styles.btnAuthPrimary}>
+                    <button onClick={() => { setIsUserMenuOpen(false); if(onOpenAuthModal) onOpenAuthModal(null, 'login'); }} className={styles.btnAuthPrimary}>
                       [ 01. ENTRAR ]
                     </button>
-                    <button onClick={() => { setIsUserMenuOpen(false); if(onOpenAuthModal) onOpenAuthModal(); }} className={styles.btnAuthSecondary}>
+                    <button onClick={() => { setIsUserMenuOpen(false); if(onOpenAuthModal) onOpenAuthModal(null, 'register'); }} className={styles.btnAuthSecondary}>
                       [ 02. CRIAR CONTA ]
                     </button>
                   </>

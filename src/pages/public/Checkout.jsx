@@ -549,7 +549,7 @@ export function Checkout({ user, onOpenAuthModal }) {
                 <button 
                   onClick={() => {
                     setShowAuthGateModal(false);
-                    if (onOpenAuthModal) onOpenAuthModal();
+                    if (onOpenAuthModal) onOpenAuthModal('/checkout', 'login');
                   }} 
                   className={styles.btnAuthPrimary}
                 >
@@ -560,7 +560,7 @@ export function Checkout({ user, onOpenAuthModal }) {
                 <button 
                   onClick={() => {
                     setShowAuthGateModal(false);
-                    if (onOpenAuthModal) onOpenAuthModal();
+                    if (onOpenAuthModal) onOpenAuthModal('/checkout', 'register');
                   }} 
                   className={styles.btnAuthSecondary}
                 >
