@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Star, 
@@ -9,23 +10,29 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Bell
+  Bell,
+  Grid,
+  Zap
 } from 'lucide-react';
-import { carouselSlides, verticalProducts } from '../../data/homeData';
+import { carouselSlides } from '../../data/homeData';
+import { catalogService } from '../../services/catalogService';
+import { NewsletterVIP } from '../../components/common/NewsletterVIP';
 import styles from './HomeContent.module.css';
 
-export function HomeContent({ onOpenCatalogo, onAddToCart }) {
+export function HomeContent({ onOpenCatalogo, onAddToCart, onOpenCart }) {
+  const navigate = useNavigate();
+
+  // Obter produtos reais do catalogService
+  const realProducts = catalogService.getAllProducts();
+  const metadata = catalogService.getDynamicMetadata();
+  const categories = metadata.categories || [];
+
   // Carousel State
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [direction, setDirection] = useState(1);
 
   // Quick Size Selections
-  const [selectedSizes, setSelectedSizes] = useState({
-    'v-prod-1': 'M',
-    'v-prod-2': 'G',
-    'v-prod-3': 'M',
-    'v-prod-4': 'G'
-  });
+  const [selectedSizes, setSelectedSizes] = useState({});
 
   // Hover and Tilt States
   const [hoveredCard, setHoveredCard] = useState(null);
@@ -33,12 +40,9 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
 
   // Interatividades & Modais
   const [wishlistSaved, setWishlistSaved] = useState({});
-  const [emailInput, setEmailInput] = useState('');
-  const [emailSubmitted, setEmailSubmitted] = useState(false);
   const [restockModal, setRestockModal] = useState(false);
   const [restockRequested, setRestockRequested] = useState(false);
   const [addedFeedback, setAddedFeedback] = useState(null);
-  const [activeMoodboardPhoto, setActiveMoodboardPhoto] = useState(null);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -74,14 +78,19 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
   };
 
   const handleQuickAdd = (prod) => {
-    const size = selectedSizes[prod.id] || 'M';
+    const size = selectedSizes[prod.id] || (prod.sizes && prod.sizes[0]) || 'M';
     if (onAddToCart) {
       onAddToCart({
         id: prod.id,
         title: prod.title,
         selectedSize: size,
-        price: prod.price
+        price: prod.priceFormatted || prod.price,
+        image: prod.images ? prod.images[0] : prod.image,
+        slug: prod.slug
       });
+    }
+    if (onOpenCart) {
+      onOpenCart();
     }
     setAddedFeedback(`${prod.title} (${size}) ADICIONADO!`);
     setTimeout(() => setAddedFeedback(null), 3000);
@@ -155,9 +164,12 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
                 <h1 className={styles.heroTitle}>THR33: THE STREETS ARE OURS</h1>
                 <p className={styles.heroCaption}>{carouselSlides[currentSlideIndex].caption}</p>
                 <div className={styles.heroButtons}>
-                  <button onClick={onOpenCatalogo} className={styles.btnPrimary}>
-                    <span>EXPLORAR CATÁLOGO</span>
+                  <button onClick={() => navigate('/lancamentos')} className={styles.btnPrimary}>
+                    <span>VER DROP ATIVO</span>
                     <ArrowRight size={16} />
+                  </button>
+                  <button onClick={() => navigate('/catalogo')} className={styles.btnSecondary}>
+                    <span>VER CATÁLOGO GERAL</span>
                   </button>
                 </div>
               </div>
@@ -184,21 +196,55 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
           </div>
         </section>
 
-        {/* SECTION 2: LANÇAMENTOS GRID */}
+        {/* SECTION 1.5: CATEGORIAS / COLEÇÕES GRID */}
+        {categories.length > 0 && (
+          <section className={styles.categorySection}>
+            <div className={styles.sectionHeader}>
+              <div className={styles.sectionHeaderLeft}>
+                <Grid size={16} className={styles.acidIcon} />
+                <h2>COLEÇÕES // CATEGORIAS EM ESTOQUE</h2>
+              </div>
+              <span className={styles.sectionSubtext}>[SELECIONE UMA CATEGORIA]</span>
+            </div>
+
+            <div className={styles.categoryGridContainer}>
+              {categories.map((cat) => (
+                <Link 
+                  key={cat.slug} 
+                  to={`/categoria/${cat.slug}`}
+                  className={styles.categoryCardTile}
+                >
+                  <div className={styles.catTileContent}>
+                    <span className={styles.catTileBadge}>[{cat.count} PEÇAS]</span>
+                    <h3 className={styles.catTileTitle}>{cat.label}</h3>
+                    <span className={styles.catTileAction}>
+                      <span>EXPLORAR</span>
+                      <ArrowRight size={14} />
+                    </span>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* SECTION 2: PRODUTOS EM DESTAQUE (REAL CATALOG SERVICE PRODUCTS) */}
         <section className={styles.gridSection}>
           <div className={styles.sectionHeader}>
             <div className={styles.sectionHeaderLeft}>
               <span className={styles.dotPulse} />
-              <h2>LANÇAMENTOS RECENTES // COMPRE AGORA</h2>
+              <h2>DESTAQUES DO ATELIÊ // COMPRE AGORA</h2>
             </div>
-            <span className={styles.sectionSubtext}>[DROP 02 EXCLUSIVO • ESTOQUE LIMITADO]</span>
+            <span className={styles.sectionSubtext}>[DROP EXCLUSIVO • ESTOQUE LIMITADO]</span>
           </div>
 
           <div className={styles.productGrid}>
-            {verticalProducts.map((prod) => {
+            {realProducts.slice(0, 4).map((prod) => {
               const isHovered = hoveredCard === prod.id;
               const cardTilt = tilts[prod.id] || { x: 0, y: 0 };
-              const currentSize = selectedSizes[prod.id] || 'M';
+              const prodSizes = prod.sizes || ['P', 'M', 'G', 'GG'];
+              const currentSize = selectedSizes[prod.id] || prodSizes[0];
+              const displayImage = prod.images ? prod.images[0] : prod.image;
 
               return (
                 <div 
@@ -214,15 +260,19 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
                   className={`${styles.productCard} ${isHovered ? styles.productCardHovered : ''}`}
                 >
                   <div className={styles.cardTop}>
-                    <span className={styles.prodTag}>{prod.tag}</span>
+                    <span className={styles.prodTag}>{prod.tag || 'HEAVYWEIGHT'}</span>
                     <button onClick={() => toggleWishlist(prod.id)} className={styles.btnWishlist}>
                       <Star size={16} className={wishlistSaved[prod.id] ? styles.starFilled : ''} />
                     </button>
                   </div>
 
-                  <div onClick={onOpenCatalogo} className={styles.imageFrame}>
-                    <img src={prod.image} alt={prod.title} className={styles.prodImage} />
-                    <div className={styles.priceBadge}>{prod.price}</div>
+                  <div 
+                    onClick={() => navigate(`/produto/${prod.slug || prod.id}`)} 
+                    className={styles.imageFrame}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    <img src={displayImage} alt={prod.title} className={styles.prodImage} />
+                    <div className={styles.priceBadge}>{prod.priceFormatted || prod.price}</div>
 
                     <AnimatePresence>
                       {isHovered && (
@@ -235,7 +285,7 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
                         >
                           <span className={styles.sizeLabel}>SELECIONE O TAMANHO:</span>
                           <div className={styles.sizeButtons}>
-                            {prod.sizes.map((sz) => (
+                            {prodSizes.map((sz) => (
                               <button
                                 key={sz}
                                 onClick={(e) => {
@@ -254,10 +304,14 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
                   </div>
 
                   <div className={styles.cardDetails}>
-                    <div>
+                    <div 
+                      onClick={() => navigate(`/produto/${prod.slug || prod.id}`)}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <h3 className={styles.prodTitle}>{prod.title}</h3>
-                      <p className={styles.prodSub}>{prod.sub}</p>
+                      <p className={styles.prodSub}>{prod.subtitle || prod.categoryLabel}</p>
                     </div>
+
                     <button 
                       onClick={() => handleQuickAdd(prod)}
                       className={isHovered ? styles.btnBuyHovered : styles.btnBuy}
@@ -298,6 +352,13 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
                 <p className={styles.manifestoBody}>
                   Construímos modelagens brutas para suportar o ritmo urbano e permanecer no tempo. Não produzimos em massa. Cada peça carrega número de série e acabamento manual.
                 </p>
+                <button 
+                  onClick={() => navigate('/lancamentos')} 
+                  className={styles.btnManifestoAtelier}
+                >
+                  <span>CONHEÇA O ATELIÊ</span>
+                  <ArrowRight size={14} />
+                </button>
               </div>
               <div className={styles.manifestoFooter}>
                 <span>SÃO PAULO // 2026</span>
@@ -308,12 +369,9 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
             {/* LIFESTYLE CARD */}
             <div className={styles.lifestyleCard}>
               <div 
-                onClick={() => setActiveMoodboardPhoto({
-                  title: 'ATITUDE & LIFESTYLE // ESTILO DE VIDA THR33',
-                  url: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&q=80&w=1200',
-                  caption: 'DESATURATED 35MM FILM • SÃO PAULO NIGHT FLASH'
-                })}
+                onClick={() => navigate('/lancamentos')}
                 className={styles.lifestyleFrame}
+                style={{ cursor: 'pointer' }}
               >
                 <img 
                   src="https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&q=80&w=1200" 
@@ -357,42 +415,12 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
               </button>
             </div>
 
-            <div className={styles.newsletterCard}>
-              <div>
-                <div className={styles.newsTag}>
-                  <Sparkles size={14} />
-                  <span>DROP PROTOCOL // PRE-RELEASE</span>
-                </div>
-                <h3>ALERTAS EXCLUSIVOS DE DROP</h3>
-                <p>Receba a senha de acesso e link direto 15 minutos antes da abertura oficial do estoque.</p>
-              </div>
-
-              <form onSubmit={handleEmailSubmit} className={styles.newsForm}>
-                <input 
-                  type="email" 
-                  value={emailInput}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  placeholder="DIGITE SEU E-MAIL PARA ALERTAS EXCLUSIVOS DE DROP"
-                  required
-                />
-                <button type="submit" className={styles.btnNews}>
-                  <span>ENTRAR PARA OS POUCOS</span>
-                  <ArrowRight size={16} />
-                </button>
-                {emailSubmitted && (
-                  <div className={styles.newsSuccess}>
-                    <Check size={16} />
-                    <span>✓ CADASTRADO COM SUCESSO // VOCÊ RECEBERÁ O PROTOCOLO DE ACESSO</span>
-                  </div>
-                )}
-              </form>
-            </div>
           </div>
         </section>
+
+        {/* SECTION 4: REUSABLE NEWSLETTER VIP */}
+        <NewsletterVIP />
       </div>
-
-      {/* MODAIS (ACCESS VERIFICATION & RESTOCK) */}
-
 
       {/* RESTOCK MODAL */}
       <AnimatePresence>
@@ -444,3 +472,5 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
     </div>
   );
 }
+
+export default HomeContent;
