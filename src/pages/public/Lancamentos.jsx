@@ -16,13 +16,19 @@ import {
 } from 'lucide-react';
 import { currentDropConfig } from '../../data/dropConfig';
 import { buttonTactile } from '../../utils/motionVariants';
+import { SocialCommunityGrid } from '../../components/common/SocialCommunityGrid';
+import { DropFaq } from '../../components/common/DropFaq';
+import { NewsletterVIP } from '../../components/common/NewsletterVIP';
+import { BrandStatementBanner } from '../../components/common/BrandStatementBanner';
 import styles from './Lancamentos.module.css';
 
-export function Lancamentos() {
+export function Lancamentos({ onOpenAuthModal, user }) {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [ticketClaimed, setTicketClaimed] = useState(false);
+
   useEffect(() => {
     const interval = setInterval(() => {
       setLoadProgress((prev) => {
@@ -69,11 +75,6 @@ export function Lancamentos() {
         </div>
 
         <div className={styles.heroTopBar}>
-          <div className={styles.dropBadge} style={{ backgroundColor: theme.accentAcid, color: '#000' }}>
-            <Flame size={14} />
-            <span>DROP 01 // EXCLUSIVO STREETWEAR</span>
-          </div>
-
           <button 
             onClick={() => setIsPlayingAudio(!isPlayingAudio)} 
             className={styles.audioToggleBtn}
@@ -123,7 +124,7 @@ export function Lancamentos() {
         </div>
       </section>
 
-      {/* 3. NOVO SHOWCASE EDITORIAL 50/50 (INSPIRADO NO FIGMA) */}
+      {/* 3. SHOWCASE EDITORIAL 50/50 */}
       <section id="showcase" className={styles.editorialShowcaseSection}>
         <div className={styles.showcaseHeader}>
           <h2>ACERVO DO DROP // PEÇAS EXCLUSIVAS</h2>
@@ -195,7 +196,6 @@ export function Lancamentos() {
                   </motion.button>
                 </div>
 
-                {/* DIVISOR VERTICAL TÁTICO */}
                 <div className={styles.editorialDivider} />
 
                 {/* LADO B: FOTOGRAFIA FULL-BLEED */}
@@ -211,6 +211,19 @@ export function Lancamentos() {
           })}
         </div>
       </section>
+
+      {/* 4. REDES SOCIAIS & COMUNIDADE BENTO GRID */}
+      <SocialCommunityGrid />
+
+      {/* 5. FAQ ACCORDION TÁTICO */}
+      <DropFaq />
+
+      {/* 6. NEWSLETTER DROPS PROTOCOL */}
+      <NewsletterVIP />
+
+      {/* 7. BANNER STATEMENT BRANDING FINAL */}
+      <BrandStatementBanner />
+
     </div>
   );
 }

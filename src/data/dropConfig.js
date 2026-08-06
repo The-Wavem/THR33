@@ -4,7 +4,7 @@ export const currentDropConfig = {
   subTitle: 'DROP 01 ★ HEAVYWEIGHT BASS & CONCRETE',
   releaseDate: '2026-08-20T00:00:00',
   coordinates: 'SP // BECO 03 ★ 23°33\'01"S',
-  teaserGifUrl: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&q=80&w=600',
+  teaserGifUrl: 'https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmxudmoyMjZzcGMwbzVuMWt6YWg5OXRzZDdiMHh3bjdtejhmZ2F5bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/p6wEQfSvYLuhxGnN2e/giphy.gif',
   theme: {
     bgPrimary: '#121110',
     bgCard: '#1A1816',
@@ -14,7 +14,7 @@ export const currentDropConfig = {
   },
   loaderLogoText: 'THR33 × CACTUS',
   heroImage: 'https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&q=80&w=2000',
-  manifestoImage: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&q=80&w=1200',
+  manifestoImage: 'https://media3.giphy.com/media/v1.Y2lkPTc5MGI3NjExYmxudmoyMjZzcGMwbzVuMWt6YWg5OXRzZDdiMHh3bjdtejhmZ2F5bSZlcD12MV9pbnRlcm5hbF9naWZfYnlfaWQmY3Q9Zw/p6wEQfSvYLuhxGnN2e/giphy.gif',
   manifestoHeading: 'O GRAVE DO TRAP ENCONTRA A SERIGRAFIA CRU DE 300GSM',
   manifestoText: 'Não fazemos roupas de prateleira. Este drop foi construído no ritmo dos estúdios madrugadores de São Paulo, usando algodão encorpado de alta densidade e acabamento reverso em pigmentação mineral.',
   products: [

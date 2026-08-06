@@ -1,0 +1,120 @@
+.sectionContainer {
+  max-width: 1400px;
+  margin: 5rem auto;
+  padding: 0 2rem;
+  font-family: 'Space Mono', monospace;
+}
+
+.headerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.15);
+  padding-bottom: 1rem;
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.acidIcon { color: #E2FF00; }
+
+.headerLeft h2 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.5rem;
+  color: #FFFFFF;
+  text-transform: uppercase;
+}
+
+.btnInstagram {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #1A1816;
+  color: #E2FF00;
+  border: 1px solid #E2FF00;
+  padding: 0.5rem 1rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: 3px 3px 0px #000000;
+  transition: all 0.15s ease;
+}
+
+.btnInstagram:hover {
+  background-color: #E2FF00;
+  color: #000000;
+}
+
+.bentoGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1.25rem;
+  height: 480px;
+}
+
+.bentoCell {
+  position: relative;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 6px 6px 0px #000000;
+  overflow: hidden;
+  background-color: #000000;
+}
+
+.bentoCellLarge {
+  grid-column: span 2;
+  grid-row: span 2;
+}
+
+.cellImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: contrast(1.15) saturate(0.85);
+  transition: transform 0.5s ease;
+}
+
+.bentoCell:hover .cellImg {
+  transform: scale(1.05);
+}
+
+.cellOverlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.85) 0%, transparent 60%);
+}
+
+.cellFooter {
+  position: absolute;
+  bottom: 0.875rem;
+  left: 0.875rem;
+  right: 0.875rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.625rem;
+}
+
+.cellTag {
+  background-color: #E2FF00;
+  color: #000000;
+  font-weight: 900;
+  padding: 0.15rem 0.5rem;
+  border: 1px solid #000000;
+}
+
+.cellLoc {
+  color: #CCCCCC;
+  font-size: 0.5625rem;
+}
+
+@media (max-width: 900px) {
+  .bentoGrid { grid-template-columns: 1fr 1fr; height: auto; }
+  .bentoCellLarge { grid-column: span 2; height: 300px; }
+  .bentoCell { height: 220px; }
+}

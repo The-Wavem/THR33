@@ -1,0 +1,95 @@
+.sectionContainer {
+  max-width: 1400px;
+  margin: 5rem auto;
+  padding: 0 2rem;
+  font-family: 'Space Mono', monospace;
+}
+
+.cardBox {
+  background-color: #161514;
+  border: 2px solid #E2FF00;
+  box-shadow: 8px 8px 0px #000000;
+  padding: 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.badgeRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #E2FF00;
+  letter-spacing: 0.15em;
+  margin-bottom: 0.5rem;
+}
+
+.acidIcon { color: #E2FF00; }
+
+.textContent h3 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 2rem;
+  color: #FFFFFF;
+  text-transform: uppercase;
+  margin-bottom: 0.5rem;
+}
+
+.textContent p {
+  font-size: 0.8125rem;
+  color: #CCCCCC;
+  line-height: 1.6;
+}
+
+.formRow {
+  display: flex;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.emailInput {
+  flex: 1;
+  min-width: 280px;
+  background-color: #000000;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #FFFFFF;
+  padding: 1rem 1.25rem;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  outline: none;
+}
+
+.emailInput:focus {
+  border-color: #E2FF00;
+}
+
+.btnSubmit {
+  padding: 1rem 2rem;
+  background-color: #E2FF00;
+  color: #000000;
+  border: 1px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.btnSubmit:hover {
+  background-color: #FFFFFF;
+}
+
+.successToast {
+  background-color: #E2FF00;
+  color: #000000;
+  padding: 0.875rem 1.25rem;
+  border: 1px solid #000000;
+  font-weight: 700;
+  font-size: 0.6875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
