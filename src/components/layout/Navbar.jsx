@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, Link, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useScroll, useMotionValueEvent } from 'framer-motion';
 import { 
   Search, 
   User, 
@@ -23,10 +23,33 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
   const [isLancamentosMenuOpen, setIsLancamentosMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const navigate = useNavigate();
+  
+  // ESTADO PARA CONTROLAR A VISIBILIDADE DA NAVBAR NO SCROLL
+  const [isHidden, setIsHidden] = useState(false);
+  const { scrollY } = useScroll();
 
+  const navigate = useNavigate();
   const metadata = catalogService.getDynamicMetadata();
   const activeCategories = metadata.categories || [];
+
+  // MONITORAR A DIREÇÃO DO SCROLL
+  useMotionValueEvent(scrollY, "change", (latest) => {
+    const previous = scrollY.getPrevious() ?? 0;
+    const isOverlayOpen = isUserMenuOpen || isCatalogMenuOpen || isLancamentosMenuOpen || isSearchOpen;
+
+    // Se houver algum menu/overlay aberto, mantém a Navbar visível
+    if (isOverlayOpen) {
+      setIsHidden(false);
+      return;
+    }
+
+    // Oculta ao rolar para baixo após passar de 100px do topo; exibe ao rolar para cima
+    if (latest > previous && latest > 100) {
+      setIsHidden(true);
+    } else if (latest < previous) {
+      setIsHidden(false);
+    }
+  });
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -38,7 +61,15 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
   };
 
   return (
-    <header className={styles.headerContainer}>
+    <motion.header 
+      className={styles.headerContainer}
+      variants={{
+        visible: { y: '0%' },
+        hidden: { y: '-100%' }
+      }}
+      animate={isHidden ? 'hidden' : 'visible'}
+      transition={{ duration: 0.35, ease: [0.25, 0.1, 0.25, 1] }}
+    >
       
       {/* 1. TOP MARQUEE TICKER */}
       <div className={styles.topMarquee}>
@@ -74,7 +105,7 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
               <span className={styles.dropLivePulse} />
             </NavLink>
 
-            {/* FLYOUT COMPACTO: APENAS A MOLDURA DO GIF */}
+            {/* FLYOUT COMPACTO DE GIF */}
             <AnimatePresence>
               {isLancamentosMenuOpen && (
                 <motion.div 
@@ -101,7 +132,7 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
             </AnimatePresence>
           </div>
 
-          {/* LINK: CATÁLOGO COM DROPDOWN NO HOVER */}
+          {/* LINK: CATÁLOGO COM DROPDOWN */}
           <div 
             className={styles.navHoverWrapper}
             onMouseEnter={() => setIsCatalogMenuOpen(true)}
@@ -125,7 +156,6 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
               />
             </NavLink>
 
-            {/* MEGA-MENU DROPDOWN ANIMADO DO CATÁLOGO */}
             <AnimatePresence>
               {isCatalogMenuOpen && (
                 <motion.div 
@@ -135,17 +165,7 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
                   transition={{ duration: 0.18, ease: 'easeOut' }}
                   className={styles.catalogDropdown}
                 >
-                  <div className={styles.dropdownHeaderBox}>
-                    <div className={styles.dropdownTitleGroup}>
-                      <Layers size={14} />
-                      <strong>MOSTRUÁRIO R.U.A</strong>
-                    </div>
-                    <span className={styles.activeBadge}>
-                      ● {activeCategories.reduce((acc, c) => acc + c.count, 0)} PEÇAS ATIVAS
-                    </span>
-                  </div>
-
-                  <div className={styles.dropdownDivider} />
+                
 
                   <Link 
                     to="/catalogo" 
@@ -177,7 +197,6 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
             </AnimatePresence>
           </div>
 
-          {/* LINK: DROPS PASSADOS */}
           <NavLink 
             to="/drops-passados" 
             className={({ isActive }) => isActive ? `${styles.navItem} ${styles.activeNavItem}` : styles.navItem}
@@ -279,7 +298,7 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
         </div>
       )}
 
-    </header>
+    </motion.header>
   );
 }
 

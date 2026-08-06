@@ -1,4 +1,6 @@
 import React, { useState } from 'react';
+import { motion } from 'framer-motion';
+import { fadeInUp, buttonTactile } from '../../utils/motionVariants';
 import styles from './NewsletterVIP.module.css';
 
 export function NewsletterVIP() {
@@ -17,15 +19,19 @@ export function NewsletterVIP() {
   };
 
   return (
-    <section className={styles.newsletterSection}>
+    <motion.section 
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, amount: 0.25 }}
+      variants={fadeInUp}
+      className={styles.newsletterSection}
+    >
       <div className={styles.newsletterContainer}>
-        {/* LADO ESQUERDO: TÍTULO E SUBTÍTULO DIRETO */}
         <div className={styles.textBlock}>
           <h3 className={styles.title}>FIQUE POR DENTRO</h3>
           <p className={styles.subtitle}>Se inscreva na newsletter da THR33.</p>
         </div>
 
-        {/* LADO DIREITO: FORMULÁRIO HORIZONTAL ULTRA-CLEAN */}
         <form onSubmit={handleSubmit} className={styles.formBlock}>
           <div className={styles.inputWrapper}>
             <input 
@@ -36,13 +42,20 @@ export function NewsletterVIP() {
               required
               className={styles.emailInput}
             />
-            <button type="submit" className={styles.btnSubmit}>
+            <motion.button 
+              variants={buttonTactile}
+              initial="rest"
+              whileHover="hover"
+              whileTap="tap"
+              type="submit" 
+              className={styles.btnSubmit}
+            >
               {submitted ? 'CADASTRADO' : 'CADASTRAR'}
-            </button>
+            </motion.button>
           </div>
         </form>
       </div>
-    </section>
+    </motion.section>
   );
 }
 

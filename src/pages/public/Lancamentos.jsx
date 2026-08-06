@@ -22,12 +22,11 @@ import { NewsletterVIP } from '../../components/common/NewsletterVIP';
 import { BrandStatementBanner } from '../../components/common/BrandStatementBanner';
 import styles from './Lancamentos.module.css';
 
-export function Lancamentos({ onOpenAuthModal, user }) {
+export function Lancamentos() {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [ticketClaimed, setTicketClaimed] = useState(false);
 
   useEffect(() => {
     const interval = setInterval(() => {

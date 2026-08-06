@@ -1,50 +1,29 @@
-/**
- * Variantes reutilizáveis do Framer Motion para o ecossistema THR33.
- * Foco: Resposta tátil imediata, zero poluição visual.
- */
+// Central de Variantes do Framer Motion para o THR33
 
-// 1. ANIMAÇÃO TÁTIL PARA BOTÕES (Efeito mecânico de prensa)
-export const buttonTactile = {
-  rest: { 
-    x: 0, 
-    y: 0,
-    boxShadow: '4px 4px 0px #000000'
-  },
-  hover: { 
-    x: -2, 
-    y: -2,
-    boxShadow: '6px 6px 0px #000000',
-    transition: { duration: 0.15, ease: 'easeOut' }
-  },
-  tap: { 
-    x: 2, 
-    y: 2,
-    boxShadow: '2px 2px 0px #000000',
-    scale: 0.98,
-    transition: { duration: 0.05 }
-  }
-};
+// Curva suave estilo Editorial / High-End
+const smoothEase = [0.25, 0.1, 0.25, 1];
 
-// 2. DESLOCAMENTO SUTIL DO ÍCONE DE SETA DENTRO DE BOTÕES
-export const arrowSlide = {
-  rest: { x: 0 },
-  hover: { x: 5, transition: { duration: 0.2, ease: 'easeOut' } }
-};
-
-// 3. ENTRADA ELEGANTE DE TEXTO (FADE-UP SEM DISTRAÇÕES)
+// 1. Aparição Suave Vertical (Fade In + Elevada Discreta de 18px)
 export const fadeInUp = {
-  hidden: { 
-    opacity: 0, 
-    y: 14 
-  },
+  hidden: { opacity: 0, y: 18 },
   visible: { 
     opacity: 1, 
     y: 0,
-    transition: { duration: 0.45, ease: [0.25, 1, 0.5, 1] }
+    transition: { duration: 0.55, ease: smoothEase }
   }
 };
 
-// 4. CONTAINER COM STAGGER PARA FRASES CONSECUTIVAS
+// 2. Aparição com Escala Discreta (para Cards e Mídias)
+export const fadeInScale = {
+  hidden: { opacity: 0, scale: 0.97 },
+  visible: { 
+    opacity: 1, 
+    scale: 1,
+    transition: { duration: 0.5, ease: smoothEase }
+  }
+};
+
+// 3. Orquestrador de Filhos (Stagger Container)
 export const staggerContainer = {
   hidden: { opacity: 0 },
   visible: {
@@ -56,11 +35,40 @@ export const staggerContainer = {
   }
 };
 
-// 5. MOLDURA DE FOTO DA ROUPA (ZOOM INTERNO SUTIL)
+// 4. Efeito de Hover Tátil Discreto para Botões
+export const buttonTactile = {
+  rest: { scale: 1 },
+  hover: { 
+    scale: 1.015,
+    transition: { duration: 0.2, ease: 'easeOut' }
+  },
+  tap: { 
+    scale: 0.985,
+    transition: { duration: 0.1, ease: 'easeIn' }
+  }
+};
+
+// 5. Hover Sutil em Imagens/Cards (Efeito de Profundidade)
+export const cardHoverDepth = {
+  rest: { y: 0, boxShadow: '6px 6px 0px #000000' },
+  hover: { 
+    y: -3, 
+    boxShadow: '8px 8px 0px #000000',
+    transition: { duration: 0.2, ease: 'easeOut' }
+  }
+};
+
+// 6. Deslocamento Sutil do Ícone de Seta
+export const arrowSlide = {
+  rest: { x: 0 },
+  hover: { x: 5, transition: { duration: 0.2, ease: 'easeOut' } }
+};
+
+// 7. Moldura de Foto da Roupa (Zoom Interno Sutil)
 export const imageInnerZoom = {
   rest: { scale: 1 },
   hover: { 
     scale: 1.04, 
-    transition: { duration: 0.5, ease: [0.25, 1, 0.5, 1] } 
+    transition: { duration: 0.5, ease: smoothEase } 
   }
 };

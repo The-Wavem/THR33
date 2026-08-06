@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Minus, HelpCircle } from 'lucide-react';
+import { fadeInUp } from '../../utils/motionVariants';
 import styles from './DropFaq.module.css';
 
 const faqItems = [
@@ -26,7 +27,13 @@ export function DropFaq() {
   const [openIndex, setOpenIndex] = useState(0);
 
   return (
-    <section className={styles.sectionContainer}>
+    <motion.section 
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, amount: 0.2 }}
+      variants={fadeInUp}
+      className={styles.sectionContainer}
+    >
       <div className={styles.headerTitle}>
         <HelpCircle size={16} className={styles.acidIcon} />
         <h2>DÚVIDAS FREQUENTES // PROTOCOLO DE COMPRA</h2>
@@ -36,33 +43,39 @@ export function DropFaq() {
         {faqItems.map((item, idx) => {
           const isOpen = openIndex === idx;
           return (
-            <div key={idx} className={styles.faqCard}>
+            <motion.div 
+              key={idx} 
+              className={styles.faqCard}
+              transition={{ duration: 0.2 }}
+            >
               <button 
                 onClick={() => setOpenIndex(isOpen ? null : idx)}
                 className={styles.faqQuestionBtn}
               >
                 <span>{item.q}</span>
-                {isOpen ? <Minus size={16} /> : <Plus size={16} />}
+                <motion.div animate={{ rotate: isOpen ? 180 : 0 }} transition={{ duration: 0.2 }}>
+                  {isOpen ? <Minus size={16} /> : <Plus size={16} />}
+                </motion.div>
               </button>
 
-              <AnimatePresence>
+              <AnimatePresence initial={false}>
                 {isOpen && (
                   <motion.div 
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2 }}
+                    transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
                     className={styles.faqAnswerContent}
                   >
                     <p>{item.a}</p>
                   </motion.div>
                 )}
               </AnimatePresence>
-            </div>
+            </motion.div>
           );
         })}
       </div>
-    </section>
+    </motion.section>
   );
 }
 

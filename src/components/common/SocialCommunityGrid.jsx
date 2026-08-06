@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { ArrowUpRight, Camera } from 'lucide-react';
+import { Camera, ArrowUpRight } from 'lucide-react';
+import { fadeInUp, staggerContainer } from '../../utils/motionVariants';
 import styles from './SocialCommunityGrid.module.css';
 
 const socialPosts = [
@@ -32,13 +33,21 @@ const socialPosts = [
 
 export function SocialCommunityGrid() {
   return (
-    <section className={styles.sectionContainer}>
+    <motion.section 
+      initial="hidden"
+      whileInView="visible"
+      viewport={{ once: true, amount: 0.15 }}
+      variants={fadeInUp}
+      className={styles.sectionContainer}
+    >
       <div className={styles.headerRow}>
         <div className={styles.headerLeft}>
           <Camera size={16} className={styles.acidIcon} />
           <h2>CULTURA & COMUNIDADE // @THR33.ATELIER</h2>
         </div>
-        <a 
+        <motion.a 
+          whileHover={{ x: 2, y: -2 }}
+          transition={{ duration: 0.15 }}
           href="https://instagram.com" 
           target="_blank" 
           rel="noopener noreferrer" 
@@ -46,14 +55,16 @@ export function SocialCommunityGrid() {
         >
           <span>SIGA NO INSTAGRAM</span>
           <ArrowUpRight size={14} />
-        </a>
+        </motion.a>
       </div>
 
-      <div className={styles.bentoGrid}>
+      <motion.div variants={staggerContainer} className={styles.bentoGrid}>
         {socialPosts.map((post, idx) => (
           <motion.div 
             key={post.id} 
-            whileHover={{ y: -4 }}
+            variants={fadeInUp}
+            whileHover={{ y: -3 }}
+            transition={{ duration: 0.2 }}
             className={`${styles.bentoCell} ${idx === 0 ? styles.bentoCellLarge : ''}`}
           >
             <img src={post.image} alt={post.tag} className={styles.cellImg} />
@@ -64,8 +75,8 @@ export function SocialCommunityGrid() {
             </div>
           </motion.div>
         ))}
-      </div>
-    </section>
+      </motion.div>
+    </motion.section>
   );
 }
 

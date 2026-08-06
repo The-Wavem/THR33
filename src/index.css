@@ -8,15 +8,40 @@
   --accent-amber: #F2E3B3;
   --font-main: 'Space Grotesk', system-ui, -apple-system, sans-serif;
   --font-mono: 'Space Mono', monospace;
+
+  /* VARIÁVEIS DA BARRA DE ROLAGEM - TEMA PADRÃO */
+  --scrollbar-track: #E5E5E5;
+  --scrollbar-thumb: #000000;
+  --scrollbar-thumb-hover: #F2E3B3;
+  --scrollbar-border: rgba(0, 0, 0, 0.2);
+  --scrollbar-width: 9px;
+}
+
+/* VARIÁVEIS DA BARRA DE ROLAGEM - TEMA LANÇAMENTOS (DROPS) */
+[data-theme="drop"] {
+  --scrollbar-track: #121110;
+  --scrollbar-thumb: #E2FF00;
+  --scrollbar-thumb-hover: #FFFFFF;
+  --scrollbar-border: rgba(226, 255, 0, 0.25);
 }
 
 * {
   box-sizing: border-box;
   margin: 0;
   padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+html {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 body {
+  width: 100%;
+  max-width: 100%;
   background-color: var(--bg-concrete);
   color: var(--text-black);
   font-family: var(--font-main);
@@ -33,4 +58,46 @@ button {
 a {
   color: inherit;
   text-decoration: none;
+}
+
+/* 1. NAVEGADORES WEBKIT (CHROME, EDGE, SAFARI) */
+::-webkit-scrollbar {
+  width: var(--scrollbar-width);
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-left: 1px solid var(--scrollbar-border);
+  transition: background-color 0.3s ease;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 0px; /* Brutalismo quadrado */
+  transition: background-color 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+}
+
+/* LENIS SMOOTH SCROLL STYLES */
+html.lenis, html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+.lenis.lenis-scrolling iframe {
+  pointer-events: none;
 }

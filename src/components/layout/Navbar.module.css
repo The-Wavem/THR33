@@ -1,10 +1,14 @@
 .headerContainer {
-  width: 100%;
-  position: sticky;
+  position: fixed;
   top: 0;
-  z-index: 90;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 1000;
   font-family: 'Space Mono', monospace;
   background-color: var(--bg-white, #FFFFFF);
+  border-bottom: 2px solid #000000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
 /* TOP MARQUEE TICKER */
