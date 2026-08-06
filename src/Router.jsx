@@ -45,7 +45,7 @@ export function AppRoutes({
           <Route path="/produto/:slug" element={<ProdutoDetalhe onAddToCart={addToCart} />} />
 
           {/* ROTA DE CHECKOUT */}
-          <Route path="/checkout" element={<Checkout />} />
+          <Route path="/checkout" element={<Checkout user={user} onOpenAuthModal={onOpenAuthModal} />} />
         </Route>
 
         <Route 

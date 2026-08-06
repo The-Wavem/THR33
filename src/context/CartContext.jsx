@@ -19,6 +19,9 @@ export function CartProvider({ children }) {
   const [appliedCoupon, setAppliedCoupon] = useState(null); // { code: 'FORTHEFEW10', discountPercent: 10 }
   const [couponCodeInput, setCouponCodeInput] = useState('');
   const [couponError, setCouponError] = useState('');
+  
+  // OPÇÃO DE FRETE SELECIONADA
+  const [selectedShippingOption, setSelectedShippingOption] = useState(null);
 
   // PERSISTÊNCIA NO LOCALSTORAGE
   useEffect(() => {
@@ -87,6 +90,7 @@ export function CartProvider({ children }) {
   const clearCart = () => {
     setCartItems([]);
     setAppliedCoupon(null);
+    setSelectedShippingOption(null);
   };
 
   // APLICAR CUPOM
@@ -112,7 +116,9 @@ export function CartProvider({ children }) {
   const totalItemsCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
   const subtotal = cartItems.reduce((sum, item) => sum + item.priceNum * item.quantity, 0);
   const discountAmount = appliedCoupon ? (subtotal * appliedCoupon.discountPercent) / 100 : 0;
-  const total = Math.max(0, subtotal - discountAmount);
+  
+  const shippingPrice = selectedShippingOption ? selectedShippingOption.price : 0;
+  const total = Math.max(0, subtotal - discountAmount + shippingPrice);
   
   const amountToFreeShipping = Math.max(0, FREE_SHIPPING_THRESHOLD - subtotal);
   const freeShippingProgress = Math.min(100, (subtotal / FREE_SHIPPING_THRESHOLD) * 100);
@@ -129,6 +135,7 @@ export function CartProvider({ children }) {
       totalItemsCount,
       subtotal,
       discountAmount,
+      shippingPrice,
       total,
       appliedCoupon,
       applyCoupon,
@@ -138,7 +145,9 @@ export function CartProvider({ children }) {
       couponError,
       amountToFreeShipping,
       freeShippingProgress,
-      FREE_SHIPPING_THRESHOLD
+      FREE_SHIPPING_THRESHOLD,
+      selectedShippingOption,
+      setSelectedShippingOption
     }}>
       {children}
     </CartContext.Provider>

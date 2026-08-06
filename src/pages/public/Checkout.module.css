@@ -118,6 +118,242 @@
   margin-top: 0.2rem;
 }
 
+/* CALCULADORA DE FRETE (ETAPA 1) */
+.shippingCalculatorBox {
+  background-color: #F8F8F8;
+  border: 2px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.shippingHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid #000000;
+  padding-bottom: 0.5rem;
+}
+
+.shippingHeader h4 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.8125rem;
+}
+
+.cepFormRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.inputCep {
+  flex: 1;
+  background: #FFFFFF;
+  border: 2px solid #000000;
+  color: #000000;
+  padding: 0.625rem 0.875rem;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  outline: none;
+}
+
+.btnCalcCep {
+  padding: 0 1.25rem;
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 2px solid #000000;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.6875rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btnCalcCep:hover {
+  background-color: #F2E3B3;
+  color: #000000;
+}
+
+.shippingOptionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.shippingListTitle {
+  font-size: 0.625rem;
+  font-weight: 700;
+  color: #555555;
+}
+
+.shippingOptionCard {
+  display: flex;
+  align-items: center;
+  gap: 0.875rem;
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  padding: 0.75rem 1rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: 2px 2px 0px #000000;
+}
+
+.shippingOptionCard:hover {
+  background-color: #F2E3B3;
+}
+
+.shippingOptionSelected {
+  background-color: #F2E3B3;
+  border-width: 2px;
+  box-shadow: 4px 4px 0px #000000;
+}
+
+.shippingRadio {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #000000;
+  background: #FFFFFF;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.radioDot {
+  width: 0;
+  height: 0;
+}
+
+.radioDotActive {
+  width: 10px;
+  height: 10px;
+  background-color: #000000;
+}
+
+.shippingInfoGroup {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  font-size: 0.6875rem;
+}
+
+.shippingInfoGroup strong {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+}
+
+.shippingInfoGroup span {
+  font-size: 0.625rem;
+  color: #555555;
+}
+
+.shippingPriceText {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.875rem;
+  color: #000000;
+}
+
+/* ENDEREÇOS SALVOS (ETAPA 2) */
+.savedAddressesContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.savedAddressesHint {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #555555;
+}
+
+.addressesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.addressCardTile {
+  background-color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+  padding: 1rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.addressCardTile:hover {
+  background-color: #F2E3B3;
+  box-shadow: 5px 5px 0px #000000;
+}
+
+.addressTileSelected {
+  background-color: #F2E3B3;
+  box-shadow: 5px 5px 0px #000000;
+  border-width: 2px;
+}
+
+.addressTileHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.addressTileHeader strong {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+}
+
+.defaultBadge {
+  background-color: #000000;
+  color: #FFFFFF;
+  font-size: 0.5625rem;
+  padding: 0.15rem 0.4rem;
+  font-weight: 700;
+}
+
+.addressText {
+  font-size: 0.6875rem;
+  color: #333333;
+  line-height: 1.4;
+}
+
+.btnAddNewAddress {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background-color: #FFFFFF;
+  color: #000000;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  cursor: pointer;
+  align-self: flex-start;
+  transition: all 0.15s ease;
+}
+
+.btnAddNewAddress:hover {
+  background-color: #F2E3B3;
+}
+
+.btnBackSavedAddresses {
+  background: none;
+  border: none;
+  color: #000000;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+  margin-bottom: 0.75rem;
+}
+
+/* FORMULÁRIO MANUL */
 .formGrid {
   display: flex;
   flex-wrap: wrap;
@@ -388,4 +624,115 @@
   flex-direction: column; 
   align-items: center; 
   gap: 1rem; 
+}
+
+/* AUTH GATEKEEPER MODAL */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(4px);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+}
+
+.authModalBox {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  background-color: #FFFFFF;
+  border: 3px solid #000000;
+  box-shadow: 10px 10px 0px #000000;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.btnCloseModal {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: #FFFFFF;
+  border: 1px solid #000000;
+  padding: 0.25rem;
+  cursor: pointer;
+  box-shadow: 2px 2px 0px #000000;
+}
+
+.btnCloseModal:hover {
+  background-color: #F2E3B3;
+}
+
+.authModalHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #000000;
+  border-bottom: 2px solid #000000;
+  padding-bottom: 0.75rem;
+}
+
+.authModalBox h3 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.125rem;
+  color: #000000;
+}
+
+.authModalDesc {
+  font-size: 0.75rem;
+  color: #444444;
+  line-height: 1.5;
+}
+
+.authModalActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.btnAuthPrimary {
+  width: 100%;
+  padding: 0.875rem;
+  background-color: #000000;
+  color: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all 0.15s ease;
+}
+
+.btnAuthPrimary:hover {
+  background-color: #F2E3B3;
+  color: #000000;
+}
+
+.btnAuthSecondary {
+  width: 100%;
+  padding: 0.875rem;
+  background-color: #FFFFFF;
+  color: #000000;
+  border: 2px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+  font-family: 'Space Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btnAuthSecondary:hover {
+  background-color: #F2E3B3;
 }
