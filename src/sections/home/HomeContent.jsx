@@ -2,10 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Star, 
-  ShieldCheck, 
   ArrowRight, 
   ShoppingBag, 
-  Lock, 
   Check, 
   Sparkles,
   X,
@@ -37,8 +35,6 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
   const [wishlistSaved, setWishlistSaved] = useState({});
   const [emailInput, setEmailInput] = useState('');
   const [emailSubmitted, setEmailSubmitted] = useState(false);
-  const [accessModal, setAccessModal] = useState(false);
-  const [accessGranted, setAccessGranted] = useState(false);
   const [restockModal, setRestockModal] = useState(false);
   const [restockRequested, setRestockRequested] = useState(false);
   const [addedFeedback, setAddedFeedback] = useState(null);
@@ -102,15 +98,6 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
     }
   };
 
-  const handleGrantAccess = () => {
-    setAccessGranted(true);
-    setTimeout(() => {
-      setAccessModal(false);
-      setAccessGranted(false);
-      if (onOpenCatalogo) onOpenCatalogo();
-    }, 1500);
-  };
-
   const slideVariants = {
     enter: (dir) => ({ x: dir > 0 ? '100%' : '-100%', opacity: 0 }),
     center: { x: 0, opacity: 1 },
@@ -171,10 +158,6 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
                   <button onClick={onOpenCatalogo} className={styles.btnPrimary}>
                     <span>EXPLORAR CATÁLOGO</span>
                     <ArrowRight size={16} />
-                  </button>
-                  <button onClick={() => setAccessModal(true)} className={styles.btnSecondary}>
-                    <Lock size={14} />
-                    <span>GARANTIR ACESSO</span>
                   </button>
                 </div>
               </div>
@@ -409,40 +392,7 @@ export function HomeContent({ onOpenCatalogo, onAddToCart }) {
       </div>
 
       {/* MODAIS (ACCESS VERIFICATION & RESTOCK) */}
-      <AnimatePresence>
-        {accessModal && (
-          <div className={styles.modalOverlay} onClick={() => setAccessModal(false)}>
-            <motion.div 
-              initial={{ scale: 0.95 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.95 }}
-              onClick={(e) => e.stopPropagation()}
-              className={styles.modalBox}
-            >
-              <button onClick={() => setAccessModal(false)} className={styles.btnClose}><X size={16} /></button>
-              <div className={styles.modalHeader}>
-                <ShieldCheck size={16} />
-                <span>BOT PROTECTION PROTOCOL</span>
-              </div>
-              <h3>ACESSO RESTRITO // DROP 02</h3>
-              <p className={styles.modalText}>
-                Você está acessando a fila prioritária do "LEAK TWO: A RUA COMO NOSSO ATELIÊ". Confirme que não é um robô para prosseguir ao catálogo liberado.
-              </p>
-              {!accessGranted ? (
-                <button onClick={handleGrantAccess} className={styles.btnValidate}>
-                  <Lock size={16} />
-                  <span>VALIDAR ACESSO HUMANO</span>
-                </button>
-              ) : (
-                <div className={styles.modalSuccess}>
-                  <Check size={18} />
-                  <span>ACESSO LIBERADO! REDIRECIONANDO...</span>
-                </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+
 
       {/* RESTOCK MODAL */}
       <AnimatePresence>

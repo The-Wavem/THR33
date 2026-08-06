@@ -202,16 +202,6 @@ export default function Hero() {
             >
               {currentSlide.primaryCta}
             </button>
-
-            <button
-              className={`${styles.secondaryCtaBtn} ${styles.interactive}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                alert(`Navegando para: ${currentSlide.secondaryCta}`);
-              }}
-            >
-              {currentSlide.secondaryCta}
-            </button>
           </div>
 
           {/* Slide Indicator Controls */}
