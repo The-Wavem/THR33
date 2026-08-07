@@ -1,0 +1,313 @@
+.pageContainer {
+  padding: 4rem 2rem;
+  background-color: #0F0E0D;
+  color: #FFFFFF;
+  font-family: 'Space Mono', monospace, sans-serif;
+  min-height: 85vh;
+}
+
+.contentWrapper {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 3rem;
+}
+
+.header {
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.tagBadge {
+  color: #F2E3B3;
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+}
+
+.header h1 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 3rem;
+  text-transform: uppercase;
+  line-height: 1;
+  margin: 0;
+}
+
+.header p {
+  color: #CCCCCC;
+  font-size: 0.875rem;
+  max-width: 680px;
+  line-height: 1.6;
+  margin: 0;
+}
+
+/* TABS DE SELEÇÃO DE MODELAGEM */
+.fitTabsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.tabBtn, .tabActive {
+  padding: 1.25rem 1rem;
+  background-color: #161514;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 4px 4px 0px #000000;
+  color: #FFFFFF;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: 'Space Mono', monospace, sans-serif;
+}
+
+.tabBtn strong, .tabActive strong {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.875rem;
+}
+
+.tabBtn span, .tabActive span {
+  font-size: 0.625rem;
+  color: #888888;
+}
+
+.tabBtn:hover {
+  border-color: #F2E3B3;
+}
+
+.tabActive {
+  background-color: #F2E3B3;
+  color: #000000;
+  border-color: #F2E3B3;
+}
+
+.tabActive span {
+  color: #333333;
+  font-weight: 700;
+}
+
+/* BLUEPRINT PANEL */
+.blueprintPanel {
+  background-color: #161514;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 8px 8px 0px #000000;
+  padding: 2.5rem;
+}
+
+.panelGrid {
+  display: grid;
+  grid-template-columns: 1fr 1.2fr;
+  gap: 3rem;
+  align-items: center;
+}
+
+/* DIAGRAMA */
+.diagramCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.diagramBox {
+  background-color: #000000;
+  border: 1px dashed rgba(242, 227, 179, 0.5);
+  height: 320px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.bpTag {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  font-size: 0.5625rem;
+  color: #F2E3B3;
+  letter-spacing: 0.1em;
+}
+
+.visualTshirtSchematic {
+  width: 220px;
+  height: 240px;
+  border: 2px solid #FFFFFF;
+  position: relative;
+  background-color: #111111;
+}
+
+.lineLargura {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  right: 0;
+  border-top: 1px dashed #F2E3B3;
+  text-align: center;
+  margin-top: -10px;
+}
+
+.lineLargura span {
+  background-color: #000;
+  color: #F2E3B3;
+  font-size: 0.5625rem;
+  padding: 0 0.35rem;
+}
+
+.lineComprimento {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 15px;
+  border-right: 1px dashed #F2E3B3;
+  display: flex;
+  align-items: center;
+}
+
+.lineComprimento span {
+  background-color: #000;
+  color: #F2E3B3;
+  font-size: 0.5625rem;
+  padding: 0.25rem 0;
+  writing-mode: vertical-rl;
+}
+
+.lineManga {
+  position: absolute;
+  top: 15px;
+  left: 0;
+  border-bottom: 1px dashed #F2E3B3;
+  padding: 0.15rem;
+}
+
+.lineManga span {
+  color: #F2E3B3;
+  font-size: 0.5625rem;
+}
+
+.modelRefCard {
+  background-color: #000000;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: #CCCCCC;
+}
+
+.iconAcid { 
+  color: #F2E3B3; 
+  flex-shrink: 0; 
+}
+
+/* TABELA */
+.tableCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.fitConceptBox h3 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.5rem;
+  color: #F2E3B3;
+  margin: 0 0 0.5rem 0;
+}
+
+.fitConceptBox p {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: #CCCCCC;
+  margin: 0;
+}
+
+.tableWrapper {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  overflow-x: auto;
+}
+
+.measuresTable {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.measuresTable th {
+  background-color: #000000;
+  color: #F2E3B3;
+  padding: 0.875rem 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.6875rem;
+}
+
+.measuresTable td {
+  padding: 0.875rem 0.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: #FFFFFF;
+}
+
+.sizeCell {
+  font-family: 'Arial Black', sans-serif;
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #F2E3B3 !important;
+}
+
+/* HOW TO SECTION */
+.howToSection h2 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.375rem;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.15);
+  padding-bottom: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.stepsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.stepCard {
+  background-color: #161514;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.stepNum {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.5rem;
+  color: #F2E3B3;
+}
+
+.stepCard h4 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.stepCard p {
+  font-size: 0.75rem;
+  color: #888888;
+  line-height: 1.6;
+  margin: 0;
+}
+
+@media (max-width: 900px) {
+  .fitTabsGrid, .stepsGrid, .panelGrid {
+    grid-template-columns: 1fr;
+  }
+  .header h1 { 
+    font-size: 2rem; 
+  }
+}

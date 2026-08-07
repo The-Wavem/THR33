@@ -51,7 +51,7 @@ export function Footer() {
             <li><Link to="/suporte">Central de Ajuda</Link></li>
             <li><Link to="/minha-conta?tab=pedidos">Meus Pedidos & Rastreio</Link></li>
             <li><Link to="/politicas?aba=reembolso">Solicitar Troca ou Devolução</Link></li>
-            <li><Link to="/catalogo">Guia de Tamanhos & Fits</Link></li>
+            <li><Link to="/guia-de-tamanhos">Guia de Tamanhos & Fits</Link></li>
           </ul>
         </div>
 
