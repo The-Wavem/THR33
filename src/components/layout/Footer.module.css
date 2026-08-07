@@ -1,52 +1,187 @@
 .footerContainer {
   width: 100%;
-  background-color: var(--bg-white);
-  border-top: 1px solid var(--border-black);
-  padding: 16px 32px;
+  background-color: #121110;
+  color: #FFFFFF;
+  font-family: 'Space Mono', monospace, sans-serif;
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
+  padding-top: 4rem;
+}
+
+.mainGrid {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 2rem 4rem 2rem;
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1fr;
+  gap: 3rem;
+}
+
+/* COLUNA DE BRANDING */
+.brandCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.logoTitle {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 2.25rem;
+  color: #FFFFFF;
+  text-decoration: none;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.brandTagline {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: #F2E3B3;
+  letter-spacing: 0.15em;
+}
+
+.hoursBox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+}
+
+.hoursLabel {
+  font-size: 0.625rem;
+  color: #888888;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.hoursDetail {
+  font-size: 0.75rem;
+  color: #CCCCCC;
+  line-height: 1.5;
+  font-style: italic;
+  margin: 0;
+}
+
+.socialsRow {
+  display: flex;
+  gap: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.socialLink {
+  color: #FFFFFF;
+  text-decoration: none;
+  font-size: 0.6875rem;
+  font-weight: 700;
   display: flex;
   align-items: center;
+  gap: 0.25rem;
+  transition: color 0.15s ease;
+}
+
+.socialLink:hover {
+  color: #F2E3B3;
+}
+
+/* COLUNAS DE LINKS */
+.linksCol {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.colTitle {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.875rem;
+  color: #FFFFFF;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.linksList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.linksList a {
+  color: #CCCCCC;
+  text-decoration: none;
+  font-size: 0.8125rem;
+  transition: color 0.15s ease, padding-left 0.15s ease;
+  display: inline-block;
+}
+
+.linksList a:hover {
+  color: #FFFFFF;
+  padding-left: 0.25rem;
+}
+
+/* BARRA INFERIOR */
+.bottomBar {
+  width: 100%;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: #0A0A09;
+  padding: 1.25rem 2rem;
+}
+
+.bottomBarContainer {
+  max-width: 1400px;
+  margin: 0 auto;
+  display: flex;
   justify-content: space-between;
-  gap: 16px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--text-black);
-  z-index: 100;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  font-size: 0.6875rem;
 }
 
 .copyrightText {
-  font-weight: 700;
-  letter-spacing: 1.2px;
-  text-transform: uppercase;
+  color: #888888;
+  letter-spacing: 0.05em;
 }
 
-.antiBotBadge {
+.securityBadge {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background-color: var(--bg-white);
-  border: 1px solid var(--border-black);
-  padding: 6px 12px;
+  gap: 0.5rem;
+  background-color: #121110;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.35rem 0.75rem;
+  color: #FFFFFF;
+  font-size: 0.625rem;
   font-weight: 700;
-  letter-spacing: 1px;
-  font-size: 10px;
-  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.8);
-  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
-.shieldDot {
+.shieldIcon {
+  color: #F2E3B3;
+}
+
+.statusDot {
   width: 6px;
   height: 6px;
-  background-color: #10B981;
   border-radius: 50%;
-  display: inline-block;
-  box-shadow: 0 0 6px #10B981;
+  background-color: #2ECC71;
+  box-shadow: 0 0 6px #2ECC71;
 }
 
-@media (max-width: 768px) {
-  .footerContainer {
+@media (max-width: 900px) {
+  .mainGrid {
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+  }
+}
+
+@media (max-width: 600px) {
+  .mainGrid {
+    grid-template-columns: 1fr;
+  }
+  .bottomBarContainer {
     flex-direction: column;
     align-items: flex-start;
-    padding: 16px 20px;
-    gap: 12px;
   }
 }

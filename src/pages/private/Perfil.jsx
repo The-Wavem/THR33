@@ -25,12 +25,17 @@ import {
   AtSign,
   Mail,
   Phone,
-  CreditCard
+  CreditCard,
+  Eye,
+  MessageSquare,
+  HelpCircle,
+  ExternalLink,
+  ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import styles from './Perfil.module.css';
 
-// EXEMPLOS DE PEDIDOS E PEÇAS GARANTIDAS NOS DROPS
+// EXEMPLOS DETALHADOS DE PEDIDOS E PEÇAS GARANTIDAS NOS DROPS
 const INITIAL_ORDERS = [
   {
     id: 'ORD-9021',
@@ -38,7 +43,29 @@ const INITIAL_ORDERS = [
     status: 'EM TRÂNSITO',
     statusType: 'shipping',
     trackingCode: 'BR948201948BR',
-    total: 'R$ 399,00',
+    subtotal: 'R$ 399,00',
+    discount: 'R$ 0,00',
+    shippingMethod: 'SEDEX EXPRESSO (1 a 2 dias úteis)',
+    shippingCost: 'R$ 24,90',
+    total: 'R$ 423,90',
+    paymentMethod: 'PIX INSTANTÂNEO',
+    paymentDetails: 'Desconto de 5% Aplicado • Chave Pix E-mail',
+    address: {
+      nome: 'WESLLEY K.',
+      rua: 'Alameda Santos',
+      numero: '1470',
+      complemento: 'Apt 82',
+      bairro: 'Cerqueira César',
+      cidade: 'São Paulo',
+      estado: 'SP',
+      cep: '01418-100'
+    },
+    timeline: [
+      { step: 1, label: '1. PEDIDO CONFIRMADO', date: '04 AGO — 14:20', done: true },
+      { step: 2, label: '2. SEPARAÇÃO NO ATELIÊ', date: '04 AGO — 16:45', done: true },
+      { step: 3, label: '3. DESPACHADO VIA SEDEX', date: '05 AGO — 09:10', done: true },
+      { step: 4, label: '4. ENTREGUE AO DESTINATÁRIO', date: 'EM TRÂNSITO', done: false }
+    ],
     items: [
       {
         id: 'item-1',
@@ -64,7 +91,29 @@ const INITIAL_ORDERS = [
     status: 'ENTREGUE',
     statusType: 'delivered',
     trackingCode: 'BR781290412BR',
-    total: 'R$ 420,00',
+    subtotal: 'R$ 420,00',
+    discount: 'R$ -21,00 (CUPOM VIP)',
+    shippingMethod: 'FRETE GRÁTIS EXPRESSO (SEDEX)',
+    shippingCost: 'R$ 0,00 (GRÁTIS)',
+    total: 'R$ 399,00',
+    paymentMethod: 'CARTÃO DE CRÉDITO',
+    paymentDetails: 'PARCELADO EM 3X DE R$ 133,00 (MASTERCARD **** 4892)',
+    address: {
+      nome: 'WESLLEY K.',
+      rua: 'Alameda Santos',
+      numero: '1470',
+      complemento: 'Apt 82',
+      bairro: 'Cerqueira César',
+      cidade: 'São Paulo',
+      estado: 'SP',
+      cep: '01418-100'
+    },
+    timeline: [
+      { step: 1, label: '1. PEDIDO CONFIRMADO', date: '18 JUL — 10:15', done: true },
+      { step: 2, label: '2. SEPARAÇÃO NO ATELIÊ', date: '18 JUL — 11:30', done: true },
+      { step: 3, label: '3. DESPACHADO VIA SEDEX', date: '19 JUL — 08:00', done: true },
+      { step: 4, label: '4. ENTREGUE AO DESTINATÁRIO', date: '21 JUL — 14:40', done: true }
+    ],
     items: [
       {
         id: 'item-3',
@@ -82,7 +131,29 @@ const INITIAL_ORDERS = [
     status: 'DESPACHADO',
     statusType: 'dispatched',
     trackingCode: 'BR330198421BR',
-    total: 'R$ 189,00',
+    subtotal: 'R$ 189,00',
+    discount: 'R$ 0,00',
+    shippingMethod: 'SEDEX PADRÃO',
+    shippingCost: 'R$ 18,00',
+    total: 'R$ 207,00',
+    paymentMethod: 'PIX INSTANTÂNEO',
+    paymentDetails: 'Chave Pix E-mail • Autenticado',
+    address: {
+      nome: 'WESLLEY K. (ATELIÊ)',
+      rua: 'Rua Fradique Coutinho',
+      numero: '350',
+      complemento: 'Conj 12',
+      bairro: 'Pinheiros',
+      cidade: 'São Paulo',
+      estado: 'SP',
+      cep: '05409-000'
+    },
+    timeline: [
+      { step: 1, label: '1. PEDIDO CONFIRMADO', date: '02 MAI — 11:00', done: true },
+      { step: 2, label: '2. SEPARAÇÃO NO ATELIÊ', date: '02 MAI — 15:00', done: true },
+      { step: 3, label: '3. DESPACHADO VIA SEDEX', date: '03 MAI — 09:30', done: true },
+      { step: 4, label: '4. ENTREGUE AO DESTINATÁRIO', date: 'AGUARDANDO', done: false }
+    ],
     items: [
       {
         id: 'item-4',
@@ -135,6 +206,27 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   const [activeTab, setActiveTab] = useState(defaultTab);
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [supportOrder, setSupportOrder] = useState(null);
+  const [showAddressModal, setShowAddressModal] = useState(false);
+
+  // TRAVAR SCROLL DO BODY E LENIS QUANDO QUALQUER MODAL ESTIVER ABERTO
+  const isAnyModalOpen = Boolean(selectedOrder || supportOrder || showAddressModal || showLogoutModal || showDeleteModal);
+
+  useEffect(() => {
+    if (isAnyModalOpen) {
+      document.body.style.overflow = 'hidden';
+      document.documentElement.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    }
+
+    return () => {
+      document.body.style.overflow = '';
+      document.documentElement.style.overflow = '';
+    };
+  }, [isAnyModalOpen]);
 
   // EFETUAR SINCRONISMO COM ROTA OU QUERY PARAMS (?tab=...)
   useEffect(() => {
@@ -162,8 +254,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     name: user?.name || 'WESLLEY K.',
     email: user?.email || 'weslley@atelier-thr33.com',
     cpf: user?.cpf || '382.901.482-00',
-    phone: user?.phone || '(11) 98765-4321',
-    instagram: user?.instagram || '@weslley.k'
+    phone: user?.phone || '(11) 98765-4321'
   });
 
   const [toastMessage, setToastMessage] = useState(null);
@@ -174,8 +265,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
         name: user.name || 'WESLLEY K.',
         email: user.email || 'weslley@atelier-thr33.com',
         cpf: user.cpf || '382.901.482-00',
-        phone: user.phone || '(11) 98765-4321',
-        instagram: user.instagram || '@weslley.k'
+        phone: user.phone || '(11) 98765-4321'
       });
     }
   }, [user]);
@@ -211,7 +301,6 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     }
   }, [addresses]);
 
-  const [showAddressModal, setShowAddressModal] = useState(false);
   const [editingAddress, setEditingAddress] = useState(null);
   const [addressForm, setAddressForm] = useState({
     label: '',
@@ -318,6 +407,11 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     setTimeout(() => {
       setCopiedTracking(null);
     }, 2500);
+  };
+
+  const handleOpenWhatsappSupport = (orderId) => {
+    const text = encodeURIComponent(`Olá equipe Ateliê THR33! Preciso de atendimento/suporte referente ao pedido #${orderId}.`);
+    window.open(`https://wa.me/5511999999999?text=${text}`, '_blank');
   };
 
   const tabsConfig = [
@@ -493,7 +587,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     <div className={styles.orderTopBar}>
                       <div className={styles.orderIdent}>
                         <span className={styles.orderTag}>PEDIDO:</span>
-                        <strong className={styles.orderNum}>{order.id}</strong>
+                        <strong className={styles.orderNum}>#{order.id}</strong>
                         <span className={styles.orderDate}>• {order.date}</span>
                       </div>
 
@@ -528,8 +622,8 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                       ))}
                     </div>
 
-                    {/* FOOTER DE PEDIDO: RASTREIO E TOTAL */}
-                    <div className={styles.orderFooterBar}>
+                    {/* RASTREIO E TOTAL */}
+                    <div className={styles.orderMiddleBar}>
                       <div className={styles.trackingBox}>
                         <span className={styles.trackLabel}>CÓDIGO DE RASTREIO SEDEX:</span>
                         <code className={styles.trackCode}>{order.trackingCode}</code>
@@ -556,6 +650,25 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                         <span className={styles.totalLabel}>TOTAL DO PEDIDO:</span>
                         <strong className={styles.totalValue}>{order.total}</strong>
                       </div>
+                    </div>
+
+                    {/* RODAPÉ DO CARD: AÇÕES RÁPIDAS (DETALHES DA COMPRA & SUPORTE) */}
+                    <div className={styles.orderCardFooterActions}>
+                      <button 
+                        onClick={() => setSelectedOrder(order)} 
+                        className={styles.btnViewDetails}
+                      >
+                        <Eye size={15} />
+                        <span>[ 👁 VER DETALHES DA COMPRA ]</span>
+                      </button>
+
+                      <button 
+                        onClick={() => setSupportOrder(order)} 
+                        className={styles.btnOrderSupport}
+                      >
+                        <MessageSquare size={15} />
+                        <span>[ 💬 SUPORTE // AJUDA ]</span>
+                      </button>
                     </div>
 
                   </div>
@@ -821,10 +934,288 @@ export function Perfil({ defaultTab = 'pedidos' }) {
         </AnimatePresence>
       </div>
 
+      {/* MODAL 01: DETALHAMENTO COMPLETO DO PEDIDO (ORDER DETAILS MODAL) */}
+      <AnimatePresence>
+        {selectedOrder && (
+          <div className={styles.modalOverlay} data-lenis-prevent>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className={styles.orderDetailsModalCard}
+            >
+              {/* TOP HEADER */}
+              <div className={styles.orderDetailsHeader}>
+                <div className={styles.orderDetailsTitleGroup}>
+                  <Package size={20} className={styles.headerIcon} />
+                  <div>
+                    <h3>DETALHAMENTO DA COMPRA #{selectedOrder.id}</h3>
+                    <span className={styles.orderDateSub}>REALIZADO EM: {selectedOrder.date}</span>
+                  </div>
+                </div>
+
+                <div className={styles.headerRightFlex}>
+                  <div className={styles.orderStatusBadge} data-status={selectedOrder.statusType}>
+                    {selectedOrder.statusType === 'shipping' && <Truck size={14} />}
+                    {selectedOrder.statusType === 'delivered' && <CheckCircle2 size={14} />}
+                    {selectedOrder.statusType === 'dispatched' && <Clock size={14} />}
+                    <span>{selectedOrder.status}</span>
+                  </div>
+
+                  <button onClick={() => setSelectedOrder(null)} className={styles.btnCloseModal}>
+                    <X size={20} />
+                  </button>
+                </div>
+              </div>
+
+              {/* CONTEÚDO DO MODAL DE DETALHES */}
+              <div className={styles.orderDetailsBody}>
+                
+                {/* 1. SEÇÃO DE ITENS ADQUIRIDOS */}
+                <div className={styles.detailSectionBox}>
+                  <h4 className={styles.detailSectionHeading}>
+                    <span>1. PEÇAS ADQUIRIDAS E LOTES NUMERADOS</span>
+                  </h4>
+                  <div className={styles.modalItemsList}>
+                    {selectedOrder.items.map((item) => (
+                      <div key={item.id} className={styles.modalItemRow}>
+                        <img src={item.image} alt={item.title} className={styles.modalItemThumb} />
+                        <div className={styles.modalItemInfo}>
+                          <strong className={styles.modalItemTitle}>{item.title}</strong>
+                          <div className={styles.modalItemMeta}>
+                            <span>TAMANHO: {item.size}</span>
+                            <span className={styles.modalLotTag}>LOTE EXCLUSIVO: {item.dropLot}</span>
+                          </div>
+                        </div>
+                        <div className={styles.modalItemPrice}>{item.price}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. LINHA DO TEMPO DO RASTREIO (TIMELINE) */}
+                <div className={styles.detailSectionBox}>
+                  <h4 className={styles.detailSectionHeading}>
+                    <span>2. STATUS E HISTÓRICO DE ENTREGA</span>
+                  </h4>
+
+                  <div className={styles.timelineContainer}>
+                    {selectedOrder.timeline.map((stepItem, idx) => (
+                      <div 
+                        key={idx} 
+                        className={`${styles.timelineStep} ${stepItem.done ? styles.stepDone : styles.stepPending}`}
+                      >
+                        <div className={styles.stepDotContainer}>
+                          <div className={styles.stepDot}>
+                            {stepItem.done ? <Check size={12} /> : <span>{stepItem.step}</span>}
+                          </div>
+                          {idx < selectedOrder.timeline.length - 1 && (
+                            <div className={`${styles.stepLine} ${selectedOrder.timeline[idx + 1].done ? styles.lineDone : ''}`} />
+                          )}
+                        </div>
+
+                        <div className={styles.stepContent}>
+                          <span className={styles.stepTitle}>{stepItem.label}</span>
+                          <span className={styles.stepDate}>{stepItem.date}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className={styles.trackingInfoBar}>
+                    <span className={styles.trackLabel}>CÓDIGO DE RASTREIO SEDEX:</span>
+                    <code className={styles.trackCode}>{selectedOrder.trackingCode}</code>
+                    <button 
+                      onClick={() => handleCopyTracking(selectedOrder.trackingCode)}
+                      className={styles.btnCopyTrack}
+                    >
+                      {copiedTracking === selectedOrder.trackingCode ? (
+                        <>
+                          <Check size={14} color="#000000" />
+                          <span>COPIADO!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={14} />
+                          <span>COPIAR</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* 3. RESUMO FINANCEIRO E PAGAMENTO & ENDEREÇO (2 COLUNAS) */}
+                <div className={styles.detailsGrid2}>
+                  
+                  {/* FINANCEIRO E PAGAMENTO */}
+                  <div className={styles.detailSectionBox}>
+                    <h4 className={styles.detailSectionHeading}>
+                      <span>3. RESUMO FINANCEIRO & PAGAMENTO</span>
+                    </h4>
+
+                    <div className={styles.financialRows}>
+                      <div className={styles.finRow}>
+                        <span>SUBTOTAL DAS PEÇAS:</span>
+                        <strong>{selectedOrder.subtotal}</strong>
+                      </div>
+                      <div className={styles.finRow}>
+                        <span>DESCONTO APLICADO:</span>
+                        <strong className={styles.discountVal}>{selectedOrder.discount}</strong>
+                      </div>
+                      <div className={styles.finRow}>
+                        <span>FRETE ({selectedOrder.shippingMethod}):</span>
+                        <strong>{selectedOrder.shippingCost}</strong>
+                      </div>
+                      <div className={`${styles.finRow} ${styles.finTotalRow}`}>
+                        <span>VALOR TOTAL PAGO:</span>
+                        <strong className={styles.finTotalVal}>{selectedOrder.total}</strong>
+                      </div>
+                    </div>
+
+                    <div className={styles.paymentMethodBlock}>
+                      <span className={styles.paymentMetaLabel}>FORMA DE PAGAMENTO UTILIZADA:</span>
+                      <strong className={styles.paymentMethodTitle}>
+                        <CreditCard size={14} />
+                        <span>{selectedOrder.paymentMethod}</span>
+                      </strong>
+                      <p className={styles.paymentDetailsText}>{selectedOrder.paymentDetails}</p>
+                    </div>
+                  </div>
+
+                  {/* ENDEREÇO DE DESPACHO */}
+                  <div className={styles.detailSectionBox}>
+                    <h4 className={styles.detailSectionHeading}>
+                      <span>4. ENDEREÇO DE DESPACHO DA ENCOMENDA</span>
+                    </h4>
+
+                    <div className={styles.addressDetailBox}>
+                      <div className={styles.addressHeaderLabel}>
+                        <MapPin size={14} />
+                        <strong>DESTINATÁRIO: {selectedOrder.address.nome}</strong>
+                      </div>
+                      <p>{selectedOrder.address.rua}, {selectedOrder.address.numero} {selectedOrder.address.complemento ? `— ${selectedOrder.address.complemento}` : ''}</p>
+                      <p>{selectedOrder.address.bairro} — {selectedOrder.address.cidade}/{selectedOrder.address.estado}</p>
+                      <p>CEP: <strong>{selectedOrder.address.cep}</strong></p>
+                    </div>
+
+                    <div className={styles.supportHelpBoxModal}>
+                      <HelpCircle size={16} />
+                      <div>
+                        <strong>DÚVIDAS OU ALTERAÇÕES DE DESTINO?</strong>
+                        <p>Entre em contato com nossa equipe tática para suporte de frete.</p>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+
+              </div>
+
+              {/* FOOTER DO MODAL DE DETALHES */}
+              <div className={styles.orderDetailsFooter}>
+                <button 
+                  onClick={() => {
+                    const current = selectedOrder;
+                    setSelectedOrder(null);
+                    setSupportOrder(current);
+                  }}
+                  className={styles.btnModalOrderSupport}
+                >
+                  <MessageSquare size={16} />
+                  <span>[ 💬 SOLICITAR TROCA OU AJUDA COM ESTE PEDIDO ]</span>
+                </button>
+
+                <button 
+                  onClick={() => setSelectedOrder(null)} 
+                  className={styles.btnCancelModal}
+                >
+                  FECHAR
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL 02: SUPORTE DIRETO & ATENDIMENTO DO PEDIDO */}
+      <AnimatePresence>
+        {supportOrder && (
+          <div className={styles.modalOverlay} data-lenis-prevent>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className={styles.modalSupportCard}
+            >
+              <div className={styles.modalHeader}>
+                <div className={styles.supportTitleBox}>
+                  <MessageSquare size={20} color="#000000" />
+                  <h3>SUPORTE & ATENDIMENTO TÁTICO ATELIÊ</h3>
+                </div>
+                <button onClick={() => setSupportOrder(null)} className={styles.btnCloseModal}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className={styles.supportBodyContent}>
+                <div className={styles.supportOrderBadgeBar}>
+                  <span>ATENDIMENTO PARA O PEDIDO:</span>
+                  <strong>#{supportOrder.id}</strong>
+                  <span className={styles.orderDateSub}>({supportOrder.date})</span>
+                </div>
+
+                <p className={styles.supportIntroText}>
+                  Escolha um dos canais rápidos abaixo para tirar dúvidas, solicitar troca de tamanho ou falar diretamente com a equipe do Ateliê:
+                </p>
+
+                <div className={styles.supportOptionsGrid}>
+                  
+                  {/* OPÇÃO 01: WHATSAPP */}
+                  <button 
+                    onClick={() => handleOpenWhatsappSupport(supportOrder.id)}
+                    className={styles.btnSupportOptionPrimary}
+                  >
+                    <MessageSquare size={18} />
+                    <div className={styles.btnOptionText}>
+                      <strong>FAÇO UM ATENDIMENTO DIRETO NO WHATSAPP</strong>
+                      <span>Abertura imediata com o número #{supportOrder.id} pré-preenchido</span>
+                    </div>
+                    <ChevronRight size={18} />
+                  </button>
+
+                  {/* OPÇÃO 02: SOLICITAR TROCA */}
+                  <button 
+                    onClick={() => {
+                      showToast(`✓ Solicitação de troca registrada para o Pedido #${supportOrder.id}. Nossa equipe entrará em contato via E-mail.`);
+                      setSupportOrder(null);
+                    }}
+                    className={styles.btnSupportOptionSecondary}
+                  >
+                    <HelpCircle size={18} />
+                    <div className={styles.btnOptionText}>
+                      <strong>SOLICITAR TROCA DE TAMANHO OU DEVOLUÇÃO</strong>
+                      <span>Registrar protocolo de troca para as peças deste pedido</span>
+                    </div>
+                    <ChevronRight size={18} />
+                  </button>
+
+                </div>
+              </div>
+
+              <div className={styles.modalActions}>
+                <button onClick={() => setSupportOrder(null)} className={styles.btnCancelModal}>
+                  FECHAR SUPORTE
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
       {/* MODAL PARA CADASTRAR/EDITAR ENDEREÇO */}
       <AnimatePresence>
         {showAddressModal && (
-          <div className={styles.modalOverlay}>
+          <div className={styles.modalOverlay} data-lenis-prevent>
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -972,7 +1363,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       {/* MODAL DE CONFIRMAÇÃO DE LOGOUT */}
       <AnimatePresence>
         {showLogoutModal && (
-          <div className={styles.modalOverlay}>
+          <div className={styles.modalOverlay} data-lenis-prevent>
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -1008,7 +1399,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE CONTA */}
       <AnimatePresence>
         {showDeleteModal && (
-          <div className={styles.modalOverlay}>
+          <div className={styles.modalOverlay} data-lenis-prevent>
             <motion.div 
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
