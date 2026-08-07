@@ -9,6 +9,8 @@ import { ProdutoDetalhe } from './pages/public/ProdutoDetalhe';
 import { Lancamentos } from './pages/public/Lancamentos';
 import { Checkout } from './pages/public/Checkout';
 import { Auth } from './pages/public/Auth';
+import { Suporte } from './pages/public/Suporte';
+import { Politicas } from './pages/public/Politicas';
 import { CartDrawer } from './components/cart/CartDrawer';
 import { useCart } from './context/CartContext';
 import { useAuth } from './context/AuthContext';
@@ -58,6 +60,10 @@ export function AppRoutes() {
           {/* ROTA DE AUTENTICAÇÃO TÁTICA (LOGIN & CADASTRO) */}
           <Route path="/auth" element={<Auth />} />
           <Route path="/login" element={<Auth />} />
+
+          {/* ROTAS INSTITUCIONAIS: SUPORTE & POLÍTICAS */}
+          <Route path="/suporte" element={<Suporte />} />
+          <Route path="/politicas" element={<Politicas />} />
         </Route>
 
         <Route 

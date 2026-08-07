@@ -1,0 +1,145 @@
+.pageContainer {
+  padding: 4rem 2rem;
+  background-color: #0F0E0D;
+  font-family: 'Space Mono', monospace, sans-serif;
+  min-height: 80vh;
+}
+
+.layoutGrid {
+  max-width: 1200px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  gap: 3rem;
+  align-items: start;
+}
+
+/* SIDEBAR NAV */
+.sidebar {
+  background-color: #161514;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 6px 6px 0px #000000;
+  position: sticky;
+  top: 100px;
+}
+
+.sidebarHeader {
+  padding: 1.5rem;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.15);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #F2E3B3;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.05em;
+}
+
+.policyNav {
+  display: flex;
+  flex-direction: column;
+}
+
+.navBtn, .navBtnActive {
+  width: 100%;
+  text-align: left;
+  padding: 1.25rem 1.5rem;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #CCCCCC;
+  font-family: 'Arial Black', sans-serif;
+  font-size: 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.navBtn:hover {
+  background-color: rgba(255, 255, 255, 0.05);
+  color: #FFFFFF;
+}
+
+.navBtnActive {
+  background-color: #F2E3B3;
+  color: #000000;
+}
+
+/* MANIFESTO / DOCUMENT FRAME */
+.contentArea {
+  width: 100%;
+}
+
+.documentFrame {
+  background-color: #F5F5F0; /* Fundo papel cru/brutalista */
+  border: 2px solid #000000;
+  box-shadow: 8px 8px 0px #000000;
+  color: #000000;
+  display: flex;
+  flex-direction: column;
+}
+
+.docHeader {
+  padding: 3rem 3rem 1.5rem 3rem;
+  border-bottom: 4px solid #000000;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.docIcon { 
+  color: #000000; 
+}
+
+.docHeader h2 {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 1.75rem;
+  text-transform: uppercase;
+  margin: 0;
+}
+
+.docBody {
+  padding: 3rem;
+  min-height: 400px;
+}
+
+.docParagraph {
+  font-size: 0.875rem;
+  line-height: 1.8;
+  margin-bottom: 1.5rem;
+  color: #222222;
+}
+
+.docParagraph:first-child {
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.docFooter {
+  padding: 1.5rem 3rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.2);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.625rem;
+  color: #666666;
+}
+
+.docFooter strong {
+  font-family: 'Arial Black', sans-serif;
+  color: #000000;
+}
+
+@media (max-width: 900px) {
+  .layoutGrid { 
+    grid-template-columns: 1fr; 
+  }
+  .sidebar { 
+    position: static; 
+  }
+  .docHeader, .docBody, .docFooter { 
+    padding: 1.5rem; 
+  }
+  .docHeader h2 { 
+    font-size: 1.25rem; 
+  }
+}

@@ -48,9 +48,9 @@ export function Footer() {
         <div className={styles.linksCol}>
           <h4 className={styles.colTitle}>SUPORTE</h4>
           <ul className={styles.linksList}>
-            <li><Link to="/minha-conta?tab=pedidos">Central de Ajuda</Link></li>
+            <li><Link to="/suporte">Central de Ajuda</Link></li>
             <li><Link to="/minha-conta?tab=pedidos">Meus Pedidos & Rastreio</Link></li>
-            <li><Link to="/minha-conta?tab=pedidos">Solicitar Troca ou Devolução</Link></li>
+            <li><Link to="/politicas?aba=reembolso">Solicitar Troca ou Devolução</Link></li>
             <li><Link to="/catalogo">Guia de Tamanhos & Fits</Link></li>
           </ul>
         </div>
@@ -59,10 +59,10 @@ export function Footer() {
         <div className={styles.linksCol}>
           <h4 className={styles.colTitle}>POLÍTICAS</h4>
           <ul className={styles.linksList}>
-            <li><Link to="/minha-conta?tab=seguranca">Política de Privacidade</Link></li>
-            <li><Link to="/minha-conta?tab=enderecos">Política de Envio & Frete</Link></li>
-            <li><Link to="/minha-conta?tab=pedidos">Termos do Drop Limitado</Link></li>
-            <li><Link to="/minha-conta?tab=seguranca">Política de Reembolso</Link></li>
+            <li><Link to="/politicas?aba=privacidade">Política de Privacidade</Link></li>
+            <li><Link to="/politicas?aba=envio">Política de Envio & Frete</Link></li>
+            <li><Link to="/politicas?aba=termos">Termos do Drop Limitado</Link></li>
+            <li><Link to="/politicas?aba=reembolso">Política de Reembolso</Link></li>
           </ul>
         </div>
 
