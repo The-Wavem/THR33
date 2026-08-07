@@ -13,6 +13,8 @@ import { CartDrawer } from './components/cart/CartDrawer';
 import { useCart } from './context/CartContext';
 import { useAuth } from './context/AuthContext';
 
+import { Perfil } from './pages/private/Perfil';
+
 export function AppRoutes() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -68,8 +70,12 @@ export function AppRoutes() {
             />
           }
         >
-          <Route path="/meus-pedidos" element={<div style={{ padding: '2rem' }}><h1>MEUS PEDIDOS</h1></div>} />
-          <Route path="/configuracoes" element={<div style={{ padding: '2rem' }}><h1>CONFIGURAÇÕES DA CONTA</h1></div>} />
+          {/* PAINEL TÁTICO PASSAPORTE ATELIÊ */}
+          <Route path="/minha-conta" element={<Perfil defaultTab="pedidos" />} />
+          <Route path="/meus-pedidos" element={<Perfil defaultTab="pedidos" />} />
+          <Route path="/configuracoes" element={<Perfil defaultTab="dados" />} />
+          <Route path="/enderecos" element={<Perfil defaultTab="enderecos" />} />
+          <Route path="/seguranca" element={<Perfil defaultTab="seguranca" />} />
         </Route>
       </Routes>
 

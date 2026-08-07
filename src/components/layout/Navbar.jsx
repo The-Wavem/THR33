@@ -236,16 +236,16 @@ export function Navbar({ cartCount = 2, onOpenCart, user, onLogout, onOpenAuthMo
               <div className={styles.userDropdown}>
                 {user ? (
                   <>
-                    <div className={styles.dropdownHeader}>
+                    <div className={styles.dropdownHeader} onClick={() => { setIsUserMenuOpen(false); navigate('/minha-conta'); }} style={{ cursor: 'pointer' }}>
                       <span className={styles.passId}>PASSAPORTE {user.passId || '#0482'}</span>
                       <strong className={styles.userName}>{user.name || 'WESLLEY K.'}</strong>
                     </div>
                     <div className={styles.dropdownDivider} />
-                    <button onClick={() => { setIsUserMenuOpen(false); navigate('/meus-pedidos'); }} className={styles.dropdownLink}>
-                      <Package size={14} /> <span>MEUS PEDIDOS</span>
+                    <button onClick={() => { setIsUserMenuOpen(false); navigate('/minha-conta?tab=pedidos'); }} className={styles.dropdownLink}>
+                      <Package size={14} /> <span>MEUS PEDIDOS & DROPS</span>
                     </button>
-                    <button onClick={() => { setIsUserMenuOpen(false); navigate('/configuracoes'); }} className={styles.dropdownLink}>
-                      <Settings size={14} /> <span>CONFIGURAÇÕES</span>
+                    <button onClick={() => { setIsUserMenuOpen(false); navigate('/minha-conta?tab=dados'); }} className={styles.dropdownLink}>
+                      <Settings size={14} /> <span>CONFIGURAÇÕES & DADOS</span>
                     </button>
                     <div className={styles.dropdownDivider} />
                     <button onClick={() => { setIsUserMenuOpen(false); if(onLogout) onLogout(); }} className={styles.dropdownLogout}>

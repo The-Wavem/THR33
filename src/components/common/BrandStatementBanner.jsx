@@ -20,11 +20,11 @@ export function BrandStatementBanner() {
           transition={{ duration: 0.8, ease: 'easeOut' }}
           className={styles.subStatement}
         >
-          THR33 ATELIÊ R.U.A // SÃO PAULO
+          FOR THE FEW
         </motion.span>
         
-        <h1 className={styles.mainStatement}>FOR THE FEW</h1>
-        <span className={styles.footerTag}>EDIÇÕES LIMITADAS • NUNCA EM MASSA</span>
+        <h1 className={styles.mainStatement}>THR33</h1>
+        <span className={styles.footerTag}>EDIÇÕES LIMITADAS</span>
       </div>
     </motion.section>
   );

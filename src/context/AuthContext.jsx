@@ -30,22 +30,47 @@ export function AuthProvider({ children }) {
     }
   }, [user]);
 
+  const DEFAULT_USER_EXTRAS = {
+    passId: '#0482',
+    tier: 'STATUS: MEMBRO VIP // ATELIÊ R.U.A',
+    createdAt: '14/03/2024',
+    phone: '(11) 98765-4321',
+    instagram: '@weslley.k',
+    cpf: '382.901.482-00'
+  };
+
   const login = (userData) => {
     const formattedUser = {
+      ...DEFAULT_USER_EXTRAS,
       id: userData.id || `usr-${Date.now()}`,
-      name: userData.name || userData.nome || 'Usuário Ateliê',
-      email: userData.email,
-      cpf: userData.cpf || '000.000.000-00',
-      createdAt: new Date().toISOString()
+      name: userData.name || userData.nome || 'WESLLEY K.',
+      email: userData.email || 'weslley@atelier-thr33.com',
+      ...userData
     };
     setUser(formattedUser);
     setIsAuthModalOpen(false);
     return formattedUser;
   };
 
+  const updateUser = (updatedFields) => {
+    setUser(prev => {
+      if (!prev) return null;
+      return {
+        ...prev,
+        ...updatedFields
+      };
+    });
+  };
+
   const logout = () => {
     setUser(null);
     localStorage.removeItem(USER_STORAGE_KEY);
+  };
+
+  const deleteAccount = () => {
+    setUser(null);
+    localStorage.removeItem(USER_STORAGE_KEY);
+    localStorage.removeItem('thr33_saved_addresses');
   };
 
   const openAuthModal = (originPath = null, tab = 'login') => {
@@ -62,7 +87,9 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       user,
       login,
+      updateUser,
       logout,
+      deleteAccount,
       isAuthModalOpen,
       openAuthModal,
       closeAuthModal,
