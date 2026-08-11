@@ -1,439 +1,132 @@
-.heroContainer {
+.heroSection {
   position: relative;
   width: 100%;
-  height: calc(100vh - 96px);
+  height: calc(100vh - var(--header-height));
   min-height: 560px;
-  background-color: var(--bg-concrete);
-  overflow: hidden;
-  cursor: none;
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border-black);
-  user-select: none;
-}
-
-/* Custom Floating Cursor Badge */
-.cursorBadge {
-  position: fixed;
-  top: 0;
-  left: 0;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-  z-index: 500;
-  background-color: var(--text-black);
-  color: var(--bg-white);
-  padding: 8px 16px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  border: 1px solid var(--bg-white);
-  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.4);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  opacity: 0;
-  transition: opacity 0.2s ease, transform 0.05s ease-out;
-  white-space: nowrap;
-}
-
-.cursorBadge.active {
-  opacity: 1;
-}
-
-.badgeDot {
-  color: var(--accent-amber);
-  font-size: 10px;
-  animation: pulseAmber 1s infinite alternate;
-}
-
-@keyframes pulseAmber {
-  from { opacity: 0.4; }
-  to { opacity: 1; }
-}
-
-/* Slide Background Image */
-.slideImageWrapper {
-  position: absolute;
-  inset: 0;
-  z-index: 1;
-  overflow: hidden;
-}
-
-.slideImage {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: grayscale(25%) contrast(110%) brightness(85%);
-  transition: transform 0.8s cubic-bezier(0.16, 1, 0.3, 1), filter 0.8s ease;
-  transform: scale(1.03);
-}
-
-.slideImage.snapping {
-  transform: scale(1.08);
-  filter: grayscale(50%) contrast(140%) brightness(110%);
-}
-
-/* Film Grain Overlay */
-.filmGrain {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  pointer-events: none;
-  opacity: 0.18;
-  mix-blend-mode: overlay;
-}
-
-.vignetteOverlay {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  pointer-events: none;
-  background: radial-gradient(circle at center, transparent 30%, rgba(0, 0, 0, 0.65) 100%);
-}
-
-/* Shutter Snap Effect Elements */
-.shutterTop,
-.shutterBottom {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  height: 50%;
-  background-color: #000000;
-  z-index: 400;
-  pointer-events: none;
-  transition: transform 0.18s cubic-bezier(0.7, 0, 0.3, 1);
-}
-
-.shutterTop {
-  top: 0;
-  transform: translateY(-100%);
-}
-
-.shutterBottom {
-  bottom: 0;
-  transform: translateY(100%);
-}
-
-.shutterActive .shutterTop {
-  transform: translateY(0%);
-}
-
-.shutterActive .shutterBottom {
-  transform: translateY(0%);
-}
-
-.flashOverlay {
-  position: absolute;
-  inset: 0;
-  background-color: #FFFFFF;
-  z-index: 450;
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 0.15s ease-out;
-}
-
-.flashActive {
-  opacity: 0.85;
-}
-
-/* Corner Ticks & Frame */
-.cornerTickTL,
-.cornerTickTR,
-.cornerTickBL,
-.cornerTickBR {
-  position: absolute;
-  z-index: 10;
-  font-family: var(--font-mono);
-  font-size: 14px;
-  color: var(--bg-white);
-  font-weight: 700;
-  opacity: 0.7;
-  pointer-events: none;
-}
-
-.cornerTickTL { top: 16px; left: 16px; }
-.cornerTickTR { top: 16px; right: 16px; }
-.cornerTickBL { bottom: 16px; left: 16px; }
-.cornerTickBR { bottom: 16px; right: 16px; }
-
-/* Content Overlay Layer */
-.heroContent {
-  position: relative;
-  z-index: 20;
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  padding: 32px 40px;
-  pointer-events: none;
-}
-
-/* Enable pointer events specifically on interactive elements */
-.interactive {
-  pointer-events: auto;
-  cursor: pointer;
-}
-
-/* Top Section: Geometric Logo Box & Metadata */
-.topRow {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  width: 100%;
-}
-
-.logoBox {
-  border: 1px solid var(--bg-white);
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(4px);
-  padding: 8px 14px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 2px;
-  color: var(--bg-white);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  box-shadow: 3px 3px 0px rgba(0, 0, 0, 0.5);
-}
-
-.logoIconSquare {
-  width: 12px;
-  height: 12px;
-  background-color: var(--accent-amber);
-  border: 1px solid var(--border-black);
-}
-
-.locationBadge {
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(4px);
-  border: 1px solid var(--bg-white);
-  padding: 8px 16px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  color: var(--bg-white);
-  text-transform: uppercase;
-}
-
-/* Middle Section: Giant Impact Typography */
-.centerTitleSection {
-  display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+}
+
+.slideBackground {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  transition: background-image 0.8s ease-in-out;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg, 
+    rgba(10, 10, 10, 0.4) 0%, 
+    rgba(10, 10, 10, 0.8) 100%
+  );
+}
+
+.contentContainer {
+  position: relative;
+  z-index: 2;
   text-align: center;
-  margin: auto 0;
+  max-width: 900px;
+  padding: 0 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
 }
 
-.giantTitle {
-  font-family: var(--font-main);
-  font-size: clamp(72px, 14vw, 190px);
-  font-weight: 900;
-  letter-spacing: -2px;
-  line-height: 0.85;
-  color: var(--bg-white);
-  -webkit-text-stroke: 2px var(--text-black);
-  text-shadow: 
-    4px 4px 0px var(--text-black),
-    8px 8px 0px rgba(0, 0, 0, 0.5),
-    12px 12px 20px rgba(0, 0, 0, 0.8);
-  text-transform: uppercase;
-  margin: 0;
-  transition: transform 0.4s ease, opacity 0.4s ease;
-}
-
-.subtitleBadge {
-  margin-top: 16px;
-  background-color: var(--accent-amber);
-  color: var(--text-black);
-  border: 1px solid var(--border-black);
-  padding: 6px 18px;
-  font-family: var(--font-mono);
-  font-size: 12px;
+.badge {
+  font-size: 0.75rem;
   font-weight: 700;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.4rem 1rem;
+  border-radius: 50px;
+  backdrop-filter: blur(8px);
+}
+
+.mainTitle {
+  font-family: var(--font-heading);
+  font-size: clamp(2.5rem, 6vw, 4.5rem);
+  font-weight: 800;
+  letter-spacing: -1px;
+  line-height: 1.1;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.subtitle {
+  font-size: clamp(0.9rem, 2vw, 1.2rem);
+  color: var(--text-secondary);
   letter-spacing: 2px;
   text-transform: uppercase;
-  box-shadow: 4px 4px 0px var(--text-black);
 }
 
-/* Bottom Section: Details & Action CTAs */
-.bottomRow {
+.actions {
   display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 24px;
-  width: 100%;
-}
-
-.detailsBlock {
-  max-width: 440px;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(6px);
-  border: 1px solid var(--bg-white);
-  padding: 16px 20px;
-  color: var(--bg-white);
-  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
-}
-
-.modelText {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 1.2px;
-  color: var(--accent-amber);
-  margin-bottom: 6px;
-  text-transform: uppercase;
-}
-
-.descriptionText {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.5;
-  color: #E5E7EB;
-  text-transform: uppercase;
-}
-
-.ctaGroup {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+  gap: 1rem;
+  margin-top: 1.5rem;
   flex-wrap: wrap;
+  justify-content: center;
 }
 
-/* Primary Button: Piano Black */
-.primaryCtaBtn {
-  background-color: var(--text-black);
-  color: var(--bg-white);
-  border: 1px solid var(--bg-white);
-  padding: 14px 28px;
-  font-family: var(--font-mono);
-  font-size: 12px;
+.primaryCta {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  padding: 1rem 2rem;
   font-weight: 700;
+  font-size: 0.85rem;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.8);
+  transition: transform var(--transition-fast), opacity var(--transition-fast);
 }
 
-.primaryCtaBtn:hover {
-  background-color: var(--bg-white);
-  color: var(--text-black);
-  border-color: var(--text-black);
+.primaryCta:hover {
+  opacity: 0.9;
   transform: translateY(-2px);
-  box-shadow: 6px 6px 0px var(--accent-amber);
 }
 
-/* Secondary Button: White with 1px black border -> Amber hover */
-.secondaryCtaBtn {
-  background-color: var(--bg-white);
-  color: var(--text-black);
-  border: 1px solid var(--border-black);
-  padding: 14px 28px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
+.secondaryCta {
+  border: 1px solid var(--border-active);
+  color: var(--text-primary);
+  padding: 1rem 2rem;
+  font-weight: 600;
+  font-size: 0.85rem;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 4px 4px 0px var(--text-black);
-}
-
-.secondaryCtaBtn:hover {
-  background-color: var(--accent-amber);
-  color: var(--text-black);
-  transform: translateY(-2px);
-  box-shadow: 6px 6px 0px rgba(0, 0, 0, 0.9);
-}
-
-/* Controls & Counter */
-.controlsBlock {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  background: rgba(0, 0, 0, 0.7);
   backdrop-filter: blur(4px);
-  border: 1px solid var(--bg-white);
-  padding: 8px 12px;
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
 }
 
-.slideIndicator {
-  background: transparent;
-  border: 1px solid var(--bg-white);
-  color: var(--bg-white);
-  padding: 6px 12px;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  transition: all 0.2s ease;
+.secondaryCta:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
 }
 
-.slideIndicator:hover,
-.slideIndicator.active {
-  background-color: var(--accent-amber);
-  color: var(--text-black);
-  border-color: var(--text-black);
+.dotsContainer {
+  position: absolute;
+  bottom: 2rem;
+  z-index: 3;
+  display: flex;
+  gap: 0.75rem;
 }
 
-.slideCounter {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--bg-white);
-  letter-spacing: 1px;
-  padding: 0 4px;
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: rgba(255, 255, 255, 0.3);
+  transition: background-color var(--transition-fast), transform var(--transition-fast);
 }
 
-/* Responsive adjustments */
-@media (max-width: 900px) {
-  .heroContainer {
-    height: auto;
-    min-height: calc(100vh - 80px);
-    cursor: default;
-  }
-  
-  .cursorBadge {
-    display: none;
-  }
-
-  .heroContent {
-    padding: 20px 16px;
-    gap: 24px;
-  }
-
-  .topRow {
-    flex-direction: column;
-    gap: 12px;
-    align-items: flex-start;
-  }
-
-  .bottomRow {
-    flex-direction: column;
-    align-items: stretch;
-    gap: 16px;
-  }
-
-  .detailsBlock {
-    max-width: 100%;
-  }
-
-  .ctaGroup {
-    width: 100%;
-  }
-
-  .primaryCtaBtn,
-  .secondaryCtaBtn {
-    flex: 1;
-    text-align: center;
-    padding: 12px 16px;
-  }
-
-  .giantTitle {
-    font-size: clamp(54px, 15vw, 100px);
-  }
+.activeDot {
+  background-color: var(--text-primary);
+  transform: scale(1.3);
 }

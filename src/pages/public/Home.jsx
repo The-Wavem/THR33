@@ -1,20 +1,16 @@
-import React, { useState } from 'react';
-import Preloader from '../../components/layout/Preloader';
-import { HomeContent } from '../../sections/home/HomeContent';
+import React from 'react';
+import Hero from '../../sections/home/Hero';
+import BentoGrid from '../../sections/home/BentoGrid';
+import BestSellers from '../../sections/home/BestSellers';
+import styles from './Home.module.css';
 
-export function Home({ onOpenCatalogo, onAddToCart, onOpenCart }) {
-  const [loading, setLoading] = useState(true);
-
+export function Home() {
   return (
-    <>
-      {loading && <Preloader onComplete={() => setLoading(false)} />}
-
-      <HomeContent 
-        onOpenCatalogo={onOpenCatalogo}
-        onAddToCart={onAddToCart}
-        onOpenCart={onOpenCart}
-      />
-    </>
+    <main className={styles.homeContainer}>
+      <Hero />
+      <BentoGrid />
+      <BestSellers />
+    </main>
   );
 }
 
