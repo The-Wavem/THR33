@@ -11,6 +11,11 @@ export const PRODUCTS_DATA = [
     priceNum: 189.90,
     sizes: ["P", "M", "G", "GG"],
     color: "preto",
+    colors: [
+      { id: "preto", name: "Preto Piano", hex: "#0a0a0a" },
+      { id: "off-white", name: "Off-White", hex: "#f2f0eb" },
+      { id: "grafite", name: "Grafite Mineral", hex: "#262626" }
+    ],
     isRelease: true,
     image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop",
     hoverImage: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&q=80&w=800",
@@ -30,6 +35,11 @@ export const PRODUCTS_DATA = [
     priceNum: 199.90,
     sizes: ["PP", "P", "M", "G"],
     color: "off-white",
+    colors: [
+      { id: "off-white", name: "Off-White", hex: "#f2f0eb" },
+      { id: "preto", name: "Preto Piano", hex: "#0a0a0a" },
+      { id: "verde-militar", name: "Verde Militar", hex: "#2d382e" }
+    ],
     isRelease: true,
     image: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?q=80&w=600&auto=format&fit=crop",
     hoverImage: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&q=80&w=800",
@@ -49,6 +59,10 @@ export const PRODUCTS_DATA = [
     priceNum: 459.90,
     sizes: ["M", "G", "GG"],
     color: "preto",
+    colors: [
+      { id: "preto", name: "Preto Raw", hex: "#0a0a0a" },
+      { id: "marrom-terra", name: "Marrom Terra", hex: "#3e2723" }
+    ],
     isRelease: true,
     image: "https://images.unsplash.com/photo-1551028719-00167b16eac5?q=80&w=600&auto=format&fit=crop",
     hoverImage: "https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&q=80&w=800",
@@ -68,6 +82,11 @@ export const PRODUCTS_DATA = [
     priceNum: 299.90,
     sizes: ["38", "40", "42", "44"],
     color: "preto",
+    colors: [
+      { id: "preto", name: "Preto Tático", hex: "#0a0a0a" },
+      { id: "verde-oliva", name: "Verde Oliva", hex: "#3b4d3c" },
+      { id: "grafite", name: "Cinza Asfalto", hex: "#333333" }
+    ],
     isRelease: false,
     image: "https://images.unsplash.com/photo-1517445312882-bc9910d016b7?q=80&w=600&auto=format&fit=crop",
     hoverImage: "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&q=80&w=800",
@@ -87,6 +106,11 @@ export const PRODUCTS_DATA = [
     priceNum: 139.90,
     sizes: ["P", "M", "G"],
     color: "grafite",
+    colors: [
+      { id: "grafite", name: "Grafite Mineral", hex: "#2b2b2b" },
+      { id: "preto", name: "Preto Piano", hex: "#0a0a0a" },
+      { id: "branco", name: "Branco Neve", hex: "#fcfcfc" }
+    ],
     isRelease: false,
     image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=600&auto=format&fit=crop",
     hoverImage: "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&q=80&w=800",
@@ -106,6 +130,10 @@ export const PRODUCTS_DATA = [
     priceNum: 389.90,
     sizes: ["P", "M", "G", "GG"],
     color: "preto",
+    colors: [
+      { id: "preto", name: "Preto Piano", hex: "#0a0a0a" },
+      { id: "cinza-chumbo", name: "Cinza Chumbo", hex: "#2e2e2e" }
+    ],
     isRelease: true,
     image: "https://images.unsplash.com/photo-1556821840-3a63f95609a7?q=80&w=600&auto=format&fit=crop",
     hoverImage: "https://images.unsplash.com/photo-1509631179647-0177331693ae?auto=format&fit=crop&q=80&w=800",
@@ -125,6 +153,10 @@ export const PRODUCTS_DATA = [
     priceNum: 179.90,
     sizes: ["P", "M", "G", "GG"],
     color: "cinza",
+    colors: [
+      { id: "cinza", name: "Cinza Concreto", hex: "#7a7a7a" },
+      { id: "preto", name: "Preto Piano", hex: "#0a0a0a" }
+    ],
     isRelease: false,
     image: "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?q=80&w=600&auto=format&fit=crop",
     hoverImage: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&q=80&w=800",
@@ -144,6 +176,10 @@ export const PRODUCTS_DATA = [
     priceNum: 329.90,
     sizes: ["38", "40", "42", "44"],
     color: "preto",
+    colors: [
+      { id: "preto", name: "Preto Alfaiataria", hex: "#0a0a0a" },
+      { id: "azul-noite", name: "Azul Noturno", hex: "#161b26" }
+    ],
     isRelease: true,
     image: "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?q=80&w=600&auto=format&fit=crop",
     hoverImage: "https://images.unsplash.com/photo-1517445312882-bc9910d016b7?auto=format&fit=crop&q=80&w=800",
@@ -163,6 +199,10 @@ export const PRODUCTS_DATA = [
     priceNum: 189.90,
     sizes: ["PP", "P", "M", "G", "GG"],
     color: "branco",
+    colors: [
+      { id: "branco", name: "Branco Puro", hex: "#ffffff" },
+      { id: "preto", name: "Preto Piano", hex: "#0a0a0a" }
+    ],
     isRelease: true,
     image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=600&auto=format&fit=crop",
     hoverImage: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?auto=format&fit=crop&q=80&w=800",
@@ -182,6 +222,10 @@ export const PRODUCTS_DATA = [
     priceNum: 399.90,
     sizes: ["P", "M", "G"],
     color: "preto",
+    colors: [
+      { id: "preto", name: "Preto Tático", hex: "#0a0a0a" },
+      { id: "verde-militar", name: "Verde Militar", hex: "#2b382c" }
+    ],
     isRelease: false,
     image: "https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=600&auto=format&fit=crop",
     hoverImage: "https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&q=80&w=800",
@@ -201,6 +245,10 @@ export const PRODUCTS_DATA = [
     priceNum: 149.90,
     sizes: ["P", "M", "G", "GG"],
     color: "preto",
+    colors: [
+      { id: "preto", name: "Preto Piano", hex: "#0a0a0a" },
+      { id: "off-white", name: "Off-White", hex: "#f2f0eb" }
+    ],
     isRelease: true,
     image: "https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=600&auto=format&fit=crop",
     hoverImage: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&q=80&w=800",
@@ -220,6 +268,10 @@ export const PRODUCTS_DATA = [
     priceNum: 279.90,
     sizes: ["38", "40", "42"],
     color: "grafite",
+    colors: [
+      { id: "grafite", name: "Grafite Mineral", hex: "#2b2b2b" },
+      { id: "preto", name: "Preto Piano", hex: "#0a0a0a" }
+    ],
     isRelease: false,
     image: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?q=80&w=600&auto=format&fit=crop",
     hoverImage: "https://images.unsplash.com/photo-1624378439575-d8705ad7ae80?auto=format&fit=crop&q=80&w=800",
