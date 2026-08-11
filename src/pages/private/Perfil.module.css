@@ -1,0 +1,1795 @@
+/* PERFIL.MODULE.CSS - TEMA PADRÃO DO SITE THR33 (BRUTALISMO CONCRETO, BRANCO, PRETO E AMBER) */
+
+.perfilContainer {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 6rem 1.5rem;
+  color: #000000;
+  font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  position: relative;
+}
+
+/* TOAST TÁTICO */
+.tacticalToast {
+  position: fixed;
+  top: 100px;
+  right: 24px;
+  z-index: 999;
+  background: #000000;
+  border: 2px solid #000000;
+  box-shadow: 6px 6px 0px #000000;
+  padding: 1rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #F2E3B3;
+  font-size: 0.85rem;
+  font-family: 'Space Mono', monospace;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.toastIcon {
+  color: #F2E3B3;
+  flex-shrink: 0;
+}
+
+/* 1. HEADER HERO: CARD PASSAPORTE VIP */
+.passportCard {
+  background: #000000;
+  border: 3px solid #000000;
+  box-shadow: 8px 8px 0px #000000;
+  padding: 2rem;
+  margin-bottom: 2.5rem;
+  position: relative;
+  overflow: hidden;
+  color: #FFFFFF;
+}
+
+.passportCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: linear-gradient(90deg, #F2E3B3 0%, #FFFFFF 50%, #F2E3B3 100%);
+}
+
+.cardBodyGrid {
+  display: grid;
+  grid-template-columns: 1fr 220px;
+  gap: 2rem;
+  align-items: center;
+}
+
+.userInfoCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.passNumberBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.75rem;
+  color: #AAAAAA;
+  letter-spacing: 0.1em;
+}
+
+.passNumber {
+  color: #000000;
+  background: #F2E3B3;
+  font-size: 1.1rem;
+  font-weight: 900;
+  letter-spacing: 0.15em;
+  padding: 0.15rem 0.6rem;
+  border: 1px solid #000000;
+}
+
+.userNameHeader {
+  font-size: 2.2rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+  color: #FFFFFF;
+  margin: 0;
+  line-height: 1.1;
+}
+
+.statusTierBox {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.25rem;
+  flex-wrap: wrap;
+}
+
+.tierLabel {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #AAAAAA;
+  letter-spacing: 0.08em;
+}
+
+.tierValue {
+  background: #F2E3B3;
+  color: #000000;
+  font-size: 0.75rem;
+  font-weight: 900;
+  padding: 0.3rem 0.75rem;
+  letter-spacing: 0.08em;
+  border: 1px solid #000000;
+  box-shadow: 3px 3px 0px #000000;
+}
+
+.userMetaFlex {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #222222;
+  flex-wrap: wrap;
+}
+
+.metaItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.metaKey {
+  font-size: 0.68rem;
+  color: #888888;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.metaVal {
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.82rem;
+  color: #FFFFFF;
+  font-weight: 700;
+}
+
+/* QR CODE COLUNA */
+.qrCodeCol {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  justify-content: center;
+  background: #111111;
+  border: 1px solid #333333;
+  padding: 1.25rem;
+}
+
+.qrFrame {
+  width: 130px;
+  height: 130px;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #000000;
+  padding: 10px;
+}
+
+.qrCornerTL { position: absolute; top: -2px; left: -2px; width: 10px; height: 10px; border-top: 2px solid #F2E3B3; border-left: 2px solid #F2E3B3; }
+.qrCornerTR { position: absolute; top: -2px; right: -2px; width: 10px; height: 10px; border-top: 2px solid #F2E3B3; border-right: 2px solid #F2E3B3; }
+.qrCornerBL { position: absolute; bottom: -2px; left: -2px; width: 10px; height: 10px; border-bottom: 2px solid #F2E3B3; border-left: 2px solid #F2E3B3; }
+.qrCornerBR { position: absolute; bottom: -2px; right: -2px; width: 10px; height: 10px; border-bottom: 2px solid #F2E3B3; border-right: 2px solid #F2E3B3; }
+
+.qrSvg {
+  width: 100%;
+  height: 100%;
+}
+
+.qrScanline {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: #F2E3B3;
+  box-shadow: 0 0 8px #F2E3B3;
+  opacity: 0.75;
+  animation: scanMove 3s infinite linear;
+}
+
+@keyframes scanMove {
+  0% { top: 0%; }
+  50% { top: 96%; }
+  100% { top: 0%; }
+}
+
+.qrCaption {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.65rem;
+  color: #AAAAAA;
+  letter-spacing: 0.08em;
+  font-weight: 700;
+}
+
+/* 2. NAVEGADOR DE ABAS TÁTICO */
+.tabsNavContainer {
+  margin-bottom: 2rem;
+}
+
+.tabsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.75rem;
+}
+
+.tabBtn {
+  position: relative;
+  background: #FFFFFF;
+  border: 2px solid #000000;
+  color: #000000;
+  padding: 1.1rem 1rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  box-shadow: 3px 3px 0px #000000;
+  transition: all 0.15s ease;
+  overflow: hidden;
+}
+
+.tabBtn:hover {
+  background: #F8F8F8;
+  transform: translate(-1px, -1px);
+  box-shadow: 4px 4px 0px #000000;
+}
+
+.tabBtnActive {
+  background: #000000 !important;
+  border-color: #000000 !important;
+  color: #F2E3B3 !important;
+  box-shadow: 5px 5px 0px #000000 !important;
+}
+
+.tabIcon {
+  flex-shrink: 0;
+}
+
+.activeTabGlow {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: #F2E3B3;
+}
+
+/* 3. CONTEÚDO DAS ABAS (CARD PRINCIPAL BRANCO COM BORDA 3PX PRETA) */
+.tabContentBox {
+  background: #FFFFFF;
+  border: 3px solid #000000;
+  box-shadow: 8px 8px 0px #000000;
+  padding: 2.25rem;
+  min-height: 420px;
+  color: #000000;
+}
+
+.tabSection {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.sectionHeaderFlex {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  border-bottom: 2px solid #000000;
+  padding-bottom: 1.25rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.sectionTitle {
+  font-size: 1.3rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  color: #000000;
+  margin: 0 0 0.4rem 0;
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.sectionSub {
+  font-size: 0.85rem;
+  color: #555555;
+  margin: 0;
+}
+
+.counterBadge {
+  background: #000000;
+  color: #FFFFFF;
+  border: 2px solid #000000;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.78rem;
+  padding: 0.4rem 0.8rem;
+  box-shadow: 3px 3px 0px #000000;
+}
+
+.counterBadge strong {
+  color: #F2E3B3;
+}
+
+/* LISTA DE PEDIDOS */
+.ordersList {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+}
+
+.orderCard {
+  background: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 5px 5px 0px #000000;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: transform 0.15s ease;
+}
+
+.orderCard:hover {
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0px #000000;
+}
+
+.orderTopBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px dashed #E0E0E0;
+  padding-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.orderIdent {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.85rem;
+}
+
+.orderTag {
+  color: #666666;
+}
+
+.orderNum {
+  color: #000000;
+  font-size: 1rem;
+  font-weight: 900;
+}
+
+.orderDate {
+  color: #666666;
+  font-size: 0.8rem;
+}
+
+.orderStatusBadge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 900;
+  padding: 0.35rem 0.85rem;
+  letter-spacing: 0.05em;
+  border: 2px solid #000000;
+}
+
+.orderStatusBadge[data-status="shipping"] {
+  background: #F2E3B3;
+  color: #000000;
+}
+
+.orderStatusBadge[data-status="delivered"] {
+  background: #2ECC71;
+  color: #FFFFFF;
+}
+
+.orderStatusBadge[data-status="dispatched"] {
+  background: #3498DB;
+  color: #FFFFFF;
+}
+
+.orderItemsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.orderItemRow {
+  display: grid;
+  grid-template-columns: 70px 1fr auto;
+  gap: 1.25rem;
+  align-items: center;
+  background: #F9F9F9;
+  border: 2px solid #000000;
+  padding: 0.75rem 1rem;
+}
+
+.itemThumb {
+  width: 70px;
+  height: 70px;
+  object-fit: cover;
+  border: 1px solid #000000;
+}
+
+.itemDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.itemTitle {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #000000;
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+.itemMetaLine {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.78rem;
+  color: #444444;
+  flex-wrap: wrap;
+}
+
+.sizeBadge {
+  background: #000000;
+  color: #FFFFFF;
+  padding: 0.15rem 0.5rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-weight: 700;
+}
+
+.lotBadge {
+  font-family: 'Space Mono', monospace, sans-serif;
+  color: #333333;
+}
+
+.lotBadge strong {
+  color: #000000;
+  background: #F2E3B3;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid #000000;
+  font-size: 0.82rem;
+}
+
+.itemPriceCol {
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: #000000;
+}
+
+.orderMiddleBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 2px solid #F0F0F0;
+  padding-top: 1rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.trackingBox {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.trackLabel {
+  font-size: 0.72rem;
+  color: #555555;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+
+.trackCode {
+  font-family: 'Space Mono', monospace, sans-serif;
+  background: #F2E3B3;
+  border: 2px solid #000000;
+  padding: 0.3rem 0.6rem;
+  color: #000000;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.btnCopyTrack {
+  background: #000000;
+  border: 2px solid #000000;
+  color: #FFFFFF;
+  padding: 0.35rem 0.75rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  box-shadow: 2px 2px 0px #000000;
+  transition: all 0.15s ease;
+}
+
+.btnCopyTrack:hover {
+  background: #F2E3B3;
+  color: #000000;
+}
+
+.orderTotalBox {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.totalLabel {
+  font-size: 0.75rem;
+  color: #666666;
+  font-weight: 700;
+}
+
+.totalValue {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #000000;
+  font-family: 'Space Mono', monospace, sans-serif;
+}
+
+/* RODAPÉ DE AÇÕES RÁPIDAS NO CARD DE PEDIDO */
+.orderCardFooterActions {
+  display: flex;
+  gap: 1rem;
+  border-top: 2px solid #000000;
+  padding-top: 1rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.btnViewDetails {
+  flex: 1;
+  background: #000000;
+  border: 2px solid #000000;
+  color: #F2E3B3;
+  padding: 0.75rem 1rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: 3px 3px 0px #000000;
+  transition: all 0.15s ease;
+}
+
+.btnViewDetails:hover {
+  background: #222222;
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0px #000000;
+}
+
+.btnOrderSupport {
+  flex: 1;
+  background: #FFFFFF;
+  border: 2px solid #000000;
+  color: #000000;
+  padding: 0.75rem 1rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-shadow: 3px 3px 0px #000000;
+  transition: all 0.15s ease;
+}
+
+.btnOrderSupport:hover {
+  background: #F2E3B3;
+  transform: translate(-1px, -1px);
+  box-shadow: 5px 5px 0px #000000;
+}
+
+/* FORMULÁRIOS BRUTALISTAS */
+.formBrutal {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.formGrid2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+.inputGroupFull {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.inputLabel {
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #000000;
+  letter-spacing: 0.08em;
+}
+
+.inputWithIcon {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.fieldIcon {
+  position: absolute;
+  left: 14px;
+  color: #444444;
+  pointer-events: none;
+}
+
+.inputWithIcon input,
+.inputGroup input,
+.inputGroup select {
+  width: 100%;
+  background: #FFFFFF;
+  border: 2px solid #000000;
+  color: #000000;
+  padding: 0.85rem 1rem 0.85rem 2.6rem;
+  font-size: 0.9rem;
+  font-family: 'Space Grotesk', sans-serif;
+  transition: all 0.2s ease;
+  box-sizing: border-box;
+}
+
+.inputGroup input {
+  padding-left: 1rem;
+}
+
+.inputWithIcon input {
+  padding-left: 2.75rem;
+}
+
+.inputWithIcon input:focus,
+.inputGroup input:focus {
+  outline: none;
+  border-color: #000000;
+  box-shadow: 4px 4px 0px #000000;
+  background: #FFFDF5;
+}
+
+.inputHelp {
+  font-size: 0.72rem;
+  color: #666666;
+  margin-top: 0.2rem;
+}
+
+.formActionsBar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 2px solid #000000;
+}
+
+.btnSavePrimary {
+  background: #000000;
+  color: #F2E3B3;
+  border: 2px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
+  padding: 0.9rem 1.8rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.85rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.btnSavePrimary:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px #000000;
+  background: #111111;
+}
+
+/* ENDEREÇOS GRID & CARDS */
+.btnAddAddress {
+  background: #000000;
+  border: 2px solid #000000;
+  color: #F2E3B3;
+  padding: 0.75rem 1.25rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 4px 4px 0px #000000;
+  transition: all 0.2s ease;
+}
+
+.btnAddAddress:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px #000000;
+}
+
+.addressesGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1.5rem;
+}
+
+.addressCard {
+  background: #FFFFFF;
+  border: 2px solid #000000;
+  box-shadow: 4px 4px 0px #000000;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  position: relative;
+}
+
+.addressCardDefault {
+  border-width: 3px;
+  background: #FFFDF5;
+}
+
+.addrHeaderBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px dashed #E0E0E0;
+  padding-bottom: 0.75rem;
+}
+
+.addrLabelBox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #000000;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.8rem;
+}
+
+.badgeDefault {
+  background: #F2E3B3;
+  color: #000000;
+  font-size: 0.68rem;
+  font-weight: 900;
+  padding: 0.25rem 0.6rem;
+  border: 1px solid #000000;
+  letter-spacing: 0.05em;
+}
+
+.btnSetDefault {
+  background: #FFFFFF;
+  border: 1px solid #000000;
+  color: #000000;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btnSetDefault:hover {
+  background: #F2E3B3;
+}
+
+.addrBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
+  color: #333333;
+}
+
+.addrRecipient {
+  color: #000000;
+  margin-bottom: 0.2rem;
+}
+
+.addrLine {
+  margin: 0;
+  color: #444444;
+}
+
+.addrCep {
+  font-family: 'Space Mono', monospace, sans-serif;
+  margin-top: 0.3rem;
+  color: #666666;
+}
+
+.addrCep strong {
+  color: #000000;
+}
+
+.addrFooterActions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+  padding-top: 0.75rem;
+  border-top: 2px solid #000000;
+}
+
+.btnAddrAction {
+  background: #FFFFFF;
+  border: 1px solid #000000;
+  color: #000000;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  font-family: 'Space Mono', monospace, sans-serif;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all 0.15s ease;
+}
+
+.btnAddrAction:hover {
+  background: #000000;
+  color: #FFFFFF;
+}
+
+.btnAddrDelete:hover {
+  background: #FF4D4D;
+  color: #FFFFFF;
+  border-color: #FF4D4D;
+}
+
+/* SEGURANÇA GRID */
+.securityGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.subSectionHeading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 900;
+  color: #000000;
+  margin: 0 0 1rem 0;
+  letter-spacing: 0.05em;
+  font-family: 'Space Mono', monospace, sans-serif;
+}
+
+.logoutDangerCard {
+  background: #FFF5F5;
+  border: 2px solid #FF4D4D;
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  box-shadow: 4px 4px 0px #000000;
+}
+
+.dangerHeader {
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+}
+
+.dangerIcon {
+  color: #E60000;
+  flex-shrink: 0;
+  margin-top: 0.2rem;
+}
+
+.dangerTitle {
+  font-size: 1rem;
+  font-weight: 900;
+  color: #E60000;
+  margin: 0 0 0.4rem 0;
+  letter-spacing: 0.05em;
+  font-family: 'Space Mono', monospace, sans-serif;
+}
+
+.dangerText {
+  font-size: 0.82rem;
+  color: #555555;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.criticalButtonsGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  width: 100%;
+}
+
+.btnLogoutDanger {
+  background: #FF4D4D;
+  color: #FFFFFF;
+  border: 2px solid #000000;
+  padding: 0.9rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  box-shadow: 4px 4px 0px #000000;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.btnLogoutDanger:hover {
+  background: #E60000;
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px #000000;
+}
+
+.btnDeleteAccountDanger {
+  background: #000000;
+  color: #FF4D4D;
+  border: 2px solid #000000;
+  padding: 0.9rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.8rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  box-shadow: 4px 4px 0px #000000;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.btnDeleteAccountDanger:hover {
+  background: #CC0000;
+  color: #FFFFFF;
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0px #000000;
+}
+
+/* MODAIS GERAIS (OVERLAY & ESTRUTURA) */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.modalCard {
+  background: #FFFFFF;
+  border: 3px solid #000000;
+  box-shadow: 8px 8px 0px #000000;
+  width: 100%;
+  max-width: 580px;
+  padding: 2rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  color: #000000;
+}
+
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #000000;
+  padding-bottom: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.modalHeader h3 {
+  font-size: 1.1rem;
+  font-weight: 900;
+  color: #000000;
+  margin: 0;
+  font-family: 'Space Mono', monospace, sans-serif;
+  letter-spacing: 0.05em;
+}
+
+.btnCloseModal {
+  background: transparent;
+  border: none;
+  color: #000000;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease;
+}
+
+.btnCloseModal:hover {
+  color: #FF4D4D;
+}
+
+.modalForm {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.inputGrid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.inputGrid3 {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 1rem;
+}
+
+.inputGrid2Inner {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 0.75rem;
+}
+
+.inputGroupCol2 {
+  grid-column: span 1;
+}
+
+.checkboxLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  color: #000000;
+  font-weight: 700;
+  cursor: pointer;
+  margin-top: 0.5rem;
+}
+
+.checkboxLabel input[type="checkbox"] {
+  accent-color: #000000;
+  width: 16px;
+  height: 16px;
+}
+
+.modalActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 2px solid #000000;
+}
+
+.btnCancelModal {
+  background: #FFFFFF;
+  border: 2px solid #000000;
+  color: #000000;
+  padding: 0.75rem 1.25rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.btnCancelModal:hover {
+  background: #F0F0F0;
+}
+
+.btnSubmitModal {
+  background: #000000;
+  border: 2px solid #000000;
+  color: #F2E3B3;
+  padding: 0.75rem 1.5rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 4px 4px 0px #000000;
+}
+
+/* MODAL DE DETALHAMENTO DE PEDIDO (ORDER DETAILS MODAL) */
+.orderDetailsModalCard {
+  background: #FFFFFF;
+  border: 3px solid #000000;
+  box-shadow: 10px 10px 0px #000000;
+  width: 100%;
+  max-width: 820px;
+  padding: 2rem;
+  max-height: 90vh;
+  overflow-y: auto;
+  color: #000000;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.orderDetailsHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #000000;
+  padding-bottom: 1.25rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.orderDetailsTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.headerIcon {
+  color: #000000;
+  flex-shrink: 0;
+}
+
+.orderDetailsTitleGroup h3 {
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #000000;
+  margin: 0;
+  font-family: 'Space Mono', monospace, sans-serif;
+}
+
+.orderDateSub {
+  font-size: 0.75rem;
+  color: #666666;
+  font-weight: 700;
+  font-family: 'Space Mono', monospace, sans-serif;
+}
+
+.headerRightFlex {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.orderDetailsBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.detailSectionBox {
+  background: #F9F9F9;
+  border: 2px solid #000000;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.detailSectionHeading {
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.82rem;
+  font-weight: 900;
+  color: #000000;
+  margin: 0;
+  letter-spacing: 0.05em;
+  border-bottom: 1px dashed #CCCCCC;
+  padding-bottom: 0.5rem;
+}
+
+.modalItemsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.modalItemRow {
+  display: grid;
+  grid-template-columns: 60px 1fr auto;
+  gap: 1rem;
+  align-items: center;
+  background: #FFFFFF;
+  border: 1px solid #000000;
+  padding: 0.6rem 0.85rem;
+}
+
+.modalItemThumb {
+  width: 60px;
+  height: 60px;
+  object-fit: cover;
+  border: 1px solid #000000;
+}
+
+.modalItemInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.modalItemTitle {
+  font-size: 0.9rem;
+  font-weight: 800;
+  color: #000000;
+}
+
+.modalItemMeta {
+  display: flex;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  color: #555555;
+  font-family: 'Space Mono', monospace, sans-serif;
+}
+
+.modalLotTag {
+  background: #F2E3B3;
+  color: #000000;
+  padding: 0.1rem 0.4rem;
+  border: 1px solid #000000;
+  font-weight: 800;
+}
+
+.modalItemPrice {
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.9rem;
+  font-weight: 900;
+  color: #000000;
+}
+
+/* TIMELINE DE RASTREIO */
+.timelineContainer {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.timelineStep {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  position: relative;
+}
+
+.stepDotContainer {
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.stepDot {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 2px solid #000000;
+  background: #FFFFFF;
+  color: #000000;
+  font-size: 0.7rem;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.stepDone .stepDot {
+  background: #000000;
+  color: #F2E3B3;
+}
+
+.stepLine {
+  flex: 1;
+  height: 2px;
+  background: #E0E0E0;
+  margin-left: -2px;
+  z-index: 1;
+}
+
+.lineDone {
+  background: #000000;
+}
+
+.stepContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.stepTitle {
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #000000;
+}
+
+.stepDate {
+  font-size: 0.65rem;
+  color: #666666;
+}
+
+.trackingInfoBar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: #FFFFFF;
+  border: 1px solid #000000;
+  padding: 0.6rem 0.85rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* FINANCEIRO E ENDEREÇO GRID DE DETALHES */
+.detailsGrid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.financialRows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.82rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+}
+
+.finRow {
+  display: flex;
+  justify-content: space-between;
+  color: #444444;
+  padding: 0.2rem 0;
+}
+
+.finRow strong {
+  color: #000000;
+}
+
+.discountVal {
+  color: #2ECC71 !important;
+}
+
+.finTotalRow {
+  border-top: 2px solid #000000;
+  padding-top: 0.5rem;
+  margin-top: 0.2rem;
+}
+
+.finTotalVal {
+  font-size: 1.05rem;
+  font-weight: 900;
+  color: #000000 !important;
+}
+
+.paymentMethodBlock {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px dashed #CCCCCC;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.paymentMetaLabel {
+  font-size: 0.68rem;
+  color: #666666;
+  font-weight: 700;
+  font-family: 'Space Mono', monospace, sans-serif;
+}
+
+.paymentMethodTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 900;
+  color: #000000;
+  font-family: 'Space Mono', monospace, sans-serif;
+}
+
+.paymentDetailsText {
+  font-size: 0.75rem;
+  color: #555555;
+  margin: 0;
+}
+
+.addressDetailBox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.82rem;
+  color: #333333;
+}
+
+.addressHeaderLabel {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #000000;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.8rem;
+  margin-bottom: 0.25rem;
+}
+
+.addressDetailBox p {
+  margin: 0;
+}
+
+.supportHelpBoxModal {
+  margin-top: 0.75rem;
+  background: #F2E3B3;
+  border: 1px solid #000000;
+  padding: 0.6rem 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+  color: #000000;
+}
+
+.supportHelpBoxModal p {
+  margin: 0;
+  font-size: 0.7rem;
+  color: #333333;
+}
+
+.orderDetailsFooter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 2px solid #000000;
+  padding-top: 1.25rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.btnModalOrderSupport {
+  background: #000000;
+  border: 2px solid #000000;
+  color: #F2E3B3;
+  padding: 0.75rem 1.25rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  box-shadow: 4px 4px 0px #000000;
+  transition: all 0.15s ease;
+}
+
+.btnModalOrderSupport:hover {
+  background: #222222;
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0px #000000;
+}
+
+/* MODAL DE SUPORTE DIRETO (SUPPORT MODAL) */
+.modalSupportCard {
+  background: #FFFFFF;
+  border: 3px solid #000000;
+  box-shadow: 10px 10px 0px #000000;
+  width: 100%;
+  max-width: 540px;
+  padding: 2rem;
+  color: #000000;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.supportTitleBox {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.supportBodyContent {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.supportOrderBadgeBar {
+  background: #F2E3B3;
+  border: 1px solid #000000;
+  padding: 0.5rem 0.85rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.supportIntroText {
+  font-size: 0.85rem;
+  color: #444444;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.supportOptionsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.btnSupportOptionPrimary {
+  background: #000000;
+  color: #FFFFFF;
+  border: 2px solid #000000;
+  padding: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  text-align: left;
+  box-shadow: 4px 4px 0px #000000;
+  transition: all 0.15s ease;
+}
+
+.btnSupportOptionPrimary:hover {
+  background: #222222;
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0px #000000;
+}
+
+.btnSupportOptionSecondary {
+  background: #FFFFFF;
+  color: #000000;
+  border: 2px solid #000000;
+  padding: 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  text-align: left;
+  box-shadow: 4px 4px 0px #000000;
+  transition: all 0.15s ease;
+}
+
+.btnSupportOptionSecondary:hover {
+  background: #F2E3B3;
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0px #000000;
+}
+
+.btnOptionText {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.btnOptionText strong {
+  font-size: 0.85rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+}
+
+.btnOptionText span {
+  font-size: 0.72rem;
+  opacity: 0.85;
+}
+
+/* MODAL DE CONFIRMAÇÃO DE LOGOUT */
+.modalConfirmCard {
+  background: #FFFFFF;
+  border: 3px solid #000000;
+  box-shadow: 8px 8px 0px #000000;
+  max-width: 440px;
+  width: 100%;
+  padding: 2.25rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  color: #000000;
+}
+
+.confirmIconBox {
+  background: #F2E3B3;
+  border: 2px solid #000000;
+  padding: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modalConfirmCard h3 {
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #000000;
+  margin: 0;
+  font-family: 'Space Mono', monospace, sans-serif;
+}
+
+.modalConfirmCard p {
+  font-size: 0.85rem;
+  color: #555555;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.4;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 1rem;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.confirmActions button {
+  flex: 1;
+}
+
+.btnConfirmLogout {
+  background: #FF4D4D;
+  color: #FFFFFF;
+  border: 2px solid #000000;
+  padding: 0.75rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.78rem;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 4px 4px 0px #000000;
+}
+
+/* MODAL DE EXCLUSÃO DE CONTA */
+.modalDeleteCard {
+  background: #FFFFFF;
+  border: 3px solid #000000;
+  box-shadow: 8px 8px 0px #000000;
+  max-width: 480px;
+  width: 100%;
+  padding: 2.25rem;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  color: #000000;
+}
+
+.deleteIconBox {
+  background: #CC0000;
+  border: 2px solid #000000;
+  padding: 0.8rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modalDeleteCard h3 {
+  font-size: 1.15rem;
+  font-weight: 900;
+  color: #CC0000;
+  margin: 0;
+  font-family: 'Space Mono', monospace, sans-serif;
+}
+
+.modalDeleteCard p {
+  font-size: 0.82rem;
+  color: #333333;
+  margin: 0 0 0.5rem 0;
+  line-height: 1.45;
+}
+
+.btnConfirmDeleteFinal {
+  background: #CC0000;
+  color: #FFFFFF;
+  border: 2px solid #000000;
+  padding: 0.75rem;
+  font-family: 'Space Mono', monospace, sans-serif;
+  font-size: 0.75rem;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 4px 4px 0px #000000;
+}
+
+/* RESPONSIVIDADE */
+@media (max-width: 900px) {
+  .cardBodyGrid {
+    grid-template-columns: 1fr;
+  }
+  
+  .qrCodeCol {
+    order: -1;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .tabsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .formGrid2 {
+    grid-template-columns: 1fr;
+  }
+
+  .inputGroupFull {
+    grid-column: span 1;
+  }
+
+  .addressesGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .securityGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .detailsGrid2 {
+    grid-template-columns: 1fr;
+  }
+
+  .timelineContainer {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .tabsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .orderItemRow {
+    grid-template-columns: 50px 1fr;
+  }
+
+  .itemPriceCol {
+    grid-column: span 2;
+    text-align: right;
+  }
+
+  .inputGrid2, .inputGrid3, .inputGrid2Inner {
+    grid-template-columns: 1fr;
+  }
+
+  .orderCardFooterActions {
+    flex-direction: column;
+  }
+}

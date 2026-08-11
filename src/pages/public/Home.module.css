@@ -1,0 +1,6 @@
+.homeContainer {
+  width: 100%;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  padding-bottom: 4rem;
+}

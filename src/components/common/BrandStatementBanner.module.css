@@ -1,0 +1,59 @@
+.fullBleedSection {
+  position: relative;
+  width: 100%;
+  background-color: #000000;
+  border-top: 2px solid rgba(255, 255, 255, 0.15);
+  border-bottom: 2px solid rgba(255, 255, 255, 0.15);
+  padding: 5rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  font-family: 'Space Mono', monospace;
+  margin-top: 5rem;
+}
+
+.gridPatternBg {
+  position: absolute;
+  inset: 0;
+  opacity: 0.08;
+  background-size: 30px 30px;
+  background-image: 
+    linear-gradient(to right, #FFFFFF 1px, transparent 1px),
+    linear-gradient(to bottom, #FFFFFF 1px, transparent 1px);
+}
+
+.contentBox {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.5rem;
+}
+
+.subStatement {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #E2FF00;
+  letter-spacing: 0.3em;
+}
+
+.mainStatement {
+  font-family: 'Arial Black', sans-serif;
+  font-size: 5vw;
+  min-size: 2.5rem;
+  color: #FFFFFF;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  text-transform: uppercase;
+  text-shadow: 0 0 30px rgba(255, 255, 255, 0.1);
+}
+
+.footerTag {
+  font-size: 0.625rem;
+  color: #888888;
+  letter-spacing: 0.2em;
+  margin-top: 0.5rem;
+}
