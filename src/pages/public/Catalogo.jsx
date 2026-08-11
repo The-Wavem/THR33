@@ -1,30 +1,62 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { useSearchParams, useParams } from 'react-router-dom';
-import { Search, X, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
+import { Link, useSearchParams, useParams } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import { X, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import FilterSidebar from '../../components/catalog/FilterSidebar';
 import ProductCard from '../../components/catalog/ProductCard';
+import ProductCardSkeleton from '../../components/catalog/ProductCardSkeleton';
 import { PRODUCTS_DATA } from '../../data/productsData';
 import styles from './Catalogo.module.css';
+
+// Variantes de animação staggered para a grade de cards
+const gridVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.05,
+      delayChildren: 0.02
+    }
+  },
+  exit: { opacity: 0, transition: { duration: 0.15 } }
+};
+
+const cardItemVariants = {
+  hidden: { opacity: 0, y: 18, scale: 0.98 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+    transition: {
+      type: 'spring',
+      stiffness: 280,
+      damping: 24
+    }
+  }
+};
 
 export function Catalogo() {
   const [searchParams] = useSearchParams();
   const { categorySlug } = useParams();
   const topRef = useRef(null);
 
-  // Estados de Filtros e Busca
+  // Estados de Filtros Multi-Seleção e Busca
   const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
   const [filters, setFilters] = useState({
-    category: categorySlug || searchParams.get('categoria') || '',
-    fit: searchParams.get('modelagem') || searchParams.get('fit') || '',
-    drop: searchParams.get('drop') || '',
-    size: searchParams.get('tamanho') || searchParams.get('size') || ''
+    categories: categorySlug ? [categorySlug] : searchParams.get('categoria') ? [searchParams.get('categoria')] : [],
+    fits: searchParams.get('modelagem') ? [searchParams.get('modelagem')] : searchParams.get('fit') ? [searchParams.get('fit')] : [],
+    drops: searchParams.get('drop') ? [searchParams.get('drop')] : [],
+    sizes: searchParams.get('tamanho') ? [searchParams.get('tamanho')] : searchParams.get('size') ? [searchParams.get('size')] : []
   });
 
   const [sortOrder, setSortOrder] = useState('newest');
   
-  // Estados de Paginação & Itens por Página (Escalabilidade)
+  // Estados de Paginação & Itens por Página
   const [itemsPerPage, setItemsPerPage] = useState(6);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Estado de Carregamento Assíncrono com Skeleton
+  const [isLoading, setIsLoading] = useState(false);
 
   // Toggle do menu de filtros no mobile
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
@@ -40,35 +72,65 @@ export function Catalogo() {
     if (cat || fit || drop || size || query) {
       setFilters(prev => ({
         ...prev,
-        ...(cat && { category: cat }),
-        ...(fit && { fit }),
-        ...(drop && { drop }),
-        ...(size && { size })
+        categories: cat ? [cat] : prev.categories,
+        fits: fit ? [fit] : prev.fits,
+        drops: drop ? [drop] : prev.drops,
+        sizes: size ? [size] : prev.sizes
       }));
       if (query) setSearchQuery(query);
     }
   }, [categorySlug, searchParams]);
 
-  // Sempre que os filtros ou busca mudarem, volta para a página 1
+  // Simulação de carregamento assíncrono para paginação e filtros
+  useEffect(() => {
+    setIsLoading(true);
+    const timer = setTimeout(() => {
+      setIsLoading(false);
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [filters, searchQuery, itemsPerPage, sortOrder, currentPage]);
+
+  // Ao mudar filtros ou busca, volta para página 1
   useEffect(() => {
     setCurrentPage(1);
   }, [filters, searchQuery, itemsPerPage, sortOrder]);
 
   const handleReset = () => {
-    setFilters({ category: '', fit: '', drop: '', size: '' });
+    setFilters({ categories: [], fits: [], drops: [], sizes: [] });
     setSearchQuery('');
     setSortOrder('newest');
     setCurrentPage(1);
   };
 
-  const removeFilter = (filterKey) => {
-    setFilters(prev => ({ ...prev, [filterKey]: '' }));
+  const handleSearchSubmit = (term) => {
+    setSearchQuery(term);
   };
 
-  // Motor de Filtragem e Ordenação
+  const handleSearchClear = () => {
+    setSearchQuery('');
+  };
+
+  // Remoções individuais de filtros
+  const removeCategory = (cat) => {
+    setFilters(prev => ({ ...prev, categories: (prev.categories || []).filter(c => c !== cat) }));
+  };
+
+  const removeFit = (fit) => {
+    setFilters(prev => ({ ...prev, fits: (prev.fits || []).filter(f => f !== fit) }));
+  };
+
+  const removeDrop = (drop) => {
+    setFilters(prev => ({ ...prev, drops: (prev.drops || []).filter(d => d !== drop) }));
+  };
+
+  const removeSize = (size) => {
+    setFilters(prev => ({ ...prev, sizes: (prev.sizes || []).filter(s => s !== size) }));
+  };
+
+  // Motor de Filtragem e Ordenação Multi-Critério
   const filteredProducts = useMemo(() => {
     return PRODUCTS_DATA.filter((product) => {
-      // Busca textual
+      // 1. Busca textual confirmada
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = product.name?.toLowerCase().includes(q);
@@ -76,24 +138,34 @@ export function Catalogo() {
         const matchTag = product.tag?.toLowerCase().includes(q);
         if (!matchName && !matchDesc && !matchTag) return false;
       }
-      // Filtros de atributos
-      if (filters.category && product.category.toLowerCase() !== filters.category.toLowerCase()) return false;
-      if (filters.fit && product.fit.toLowerCase() !== filters.fit.toLowerCase()) return false;
-      if (filters.drop && product.drop.toLowerCase() !== filters.drop.toLowerCase()) return false;
-      if (filters.size && !product.sizes.includes(filters.size)) return false;
+      // 2. Categorias (Multi-Seleção: OR)
+      if (filters.categories && filters.categories.length > 0) {
+        if (!filters.categories.includes(product.category.toLowerCase())) return false;
+      }
+      // 3. Modelagens (Multi-Seleção: OR)
+      if (filters.fits && filters.fits.length > 0) {
+        if (!filters.fits.includes(product.fit.toLowerCase())) return false;
+      }
+      // 4. Drops (Multi-Seleção: OR)
+      if (filters.drops && filters.drops.length > 0) {
+        if (!filters.drops.includes(product.drop.toLowerCase())) return false;
+      }
+      // 5. Tamanhos (Multi-Seleção: Se o produto tiver qualquer um dos tamanhos selecionados)
+      if (filters.sizes && filters.sizes.length > 0) {
+        const hasMatchingSize = product.sizes?.some(sz => filters.sizes.includes(sz));
+        if (!hasMatchingSize) return false;
+      }
       return true;
     }).sort((a, b) => {
       if (sortOrder === 'price-low') return a.price - b.price;
       if (sortOrder === 'price-high') return b.price - a.price;
-      return (b.isRelease ? 1 : 0) - (a.isRelease ? 1 : 0); // Lançamentos primeiro
+      return (b.isRelease ? 1 : 0) - (a.isRelease ? 1 : 0);
     });
   }, [filters, searchQuery, sortOrder]);
 
   // Cálculo de Paginação
   const totalItems = filteredProducts.length;
-  const isAll = itemsPerPage === 999;
-  const effectivePerPage = isAll ? Math.max(1, totalItems) : itemsPerPage;
-  const totalPages = Math.ceil(totalItems / effectivePerPage) || 1;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
 
   // Ajuste se a página atual ultrapassar o total
   useEffect(() => {
@@ -102,54 +174,89 @@ export function Catalogo() {
     }
   }, [currentPage, totalPages]);
 
-  const startIndex = (currentPage - 1) * effectivePerPage;
-  const endIndex = Math.min(startIndex + effectivePerPage, totalItems);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
   const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
 
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
       setCurrentPage(newPage);
-      // Rolagem suave para o topo da lista de produtos
+
+      // Rolagem suave com offset para o topo da lista de produtos
       if (topRef.current) {
-        topRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        const headerOffset = 80;
+        const elementPosition = topRef.current.getBoundingClientRect().top;
+        const offsetPosition = elementPosition + window.pageYOffset - headerOffset;
+
+        window.scrollTo({
+          top: Math.max(0, offsetPosition),
+          behavior: 'smooth'
+        });
       }
     }
   };
 
   // Contagem de filtros ativos
-  const activeFiltersCount = Object.values(filters).filter(Boolean).length + (searchQuery.trim() ? 1 : 0);
+  const selectedCategories = filters.categories || [];
+  const selectedFits = filters.fits || [];
+  const selectedDrops = filters.drops || [];
+  const selectedSizes = filters.sizes || [];
+
+  const activeFiltersCount = selectedCategories.length + selectedFits.length + selectedDrops.length + selectedSizes.length + (searchQuery.trim() ? 1 : 0);
 
   return (
     <main className={styles.catalogPage} ref={topRef}>
-      {/* HEADER DA PÁGINA */}
+      {/* HEADER DA PÁGINA COM BREADCRUMB DINÂMICO E VISÍVEL */}
       <header className={styles.header}>
         <div>
-          <span className={styles.breadcrumb}>HOME / CATÁLOGO</span>
+          <nav aria-label="Breadcrumb" className={styles.breadcrumbNav}>
+            <Link to="/" className={styles.breadcrumbLink}>HOME</Link>
+            <span className={styles.breadcrumbSeparator}>/</span>
+            <Link 
+              to="/catalogo" 
+              onClick={(e) => {
+                if (activeFiltersCount > 0) {
+                  handleReset();
+                }
+              }}
+              className={activeFiltersCount === 0 ? styles.breadcrumbActive : styles.breadcrumbLink}
+            >
+              CATÁLOGO
+            </Link>
+
+            {selectedCategories.length === 1 && (
+              <>
+                <span className={styles.breadcrumbSeparator}>/</span>
+                <span className={styles.breadcrumbActive}>
+                  {selectedCategories[0] === 'camisa' ? 'CAMISAS' : selectedCategories[0] === 'calca' ? 'CALÇAS' : selectedCategories[0] === 'jaqueta' ? 'JAQUETAS & HOODIES' : selectedCategories[0].toUpperCase()}
+                </span>
+              </>
+            )}
+
+            {selectedCategories.length > 1 && (
+              <>
+                <span className={styles.breadcrumbSeparator}>/</span>
+                <span className={styles.breadcrumbActive}>
+                  MÚLTIPLAS CATEGORIAS ({selectedCategories.length})
+                </span>
+              </>
+            )}
+
+            {selectedDrops.length === 1 && selectedCategories.length === 0 && (
+              <>
+                <span className={styles.breadcrumbSeparator}>/</span>
+                <span className={styles.breadcrumbActive}>
+                  {selectedDrops[0] === 'leak-two' ? 'LEAK TWO' : 'DROPS PASSADOS'}
+                </span>
+              </>
+            )}
+          </nav>
+
           <h1 className={styles.title}>VESTUÁRIO & CONCEITO</h1>
         </div>
 
-        {/* BARRA DE PESQUISA & CONTROLES */}
+        {/* CONTROLES DO TOPO: ITENS POR PÁGINA & ORDENAÇÃO */}
         <div className={styles.topActions}>
-          <div className={styles.searchBox}>
-            <Search size={16} className={styles.searchIcon} />
-            <input 
-              type="text" 
-              placeholder="Buscar peça ou conceito..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className={styles.searchInput}
-            />
-            {searchQuery && (
-              <button 
-                onClick={() => setSearchQuery('')} 
-                className={styles.clearSearchBtn}
-                aria-label="Limpar busca"
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
-
           <div className={styles.controlGroup}>
             {/* ITENS POR PÁGINA */}
             <div className={styles.selectWrapper}>
@@ -163,7 +270,6 @@ export function Catalogo() {
                 <option value={6}>6 ITENS</option>
                 <option value={12}>12 ITENS</option>
                 <option value={24}>24 ITENS</option>
-                <option value={999}>TODOS</option>
               </select>
             </div>
 
@@ -196,50 +302,50 @@ export function Catalogo() {
         </button>
       </div>
 
-      {/* CHIPS DE FILTROS ATIVOS (QUALIDADE DE VIDA) */}
+      {/* CHIPS DE FILTROS ATIVOS (MULTI-SELEÇÃO) */}
       {activeFiltersCount > 0 && (
         <div className={styles.activeFiltersRow}>
           <span className={styles.activeFiltersLabel}>FILTROS ATIVOS:</span>
           {searchQuery && (
             <span className={styles.filterChip}>
               BUSCA: "{searchQuery}"
-              <button onClick={() => setSearchQuery('')} aria-label="Remover filtro de busca">
+              <button onClick={handleSearchClear} aria-label="Remover filtro de busca">
                 <X size={12} />
               </button>
             </span>
           )}
-          {filters.category && (
-            <span className={styles.filterChip}>
-              CATEGORIA: {filters.category.toUpperCase()}
-              <button onClick={() => removeFilter('category')} aria-label="Remover categoria">
+          {selectedCategories.map(cat => (
+            <span key={cat} className={styles.filterChip}>
+              CATEGORIA: {cat === 'calca' ? 'CALÇA' : cat.toUpperCase()}
+              <button onClick={() => removeCategory(cat)} aria-label={`Remover categoria ${cat}`}>
                 <X size={12} />
               </button>
             </span>
-          )}
-          {filters.fit && (
-            <span className={styles.filterChip}>
-              MODELAGEM: {filters.fit.toUpperCase()}
-              <button onClick={() => removeFilter('fit')} aria-label="Remover modelagem">
+          ))}
+          {selectedFits.map(fit => (
+            <span key={fit} className={styles.filterChip}>
+              MODELAGEM: {fit.toUpperCase()}
+              <button onClick={() => removeFit(fit)} aria-label={`Remover modelagem ${fit}`}>
                 <X size={12} />
               </button>
             </span>
-          )}
-          {filters.drop && (
-            <span className={styles.filterChip}>
-              DROP: {filters.drop === 'leak-two' ? 'LEAK TWO' : 'DROPS PASSADOS'}
-              <button onClick={() => removeFilter('drop')} aria-label="Remover drop">
+          ))}
+          {selectedDrops.map(drop => (
+            <span key={drop} className={styles.filterChip}>
+              DROP: {drop === 'leak-two' ? 'LEAK TWO' : 'DROPS PASSADOS'}
+              <button onClick={() => removeDrop(drop)} aria-label={`Remover drop ${drop}`}>
                 <X size={12} />
               </button>
             </span>
-          )}
-          {filters.size && (
-            <span className={styles.filterChip}>
-              TAMANHO: {filters.size}
-              <button onClick={() => removeFilter('size')} aria-label="Remover tamanho">
+          ))}
+          {selectedSizes.map(size => (
+            <span key={size} className={styles.filterChip}>
+              TAMANHO: {size}
+              <button onClick={() => removeSize(size)} aria-label={`Remover tamanho ${size}`}>
                 <X size={12} />
               </button>
             </span>
-          )}
+          ))}
           <button onClick={handleReset} className={styles.clearAllLink}>
             LIMPAR TODOS
           </button>
@@ -249,7 +355,14 @@ export function Catalogo() {
       {/* CORPO DO CATÁLOGO: SIDEBAR + GRADE DE PRODUTOS */}
       <div className={styles.contentLayout}>
         <div className={`${styles.sidebarWrapper} ${isMobileFilterOpen ? styles.sidebarMobileOpen : ''}`}>
-          <FilterSidebar filters={filters} onReset={handleReset} setFilters={setFilters} />
+          <FilterSidebar 
+            filters={filters} 
+            setFilters={setFilters}
+            onReset={handleReset} 
+            searchQuery={searchQuery}
+            onSearchSubmit={handleSearchSubmit}
+            onSearchClear={handleSearchClear}
+          />
         </div>
 
         <section className={styles.productsArea}>
@@ -263,24 +376,39 @@ export function Catalogo() {
               )}
             </div>
 
-            {!isAll && totalPages > 1 && (
+            {totalPages > 1 && (
               <span className={styles.pageIndicatorMini}>
                 PÁGINA {currentPage} DE {totalPages}
               </span>
             )}
           </div>
 
-          {/* GRADE DE PRODUTOS */}
-          {paginatedProducts.length > 0 ? (
+          {/* SKELETON LOADING OU GRADE ANIMADA DE PRODUTOS */}
+          {isLoading ? (
+            <div className={styles.grid}>
+              {Array.from({ length: Math.min(itemsPerPage, totalItems || itemsPerPage) }).map((_, idx) => (
+                <ProductCardSkeleton key={idx} />
+              ))}
+            </div>
+          ) : paginatedProducts.length > 0 ? (
             <>
-              <div className={styles.grid}>
+              <motion.div 
+                key={`page-${currentPage}-${sortOrder}-${itemsPerPage}-${JSON.stringify(filters)}-${searchQuery}`}
+                variants={gridVariants}
+                initial="hidden"
+                animate="visible"
+                exit="exit"
+                className={styles.grid}
+              >
                 {paginatedProducts.map(product => (
-                  <ProductCard key={product.id} product={product} />
+                  <motion.div key={product.id} variants={cardItemVariants}>
+                    <ProductCard product={product} />
+                  </motion.div>
                 ))}
-              </div>
+              </motion.div>
 
               {/* BARRA DE PAGINAÇÃO COMPLETA */}
-              {!isAll && totalPages > 1 && (
+              {totalPages > 1 && (
                 <div className={styles.paginationContainer} aria-label="Navegação entre páginas">
                   <button
                     className={styles.pageBtn}

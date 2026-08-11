@@ -16,10 +16,39 @@
   gap: 1.5rem;
 }
 
-.breadcrumb {
-  font-size: 0.7rem;
-  letter-spacing: 2px;
-  color: var(--text-muted);
+/* Breadcrumb Funcional e Visível */
+.breadcrumbNav {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.78rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.breadcrumbLink {
+  color: #a3a3a3;
+  transition: color var(--transition-fast);
+  text-decoration: none;
+}
+
+.breadcrumbLink:hover {
+  color: #ffffff;
+  text-decoration: underline;
+}
+
+.breadcrumbSeparator {
+  color: #525252;
+  font-weight: 400;
+  user-select: none;
+}
+
+.breadcrumbActive {
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: 1.5px;
 }
 
 .title {
@@ -31,61 +60,17 @@
   margin-top: 0.3rem;
 }
 
-/* Ações do Topo: Busca + Seletores */
+/* Ações do Topo: Seletores de Exibição e Ordenação */
 .topActions {
   display: flex;
   align-items: center;
   gap: 1.5rem;
-  flex-wrap: wrap;
-}
-
-.searchBox {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.searchIcon {
-  position: absolute;
-  left: 0.75rem;
-  color: var(--text-muted);
-  pointer-events: none;
-}
-
-.searchInput {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  padding: 0.55rem 2rem 0.55rem 2.25rem;
-  font-size: 0.8rem;
-  font-family: var(--font-body);
-  outline: none;
-  min-width: 220px;
-  transition: border-color var(--transition-fast);
-}
-
-.searchInput:focus {
-  border-color: var(--border-active);
-}
-
-.clearSearchBtn {
-  position: absolute;
-  right: 0.6rem;
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: color var(--transition-fast);
-}
-
-.clearSearchBtn:hover {
-  color: var(--text-primary);
 }
 
 .controlGroup {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 1.25rem;
 }
 
 .selectWrapper {
@@ -358,14 +343,6 @@
   .topActions {
     width: 100%;
     justify-content: space-between;
-  }
-
-  .searchBox {
-    width: 100%;
-  }
-
-  .searchInput {
-    width: 100%;
   }
 
   .controlGroup {
