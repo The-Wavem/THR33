@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import styles from './Hero.module.css';
 
-// Banners simulados para os drops / campanhas
 const HERO_SLIDES = [
   {
     id: 1,
@@ -24,49 +25,162 @@ const HERO_SLIDES = [
   }
 ];
 
+// Animação refinada para o background (crossfade editorial com zoom sutil)
+const bgVariants = {
+  initial: { opacity: 0, scale: 1.06 },
+  animate: {
+    opacity: 1,
+    scale: 1,
+    transition: { duration: 0.9, ease: [0.16, 1, 0.3, 1] }
+  },
+  exit: {
+    opacity: 0,
+    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] }
+  }
+};
+
+// Animação de entrada dos textos
+const textVariants = {
+  initial: { opacity: 0, y: 20 },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] }
+  },
+  exit: {
+    opacity: 0,
+    y: -15,
+    transition: { duration: 0.3, ease: 'easeIn' }
+  }
+};
+
 export function Hero() {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [direction, setDirection] = useState(1);
+  const [isHovered, setIsHovered] = useState(false);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
-    }, 6000);
-    return () => clearInterval(timer);
+  const nextSlide = useCallback(() => {
+    setDirection(1);
+    setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
   }, []);
+
+  const prevSlide = useCallback(() => {
+    setDirection(-1);
+    setCurrentSlide((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
+  }, []);
+
+  const goToSlide = (index) => {
+    setDirection(index > currentSlide ? 1 : -1);
+    setCurrentSlide(index);
+  };
+
+  // Tempo de transição aumentado para 8 segundos e pausa ao passar o mouse
+  useEffect(() => {
+    if (isHovered) return;
+
+    const timer = setInterval(() => {
+      nextSlide();
+    }, 8000);
+
+    return () => clearInterval(timer);
+  }, [nextSlide, isHovered]);
+
+  // Manipulador de arraste (drag / swipe para mouse e touch)
+  const handleDragEnd = (e, { offset, velocity }) => {
+    const swipeConfidenceThreshold = 10000;
+    const swipePower = Math.abs(offset.x) * velocity.x;
+
+    if (offset.x < -50 || swipePower < -swipeConfidenceThreshold) {
+      nextSlide();
+    } else if (offset.x > 50 || swipePower > swipeConfidenceThreshold) {
+      prevSlide();
+    }
+  };
 
   const slide = HERO_SLIDES[currentSlide];
 
   return (
-    <section className={styles.heroSection} aria-label="Destaques THR33">
-      <div 
-        className={styles.slideBackground} 
-        style={{ backgroundImage: `url(${slide.bgImage})` }}
+    <section 
+      className={styles.heroSection} 
+      aria-label="Destaques THR33"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Área Arrastável / Interativa */}
+      <motion.div 
+        className={styles.dragWrapper}
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.15}
+        onDragEnd={handleDragEnd}
       >
-        <div className={styles.overlay}></div>
-      </div>
+        <AnimatePresence initial={false} custom={direction} mode="wait">
+          <motion.div
+            key={slide.id}
+            variants={bgVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className={styles.slideBackground}
+            style={{ backgroundImage: `url(${slide.bgImage})` }}
+          >
+            <div className={styles.overlay} />
+          </motion.div>
+        </AnimatePresence>
 
-      <div className={styles.contentContainer}>
-        <span className={styles.badge}>{slide.badge}</span>
-        <h1 className={styles.mainTitle}>{slide.title}</h1>
-        <p className={styles.subtitle}>{slide.subtitle}</p>
+        <AnimatePresence initial={false} custom={direction} mode="wait">
+          <motion.div 
+            key={slide.id}
+            variants={textVariants}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            className={styles.contentContainer}
+          >
+            <div className={styles.badge}>
+              <span className={styles.badgeDot} />
+              <span className={styles.badgeText}>{slide.badge}</span>
+            </div>
 
-        <div className={styles.actions}>
-          <Link className={styles.primaryCta} to={slide.link}>
-            {slide.cta}
-          </Link>
-          <Link className={styles.secondaryCta} to="/sobre">
-            CONHEÇA A MARCA
-          </Link>
-        </div>
-      </div>
+            <h1 className={styles.mainTitle}>{slide.title}</h1>
+            <p className={styles.subtitle}>{slide.subtitle}</p>
 
-      {/* Indicadores do Carrossel */}
+            <div className={styles.actions}>
+              <Link className={styles.primaryCta} to={slide.link}>
+                {slide.cta}
+              </Link>
+              <Link className={styles.secondaryCta} to="/sobre">
+                CONHEÇA A MARCA
+              </Link>
+            </div>
+          </motion.div>
+        </AnimatePresence>
+      </motion.div>
+
+      {/* Botões de Navegação Lateral (Prev / Next) */}
+      <button 
+        className={`${styles.navArrow} ${styles.navArrowPrev}`}
+        onClick={prevSlide}
+        aria-label="Slide anterior"
+      >
+        <ChevronLeft size={22} />
+      </button>
+
+      <button 
+        className={`${styles.navArrow} ${styles.navArrowNext}`}
+        onClick={nextSlide}
+        aria-label="Próximo slide"
+      >
+        <ChevronRight size={22} />
+      </button>
+
+      {/* Indicadores / Linhas de Progresso do Carrossel */}
       <div className={styles.dotsContainer}>
         {HERO_SLIDES.map((_, index) => (
           <button
             key={index}
             className={`${styles.dot} ${index === currentSlide ? styles.activeDot : ''}`}
-            onClick={() => setCurrentSlide(index)}
+            onClick={() => goToSlide(index)}
             aria-label={`Ir para slide ${index + 1}`}
           />
         ))}
