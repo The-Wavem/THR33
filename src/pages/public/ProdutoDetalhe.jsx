@@ -1,99 +1,96 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  ShoppingBag, 
-  Star, 
-  Truck, 
-  ShieldCheck, 
-  RotateCcw, 
-  Check, 
-  X,
-  ZoomIn,
-  ChevronLeft,
-  ChevronRight,
-  Plus,
-  Minus
-} from 'lucide-react';
-import { productsData } from '../../data/productsData';
-import { buttonTactile } from '../../utils/motionVariants';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { PRODUCTS_DATA } from '../../data/productsData';
 import styles from './ProdutoDetalhe.module.css';
 
+// MOCK PADRÃO / FALLBACK COMPLETO DO PRODUTO
+const DEFAULT_PRODUCT = {
+  id: "thr33-boxy-black",
+  name: "Camiseta THR33 Boxy Logo",
+  fit: "Boxy Fit",
+  drop: "LEAK TWO",
+  price: 189.90,
+  installments: 3,
+  description: "Desenvolvida em algodão heavy-weight de 260g/m², a Camiseta THR33 Boxy Logo traz modelagem quadrada exclusiva com ombros caídos e gola anelada de 3cm. Peça inspirada na cultura streetwear curitibana com a assinatura da marca no peito.",
+  images: [
+    "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=800&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?q=80&w=800&auto=format&fit=crop",
+    "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=800&auto=format&fit=crop"
+  ],
+  sizes: ["P", "M", "G", "GG"],
+  sizeChart: [
+    { size: "P", chest: "56 cm", length: "70 cm", sleeve: "22 cm" },
+    { size: "M", chest: "58 cm", length: "72 cm", sleeve: "23 cm" },
+    { size: "G", chest: "60 cm", length: "74 cm", sleeve: "24 cm" },
+    { size: "GG", chest: "62 cm", length: "76 cm", sleeve: "25 cm" }
+  ],
+  careInstructions: [
+    "Lavar à mão ou na máquina em ciclo delicado com água fria.",
+    "Não utilizar alvejantes ou branqueadores ópticos.",
+    "Secar à sombra (não usar secadora).",
+    "Passar do avesso em temperatura média evitando a estampa."
+  ],
+  reviews: [
+    { id: 1, author: "Lucas M.", rating: 5, date: "02/08/2026", comment: "Caimento impecável! O tecido é bem encorpado e a gola é firme." },
+    { id: 2, author: "Gabriel S.", rating: 5, date: "28/07/2026", comment: "Modelagem Boxy de verdade. Chegou muito rápido aqui em Curitiba." }
+  ]
+};
+
 export function ProdutoDetalhe({ onAddToCart }) {
-  const { slug } = useParams();
-  const navigate = useNavigate();
+  const { slug, id } = useParams();
+  const currentParam = slug || id;
 
-  const product = productsData.find(p => p.slug === slug) || productsData[0];
-
-  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [selectedSize, setSelectedSize] = useState('M');
-  const [quantity, setQuantity] = useState(1);
-  const [activeTab, setActiveTab] = useState('descricao');
-  const [isAddedFeedback, setIsAddedFeedback] = useState(false);
-  const [isWishlisted, setIsWishlisted] = useState(false);
+  // Busca o produto correspondente no banco mock ou usa o padrão
+  const matched = PRODUCTS_DATA.find(p => p.id === currentParam || p.slug === currentParam);
   
-  // LIGHTBOX & HOVER ZOOM STATES
-  const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-  const [isZoomed, setIsZoomed] = useState(false);
-  const [mousePos, setMousePos] = useState({ x: 50, y: 50 });
+  const product = matched ? {
+    ...DEFAULT_PRODUCT,
+    ...matched,
+    name: matched.name || matched.title || DEFAULT_PRODUCT.name,
+    fit: matched.fit ? `${matched.fit.toUpperCase()} FIT` : DEFAULT_PRODUCT.fit,
+    drop: matched.drop === 'leak-two' ? 'LEAK TWO' : matched.drop === 'drop-01' ? 'DROP ANTERIOR' : DEFAULT_PRODUCT.drop,
+    price: matched.price || matched.priceNum || DEFAULT_PRODUCT.price,
+    images: matched.images || [matched.image, matched.hoverImage, DEFAULT_PRODUCT.images[2]].filter(Boolean),
+    description: matched.description || DEFAULT_PRODUCT.description
+  } : DEFAULT_PRODUCT;
 
-  const galleryList = product?.gallery || [product?.image, product?.hoverImage].filter(Boolean);
+  // Estados de Interação
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [selectedSize, setSelectedSize] = useState(product.sizes[0] || 'M');
+  const [quantity, setQuantity] = useState(1);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [openAccordion, setOpenAccordion] = useState('measures'); // 'description', 'measures', 'care', 'reviews'
+  const [isAddedFeedback, setIsAddedFeedback] = useState(false);
+  
+  // Cupom
+  const [couponCode, setCouponCode] = useState('');
+  const [couponMessage, setCouponMessage] = useState(null);
 
+  // Sincroniza tamanho padrão quando o produto muda
   useEffect(() => {
-    if (product) {
-      setSelectedImageIndex(0);
-      setQuantity(1);
-      if (product.sizes && product.sizes.length > 0) {
-        setSelectedSize(product.sizes[0]);
-      }
+    setSelectedImageIndex(0);
+    setQuantity(1);
+    if (product.sizes && product.sizes.length > 0) {
+      setSelectedSize(product.sizes[0]);
     }
-  }, [slug, product]);
+  }, [currentParam]);
 
-  // NAVEGAÇÃO DA GALERIA
-  const handlePrevImage = useCallback(() => {
-    setIsZoomed(false);
-    setSelectedImageIndex((prev) => (prev === 0 ? galleryList.length - 1 : prev - 1));
-  }, [galleryList.length]);
-
-  const handleNextImage = useCallback(() => {
-    setIsZoomed(false);
-    setSelectedImageIndex((prev) => (prev === galleryList.length - 1 ? 0 : prev + 1));
-  }, [galleryList.length]);
-
-  // CÁLCULO DE COORDENADAS PARA O ZOOM
-  const handleMouseMove = (e) => {
-    const { left, top, width, height } = e.currentTarget.getBoundingClientRect();
-    const x = Math.max(0, Math.min(100, ((e.clientX - left) / width) * 100));
-    const y = Math.max(0, Math.min(100, ((e.clientY - top) / height) * 100));
-    setMousePos({ x, y });
+  const handlePrevImage = () => {
+    setSelectedImageIndex((prev) => (prev === 0 ? product.images.length - 1 : prev - 1));
   };
 
-  // NAVEGAÇÃO POR TECLADO (SETAS E ESC)
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (!isLightboxOpen) return;
-      if (e.key === 'ArrowLeft') handlePrevImage();
-      if (e.key === 'ArrowRight') handleNextImage();
-      if (e.key === 'Escape') {
-        setIsLightboxOpen(false);
-        setIsZoomed(false);
-      }
-    };
+  const handleNextImage = () => {
+    setSelectedImageIndex((prev) => (prev === product.images.length - 1 ? 0 : prev + 1));
+  };
 
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isLightboxOpen, handlePrevImage, handleNextImage]);
-
-  if (!product) {
-    return (
-      <div className={styles.notFoundContainer}>
-        <h2>PEÇA NÃO ENCONTRADA // ARCHIVED</h2>
-        <button onClick={() => navigate('/catalogo')} className={styles.btnBack}>
-          VOLTAR AO CATÁLOGO
-        </button>
-      </div>
-    );
-  }
+  const handleApplyCoupon = (e) => {
+    e.preventDefault();
+    if (couponCode.trim().toUpperCase() === 'FORTHEFEW') {
+      setCouponMessage({ type: 'success', text: 'Cupom aplicado: 10% de desconto!' });
+    } else {
+      setCouponMessage({ type: 'error', text: 'Cupom inválido ou expirado.' });
+    }
+  };
 
   const handleAddToCart = () => {
     if (onAddToCart) {
@@ -103,309 +100,247 @@ export function ProdutoDetalhe({ onAddToCart }) {
     setTimeout(() => setIsAddedFeedback(false), 2500);
   };
 
-  const currentImage = galleryList[selectedImageIndex] || product.image;
+  const installmentsCount = product.installments || 3;
+  const installmentValue = (product.price / installmentsCount).toFixed(2);
 
   return (
-    <div className={styles.pdpContainer}>
-      <div className={styles.wrapper}>
-        
-        {/* BREADCRUMB */}
-        <div className={styles.breadcrumbBar}>
-          <Link to="/" className={styles.breadLink}>HOME</Link>
-          <span className={styles.breadSep}>/</span>
-          <Link to="/catalogo" className={styles.breadLink}>CATÁLOGO</Link>
-          <span className={styles.breadSep}>/</span>
-          <strong className={styles.breadActive}>{product.title}</strong>
-        </div>
+    <main className={styles.container}>
+      {/* NAVEGAÇÃO BREADCRUMB FUNCIONAL E VISÍVEL */}
+      <nav aria-label="Breadcrumb" className={styles.breadcrumb}>
+        <Link to="/" className={styles.breadcrumbLink}>HOME</Link>
+        <span className={styles.breadcrumbSeparator}>/</span>
+        <Link to="/catalogo" className={styles.breadcrumbLink}>CATÁLOGO</Link>
+        <span className={styles.breadcrumbSeparator}>/</span>
+        <span className={styles.breadcrumbActive}>{product.name.toUpperCase()}</span>
+      </nav>
 
-        {/* MAIN PDP GRID */}
-        <div className={styles.pdpGrid}>
-          
-          {/* LEFT: GALLERY */}
-          <div className={styles.galleryColumn}>
-            <div 
-              className={styles.mainImageFrame}
-              onClick={() => setIsLightboxOpen(true)}
-              title="Clique para Maximizar e Navegar na Galeria"
-            >
-              <AnimatePresence mode="wait">
-                <motion.img 
-                  key={currentImage}
-                  src={currentImage} 
-                  alt={product.title}
-                  initial={{ opacity: 0.4, scale: 0.98 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0.4 }}
-                  transition={{ duration: 0.2 }}
-                  className={styles.mainImage}
-                />
-              </AnimatePresence>
+      <div className={styles.productGrid}>
+        {/* GALERIA DE IMAGENS COM CARROSSEL E SETAS */}
+        <section className={styles.gallerySection} aria-label="Galeria de fotos do produto">
+          <div className={styles.mainImageWrapper}>
+            <button onClick={handlePrevImage} className={`${styles.navArrow} ${styles.prevArrow}`} aria-label="Imagem anterior">
+              &#10094;
+            </button>
+            <img 
+              src={product.images[selectedImageIndex]} 
+              alt={`${product.name} - Imagem ${selectedImageIndex + 1}`} 
+              className={styles.mainImage}
+            />
+            <button onClick={handleNextImage} className={`${styles.navArrow} ${styles.nextArrow}`} aria-label="Próxima imagem">
+              &#10095;
+            </button>
+          </div>
 
-              <span className={styles.tagBadge}>{product.tag || 'FOR THE FEW'}</span>
+          <div className={styles.thumbnailsList}>
+            {product.images.map((img, idx) => (
+              <button
+                key={idx}
+                className={`${styles.thumbBtn} ${idx === selectedImageIndex ? styles.activeThumb : ''}`}
+                onClick={() => setSelectedImageIndex(idx)}
+                aria-label={`Selecionar foto ${idx + 1}`}
+              >
+                <img src={img} alt={`Miniatura ${idx + 1}`} />
+              </button>
+            ))}
+          </div>
+        </section>
 
-              <div className={styles.zoomHint}>
-                <ZoomIn size={14} />
-                <span>EXPANDIR (FOTO {selectedImageIndex + 1}/{galleryList.length})</span>
-              </div>
+        {/* DETALHES E COMPRA */}
+        <section className={styles.infoSection}>
+          <div className={styles.headerInfo}>
+            <div className={styles.badgeRow}>
+              <span className={styles.fitBadge}>{product.fit}</span>
+              <span className={styles.dropBadge}>{product.drop}</span>
+            </div>
+            <h1 className={styles.title}>{product.name}</h1>
+            <div className={styles.priceContainer}>
+              <span className={styles.price}>R$ {product.price.toFixed(2)}</span>
+              <span className={styles.installments}>
+                ou {installmentsCount}x de R$ {installmentValue} sem juros
+              </span>
+            </div>
+          </div>
+
+          {/* SELEÇÃO DE TAMANHO */}
+          <div className={styles.selectorGroup}>
+            <div className={styles.labelRow}>
+              <span className={styles.groupLabel}>TAMANHO DISPONÍVEL</span>
+              <button 
+                type="button"
+                className={styles.textLink} 
+                onClick={() => setOpenAccordion('measures')}
+              >
+                Guia de Medidas
+              </button>
+            </div>
+            <div className={styles.sizesGrid}>
+              {product.sizes.map((size) => (
+                <button
+                  key={size}
+                  type="button"
+                  className={`${styles.sizeBtn} ${selectedSize === size ? styles.activeSize : ''}`}
+                  onClick={() => setSelectedSize(size)}
+                >
+                  {size}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* SELEÇÃO DE QUANTIDADE E AÇÕES DE COMPRA */}
+          <div className={styles.actionGroup}>
+            <div className={styles.quantityPicker}>
+              <button type="button" onClick={() => setQuantity(q => Math.max(1, q - 1))} aria-label="Diminuir quantidade">-</button>
+              <span>{String(quantity).padStart(2, '0')}</span>
+              <button type="button" onClick={() => setQuantity(q => q + 1)} aria-label="Aumentar quantidade">+</button>
             </div>
 
-            {/* THUMBNAILS */}
-            {galleryList.length > 1 && (
-              <div className={styles.thumbnailRow}>
-                {galleryList.map((imgUrl, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setSelectedImageIndex(idx)}
-                    className={selectedImageIndex === idx ? styles.thumbActive : styles.thumbBtn}
-                  >
-                    <img src={imgUrl} alt={`Thumbnail ${idx + 1}`} />
-                  </button>
-                ))}
-              </div>
+            <button 
+              type="button"
+              onClick={handleAddToCart}
+              className={`${styles.addToCartBtn} ${isAddedFeedback ? styles.addToCartAdded : ''}`}
+            >
+              {isAddedFeedback ? `✓ ADICIONADO (${quantity}x ${selectedSize})` : `ADICIONAR AO CARRINHO (${quantity}x ${selectedSize})`}
+            </button>
+
+            <button 
+              type="button"
+              className={`${styles.favoriteBtn} ${isFavorite ? styles.activeFavorite : ''}`}
+              onClick={() => setIsFavorite(!isFavorite)}
+              aria-label="Adicionar aos favoritos"
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.72-8.72 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+              </svg>
+            </button>
+          </div>
+
+          {/* TESTADOR DE CUPOM DE DESCONTO */}
+          <div className={styles.couponSection}>
+            <span className={styles.groupLabel}>TESTAR CUPOM DE DESCONTO</span>
+            <form onSubmit={handleApplyCoupon} className={styles.couponForm}>
+              <input 
+                type="text" 
+                placeholder="Ex: FORTHEFEW" 
+                value={couponCode}
+                onChange={(e) => setCouponCode(e.target.value)}
+                className={styles.couponInput}
+              />
+              <button type="submit" className={styles.couponBtn}>APLICAR</button>
+            </form>
+            {couponMessage && (
+              <p className={couponMessage.type === 'success' ? styles.successMsg : styles.errorMsg}>
+                {couponMessage.text}
+              </p>
             )}
           </div>
 
-          {/* RIGHT: INFO PANEL */}
-          <div className={styles.infoColumn}>
-            <div className={styles.headerBlock}>
-              <div className={styles.titleRow}>
-                <h1 className={styles.productTitle}>{product.title}</h1>
-                <motion.button 
-                  whileTap={{ scale: 0.85 }}
-                  onClick={() => setIsWishlisted(!isWishlisted)} 
-                  className={styles.wishlistBtn}
-                  title="Guardar na Lista"
-                >
-                  <Star size={18} className={isWishlisted ? styles.starActive : ''} />
-                </motion.button>
-              </div>
-              <span className={styles.fabricSub}>{product.fabric}</span>
-            </div>
-
-            <div className={styles.priceBlock}>
-              <strong className={styles.priceText}>{product.price}</strong>
-              <span className={styles.installmentText}>
-                OU 6X DE R$ {(product.priceNum / 6).toFixed(2)} SEM JUROS
-              </span>
-            </div>
-
-            <div className={styles.sizeBlock}>
-              <div className={styles.sizeHeader}>
-                <span>TAMANHO DISPONÍVEL:</span>
-                <strong className={styles.selectedSizeLabel}>({selectedSize})</strong>
-              </div>
-              <div className={styles.sizeGrid}>
-                {product.sizes.map((sz) => (
-                  <button
-                    key={sz}
-                    onClick={() => setSelectedSize(sz)}
-                    className={selectedSize === sz ? styles.sizeActive : styles.sizeBtn}
-                  >
-                    {sz}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* 1. CONTROLE DE QUANTIDADE TÁTICO & BOTÃO ADICIONAR */}
-            <div className={styles.actionRow}>
-              <div className={styles.quantitySelector}>
-                <motion.button 
-                  type="button"
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setQuantity(prev => Math.max(1, prev - 1))}
-                  className={styles.btnQty}
-                  title="Diminuir Quantidade"
-                >
-                  <Minus size={14} />
-                </motion.button>
-                <span className={styles.qtyNumDisplay}>{String(quantity).padStart(2, '0')}</span>
-                <motion.button 
-                  type="button"
-                  whileTap={{ scale: 0.9 }}
-                  onClick={() => setQuantity(prev => prev + 1)}
-                  className={styles.btnQty}
-                  title="Aumentar Quantidade"
-                >
-                  <Plus size={14} />
-                </motion.button>
-              </div>
-
-              <motion.button 
-                variants={buttonTactile}
-                initial="rest"
-                whileHover="hover"
-                whileTap="tap"
-                onClick={handleAddToCart} 
-                className={styles.btnAddToCart}
-              >
-                <ShoppingBag size={16} />
-                <span>
-                  {isAddedFeedback 
-                    ? `✓ ADICIONADO (${quantity}x ${selectedSize})` 
-                    : `ADICIONAR AO CARRINHO (${quantity}x ${selectedSize})`}
-                </span>
-              </motion.button>
-            </div>
-
-            {/* 2. SISTEMA DE ABAS BRUTALISTA REFINADO */}
-            <div className={styles.tabsContainer}>
-              <div className={styles.tabsHeader}>
-                {[
-                  { id: 'descricao', label: 'DESCRIÇÃO' },
-                  { id: 'medidas', label: 'TABELA DE MEDIDAS' },
-                  { id: 'cuidados', label: 'CUIDADOS' },
-                  { id: 'politicas', label: 'POLÍTICAS' }
-                ].map((tab) => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    className={activeTab === tab.id ? styles.tabActive : styles.tabBtn}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              <div className={styles.tabContent}>
-                {activeTab === 'descricao' && (
-                  <div>
-                    <p className={styles.tabParagraph}>{product.description}</p>
-                    <ul className={styles.specList}>
-                      <li>▪ <strong>MODELAGEM:</strong> BOXY OVERSIZED</li>
-                      <li>▪ <strong>GRAMATURA:</strong> 280GSM HEAVYWEIGHT</li>
-                      <li>▪ <strong>GOLA:</strong> CANELADA REFORÇADA 3CM</li>
-                      <li>▪ <strong>PRODUÇÃO:</strong> EDIÇÃO LIMITADA NUMERADA</li>
-                    </ul>
-                  </div>
-                )}
-
-                {activeTab === 'medidas' && (
-                  <div className={styles.tableWrapper}>
-                    <table className={styles.measureTable}>
-                      <thead>
-                        <tr>
-                          <th>TAMANHO</th>
-                          <th>TÓRAX (CM)</th>
-                          <th>COMPRIMENTO (CM)</th>
-                          <th>MANGA (CM)</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <tr><td>P</td><td>56</td><td>72</td><td>22</td></tr>
-                        <tr><td>M</td><td>59</td><td>75</td><td>23</td></tr>
-                        <tr><td>G</td><td>62</td><td>78</td><td>24</td></tr>
-                        <tr><td>GG</td><td>65</td><td>81</td><td>25</td></tr>
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-
-                {activeTab === 'cuidados' && (
-                  <ul className={styles.specList}>
-                    <li>▪ <strong>LAVAGEM:</strong> Lavar à mão ou no ciclo delicado com água fria.</li>
-                    <li>▪ <strong>ALVEJANTE:</strong> Não utilizar produtos à base de cloro.</li>
-                    <li>▪ <strong>PASSADOR:</strong> Passar do avesso em temperatura média.</li>
-                    <li>▪ <strong>SECAGEM:</strong> Secar à sombra para conservar o pigmento original.</li>
-                  </ul>
-                )}
-
-                {activeTab === 'politicas' && (
-                  <ul className={styles.specList}>
-                    <li>▪ <strong>FRETE DESPACHO:</strong> Envio expresso prioritário em até 48h úteis.</li>
-                    <li>▪ <strong>POLÍTICA DE TROCAS:</strong> 30 dias após recebimento mantendo o lacre.</li>
-                    <li>▪ <strong>GARANTIA R.U.A:</strong> Autenticidade garantida THR33 ATELIÊ.</li>
-                  </ul>
-                )}
-              </div>
-            </div>
-
-            {/* 3. BARRA DE CONFIANÇA & SELOS (TRUST BADGES GRID) */}
-            <div className={styles.trustBannerGrid}>
-              <div className={styles.trustItem}>
-                <Truck size={18} className={styles.trustIcon} />
-                <div className={styles.trustTextGroup}>
-                  <strong>FRETE EXPRESSO</strong>
-                  <span>DESPACHO TÁTICO 48H</span>
-                </div>
-              </div>
-
-              <div className={styles.trustDivider} />
-
-              <div className={styles.trustItem}>
-                <ShieldCheck size={18} className={styles.trustIcon} />
-                <div className={styles.trustTextGroup}>
-                  <strong>PAGAMENTO SECURE</strong>
-                  <span>PIX OU ATÉ 6X</span>
-                </div>
-              </div>
-
-              <div className={styles.trustDivider} />
-
-              <div className={styles.trustItem}>
-                <RotateCcw size={18} className={styles.trustIcon} />
-                <div className={styles.trustTextGroup}>
-                  <strong>30 DIAS DE TROCA</strong>
-                  <span>GARANTIA TOTAL</span>
-                </div>
-              </div>
-            </div>
-
-          </div>
-
-        </div>
-
-      </div>
-
-      {/* LIGHTBOX MODAL DA GALERIA */}
-      <AnimatePresence>
-        {isLightboxOpen && (
-          <div className={styles.lightboxOverlay} onClick={() => { setIsLightboxOpen(false); setIsZoomed(false); }}>
-            <div className={styles.lightboxContent} onClick={(e) => e.stopPropagation()}>
+          {/* ACCORDIONS DE INFORMAÇÕES TÉCNICAS */}
+          <div className={styles.accordions}>
+            {/* Descrição */}
+            <div className={styles.accordionItem}>
               <button 
-                onClick={() => { setIsLightboxOpen(false); setIsZoomed(false); }} 
-                className={styles.btnCloseLightbox}
-                title="Fechar (ESC)"
+                type="button"
+                className={styles.accordionHeader} 
+                onClick={() => setOpenAccordion(openAccordion === 'description' ? null : 'description')}
               >
-                <X size={20} />
+                <span>DESCRIÇÃO E DETALHES</span>
+                <span className={styles.accordionSign}>{openAccordion === 'description' ? '−' : '+'}</span>
               </button>
+              {openAccordion === 'description' && (
+                <div className={styles.accordionBody}>
+                  <p>{product.description}</p>
+                </div>
+              )}
+            </div>
 
-              <button onClick={handlePrevImage} className={styles.lightboxNavLeft}>
-                <ChevronLeft size={24} />
-              </button>
-
-              <div 
-                className={`${styles.lightboxImageWrapper} ${isZoomed ? styles.zoomedActive : ''}`}
-                onMouseMove={handleMouseMove}
-                onClick={() => setIsZoomed(!isZoomed)}
+            {/* Tabela de Medidas */}
+            <div className={styles.accordionItem}>
+              <button 
+                type="button"
+                className={styles.accordionHeader} 
+                onClick={() => setOpenAccordion(openAccordion === 'measures' ? null : 'measures')}
               >
-                <img 
-                  src={currentImage} 
-                  alt={product.title} 
-                  className={styles.lightboxImage}
-                  style={isZoomed ? {
-                    transformOrigin: `${mousePos.x}% ${mousePos.y}%`,
-                    transform: 'scale(2.4)'
-                  } : {}}
-                />
-              </div>
-
-              <button onClick={handleNextImage} className={styles.lightboxNavRight}>
-                <ChevronRight size={24} />
+                <span>TABELA DE MEDIDAS (CM)</span>
+                <span className={styles.accordionSign}>{openAccordion === 'measures' ? '−' : '+'}</span>
               </button>
+              {openAccordion === 'measures' && (
+                <div className={styles.accordionBody}>
+                  <table className={styles.measuresTable}>
+                    <thead>
+                      <tr>
+                        <th>Tamanho</th>
+                        <th>Tórax</th>
+                        <th>Comprimento</th>
+                        <th>Manga</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {product.sizeChart.map((row) => (
+                        <tr key={row.size}>
+                          <td><strong>{row.size}</strong></td>
+                          <td>{row.chest}</td>
+                          <td>{row.length}</td>
+                          <td>{row.sleeve}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
 
-              <div className={styles.lightboxFooter}>
-                <span>{product.title} // IMAGEM {selectedImageIndex + 1} DE {galleryList.length}</span>
-                <span className={styles.zoomToggleHint}>
-                  {isZoomed ? 'CLIQUE PARA REDUZIR' : 'CLIQUE EM QUALQUER PONTO PARA ZOOM LUPA (2.4X)'}
-                </span>
-              </div>
+            {/* Cuidados com a Peça */}
+            <div className={styles.accordionItem}>
+              <button 
+                type="button"
+                className={styles.accordionHeader} 
+                onClick={() => setOpenAccordion(openAccordion === 'care' ? null : 'care')}
+              >
+                <span>CUIDADOS COM A PEÇA</span>
+                <span className={styles.accordionSign}>{openAccordion === 'care' ? '−' : '+'}</span>
+              </button>
+              {openAccordion === 'care' && (
+                <div className={styles.accordionBody}>
+                  <ul className={styles.careList}>
+                    {product.careInstructions.map((instruction, idx) => (
+                      <li key={idx}>{instruction}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            {/* Avaliações de Clientes */}
+            <div className={styles.accordionItem}>
+              <button 
+                type="button"
+                className={styles.accordionHeader} 
+                onClick={() => setOpenAccordion(openAccordion === 'reviews' ? null : 'reviews')}
+              >
+                <span>AVALIAÇÕES DOS CLIENTES ({product.reviews.length})</span>
+                <span className={styles.accordionSign}>{openAccordion === 'reviews' ? '−' : '+'}</span>
+              </button>
+              {openAccordion === 'reviews' && (
+                <div className={styles.accordionBody}>
+                  <div className={styles.reviewsList}>
+                    {product.reviews.map((rev) => (
+                      <div key={rev.id} className={styles.reviewCard}>
+                        <div className={styles.reviewHeader}>
+                          <strong>{rev.author}</strong>
+                          <span className={styles.reviewDate}>{rev.date}</span>
+                        </div>
+                        <p className={styles.reviewComment}>"{rev.comment}"</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
-        )}
-      </AnimatePresence>
-
-    </div>
+        </section>
+      </div>
+    </main>
   );
 }
 
