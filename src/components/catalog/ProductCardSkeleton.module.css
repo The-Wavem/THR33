@@ -1,0 +1,90 @@
+.skeletonCard {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.imagePlaceholder {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3/4;
+  background-color: #141414;
+  overflow: hidden;
+}
+
+.shimmer {
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.05) 50%,
+    transparent 100%
+  );
+  animation: shimmerAnim 1.6s infinite ease-in-out;
+}
+
+.details {
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.tagsRow {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.skeletonBar {
+  position: relative;
+  background-color: #1a1a1a;
+  border-radius: 0px;
+  overflow: hidden;
+}
+
+.skeletonBar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(255, 255, 255, 0.04) 50%,
+    transparent 100%
+  );
+  animation: shimmerAnim 1.6s infinite ease-in-out;
+}
+
+.tagBar {
+  width: 70px;
+  height: 12px;
+}
+
+.tagBarSmall {
+  width: 60px;
+  height: 12px;
+}
+
+.titleBar {
+  width: 85%;
+  height: 16px;
+}
+
+.priceBar {
+  width: 45%;
+  height: 14px;
+}
+
+@keyframes shimmerAnim {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}

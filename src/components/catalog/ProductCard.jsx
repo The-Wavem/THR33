@@ -1,15 +1,28 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import styles from './ProductCard.module.css';
 
 export function ProductCard({ product }) {
+  const [imageLoaded, setImageLoaded] = useState(false);
   const productId = product.slug || product.id;
 
   return (
     <div className={styles.card}>
       <div className={styles.imageWrapper}>
         {product.isRelease && <span className={styles.badge}>LANÇAMENTO</span>}
-        <img src={product.image} alt={product.name} className={styles.image} />
+        
+        {/* Placeholder com Shimmer enquanto a imagem carrega */}
+        {!imageLoaded && <div className={styles.imagePlaceholderShimmer} />}
+
+        <img 
+          src={product.image} 
+          alt={product.name} 
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setImageLoaded(true)}
+          className={`${styles.image} ${imageLoaded ? styles.imageVisible : styles.imageHidden}`} 
+        />
+
         <Link className={styles.overlayBtn} to={`/produto/${productId}`}>
           VER DETALHES
         </Link>
