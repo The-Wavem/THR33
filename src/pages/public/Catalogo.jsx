@@ -1,166 +1,107 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { catalogService } from '../../services/catalogService';
-import { ProductCard } from '../../components/catalog/ProductCard';
-import { FilterSidebar } from '../../components/catalog/FilterSidebar';
+import { useSearchParams, useParams } from 'react-router-dom';
+import FilterSidebar from '../../components/catalog/FilterSidebar';
+import ProductCard from '../../components/catalog/ProductCard';
+import { PRODUCTS_DATA } from '../../data/productsData';
 import styles from './Catalogo.module.css';
 
-export function Catalogo({ onAddToCart }) {
+export function Catalogo() {
+  const [searchParams] = useSearchParams();
   const { categorySlug } = useParams();
-  const navigate = useNavigate();
 
-  // Buscar meta-dados dinâmicos do banco/serviço
-  const metadata = useMemo(() => catalogService.getDynamicMetadata(), []);
+  const [filters, setFilters] = useState({
+    category: categorySlug || searchParams.get('categoria') || '',
+    fit: searchParams.get('modelagem') || searchParams.get('fit') || '',
+    drop: searchParams.get('drop') || '',
+    size: searchParams.get('tamanho') || searchParams.get('size') || ''
+  });
 
-  const [selectedCategories, setSelectedCategories] = useState([]);
-  const [selectedFits, setSelectedFits] = useState([]);
-  const [maxPrice, setMaxPrice] = useState(metadata.maxPrice);
-  const [selectedSize, setSelectedSize] = useState(null);
-  const [sortBy, setSortBy] = useState('destaques');
-  const [wishlist, setWishlist] = useState([]);
+  const [sortOrder, setSortOrder] = useState('newest');
 
-  // Sincronizar parâmetro da URL com o estado de categorias
   useEffect(() => {
-    if (categorySlug && categorySlug !== 'todos') {
-      setSelectedCategories([categorySlug.toLowerCase()]);
-    } else {
-      setSelectedCategories([]);
+    const cat = categorySlug || searchParams.get('categoria') || '';
+    const fit = searchParams.get('modelagem') || searchParams.get('fit') || '';
+    const drop = searchParams.get('drop') || '';
+    const size = searchParams.get('tamanho') || searchParams.get('size') || '';
+
+    if (cat || fit || drop || size) {
+      setFilters(prev => ({
+        ...prev,
+        ...(cat && { category: cat }),
+        ...(fit && { fit }),
+        ...(drop && { drop }),
+        ...(size && { size })
+      }));
     }
-  }, [categorySlug]);
+  }, [categorySlug, searchParams]);
 
-  const allProducts = useMemo(() => catalogService.getAllProducts(), []);
-
-  // TOGGLES
-  const handleCategoryChange = (catSlug) => {
-    setSelectedCategories(prev => {
-      const next = prev.includes(catSlug) ? prev.filter(c => c !== catSlug) : [...prev, catSlug];
-      if (next.length === 1) {
-        navigate(`/categoria/${next[0]}`);
-      } else {
-        navigate('/catalogo');
-      }
-      return next;
-    });
+  const handleReset = () => {
+    setFilters({ category: '', fit: '', drop: '', size: '' });
+    setSortOrder('newest');
   };
 
-  const handleFitChange = (fit) => {
-    setSelectedFits(prev => prev.includes(fit) ? prev.filter(f => f !== fit) : [...prev, fit]);
-  };
-
-  const handleSizeChange = (sz) => {
-    setSelectedSize(prev => prev === sz ? null : sz);
-  };
-
-  const handleToggleWishlist = (id) => {
-    setWishlist(prev => prev.includes(id) ? prev.filter(item => item !== id) : [...prev, id]);
-  };
-
-  const handleResetFilters = () => {
-    setSelectedCategories([]);
-    setSelectedFits([]);
-    setMaxPrice(metadata.maxPrice);
-    setSelectedSize(null);
-    navigate('/catalogo');
-  };
-
-  // MOTOR DE FILTRAGEM DINÂMICO
+  // Lógica de Filtragem e Ordenação
   const filteredProducts = useMemo(() => {
-    return allProducts.filter(item => {
-      if (selectedCategories.length > 0 && !selectedCategories.includes(item.category.toLowerCase())) {
-        return false;
-      }
-      if (selectedFits.length > 0 && !selectedFits.includes(item.fit)) {
-        return false;
-      }
-      if (item.priceNum > maxPrice) {
-        return false;
-      }
-      if (selectedSize && !item.sizes.includes(selectedSize)) {
-        return false;
-      }
+    return PRODUCTS_DATA.filter((product) => {
+      if (filters.category && product.category.toLowerCase() !== filters.category.toLowerCase()) return false;
+      if (filters.fit && product.fit.toLowerCase() !== filters.fit.toLowerCase()) return false;
+      if (filters.drop && product.drop.toLowerCase() !== filters.drop.toLowerCase()) return false;
+      if (filters.size && !product.sizes.includes(filters.size)) return false;
       return true;
     }).sort((a, b) => {
-      if (sortBy === 'menor-preco') return a.priceNum - b.priceNum;
-      if (sortBy === 'maior-preco') return b.priceNum - a.priceNum;
-      return 0;
+      if (sortOrder === 'price-low') return a.price - b.price;
+      if (sortOrder === 'price-high') return b.price - a.price;
+      return (b.isRelease ? 1 : 0) - (a.isRelease ? 1 : 0); // newest
     });
-  }, [allProducts, selectedCategories, selectedFits, maxPrice, selectedSize, sortBy]);
+  }, [filters, sortOrder]);
 
   return (
-    <div className={styles.catalogPage}>
-      <div className={styles.container}>
-        
-        {/* BREADCRUMB DINÂMICO */}
-        <div className={styles.topControlBar}>
-          <div className={styles.breadcrumb}>
-            HOME / {categorySlug ? categorySlug.toUpperCase() : 'CATÁLOGO GERAL'} / 
-            <strong> [{filteredProducts.length} PEÇAS ENCONTRADAS]</strong>
-          </div>
-
-          <div className={styles.sortWrapper}>
-            <label>ORDENAR POR:</label>
-            <select 
-              value={sortBy} 
-              onChange={(e) => setSortBy(e.target.value)}
-              className={styles.sortSelect}
-            >
-              <option value="destaques">DESTAQUES</option>
-              <option value="menor-preco">MENOR PREÇO</option>
-              <option value="maior-preco">MAIOR PREÇO</option>
-            </select>
-          </div>
+    <main className={styles.catalogPage}>
+      <header className={styles.header}>
+        <div>
+          <span className={styles.breadcrumb}>HOME / CATÁLOGO</span>
+          <h1 className={styles.title}>VESTUÁRIO & CONCEITO</h1>
         </div>
 
-        {/* MAIN LAYOUT */}
-        <div className={styles.mainGrid}>
-          <div className={styles.sidebarCol}>
-            <FilterSidebar 
-              availableFilters={{
-                categories: metadata.categories,
-                fits: metadata.fits,
-                sizes: metadata.sizes,
-                minPrice: metadata.minPrice,
-                maxPriceLimit: metadata.maxPrice
-              }}
-              selectedCategories={selectedCategories}
-              onCategoryChange={handleCategoryChange}
-              selectedFits={selectedFits}
-              onFitChange={handleFitChange}
-              maxPrice={maxPrice}
-              onPriceChange={setMaxPrice}
-              selectedSize={selectedSize}
-              onSizeChange={handleSizeChange}
-              onResetFilters={handleResetFilters}
-            />
-          </div>
-
-          <div className={styles.gridCol}>
-            {filteredProducts.length > 0 ? (
-              <div className={styles.productsGrid}>
-                {filteredProducts.map(product => (
-                  <ProductCard 
-                    key={product.id}
-                    product={product}
-                    onAddToCart={onAddToCart}
-                    onToggleWishlist={handleToggleWishlist}
-                    isWishlisted={wishlist.includes(product.id)}
-                  />
-                ))}
-              </div>
-            ) : (
-              <div className={styles.emptyState}>
-                <h3>NENHUMA PEÇA ENCONTRADA COM ESSES FILTROS</h3>
-                <p>O catálogo ajustou dinamicamente as opções para o estoque ativo.</p>
-                <button onClick={handleResetFilters} className={styles.btnResetState}>
-                  LIMPAR FILTROS
-                </button>
-              </div>
-            )}
-          </div>
+        {/* Ordenação */}
+        <div className={styles.sortWrapper}>
+          <label htmlFor="sortSelect" className={styles.sortLabel}>ORDENAR POR:</label>
+          <select 
+            id="sortSelect" 
+            className={styles.sortSelect}
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value)}
+          >
+            <option value="newest">LANÇAMENTOS</option>
+            <option value="price-low">MENOR PREÇO</option>
+            <option value="price-high">MAIOR PREÇO</option>
+          </select>
         </div>
+      </header>
 
+      <div className={styles.contentLayout}>
+        <FilterSidebar filters={filters} onReset={handleReset} setFilters={setFilters} />
+
+        <section className={styles.productsArea}>
+          <div className={styles.resultsCount}>
+            {filteredProducts.length} PRODUTO(S) ENCONTRADO(S)
+          </div>
+
+          {filteredProducts.length > 0 ? (
+            <div className={styles.grid}>
+              {filteredProducts.map(product => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </div>
+          ) : (
+            <div className={styles.emptyState}>
+              <p>Nenhum produto encontrado para os filtros selecionados.</p>
+              <button onClick={handleReset} className={styles.resetBtn}>LIMPAR FILTROS</button>
+            </div>
+          )}
+        </section>
       </div>
-    </div>
+    </main>
   );
 }
 

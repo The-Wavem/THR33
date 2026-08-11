@@ -1,117 +1,95 @@
 import React from 'react';
 import styles from './FilterSidebar.module.css';
 
-export function FilterSidebar({ 
-  availableFilters,
-  selectedCategories, 
-  onCategoryChange, 
-  selectedFits, 
-  onFitChange, 
-  maxPrice, 
-  onPriceChange, 
-  selectedSize, 
-  onSizeChange,
-  onResetFilters 
-}) {
-  const { categories = [], fits = [], sizes = [], minPrice = 0, maxPriceLimit = 500 } = availableFilters || {};
+export function FilterSidebar({ filters, setFilters, onReset }) {
+  const handleCategoryChange = (cat) => {
+    setFilters(prev => ({ ...prev, category: prev.category === cat ? '' : cat }));
+  };
+
+  const handleFitChange = (fit) => {
+    setFilters(prev => ({ ...prev, fit: prev.fit === fit ? '' : fit }));
+  };
+
+  const handleDropChange = (drop) => {
+    setFilters(prev => ({ ...prev, drop: prev.drop === drop ? '' : drop }));
+  };
+
+  const handleSizeChange = (size) => {
+    setFilters(prev => ({ ...prev, size: prev.size === size ? '' : size }));
+  };
 
   return (
-    <aside className={styles.sidebarContainer}>
-      <div className={styles.sidebarHeader}>
-        <h3>PAINEL DE FILTROS</h3>
-        <span className={styles.versionBadge}>DYNAMIC v2.0</span>
+    <aside className={styles.sidebar} aria-label="Filtros do Catálogo">
+      <div className={styles.header}>
+        <h3 className={styles.title}>FILTROS</h3>
+        <button onClick={onReset} className={styles.clearBtn}>LIMPAR TUDO</button>
       </div>
 
-      <div className={styles.divider} />
-
-      {/* 1. CATEGORIAS EXTRAÍDAS DINAMICAMENTE */}
-      {categories.length > 0 && (
-        <div className={styles.filterGroup}>
-          <label className={styles.groupLabel}>CATEGORIAS EM ESTOQUE</label>
-          <div className={styles.checkboxList}>
-            {categories.map((cat) => (
-              <label key={cat.slug} className={styles.checkboxItem}>
-                <input 
-                  type="checkbox"
-                  checked={selectedCategories.includes(cat.slug)}
-                  onChange={() => onCategoryChange(cat.slug)}
-                />
-                <span>{cat.label} ({cat.count})</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className={styles.divider} />
-
-      {/* 2. FIT / CORTE DINÂMICO */}
-      {fits.length > 0 && (
-        <div className={styles.filterGroup}>
-          <label className={styles.groupLabel}>FIT / CORTE DISPONÍVEL</label>
-          <div className={styles.fitGrid}>
-            {fits.map((fit) => (
-              <button
-                key={fit}
-                onClick={() => onFitChange(fit)}
-                className={selectedFits.includes(fit) ? styles.fitBtnActive : styles.fitBtn}
-              >
-                {fit}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className={styles.divider} />
-
-      {/* 3. FAIXA DE PREÇO CALCULADA */}
+      {/* Categoria */}
       <div className={styles.filterGroup}>
-        <div className={styles.priceLabelRow}>
-          <label className={styles.groupLabel}>FAIXA DE PREÇO</label>
-          <strong className={styles.priceVal}>ATÉ R$ {maxPrice}</strong>
-        </div>
-        <input 
-          type="range"
-          min={minPrice}
-          max={maxPriceLimit}
-          step="10"
-          value={maxPrice}
-          onChange={(e) => onPriceChange(Number(e.target.value))}
-          className={styles.priceRangeInput}
-        />
-        <div className={styles.priceMinMax}>
-          <span>R$ {minPrice}</span>
-          <span>R$ {maxPriceLimit}</span>
+        <span className={styles.groupLabel}>CATEGORIAS</span>
+        <div className={styles.optionsList}>
+          {['camisa', 'calca', 'jaqueta'].map((cat) => (
+            <button
+              key={cat}
+              className={`${styles.optionBtn} ${filters.category === cat ? styles.activeOption : ''}`}
+              onClick={() => handleCategoryChange(cat)}
+            >
+              {cat.toUpperCase()}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className={styles.divider} />
-
-      {/* 4. TAMANHOS EXISTENTES */}
-      {sizes.length > 0 && (
-        <div className={styles.filterGroup}>
-          <label className={styles.groupLabel}>TAMANHO DISPONÍVEL</label>
-          <div className={styles.sizeGrid}>
-            {sizes.map((sz) => (
-              <button
-                key={sz}
-                onClick={() => onSizeChange(sz)}
-                className={selectedSize === sz ? styles.sizeBoxActive : styles.sizeBox}
-              >
-                {sz}
-              </button>
-            ))}
-          </div>
+      {/* Modelagem */}
+      <div className={styles.filterGroup}>
+        <span className={styles.groupLabel}>MODELAGEM</span>
+        <div className={styles.optionsList}>
+          {['boxy', 'oversized', 'normal', 'regata'].map((fit) => (
+            <button
+              key={fit}
+              className={`${styles.optionBtn} ${filters.fit === fit ? styles.activeOption : ''}`}
+              onClick={() => handleFitChange(fit)}
+            >
+              {fit.toUpperCase()}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
-      <div className={styles.divider} />
+      {/* Drops */}
+      <div className={styles.filterGroup}>
+        <span className={styles.groupLabel}>DROP</span>
+        <div className={styles.optionsList}>
+          <button
+            className={`${styles.optionBtn} ${filters.drop === 'leak-two' ? styles.activeOption : ''}`}
+            onClick={() => handleDropChange('leak-two')}
+          >
+            LEAK TWO (NOVO)
+          </button>
+          <button
+            className={`${styles.optionBtn} ${filters.drop === 'drop-01' ? styles.activeOption : ''}`}
+            onClick={() => handleDropChange('drop-01')}
+          >
+            DROPS PASSADOS
+          </button>
+        </div>
+      </div>
 
-      <div className={styles.actionBlock}>
-        <button onClick={onResetFilters} className={styles.btnReset}>
-          [ LIMPAR FILTROS ]
-        </button>
+      {/* Tamanho */}
+      <div className={styles.filterGroup}>
+        <span className={styles.groupLabel}>TAMANHO</span>
+        <div className={styles.gridSizes}>
+          {['PP', 'P', 'M', 'G', 'GG'].map((size) => (
+            <button
+              key={size}
+              className={`${styles.sizeBtn} ${filters.size === size ? styles.activeSize : ''}`}
+              onClick={() => handleSizeChange(size)}
+            >
+              {size}
+            </button>
+          ))}
+        </div>
       </div>
     </aside>
   );
