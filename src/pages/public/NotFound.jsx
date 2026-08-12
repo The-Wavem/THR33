@@ -1,11 +1,12 @@
 import React from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Compass, ShoppingBag, HelpCircle } from 'lucide-react';
+import { ArrowLeft, Compass, ShoppingBag, HelpCircle, Terminal } from 'lucide-react';
 import styles from './NotFound.module.css';
 
 export function NotFound() {
   const navigate = useNavigate();
+  const location = useLocation();
 
   return (
     <main className={styles.container}>
@@ -15,13 +16,6 @@ export function NotFound() {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: "easeOut" }}
       >
-        {/* BADGE TÁTICO */}
-        <div className={styles.badgeRow}>
-          <span className={styles.errorBadge}>
-            <Compass size={13} />
-            <span>COORDENADA NÃO ENCONTRADA // 404</span>
-          </span>
-        </div>
 
         {/* GLITCH / CÓDIGO DO ERRO */}
         <h1 className={styles.errorCode}>404</h1>
@@ -29,7 +23,7 @@ export function NotFound() {
         <h2 className={styles.title}>ROTA OU PEÇA INEXISTENTE</h2>
         
         <p className={styles.description}>
-          A página que você está tentando acessar foi movida, expirou ou pertence a um arquivo restrito do Ateliê THR33.
+          A rota que você tentou acessar não foi localizada no catálogo do Ateliê THR33.
         </p>
 
         {/* BOTÕES DE NAVEGAÇÃO E RECUPERAÇÃO */}
