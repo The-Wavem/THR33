@@ -9,6 +9,7 @@ import { ProdutoDetalhe } from './pages/public/ProdutoDetalhe';
 import { Lancamentos } from './pages/public/Lancamentos';
 import { Checkout } from './pages/public/Checkout';
 import { Auth } from './pages/public/Auth';
+import { Sobre } from './pages/public/Sobre';
 import { Suporte } from './pages/public/Suporte';
 import { Politicas } from './pages/public/Politicas';
 import { GuiaTamanhos } from './pages/public/GuiaTamanhos';
@@ -62,7 +63,8 @@ export function AppRoutes() {
           <Route path="/auth" element={<Auth />} />
           <Route path="/login" element={<Auth />} />
 
-          {/* ROTAS INSTITUCIONAIS: SUPORTE, POLÍTICAS & GUIA DE TAMANHOS */}
+          {/* ROTAS INSTITUCIONAIS: SOBRE, SUPORTE, POLÍTICAS & GUIA DE TAMANHOS */}
+          <Route path="/sobre" element={<Sobre />} />
           <Route path="/suporte" element={<Suporte />} />
           <Route path="/politicas" element={<Politicas />} />
           <Route path="/guia-de-tamanhos" element={<GuiaTamanhos />} />
