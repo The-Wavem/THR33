@@ -19,6 +19,7 @@ const Sobre = lazy(() => import('./pages/public/Sobre').then(m => ({ default: m.
 const Suporte = lazy(() => import('./pages/public/Suporte').then(m => ({ default: m.Suporte || m.default })));
 const Politicas = lazy(() => import('./pages/public/Politicas').then(m => ({ default: m.Politicas || m.default })));
 const GuiaTamanhos = lazy(() => import('./pages/public/GuiaTamanhos').then(m => ({ default: m.GuiaTamanhos || m.default })));
+const Favoritos = lazy(() => import('./pages/public/Favoritos').then(m => ({ default: m.Favoritos || m.default })));
 
 const Perfil = lazy(() => import('./pages/private/Perfil').then(m => ({ default: m.Perfil || m.default })));
 
@@ -70,11 +71,12 @@ export function AppRoutes() {
             <Route path="/auth" element={<Auth />} />
             <Route path="/login" element={<Auth />} />
 
-            {/* ROTAS INSTITUCIONAIS: SOBRE, SUPORTE, POLÍTICAS & GUIA DE TAMANHOS */}
+            {/* ROTAS INSTITUCIONAIS: SOBRE, SUPORTE, POLÍTICAS, GUIA DE TAMANHOS & FAVORITOS */}
             <Route path="/sobre" element={<Sobre />} />
             <Route path="/suporte" element={<Suporte />} />
             <Route path="/politicas" element={<Politicas />} />
             <Route path="/guia-de-tamanhos" element={<GuiaTamanhos />} />
+            <Route path="/favoritos" element={<Favoritos />} />
           </Route>
 
           <Route 
