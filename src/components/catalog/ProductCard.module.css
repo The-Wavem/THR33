@@ -69,26 +69,73 @@
   transform: scale(1.05);
 }
 
-.overlayBtn {
+/* GRUPO DE AÇÕES NO HOVER: VER DETALHES + FAVORITOS */
+.overlayActions {
   position: absolute;
-  bottom: 1rem;
-  left: 50%;
-  transform: translateX(-50%) translateY(10px);
-  background-color: rgba(10, 10, 10, 0.9);
+  bottom: 0.85rem;
+  left: 0.85rem;
+  right: 0.85rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transform: translateY(10px);
+  opacity: 0;
+  transition: all var(--transition-fast);
+  z-index: 3;
+}
+
+.card:hover .overlayActions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.overlayBtn {
+  flex: 1;
+  text-align: center;
+  background-color: rgba(10, 10, 10, 0.92);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
-  padding: 0.6rem 1.2rem;
-  font-size: 0.75rem;
-  font-weight: 700;
+  padding: 0.65rem 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 800;
   letter-spacing: 1px;
-  opacity: 0;
   backdrop-filter: blur(4px);
+  text-decoration: none;
   transition: all var(--transition-fast);
 }
 
-.card:hover .overlayBtn {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
+.overlayBtn:hover {
+  background-color: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+}
+
+.favoriteBtn {
+  width: 36px;
+  height: 36px;
+  background-color: rgba(10, 10, 10, 0.92);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.favoriteBtn:hover {
+  border-color: var(--border-active);
+  background-color: #1a1a1a;
+  transform: scale(1.06);
+}
+
+.favoriteActive {
+  border-color: rgba(239, 68, 68, 0.6);
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
 }
 
 .details {
@@ -108,21 +155,24 @@
 }
 
 .fitTag {
-  color: var(--text-secondary);
-}
-
-.dropTag {
   color: var(--text-muted);
 }
 
+.dropTag {
+  color: var(--text-secondary);
+}
+
 .productName {
-  font-size: 0.95rem;
-  font-weight: 600;
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-primary);
+  margin: 0.2rem 0;
 }
 
 .price {
-  font-size: 0.9rem;
-  font-weight: 700;
+  font-size: 0.95rem;
+  font-weight: 800;
   color: var(--text-primary);
-  margin-top: 0.2rem;
 }

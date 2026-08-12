@@ -1,10 +1,21 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Heart } from 'lucide-react';
+import { useWishlist } from '../../context/WishlistContext';
 import styles from './ProductCard.module.css';
 
 export function ProductCard({ product }) {
   const [imageLoaded, setImageLoaded] = useState(false);
+  const { isFavorite, toggleFavorite } = useWishlist();
+  
   const productId = product.slug || product.id;
+  const isFav = isFavorite(productId);
+
+  const handleFavoriteClick = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    toggleFavorite(product);
+  };
 
   return (
     <div className={styles.card}>
@@ -23,18 +34,35 @@ export function ProductCard({ product }) {
           className={`${styles.image} ${imageLoaded ? styles.imageVisible : styles.imageHidden}`} 
         />
 
-        <Link className={styles.overlayBtn} to={`/produto/${productId}`}>
-          VER DETALHES
-        </Link>
+        {/* BOTÕES DE AÇÃO: VER DETALHES + FAVORITAR */}
+        <div className={styles.overlayActions}>
+          <Link className={styles.overlayBtn} to={`/produto/${productId}`}>
+            VER DETALHES
+          </Link>
+
+          <button 
+            type="button"
+            onClick={handleFavoriteClick}
+            className={`${styles.favoriteBtn} ${isFav ? styles.favoriteActive : ''}`}
+            aria-label={isFav ? "Remover dos favoritos" : "Salvar nos favoritos"}
+            title={isFav ? "Remover dos favoritos" : "Salvar nos favoritos"}
+          >
+            <Heart 
+              size={16} 
+              fill={isFav ? "#ef4444" : "none"} 
+              stroke={isFav ? "#ef4444" : "currentColor"} 
+            />
+          </button>
+        </div>
       </div>
 
       <div className={styles.details}>
         <div className={styles.tagsRow}>
-          <span className={styles.fitTag}>{product.fit.toUpperCase()} FIT</span>
+          <span className={styles.fitTag}>{product.fit?.toUpperCase()} FIT</span>
           <span className={styles.dropTag}>{product.drop === 'leak-two' ? 'LEAK TWO' : 'DROP ANTERIOR'}</span>
         </div>
         <h3 className={styles.productName}>{product.name}</h3>
-        <p className={styles.price}>R$ {product.price.toFixed(2)}</p>
+        <p className={styles.price}>R$ {product.price?.toFixed(2)}</p>
       </div>
     </div>
   );

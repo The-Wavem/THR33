@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { User, ShoppingBag, Heart, LogOut, Package, ArrowRight } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import { useWishlist } from '../../context/WishlistContext';
 import { preloadRoute } from '../../utils/preloader';
 import styles from './Navbar.module.css';
 
@@ -14,6 +15,7 @@ export function Navbar({ onOpenCart }) {
 
   const { openCart, totalItemsCount } = useCart();
   const { currentUser, isAuthenticated, logout } = useAuth();
+  const { favoritesCount } = useWishlist();
   const navigate = useNavigate();
 
   const handleCartClick = onOpenCart || openCart;
@@ -139,10 +141,13 @@ export function Navbar({ onOpenCart }) {
           <Link 
             to="/favoritos" 
             className={styles.actionBtn} 
-            aria-label="Ver Favoritos / Wishlist"
+            aria-label={`Ver Favoritos / Wishlist (${favoritesCount} itens)`}
             onMouseEnter={() => preloadRoute('/catalogo')}
           >
             <Heart size={20} />
+            {favoritesCount > 0 && (
+              <span className={styles.cartBadge}>{favoritesCount}</span>
+            )}
           </Link>
 
           {/* ÍCONE DE PERFIL COM HOVER BRIDGE & TOLERÂNCIA SUAVE */}
