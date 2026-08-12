@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import styles from './Hero.module.css';
 
@@ -24,32 +25,107 @@ const HERO_SLIDES = [
   }
 ];
 
+// Animação refinada para o background do slide
+const bgVariants = {
+  initial: {
+    opacity: 0,
+    scale: 1.04
+  },
+  animate: {
+    opacity: 1,
+    scale: 1,
+    transition: {
+      duration: 0.7,
+      ease: [0.16, 1, 0.3, 1]
+    }
+  },
+  exit: {
+    opacity: 0,
+    scale: 0.98,
+    transition: {
+      duration: 0.45,
+      ease: [0.16, 1, 0.3, 1]
+    }
+  }
+};
+
+// Animação de entrada e saída dos textos
+const textVariants = {
+  initial: {
+    opacity: 0,
+    y: 16
+  },
+  animate: {
+    opacity: 1,
+    y: 0,
+    transition: {
+      duration: 0.5,
+      delay: 0.08,
+      ease: [0.16, 1, 0.3, 1]
+    }
+  },
+  exit: {
+    opacity: 0,
+    y: -10,
+    transition: {
+      duration: 0.25,
+      ease: 'easeIn'
+    }
+  }
+};
+
 export function Hero() {
   const [currentSlide, setCurrentSlide] = useState(0);
+  const [direction, setDirection] = useState(1);
   const [isHovered, setIsHovered] = useState(false);
 
+  // Pré-carrega imagens para transição instantânea
+  useEffect(() => {
+    HERO_SLIDES.forEach(s => {
+      const img = new Image();
+      img.src = s.bgImage;
+    });
+  }, []);
+
   const nextSlide = useCallback(() => {
+    setDirection(1);
     setCurrentSlide((prev) => (prev + 1) % HERO_SLIDES.length);
   }, []);
 
   const prevSlide = useCallback(() => {
+    setDirection(-1);
     setCurrentSlide((prev) => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length);
   }, []);
 
   const goToSlide = (index) => {
+    setDirection(index > currentSlide ? 1 : -1);
     setCurrentSlide(index);
   };
 
-  // Transição automática contínua de slides a cada 7 segundos
+  // Transição automática a cada 7.5 segundos (pausa no hover)
   useEffect(() => {
     if (isHovered) return;
 
     const timer = setInterval(() => {
       nextSlide();
-    }, 7000);
+    }, 7500);
 
     return () => clearInterval(timer);
   }, [nextSlide, isHovered]);
+
+  // Manipulador de arraste (drag / swipe horizontal)
+  const handleDragEnd = (e, { offset, velocity }) => {
+    const swipeConfidenceThreshold = 10000;
+    const swipePower = Math.abs(offset.x) * velocity.x;
+
+    if (offset.x < -50 || swipePower < -swipeConfidenceThreshold) {
+      nextSlide();
+    } else if (offset.x > 50 || swipePower > swipeConfidenceThreshold) {
+      prevSlide();
+    }
+  };
+
+  const slide = HERO_SLIDES[currentSlide];
 
   return (
     <section 
@@ -58,43 +134,59 @@ export function Hero() {
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className={styles.slidesContainer}>
-        {HERO_SLIDES.map((slide, index) => {
-          const isActive = index === currentSlide;
-          return (
-            <div
-              key={slide.id}
-              className={`${styles.slideItem} ${isActive ? styles.slideActive : styles.slideInactive}`}
+      {/* Área Arrastável com AnimatePresence */}
+      <motion.div 
+        className={styles.dragWrapper}
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.15}
+        onDragEnd={handleDragEnd}
+      >
+        <AnimatePresence custom={direction} mode="wait">
+          <motion.div
+            key={`hero-slide-${slide.id}`}
+            className={styles.slideMotionContainer}
+          >
+            {/* Background do Slide com Zoom Suave */}
+            <motion.div
+              variants={bgVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className={styles.slideBackground}
+              style={{ backgroundImage: `url(${slide.bgImage})` }}
             >
-              <div 
-                className={styles.slideBackground}
-                style={{ backgroundImage: `url(${slide.bgImage})` }}
-              >
-                <div className={styles.overlay} />
+              <div className={styles.overlay} />
+            </motion.div>
+
+            {/* Conteúdo Textual do Slide */}
+            <motion.div 
+              variants={textVariants}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              className={styles.contentContainer}
+            >
+              <div className={styles.badge}>
+                <span className={styles.badgeDot} />
+                <span className={styles.badgeText}>{slide.badge}</span>
               </div>
 
-              <div className={styles.contentContainer}>
-                <div className={styles.badge}>
-                  <span className={styles.badgeDot} />
-                  <span className={styles.badgeText}>{slide.badge}</span>
-                </div>
+              <h1 className={styles.mainTitle}>{slide.title}</h1>
+              <p className={styles.subtitle}>{slide.subtitle}</p>
 
-                <h1 className={styles.mainTitle}>{slide.title}</h1>
-                <p className={styles.subtitle}>{slide.subtitle}</p>
-
-                <div className={styles.actions}>
-                  <Link className={styles.primaryCta} to={slide.link}>
-                    {slide.cta}
-                  </Link>
-                  <Link className={styles.secondaryCta} to="/sobre">
-                    CONHEÇA A MARCA
-                  </Link>
-                </div>
+              <div className={styles.actions}>
+                <Link className={styles.primaryCta} to={slide.link}>
+                  {slide.cta}
+                </Link>
+                <Link className={styles.secondaryCta} to="/sobre">
+                  CONHEÇA A MARCA
+                </Link>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            </motion.div>
+          </motion.div>
+        </AnimatePresence>
+      </motion.div>
 
       {/* Botões de Navegação Lateral (Prev / Next) */}
       <button 
