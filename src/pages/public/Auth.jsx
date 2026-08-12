@@ -1,295 +1,312 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Lock, User, Mail, ShieldCheck, ArrowRight, Check, AlertTriangle, KeyRound } from 'lucide-react';
+import { 
+  Lock, 
+  User, 
+  Mail, 
+  ShieldCheck, 
+  ArrowRight, 
+  Check, 
+  AlertCircle, 
+  Phone, 
+  FileText,
+  Eye,
+  EyeOff
+} from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { validateEmail, validateCPF, validatePhone, maskCPF, maskPhone } from '../../utils/validators';
 import styles from './Auth.module.css';
 
 export function Auth() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { login, user } = useAuth();
+  const { login, register, isAuthenticated } = useAuth();
 
-  // Rota de origem (location.state?.from ou '/')
-  const fromPath = location.state?.from || '/';
-  const initialTab = location.state?.tab || 'login';
+  // Define se o modo inicial é 'login' ou 'register' com base no parâmetro da URL (?mode=register) ou state
+  const queryParams = new URLSearchParams(location.search);
+  const queryMode = queryParams.get('mode');
+  const stateMode = location.state?.tab;
+  const initialMode = queryMode === 'register' || stateMode === 'register' ? 'register' : 'login';
 
-  const [activeTab, setActiveTab] = useState(initialTab); // 'login' | 'register'
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [mode, setMode] = useState(initialMode);
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
   const [successMessage, setSuccessMessage] = useState('');
 
-  // Formulário de Login
-  const [loginData, setLoginData] = useState({
-    email: '',
-    senha: ''
-  });
+  useEffect(() => {
+    const currentMode = queryParams.get('mode');
+    if (currentMode === 'register' || currentMode === 'login') {
+      setMode(currentMode);
+      setError('');
+    }
+  }, [location.search]);
 
-  // Formulário de Cadastro
+  // Se já estiver autenticado, redireciona para a conta
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate('/perfil', { replace: true });
+    }
+  }, [isAuthenticated, navigate]);
+
+  // Form de Login
+  const [loginData, setLoginData] = useState({ email: '', password: '' });
+
+  // Form de Cadastro
   const [registerData, setRegisterData] = useState({
-    nome: '',
+    name: '',
     email: '',
     cpf: '',
-    senha: ''
+    phone: '',
+    password: '',
+    confirmPassword: ''
   });
-
-  // Se já estiver logado, redireciona para a origem
-  useEffect(() => {
-    if (user) {
-      navigate(fromPath, { replace: true });
-    }
-  }, [user, fromPath, navigate]);
 
   const handleLoginSubmit = (e) => {
     e.preventDefault();
-    setErrorMessage('');
-    setIsLoading(true);
+    setError('');
 
+    if (!validateEmail(loginData.email)) {
+      setError('Informe um e-mail válido.');
+      return;
+    }
+    if (!loginData.password) {
+      setError('Informe sua senha.');
+      return;
+    }
+
+    login(loginData.email, loginData.password);
+    setSuccessMessage('Login efetuado com sucesso! Redirecionando...');
     setTimeout(() => {
-      if (loginData.email.trim() && loginData.senha.trim()) {
-        login({
-          name: 'Usuário Ateliê',
-          email: loginData.email,
-          cpf: '123.456.789-00'
-        });
-        setSuccessMessage('✓ AUTENTICAÇÃO REALIZADA COM SUCESSO! REDIRECIONANDO...');
-        setTimeout(() => {
-          navigate(fromPath, { replace: true });
-        }, 1000);
-      } else {
-        setErrorMessage('CREDENCIAS INVÁLIDAS // PREENCHA TODOS OS CAMPOS');
-        setIsLoading(false);
-      }
-    }, 1200);
+      navigate('/perfil');
+    }, 600);
   };
 
   const handleRegisterSubmit = (e) => {
     e.preventDefault();
-    setErrorMessage('');
-    setIsLoading(true);
+    setError('');
 
+    if (!registerData.name.trim() || registerData.name.trim().length < 3) {
+      setError('Informe seu nome completo (mínimo 3 caracteres).');
+      return;
+    }
+    if (!validateEmail(registerData.email)) {
+      setError('Informe um e-mail válido.');
+      return;
+    }
+    if (registerData.cpf && !validateCPF(registerData.cpf)) {
+      setError('CPF inválido. Verifique os números digitados.');
+      return;
+    }
+    if (registerData.phone && !validatePhone(registerData.phone)) {
+      setError('Telefone inválido com DDD.');
+      return;
+    }
+    if (registerData.password.length < 6) {
+      setError('A senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+    if (registerData.password !== registerData.confirmPassword) {
+      setError('As senhas não coincidem.');
+      return;
+    }
+
+    register(registerData);
+    setSuccessMessage('Cadastro realizado com sucesso! Redirecionando...');
     setTimeout(() => {
-      if (registerData.nome.trim() && registerData.email.trim() && registerData.senha.trim()) {
-        login({
-          name: registerData.nome,
-          email: registerData.email,
-          cpf: registerData.cpf || '000.000.000-00'
-        });
-        setSuccessMessage('✓ CONTA CADASTRADA COM SUCESSO! BEM-VINDO AO ATELIÊ.');
-        setTimeout(() => {
-          navigate(fromPath, { replace: true });
-        }, 1000);
-      } else {
-        setErrorMessage('ERRO NO CADASTRO // VERIFIQUE OS DADOS INFORMADOS');
-        setIsLoading(false);
-      }
-    }, 1200);
+      navigate('/perfil');
+    }, 600);
   };
 
   return (
-    <div className={styles.authPageContainer}>
-      <div className={styles.wrapper}>
-        
-        {/* HEADER DE NAVEGAÇÃO & BREADCRUMB */}
-        <div className={styles.authHeaderBar}>
-          <Link to="/" className={styles.breadLink}>HOME</Link>
-          <span className={styles.breadSep}>/</span>
-          <strong className={styles.breadActive}>AUTENTICAÇÃO TÁTICA</strong>
+    <main className={styles.container}>
+      <motion.div 
+        className={styles.authCard}
+        initial={{ opacity: 0, y: 15 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        {/* ALTERNÂNCIA DE ABAS */}
+        <div className={styles.tabHeaders}>
+          <button 
+            type="button"
+            className={`${styles.tabBtn} ${mode === 'login' ? styles.activeTab : ''}`}
+            onClick={() => { setMode('login'); setError(''); setSuccessMessage(''); }}
+          >
+            ENTRAR
+          </button>
+          <button 
+            type="button"
+            className={`${styles.tabBtn} ${mode === 'register' ? styles.activeTab : ''}`}
+            onClick={() => { setMode('register'); setError(''); setSuccessMessage(''); }}
+          >
+            CRIAR CONTA
+          </button>
         </div>
 
-        {/* CONTAINER DO CARD BRUTALISTA DE AUTH */}
-        <div className={styles.authCard}>
-          
-          <div className={styles.cardTopHeader}>
-            <div className={styles.tagBadge}>
-              <Lock size={14} />
-              <span>THR33 SECURE AUTH PROTOCOL</span>
-            </div>
-            {fromPath === '/checkout' && (
-              <span className={styles.originAlert}>
-                [ ORIGEM: CHECKOUT // RETORNO AUTOMÁTICO APÓS AUTH ]
-              </span>
-            )}
+        {error && (
+          <div className={styles.errorMessage}>
+            <AlertCircle size={14} />
+            <span>{error}</span>
           </div>
+        )}
 
-          {/* TAB SWITCHER */}
-          <div className={styles.tabsHeader}>
-            <button
-              onClick={() => { setActiveTab('login'); setErrorMessage(''); }}
-              className={activeTab === 'login' ? styles.tabActive : styles.tabBtn}
-            >
-              <span>01. ENTRAR NA CONTA</span>
-            </button>
-            <button
-              onClick={() => { setActiveTab('register'); setErrorMessage(''); }}
-              className={activeTab === 'register' ? styles.tabActive : styles.tabBtn}
-            >
-              <span>02. CRIAR CONTA ATELIÊ</span>
-            </button>
+        {successMessage && (
+          <div className={styles.successMessage}>
+            <Check size={14} />
+            <span>{successMessage}</span>
           </div>
+        )}
 
-          {/* MENAGENS DE FEEDBACK */}
-          <AnimatePresence mode="wait">
-            {errorMessage && (
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                exit={{ opacity: 0 }}
-                className={styles.errorBox}
-              >
-                <AlertTriangle size={16} />
-                <span>{errorMessage}</span>
-              </motion.div>
-            )}
-
-            {successMessage && (
-              <motion.div 
-                initial={{ opacity: 0, y: -10 }} 
-                animate={{ opacity: 1, y: 0 }} 
-                exit={{ opacity: 0 }}
-                className={styles.successBox}
-              >
-                <Check size={16} />
-                <span>{successMessage}</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* TAB 01: LOGIN */}
-          {activeTab === 'login' && (
+        <AnimatePresence mode="wait">
+          {/* FORMULÁRIO DE LOGIN */}
+          {mode === 'login' ? (
             <motion.form 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
+              key="login-form"
               onSubmit={handleLoginSubmit} 
-              className={styles.formContent}
+              className={styles.form}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.2 }}
             >
-              <div className={styles.fieldGroup}>
-                <label className={styles.label}>E-MAIL REGISTRADO</label>
-                <div className={styles.inputWrapper}>
-                  <Mail size={16} className={styles.inputIcon} />
+              <div className={styles.inputGroup}>
+                <label>E-MAIL *</label>
+                <input 
+                  type="email" 
+                  placeholder="seu.email@exemplo.com"
+                  value={loginData.email}
+                  onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                  required 
+                />
+              </div>
+
+              <div className={styles.inputGroup}>
+                <div className={styles.labelRow}>
+                  <label>SENHA *</label>
+                  <a 
+                    href="#esqueceu" 
+                    onClick={(e) => { 
+                      e.preventDefault(); 
+                      alert('Enviamos um link seguro de recuperação para seu e-mail.'); 
+                    }} 
+                    className={styles.forgotLink}
+                  >
+                    Esqueceu a senha?
+                  </a>
+                </div>
+                <div className={styles.passwordInputWrapper}>
                   <input 
-                    type="email" 
-                    placeholder="SEU.EMAIL@DOMINIO.COM" 
-                    value={loginData.email}
-                    onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
-                    className={styles.inputField}
-                    required
+                    type={showPassword ? "text" : "password"} 
+                    placeholder="••••••••"
+                    value={loginData.password}
+                    onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                    required 
                   />
+                  <button 
+                    type="button" 
+                    onClick={() => setShowPassword(!showPassword)} 
+                    className={styles.togglePasswordBtn}
+                    aria-label={showPassword ? "Ocultar senha" : "Ver senha"}
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
                 </div>
               </div>
 
-              <div className={styles.fieldGroup}>
-                <label className={styles.label}>SENHA DE ACESSO</label>
-                <div className={styles.inputWrapper}>
-                  <KeyRound size={16} className={styles.inputIcon} />
-                  <input 
-                    type="password" 
-                    placeholder="••••••••••••" 
-                    value={loginData.senha}
-                    onChange={(e) => setLoginData({ ...loginData, senha: e.target.value })}
-                    className={styles.inputField}
-                    required
-                  />
-                </div>
-              </div>
-
-              <button type="submit" disabled={isLoading} className={styles.btnSubmit}>
-                {isLoading ? (
-                  <span>AUTENTICANDO CREDENCIAIS...</span>
-                ) : (
-                  <>
-                    <span>ENTRAR NO ATELIÊ</span>
-                    <ArrowRight size={16} />
-                  </>
-                )}
+              <button type="submit" className={styles.submitBtn}>
+                <span>ACESSAR MINHA CONTA</span>
+                <ArrowRight size={15} />
               </button>
             </motion.form>
-          )}
-
-          {/* TAB 02: CRIAR CONTA ATELIÊ */}
-          {activeTab === 'register' && (
+          ) : (
+            /* FORMULÁRIO DE CADASTRO */
             <motion.form 
-              initial={{ opacity: 0 }} 
-              animate={{ opacity: 1 }} 
+              key="register-form"
               onSubmit={handleRegisterSubmit} 
-              className={styles.formContent}
+              className={styles.form}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.2 }}
             >
-              <div className={styles.fieldGroup}>
-                <label className={styles.label}>NOME COMPLETO</label>
-                <div className={styles.inputWrapper}>
-                  <User size={16} className={styles.inputIcon} />
-                  <input 
-                    type="text" 
-                    placeholder="SEU NOME COMPLETO" 
-                    value={registerData.nome}
-                    onChange={(e) => setRegisterData({ ...registerData, nome: e.target.value })}
-                    className={styles.inputField}
-                    required
-                  />
-                </div>
+              <div className={styles.inputGroup}>
+                <label>NOME COMPLETO *</label>
+                <input 
+                  type="text" 
+                  placeholder="Seu nome completo"
+                  value={registerData.name}
+                  onChange={(e) => setRegisterData({ ...registerData, name: e.target.value })}
+                  required 
+                />
               </div>
 
-              <div className={styles.fieldGroup}>
-                <label className={styles.label}>E-MAIL PARA NOTIFICAÇÕES</label>
-                <div className={styles.inputWrapper}>
-                  <Mail size={16} className={styles.inputIcon} />
-                  <input 
-                    type="email" 
-                    placeholder="SEU.EMAIL@DOMINIO.COM" 
-                    value={registerData.email}
-                    onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
-                    className={styles.inputField}
-                    required
-                  />
-                </div>
+              <div className={styles.inputGroup}>
+                <label>E-MAIL *</label>
+                <input 
+                  type="email" 
+                  placeholder="seu.email@exemplo.com"
+                  value={registerData.email}
+                  onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
+                  required 
+                />
               </div>
 
-              <div className={styles.fieldGroup}>
-                <label className={styles.label}>CPF (PARA EMISSÃO DE NOTA FISCAL)</label>
-                <div className={styles.inputWrapper}>
-                  <ShieldCheck size={16} className={styles.inputIcon} />
+              <div className={styles.rowTwo}>
+                <div className={styles.inputGroup}>
+                  <label>CPF</label>
                   <input 
                     type="text" 
-                    placeholder="000.000.000-00" 
+                    placeholder="000.000.000-00"
+                    maxLength={14}
                     value={registerData.cpf}
-                    onChange={(e) => setRegisterData({ ...registerData, cpf: e.target.value })}
-                    className={styles.inputField}
+                    onChange={(e) => setRegisterData({ ...registerData, cpf: maskCPF(e.target.value) })}
                   />
                 </div>
-              </div>
-
-              <div className={styles.fieldGroup}>
-                <label className={styles.label}>DEFINIR SENHA DE ACESSO</label>
-                <div className={styles.inputWrapper}>
-                  <KeyRound size={16} className={styles.inputIcon} />
+                <div className={styles.inputGroup}>
+                  <label>TELEFONE</label>
                   <input 
-                    type="password" 
-                    placeholder="••••••••••••" 
-                    value={registerData.senha}
-                    onChange={(e) => setRegisterData({ ...registerData, senha: e.target.value })}
-                    className={styles.inputField}
-                    required
+                    type="text" 
+                    placeholder="(41) 99999-9999"
+                    maxLength={15}
+                    value={registerData.phone}
+                    onChange={(e) => setRegisterData({ ...registerData, phone: maskPhone(e.target.value) })}
                   />
                 </div>
               </div>
 
-              <button type="submit" disabled={isLoading} className={styles.btnSubmit}>
-                {isLoading ? (
-                  <span>CADASTRANDO PERFIL...</span>
-                ) : (
-                  <>
-                    <span>CRIAR CONTA & CONTINUAR</span>
-                    <ArrowRight size={16} />
-                  </>
-                )}
+              <div className={styles.rowTwo}>
+                <div className={styles.inputGroup}>
+                  <label>SENHA *</label>
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    placeholder="Mínimo 6 caracteres"
+                    value={registerData.password}
+                    onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
+                    required 
+                  />
+                </div>
+                <div className={styles.inputGroup}>
+                  <label>CONFIRMAR SENHA *</label>
+                  <input 
+                    type={showPassword ? "text" : "password"} 
+                    placeholder="Repita sua senha"
+                    value={registerData.confirmPassword}
+                    onChange={(e) => setRegisterData({ ...registerData, confirmPassword: e.target.value })}
+                    required 
+                  />
+                </div>
+              </div>
+
+              <button type="submit" className={styles.submitBtn}>
+                <span>CONCLUIR CADASTRO</span>
+                <ArrowRight size={15} />
               </button>
             </motion.form>
           )}
-
-        </div>
-
-      </div>
-    </div>
+        </AnimatePresence>
+      </motion.div>
+    </main>
   );
 }
 

@@ -5,7 +5,7 @@ const AuthContext = createContext();
 const USER_STORAGE_KEY = 'thr33_user_profile';
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
+  const [currentUser, setCurrentUser] = useState(() => {
     try {
       const saved = localStorage.getItem(USER_STORAGE_KEY);
       return saved ? JSON.parse(saved) : null;
@@ -20,40 +20,56 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     try {
-      if (user) {
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+      if (currentUser) {
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(currentUser));
       } else {
         localStorage.removeItem(USER_STORAGE_KEY);
       }
     } catch (e) {
       console.error('Erro ao guardar sessão de usuário:', e);
     }
-  }, [user]);
+  }, [currentUser]);
 
-  const DEFAULT_USER_EXTRAS = {
-    passId: '#0482',
-    tier: 'STATUS: MEMBRO VIP // ATELIÊ R.U.A',
-    createdAt: '14/03/2024',
-    phone: '(11) 98765-4321',
-    instagram: '@weslley.k',
-    cpf: '382.901.482-00'
+  const login = (emailOrData, password) => {
+    let userMock;
+    if (typeof emailOrData === 'object' && emailOrData !== null) {
+      userMock = {
+        id: emailOrData.id || `usr-${Date.now()}`,
+        name: emailOrData.name || 'Weslley Kampa',
+        email: emailOrData.email || 'weslley@thr33.com',
+        phone: emailOrData.phone || '(41) 99999-8888',
+        cpf: emailOrData.cpf || '123.456.789-00',
+        ...emailOrData
+      };
+    } else {
+      userMock = {
+        id: 'usr_123',
+        name: 'Weslley Kampa',
+        email: emailOrData,
+        phone: '(41) 99999-8888',
+        cpf: '123.456.789-00'
+      };
+    }
+    setCurrentUser(userMock);
+    setIsAuthModalOpen(false);
+    return userMock;
   };
 
-  const login = (userData) => {
-    const formattedUser = {
-      ...DEFAULT_USER_EXTRAS,
-      id: userData.id || `usr-${Date.now()}`,
-      name: userData.name || userData.nome || 'WESLLEY K.',
-      email: userData.email || 'weslley@atelier-thr33.com',
-      ...userData
+  const register = (userData) => {
+    const userMock = {
+      id: `usr_${Date.now()}`,
+      name: userData.name || 'Novo Cliente',
+      email: userData.email,
+      cpf: userData.cpf || '123.456.789-00',
+      phone: userData.phone || '(41) 99999-8888'
     };
-    setUser(formattedUser);
+    setCurrentUser(userMock);
     setIsAuthModalOpen(false);
-    return formattedUser;
+    return userMock;
   };
 
   const updateUser = (updatedFields) => {
-    setUser(prev => {
+    setCurrentUser(prev => {
       if (!prev) return null;
       return {
         ...prev,
@@ -63,12 +79,12 @@ export function AuthProvider({ children }) {
   };
 
   const logout = () => {
-    setUser(null);
+    setCurrentUser(null);
     localStorage.removeItem(USER_STORAGE_KEY);
   };
 
   const deleteAccount = () => {
-    setUser(null);
+    setCurrentUser(null);
     localStorage.removeItem(USER_STORAGE_KEY);
     localStorage.removeItem('thr33_saved_addresses');
   };
@@ -85,8 +101,11 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={{
-      user,
+      currentUser,
+      user: currentUser,
+      isAuthenticated: Boolean(currentUser),
       login,
+      register,
       updateUser,
       logout,
       deleteAccount,
@@ -104,3 +123,5 @@ export function AuthProvider({ children }) {
 }
 
 export const useAuth = () => useContext(AuthContext);
+
+export default AuthContext;

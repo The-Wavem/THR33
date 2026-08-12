@@ -79,6 +79,7 @@ export function AppRoutes() {
           }
         >
           {/* PAINEL TÁTICO PASSAPORTE ATELIÊ */}
+          <Route path="/perfil" element={<Perfil defaultTab="dados" />} />
           <Route path="/minha-conta" element={<Perfil defaultTab="pedidos" />} />
           <Route path="/meus-pedidos" element={<Perfil defaultTab="pedidos" />} />
           <Route path="/configuracoes" element={<Perfil defaultTab="dados" />} />
