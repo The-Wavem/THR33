@@ -82,6 +82,7 @@
 }
 
 .actionBtn {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -93,6 +94,24 @@
 .actionBtn:hover {
   color: var(--text-primary);
   transform: translateY(-1px);
+}
+
+.cartBadge {
+  position: absolute;
+  top: 2px;
+  right: 0px;
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  font-size: 0.62rem;
+  font-weight: 900;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0 2px;
 }
 
 /* Responsive / Mobile */

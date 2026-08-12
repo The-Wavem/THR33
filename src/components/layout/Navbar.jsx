@@ -1,9 +1,13 @@
 import React, { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
+import { useCart } from '../../context/CartContext';
 import styles from './Navbar.module.css';
 
 export function Navbar({ onOpenCart }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const { openCart, totalItemsCount } = useCart();
+
+  const handleCartClick = onOpenCart || openCart;
 
   const toggleMobileMenu = () => {
     setIsMobileMenuOpen((prev) => !prev);
@@ -68,19 +72,22 @@ export function Navbar({ onOpenCart }) {
             </svg>
           </Link>
 
-          <Link to="/perfil" className={styles.actionBtn} aria-label="Minha Conta">
+          <Link to="/minha-conta" className={styles.actionBtn} aria-label="Minha Conta">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
               <circle cx="12" cy="7" r="4"></circle>
             </svg>
           </Link>
 
-          <button onClick={onOpenCart} className={styles.actionBtn} aria-label="Abrir Carrinho">
+          <button onClick={handleCartClick} className={styles.actionBtn} aria-label={`Abrir Carrinho (${totalItemsCount} itens)`}>
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
               <line x1="3" y1="6" x2="21" y2="6"></line>
               <path d="M16 10a4 4 0 0 1-8 0"></path>
             </svg>
+            {totalItemsCount > 0 && (
+              <span className={styles.cartBadge}>{totalItemsCount}</span>
+            )}
           </button>
         </div>
       </div>
