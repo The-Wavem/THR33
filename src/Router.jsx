@@ -20,6 +20,8 @@ const Suporte = lazy(() => import('./pages/public/Suporte').then(m => ({ default
 const Politicas = lazy(() => import('./pages/public/Politicas').then(m => ({ default: m.Politicas || m.default })));
 const GuiaTamanhos = lazy(() => import('./pages/public/GuiaTamanhos').then(m => ({ default: m.GuiaTamanhos || m.default })));
 const Favoritos = lazy(() => import('./pages/public/Favoritos').then(m => ({ default: m.Favoritos || m.default })));
+const Brindes = lazy(() => import('./pages/public/Brindes').then(m => ({ default: m.Brindes || m.default })));
+const BrindeDetalhe = lazy(() => import('./pages/public/BrindeDetalhe').then(m => ({ default: m.BrindeDetalhe || m.default })));
 const NotFound = lazy(() => import('./pages/public/NotFound').then(m => ({ default: m.NotFound || m.default })));
 
 const Perfil = lazy(() => import('./pages/private/Perfil').then(m => ({ default: m.Perfil || m.default })));
@@ -78,6 +80,10 @@ export function AppRoutes() {
             <Route path="/politicas" element={<Politicas />} />
             <Route path="/guia-de-tamanhos" element={<GuiaTamanhos />} />
             <Route path="/favoritos" element={<Favoritos />} />
+
+            {/* ROTAS DE BRINDES & VALE-PRESENTE */}
+            <Route path="/brindes" element={<Brindes />} />
+            <Route path="/brindes/:id" element={<BrindeDetalhe />} />
 
             {/* ROTA 404 (NOT FOUND) */}
             <Route path="*" element={<NotFound />} />

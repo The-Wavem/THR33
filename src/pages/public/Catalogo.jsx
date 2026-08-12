@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Link, useSearchParams, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
@@ -36,95 +36,162 @@ const cardItemVariants = {
 };
 
 export function Catalogo() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { categorySlug } = useParams();
   const topRef = useRef(null);
 
   // Estados de Filtros Multi-Seleção e Busca
-  const [searchQuery, setSearchQuery] = useState(searchParams.get('search') || '');
+  const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({
-    categories: categorySlug ? [categorySlug] : searchParams.get('categoria') ? [searchParams.get('categoria')] : [],
-    fits: searchParams.get('modelagem') ? [searchParams.get('modelagem')] : searchParams.get('fit') ? [searchParams.get('fit')] : [],
-    drops: searchParams.get('drop') ? [searchParams.get('drop')] : [],
-    sizes: searchParams.get('tamanho') ? [searchParams.get('tamanho')] : searchParams.get('size') ? [searchParams.get('size')] : []
+    categories: [],
+    fits: [],
+    drops: [],
+    sizes: []
   });
 
   const [sortOrder, setSortOrder] = useState('newest');
-  
-  // Estados de Paginação & Itens por Página
   const [itemsPerPage, setItemsPerPage] = useState(6);
   const [currentPage, setCurrentPage] = useState(1);
-
-  // Estado de Carregamento Assíncrono com Skeleton
   const [isLoading, setIsLoading] = useState(false);
-
-  // Toggle do menu de filtros no mobile
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
-  // Sincronização inicial com URL
+  // 1. SINCRONIZAÇÃO: Ler parâmetros da URL e atualizar estados internos
   useEffect(() => {
-    const cat = categorySlug || searchParams.get('categoria') || '';
-    const fit = searchParams.get('modelagem') || searchParams.get('fit') || '';
-    const drop = searchParams.get('drop') || '';
-    const size = searchParams.get('tamanho') || searchParams.get('size') || '';
-    const query = searchParams.get('search') || '';
+    const catParam = categorySlug || searchParams.get('categoria') || '';
+    const fitParam = searchParams.get('fit') || searchParams.get('modelagem') || '';
+    const dropParam = searchParams.get('drop') || '';
+    const sizeParam = searchParams.get('tamanho') || searchParams.get('size') || '';
+    const searchParam = searchParams.get('search') || '';
+    const sortParam = searchParams.get('ordenar') || 'newest';
+    const pageParam = parseInt(searchParams.get('pagina'), 10) || 1;
+    const perPageParam = parseInt(searchParams.get('por_pagina'), 10) || 6;
 
-    if (cat || fit || drop || size || query) {
-      setFilters(prev => ({
-        ...prev,
-        categories: cat ? [cat] : prev.categories,
-        fits: fit ? [fit] : prev.fits,
-        drops: drop ? [drop] : prev.drops,
-        sizes: size ? [size] : prev.sizes
-      }));
-      if (query) setSearchQuery(query);
+    const newCategories = catParam ? catParam.split(',').filter(Boolean) : [];
+    const newFits = fitParam ? fitParam.split(',').filter(Boolean) : [];
+    const newDrops = dropParam ? dropParam.split(',').filter(Boolean) : [];
+    const newSizes = sizeParam ? sizeParam.split(',').filter(Boolean) : [];
+
+    setFilters({
+      categories: newCategories,
+      fits: newFits,
+      drops: newDrops,
+      sizes: newSizes
+    });
+    setSearchQuery(searchParam);
+    setSortOrder(sortParam);
+    setCurrentPage(pageParam);
+    setItemsPerPage(perPageParam);
+  }, [categorySlug, searchParams.toString()]);
+
+  // 2. HELPER: Atualiza a URL mantendo todos os parâmetros ativos
+  const applyUrlParams = useCallback((newFilters, newSearch, newSort, newPage, newPerPage) => {
+    const params = new URLSearchParams();
+
+    if (newFilters.categories && newFilters.categories.length > 0) {
+      params.set('categoria', newFilters.categories.join(','));
     }
-  }, [categorySlug, searchParams]);
+    if (newFilters.fits && newFilters.fits.length > 0) {
+      params.set('fit', newFilters.fits.join(','));
+    }
+    if (newFilters.drops && newFilters.drops.length > 0) {
+      params.set('drop', newFilters.drops.join(','));
+    }
+    if (newFilters.sizes && newFilters.sizes.length > 0) {
+      params.set('tamanho', newFilters.sizes.join(','));
+    }
+    if (newSearch && newSearch.trim()) {
+      params.set('search', newSearch.trim());
+    }
+    if (newSort && newSort !== 'newest') {
+      params.set('ordenar', newSort);
+    }
+    if (newPage && newPage > 1) {
+      params.set('pagina', String(newPage));
+    }
+    if (newPerPage && newPerPage !== 6) {
+      params.set('por_pagina', String(newPerPage));
+    }
+
+    setSearchParams(params, { replace: true });
+  }, [setSearchParams]);
+
+  // Handler de atualização de filtros vindo da FilterSidebar
+  const handleFiltersChange = (updater) => {
+    setFilters((prev) => {
+      const nextFilters = typeof updater === 'function' ? updater(prev) : updater;
+      applyUrlParams(nextFilters, searchQuery, sortOrder, 1, itemsPerPage);
+      return nextFilters;
+    });
+    setCurrentPage(1);
+  };
 
   // Simulação de carregamento assíncrono para paginação e filtros
   useEffect(() => {
     setIsLoading(true);
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 280);
+    }, 250);
     return () => clearTimeout(timer);
   }, [filters, searchQuery, itemsPerPage, sortOrder, currentPage]);
 
-  // Ao mudar filtros ou busca, volta para página 1
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filters, searchQuery, itemsPerPage, sortOrder]);
-
   const handleReset = () => {
-    setFilters({ categories: [], fits: [], drops: [], sizes: [] });
+    const emptyFilters = { categories: [], fits: [], drops: [], sizes: [] };
+    setFilters(emptyFilters);
     setSearchQuery('');
     setSortOrder('newest');
     setCurrentPage(1);
+    setSearchParams({}, { replace: true });
   };
 
   const handleSearchSubmit = (term) => {
     setSearchQuery(term);
+    setCurrentPage(1);
+    applyUrlParams(filters, term, sortOrder, 1, itemsPerPage);
   };
 
   const handleSearchClear = () => {
     setSearchQuery('');
+    applyUrlParams(filters, '', sortOrder, 1, itemsPerPage);
   };
 
-  // Remoções individuais de filtros
+  // Remoções individuais de filtros (chips)
   const removeCategory = (cat) => {
-    setFilters(prev => ({ ...prev, categories: (prev.categories || []).filter(c => c !== cat) }));
+    const updated = (filters.categories || []).filter(c => c !== cat);
+    const newFilters = { ...filters, categories: updated };
+    setFilters(newFilters);
+    applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
   };
 
   const removeFit = (fit) => {
-    setFilters(prev => ({ ...prev, fits: (prev.fits || []).filter(f => f !== fit) }));
+    const updated = (filters.fits || []).filter(f => f !== fit);
+    const newFilters = { ...filters, fits: updated };
+    setFilters(newFilters);
+    applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
   };
 
   const removeDrop = (drop) => {
-    setFilters(prev => ({ ...prev, drops: (prev.drops || []).filter(d => d !== drop) }));
+    const updated = (filters.drops || []).filter(d => d !== drop);
+    const newFilters = { ...filters, drops: updated };
+    setFilters(newFilters);
+    applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
   };
 
   const removeSize = (size) => {
-    setFilters(prev => ({ ...prev, sizes: (prev.sizes || []).filter(s => s !== size) }));
+    const updated = (filters.sizes || []).filter(s => s !== size);
+    const newFilters = { ...filters, sizes: updated };
+    setFilters(newFilters);
+    applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
+  };
+
+  const handleSortChange = (newOrder) => {
+    setSortOrder(newOrder);
+    applyUrlParams(filters, searchQuery, newOrder, currentPage, itemsPerPage);
+  };
+
+  const handlePerPageChange = (newPerPage) => {
+    setItemsPerPage(newPerPage);
+    setCurrentPage(1);
+    applyUrlParams(filters, searchQuery, sortOrder, 1, newPerPage);
   };
 
   // Motor de Filtragem e Ordenação Multi-Critério
@@ -140,15 +207,15 @@ export function Catalogo() {
       }
       // 2. Categorias (Multi-Seleção: OR)
       if (filters.categories && filters.categories.length > 0) {
-        if (!filters.categories.includes(product.category.toLowerCase())) return false;
+        if (!filters.categories.includes(product.category?.toLowerCase())) return false;
       }
       // 3. Modelagens (Multi-Seleção: OR)
       if (filters.fits && filters.fits.length > 0) {
-        if (!filters.fits.includes(product.fit.toLowerCase())) return false;
+        if (!filters.fits.includes(product.fit?.toLowerCase())) return false;
       }
       // 4. Drops (Multi-Seleção: OR)
       if (filters.drops && filters.drops.length > 0) {
-        if (!filters.drops.includes(product.drop.toLowerCase())) return false;
+        if (!filters.drops.includes(product.drop?.toLowerCase())) return false;
       }
       // 5. Tamanhos (Multi-Seleção: Se o produto tiver qualquer um dos tamanhos selecionados)
       if (filters.sizes && filters.sizes.length > 0) {
@@ -181,6 +248,7 @@ export function Catalogo() {
   const handlePageChange = (newPage) => {
     if (newPage >= 1 && newPage <= totalPages && newPage !== currentPage) {
       setCurrentPage(newPage);
+      applyUrlParams(filters, searchQuery, sortOrder, newPage, itemsPerPage);
 
       // Rolagem suave com offset para o topo da lista de produtos
       if (topRef.current) {
@@ -265,7 +333,7 @@ export function Catalogo() {
                 id="perPageSelect"
                 className={styles.selectInput}
                 value={itemsPerPage}
-                onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                onChange={(e) => handlePerPageChange(Number(e.target.value))}
               >
                 <option value={6}>6 ITENS</option>
                 <option value={12}>12 ITENS</option>
@@ -280,7 +348,7 @@ export function Catalogo() {
                 id="sortSelect" 
                 className={styles.selectInput}
                 value={sortOrder}
-                onChange={(e) => setSortOrder(e.target.value)}
+                onChange={(e) => handleSortChange(e.target.value)}
               >
                 <option value="newest">LANÇAMENTOS</option>
                 <option value="price-low">MENOR PREÇO</option>
@@ -357,7 +425,7 @@ export function Catalogo() {
         <div className={`${styles.sidebarWrapper} ${isMobileFilterOpen ? styles.sidebarMobileOpen : ''}`}>
           <FilterSidebar 
             filters={filters} 
-            setFilters={setFilters}
+            setFilters={handleFiltersChange} 
             onReset={handleReset} 
             searchQuery={searchQuery}
             onSearchSubmit={handleSearchSubmit}

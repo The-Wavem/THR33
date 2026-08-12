@@ -58,10 +58,13 @@
   transition: color var(--transition-fast);
   position: relative;
   padding: 0.5rem 0;
+  cursor: pointer;
+  z-index: 1105;
 }
 
 .link:hover,
-.active {
+.active,
+.linkDropdownActive {
   color: var(--text-primary);
 }
 
@@ -73,6 +76,16 @@
   width: 100%;
   height: 2px;
   background-color: var(--text-primary);
+}
+
+.linkDropdownActive:not(.active)::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: rgba(255, 255, 255, 0.4);
 }
 
 .actions {
@@ -91,10 +104,12 @@
   background: transparent;
   border: none;
   cursor: pointer;
+  z-index: 1105;
   transition: color var(--transition-fast), transform var(--transition-fast);
 }
 
-.actionBtn:hover {
+.actionBtn:hover,
+.profileBtnActive {
   color: var(--text-primary);
   transform: translateY(-1px);
 }
@@ -137,28 +152,23 @@
   width: 250px;
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.8);
   padding: 1.25rem;
   z-index: 1100;
-  animation: fadeIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   margin-top: 0.35rem;
+  transform-origin: top right;
 }
 
-/* Ponte Invisível de Hover (Hover Bridge) para evitar fechamento acidental */
+/* Ponte Invisível de Hover: somente preenche a fenda entre botão e dropdown */
 .profileDropdown::before {
   content: '';
   position: absolute;
-  top: -16px;
-  left: -20px;
-  right: -20px;
-  height: 18px;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 10px;
   background: transparent;
   pointer-events: auto;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 .dropdownContent {
@@ -210,16 +220,18 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 700;
   color: var(--text-secondary);
-  padding: 0.5rem 0;
+  padding: 0.45rem 0;
   letter-spacing: 0.5px;
-  transition: color var(--transition-fast);
+  text-decoration: none;
+  transition: color var(--transition-fast), transform var(--transition-fast);
 }
 
 .dropdownLink:hover {
   color: var(--text-primary);
+  transform: translateX(4px);
 }
 
 .primaryAuthBtn {
@@ -273,6 +285,107 @@
 
 .logoutBtn:hover {
   color: #ef4444;
+}
+
+/* ============================================================
+   POPOVER / DROPDOWN DO CATÁLOGO & CATEGORIAS
+   ============================================================ */
+.navItemWrapper {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.catalogDropdown {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  margin-left: -115px;
+  width: 230px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.8);
+  padding: 1.25rem;
+  z-index: 1100;
+  margin-top: 0.35rem;
+  transform-origin: top center;
+}
+
+/* Ponte de Hover: preenche apenas a lacuna vertical entre o link e o popover sem sobrepor o texto */
+.catalogDropdown::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 10px;
+  background: transparent;
+  pointer-events: auto;
+}
+
+.dropdownMainHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-primary);
+  text-decoration: none;
+  transition: color var(--transition-fast), transform var(--transition-fast);
+}
+
+.dropdownMainHeader:hover {
+  color: var(--text-secondary);
+  transform: translateX(2px);
+}
+
+.categoryHeading {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  margin-bottom: 0.4rem;
+  display: block;
+}
+
+.highlightDropdownLink {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.6rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  margin-top: 0.25rem;
+  transition: all var(--transition-fast);
+}
+
+.highlightDropdownLink:hover {
+  border-color: var(--border-active);
+  background-color: rgba(255, 255, 255, 0.08);
+}
+
+.highlightLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.miniBadge {
+  font-size: 0.55rem;
+  font-weight: 900;
+  letter-spacing: 1px;
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  padding: 0.15rem 0.35rem;
+  border-radius: 2px;
 }
 
 /* Responsive / Mobile */

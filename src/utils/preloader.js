@@ -12,6 +12,7 @@ const routeLoaders = {
   '/politicas': () => import('../pages/public/Politicas'),
   '/guia-de-tamanhos': () => import('../pages/public/GuiaTamanhos'),
   '/favoritos': () => import('../pages/public/Favoritos'),
+  '/brindes': () => import('../pages/public/Brindes'),
   '/perfil': () => import('../pages/private/Perfil'),
   '/minha-conta': () => import('../pages/private/Perfil'),
   '/meus-pedidos': () => import('../pages/private/Perfil'),
