@@ -61,7 +61,9 @@ export function PublicLayout({
       />
 
       <main className={styles.contentArea}>
-        <Outlet />
+        <div key={location.pathname} className={styles.pageMotionWrapper}>
+          <Outlet />
+        </div>
       </main>
 
       <Footer />

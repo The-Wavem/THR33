@@ -28,7 +28,7 @@ export function ScrollToTop() {
         });
       }
     }
-  }, [pathname, search, hash]);
+  }, [pathname, hash]);
 
   return null;
 }
