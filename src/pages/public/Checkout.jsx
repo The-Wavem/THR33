@@ -19,7 +19,10 @@ import {
   Plus,
   AlertCircle,
   Loader2,
-  CheckCircle
+  Edit3,
+  UserCheck,
+  ExternalLink,
+  Zap
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { 
@@ -27,15 +30,9 @@ import {
   validateEmail, 
   validatePhone, 
   validateCEP,
-  validateExpiryDate, 
-  validateCVC, 
-  validateCardNumber, 
   maskCPF, 
   maskPhone, 
-  maskCEP, 
-  maskCardNumber, 
-  maskExpiry,
-  getCardBrand
+  maskCEP
 } from '../../utils/validators';
 import { fetchAddressByCep } from '../../services/viaCepService';
 import styles from './Checkout.module.css';
@@ -77,10 +74,23 @@ export function Checkout({ user, onOpenAuthModal }) {
   const [clientData, setClientData] = useState({
     name: user?.name || 'Weslley Kampa',
     email: user?.email || 'cliente@thr33.com',
-    cpf: '123.456.789-00',
-    phone: '(41) 99888-7766'
+    cpf: '',
+    phone: user?.phone || '(41) 99888-7766'
   });
+  const [isEditingAccountData, setIsEditingAccountData] = useState(false);
   const [clientErrors, setClientErrors] = useState({});
+
+  // Sincroniza se o usuário logado mudar
+  useEffect(() => {
+    if (user) {
+      setClientData(prev => ({
+        ...prev,
+        name: user.name || prev.name,
+        email: user.email || prev.email,
+        phone: user.phone || prev.phone
+      }));
+    }
+  }, [user]);
 
   // ESTADOS DE ENDEREÇO & FRETE (ETAPA 2)
   const [savedAddresses, setSavedAddresses] = useState(INITIAL_SAVED_ADDRESSES);
@@ -107,18 +117,6 @@ export function Checkout({ user, onOpenAuthModal }) {
     { id: 'retirada', name: 'Retirada no Ateliê (Curitiba)', deadline: 'Disponível em 24h', price: 0 }
   ]);
   const [selectedShippingMethod, setSelectedShippingMethod] = useState('sedex');
-
-  // ESTADOS DE PAGAMENTO (ETAPA 3)
-  const [paymentMethod, setPaymentMethod] = useState('pix'); // 'pix', 'credit', 'boleto'
-  const [cardData, setCardData] = useState({
-    number: '',
-    name: '',
-    expiry: '',
-    cvc: '',
-    installments: '1'
-  });
-  const [cardErrors, setCardErrors] = useState({});
-  const [cardBrand, setCardBrand] = useState('Cartão');
 
   // PROCESSAMENTO FINAL E SUCESSO
   const [isProcessing, setIsProcessing] = useState(false);
@@ -176,7 +174,7 @@ export function Checkout({ user, onOpenAuthModal }) {
       errors.email = 'Informe um e-mail válido para confirmação.';
     }
     if (!validateCPF(clientData.cpf)) {
-      errors.cpf = 'CPF inválido. Verifique os dígitos digitados.';
+      errors.cpf = 'Informe um CPF válido (11 dígitos).';
     }
     if (!validatePhone(clientData.phone)) {
       errors.phone = 'Telefone inválido com DDD (10 ou 11 dígitos).';
@@ -189,6 +187,7 @@ export function Checkout({ user, onOpenAuthModal }) {
   const handleNextToStep2 = (e) => {
     e.preventDefault();
     if (validateStep1()) {
+      setIsEditingAccountData(false);
       setCurrentStep(2);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -203,7 +202,6 @@ export function Checkout({ user, onOpenAuthModal }) {
 
     if (name === 'cep') {
       formatted = maskCEP(value);
-      // Auto-busca quando completa 8 dígitos do CEP
       const clean = formatted.replace(/\D/g, '');
       if (clean.length === 8) {
         triggerCepLookup(clean);
@@ -289,51 +287,10 @@ export function Checkout({ user, onOpenAuthModal }) {
   };
 
   // -------------------------------------------------------------
-  // HANDLERS ETAPA 3: PAGAMENTO TRANSPARENTE PAGBANK
+  // HANDLERS ETAPA 3: CONEXÃO COM GATEWAY PAGBANK
   // -------------------------------------------------------------
-  const handleCardChange = (e) => {
-    const { name, value } = e.target;
-    let formatted = value;
-
-    if (name === 'number') {
-      formatted = maskCardNumber(value);
-      setCardBrand(getCardBrand(value));
-    }
-    if (name === 'expiry') formatted = maskExpiry(value);
-    if (name === 'cvc') formatted = value.replace(/\D/g, '').slice(0, 4);
-
-    setCardData(prev => ({ ...prev, [name]: formatted }));
-    if (cardErrors[name]) {
-      setCardErrors(prev => ({ ...prev, [name]: null }));
-    }
-  };
-
-  const validateCard = () => {
-    const errors = {};
-    if (!validateCardNumber(cardData.number)) {
-      errors.number = 'Número do cartão inválido.';
-    }
-    if (!cardData.name.trim() || cardData.name.trim().length < 3) {
-      errors.name = 'Nome impresso obrigatório.';
-    }
-    if (!validateExpiryDate(cardData.expiry)) {
-      errors.expiry = 'Data de validade inválida (MM/AA).';
-    }
-    if (!validateCVC(cardData.cvc)) {
-      errors.cvc = 'CVC inválido (3 ou 4 dígitos).';
-    }
-
-    setCardErrors(errors);
-    return Object.keys(errors).length === 0;
-  };
-
-  const handleCompleteOrder = (e) => {
+  const handleProceedToPagBank = (e) => {
     e.preventDefault();
-
-    if (paymentMethod === 'credit') {
-      if (!validateCard()) return;
-    }
-
     setIsProcessing(true);
 
     setTimeout(() => {
@@ -343,7 +300,7 @@ export function Checkout({ user, onOpenAuthModal }) {
       setCurrentStep(4);
       clearCart();
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 1200);
+    }, 1400);
   };
 
   const handleCopyPix = () => {
@@ -360,11 +317,10 @@ export function Checkout({ user, onOpenAuthModal }) {
     }
   };
 
-  // Obtém o endereço atualmente selecionado
   const activeAddress = savedAddresses.find(a => a.id === selectedAddressId) || savedAddresses[0];
 
   // -------------------------------------------------------------
-  // ETAPA 4: SUCESSO / PEDIDO CONFIRMADO
+  // ETAPA 4: SUCESSO / PEDIDO CONFIRMADO VIA PAGBANK
   // -------------------------------------------------------------
   if (currentStep === 4) {
     return (
@@ -379,74 +335,45 @@ export function Checkout({ user, onOpenAuthModal }) {
             <Check size={32} />
           </div>
           <span className={styles.orderNumberBadge}>PEDIDO {orderNumber}</span>
-          <h1 className={styles.successTitle}>PEDIDO CONFIRMADO!</h1>
+          <h1 className={styles.successTitle}>PEDIDO GERADO COM SUCESSO!</h1>
           <p className={styles.successText}>
-            Obrigado por comprar na THR33. Enviamos o comprovante e os detalhes de rastreamento para <strong>{clientData.email}</strong>.
+            Obrigado por comprar na THR33. Enviamos os detalhes do pedido e instruções de pagamento para <strong>{clientData.email}</strong>.
           </p>
 
-          {/* PIX PAGBANK */}
-          {paymentMethod === 'pix' && (
-            <div className={styles.pixBox}>
-              <div className={styles.pixHeader}>
-                <QrCode size={18} />
-                <strong>PAGAMENTO PIX (APROVAÇÃO INSTANTÂNEA)</strong>
-              </div>
-              <p className={styles.pixInstruction}>
-                Escaneie o QR Code abaixo no app do seu banco ou copie a chave Pix Copia e Cola:
-              </p>
-              
-              <div className={styles.qrCodeContainer}>
-                <div className={styles.qrCodeGraphic}>
-                  <div className={styles.qrCornerTopLeft} />
-                  <div className={styles.qrCornerTopRight} />
-                  <div className={styles.qrCornerBottomLeft} />
-                  <span className={styles.qrCodeText}>[ QR CODE PAGBANK ]</span>
-                  <span className={styles.qrCodeValue}>R$ {total.toFixed(2)}</span>
-                </div>
-              </div>
-
-              <div className={styles.pixCopyArea}>
-                <input 
-                  type="text" 
-                  readOnly 
-                  value="00020126580014br.gov.bcb.pix0136thr33-atelie-pagbank-curitiba@thr33.com..." 
-                  className={styles.pixInput} 
-                />
-                <button type="button" onClick={handleCopyPix} className={styles.copyBtn}>
-                  {copiedPix ? <Check size={14} /> : <Copy size={14} />}
-                  <span>{copiedPix ? 'COPIADO!' : 'COPIAR CHAVE'}</span>
-                </button>
-              </div>
-              <span className={styles.pixTimerText}>O código expira em 15 minutos.</span>
+          {/* PIX / GATEWAY PAGBANK CONFIRMAÇÃO */}
+          <div className={styles.pixBox}>
+            <div className={styles.pixHeader}>
+              <QrCode size={18} />
+              <strong>PAGUE COM PIX OU ABRA O LINK PAGBANK</strong>
             </div>
-          )}
-
-          {/* CARTÃO PAGBANK */}
-          {paymentMethod === 'credit' && (
-            <div className={styles.approvedCardBox}>
-              <CheckCircle2 size={24} color="#22c55e" />
-              <div>
-                <strong>PAGAMENTO APROVADO NO CARTÃO</strong>
-                <p>Transação processada com sucesso via PagBank em {cardData.installments}x sem juros.</p>
+            <p className={styles.pixInstruction}>
+              Escaneie o QR Code abaixo no app do seu banco ou use o código Pix Copia e Cola:
+            </p>
+            
+            <div className={styles.qrCodeContainer}>
+              <div className={styles.qrCodeGraphic}>
+                <div className={styles.qrCornerTopLeft} />
+                <div className={styles.qrCornerTopRight} />
+                <div className={styles.qrCornerBottomLeft} />
+                <span className={styles.qrCodeText}>[ QR CODE PAGBANK ]</span>
+                <span className={styles.qrCodeValue}>R$ {total.toFixed(2)}</span>
               </div>
             </div>
-          )}
 
-          {/* BOLETO PAGBANK */}
-          {paymentMethod === 'boleto' && (
-            <div className={styles.pixBox}>
-              <div className={styles.pixHeader}>
-                <FileText size={18} />
-                <strong>BOLETO BANCÁRIO GERADO</strong>
-              </div>
-              <p className={styles.pixInstruction}>
-                O boleto foi emitido com vencimento para 2 dias úteis. A compensação ocorre em até 48 horas.
-              </p>
-              <button type="button" onClick={() => alert('Boleto aberto para impressão.')} className={styles.primaryBtn}>
-                VISUALIZAR / IMPRIMIR BOLETO
+            <div className={styles.pixCopyArea}>
+              <input 
+                type="text" 
+                readOnly 
+                value="00020126580014br.gov.bcb.pix0136thr33-atelie-pagbank-curitiba@thr33.com..." 
+                className={styles.pixInput} 
+              />
+              <button type="button" onClick={handleCopyPix} className={styles.copyBtn}>
+                {copiedPix ? <Check size={14} /> : <Copy size={14} />}
+                <span>{copiedPix ? 'COPIADO!' : 'COPIAR CHAVE'}</span>
               </button>
             </div>
-          )}
+            <span className={styles.pixTimerText}>O código Pix expira em 15 minutos.</span>
+          </div>
 
           <div className={styles.successActions}>
             <Link to="/" className={styles.primaryBtn}>
@@ -504,7 +431,7 @@ export function Checkout({ user, onOpenAuthModal }) {
             onClick={() => { if (validateStep1()) setCurrentStep(3); }}
           >
             <span className={styles.stepNum}>3</span>
-            <span className={styles.stepName}>PAGAMENTO</span>
+            <span className={styles.stepName}>PAGAMENTO PAGBANK</span>
           </button>
         </div>
       </header>
@@ -530,35 +457,90 @@ export function Checkout({ user, onOpenAuthModal }) {
                   <h2 className={styles.stepCardTitle}>DADOS DE IDENTIFICAÇÃO</h2>
                 </div>
 
-                <div className={styles.fieldsGrid}>
-                  <div className={styles.fieldWrapper}>
-                    <label className={styles.fieldLabel}>Nome Completo *</label>
-                    <input 
-                      type="text" 
-                      name="name" 
-                      placeholder="Ex: Weslley Kampa"
-                      value={clientData.name} 
-                      onChange={handleClientChange} 
-                      className={clientErrors.name ? styles.inputError : ''}
-                    />
-                    {clientErrors.name && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.name}</span>}
+                {/* DADOS DA CONTA DO CLIENTE (BLOQUEADOS COM OPÇÃO DE EDITAR) */}
+                <div className={styles.accountDataBlock}>
+                  <div className={styles.accountDataHeader}>
+                    <div className={styles.accountDataBadge}>
+                      <UserCheck size={14} />
+                      <span>CONTA VERIFICADA ATELIÊ</span>
+                    </div>
+
+                    <button 
+                      type="button"
+                      onClick={() => setIsEditingAccountData(!isEditingAccountData)}
+                      className={styles.editDataBtn}
+                    >
+                      <Edit3 size={13} />
+                      <span>{isEditingAccountData ? 'Concluir Edição' : 'Editar Dados'}</span>
+                    </button>
                   </div>
 
-                  <div className={styles.fieldWrapper}>
-                    <label className={styles.fieldLabel}>E-mail para Confirmação *</label>
-                    <input 
-                      type="email" 
-                      name="email" 
-                      placeholder="seuemail@exemplo.com"
-                      value={clientData.email} 
-                      onChange={handleClientChange} 
-                      className={clientErrors.email ? styles.inputError : ''}
-                    />
-                    {clientErrors.email && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.email}</span>}
-                  </div>
+                  {!isEditingAccountData ? (
+                    /* VISUAL BLOQUEADO DOS DADOS CADASTRADOS */
+                    <div className={styles.lockedDataGrid}>
+                      <div className={styles.lockedItem}>
+                        <span className={styles.lockedLabel}>NOME</span>
+                        <strong className={styles.lockedValue}>{clientData.name}</strong>
+                      </div>
+                      <div className={styles.lockedItem}>
+                        <span className={styles.lockedLabel}>E-MAIL</span>
+                        <strong className={styles.lockedValue}>{clientData.email}</strong>
+                      </div>
+                      <div className={styles.lockedItem}>
+                        <span className={styles.lockedLabel}>TELEFONE / WHATSAPP</span>
+                        <strong className={styles.lockedValue}>{clientData.phone}</strong>
+                      </div>
+                    </div>
+                  ) : (
+                    /* CAMPOS DESBLOQUEADOS PARA EDIÇÃO */
+                    <div className={styles.fieldsGrid}>
+                      <div className={styles.fieldWrapper}>
+                        <label className={styles.fieldLabel}>Nome Completo *</label>
+                        <input 
+                          type="text" 
+                          name="name" 
+                          value={clientData.name} 
+                          onChange={handleClientChange} 
+                          className={clientErrors.name ? styles.inputError : ''}
+                        />
+                        {clientErrors.name && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.name}</span>}
+                      </div>
 
+                      <div className={styles.fieldWrapper}>
+                        <label className={styles.fieldLabel}>E-mail *</label>
+                        <input 
+                          type="email" 
+                          name="email" 
+                          value={clientData.email} 
+                          onChange={handleClientChange} 
+                          className={clientErrors.email ? styles.inputError : ''}
+                        />
+                        {clientErrors.email && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.email}</span>}
+                      </div>
+
+                      <div className={styles.fieldWrapper}>
+                        <label className={styles.fieldLabel}>Telefone / WhatsApp *</label>
+                        <input 
+                          type="text" 
+                          name="phone" 
+                          maxLength={15}
+                          value={clientData.phone} 
+                          onChange={handleClientChange} 
+                          className={clientErrors.phone ? styles.inputError : ''}
+                        />
+                        {clientErrors.phone && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.phone}</span>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* CPF (SEMPRE ABERTO PARA DIGITAÇÃO / VALIDAÇÃO NA COMPRA) */}
+                <div className={styles.cpfEntrySection}>
                   <div className={styles.fieldWrapper}>
-                    <label className={styles.fieldLabel}>CPF (Validação Oficial) *</label>
+                    <div className={styles.labelWithBadge}>
+                      <label className={styles.fieldLabel}>CPF DO TITULAR DA COMPRA *</label>
+                      <span className={styles.requiredBadge}>Obrigatório para NF e PagBank</span>
+                    </div>
                     <input 
                       type="text" 
                       name="cpf" 
@@ -567,22 +549,9 @@ export function Checkout({ user, onOpenAuthModal }) {
                       value={clientData.cpf} 
                       onChange={handleClientChange} 
                       className={clientErrors.cpf ? styles.inputError : ''}
+                      autoFocus
                     />
                     {clientErrors.cpf && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.cpf}</span>}
-                  </div>
-
-                  <div className={styles.fieldWrapper}>
-                    <label className={styles.fieldLabel}>Telefone / WhatsApp *</label>
-                    <input 
-                      type="text" 
-                      name="phone" 
-                      placeholder="(41) 90000-0000"
-                      maxLength={15}
-                      value={clientData.phone} 
-                      onChange={handleClientChange} 
-                      className={clientErrors.phone ? styles.inputError : ''}
-                    />
-                    {clientErrors.phone && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.phone}</span>}
                   </div>
                 </div>
 
@@ -815,7 +784,7 @@ export function Checkout({ user, onOpenAuthModal }) {
             )}
 
             {/* --------------------------------------------------------
-                ETAPA 3: PAGAMENTO TRANSPARENTE PAGBANK
+                ETAPA 3: PORTAL DE PAGAMENTO SEGURO (PAGBANK)
                 -------------------------------------------------------- */}
             {currentStep === 3 && (
               <motion.section 
@@ -828,7 +797,7 @@ export function Checkout({ user, onOpenAuthModal }) {
               >
                 <div className={styles.stepCardHeader}>
                   <span className={styles.stepCardBadge}>ETAPA 03</span>
-                  <h2 className={styles.stepCardTitle}>FORMA DE PAGAMENTO (PAGBANK)</h2>
+                  <h2 className={styles.stepCardTitle}>PAGAMENTO SEGURO (PAGBANK)</h2>
                 </div>
 
                 {/* Resumo do Destino */}
@@ -840,136 +809,38 @@ export function Checkout({ user, onOpenAuthModal }) {
                   <button type="button" onClick={() => setCurrentStep(2)} className={styles.changeLink}>Alterar</button>
                 </div>
 
-                {/* ABAS DE PAGAMENTO */}
-                <div className={styles.paymentTabs}>
-                  <button 
-                    type="button" 
-                    className={`${styles.tabBtn} ${paymentMethod === 'pix' ? styles.activeTab : ''}`}
-                    onClick={() => setPaymentMethod('pix')}
-                  >
-                    <QrCode size={16} />
-                    <span>PIX (INSTANTÂNEO)</span>
-                  </button>
-                  
-                  <button 
-                    type="button" 
-                    className={`${styles.tabBtn} ${paymentMethod === 'credit' ? styles.activeTab : ''}`}
-                    onClick={() => setPaymentMethod('credit')}
-                  >
-                    <CreditCard size={16} />
-                    <span>CARTÃO DE CRÉDITO</span>
-                  </button>
+                {/* CARD PRINCIPAL DO GATEWAY PAGBANK */}
+                <div className={styles.pagBankGatewayCard}>
+                  <div className={styles.pagBankHeader}>
+                    <div className={styles.pagBankBrandGroup}>
+                      <span className={styles.pagBankLogo}>PAGBANK</span>
+                      <span className={styles.pagBankBadge}>GATEWAY OFICIAL</span>
+                    </div>
+                    <div className={styles.pagBankSecureTag}>
+                      <ShieldCheck size={14} color="#4ade80" />
+                      <span>CRIPTOGRAFIA 256-BIT</span>
+                    </div>
+                  </div>
 
-                  <button 
-                    type="button" 
-                    className={`${styles.tabBtn} ${paymentMethod === 'boleto' ? styles.activeTab : ''}`}
-                    onClick={() => setPaymentMethod('boleto')}
-                  >
-                    <FileText size={16} />
-                    <span>BOLETO BANCÁRIO</span>
-                  </button>
+                  <p className={styles.pagBankDesc}>
+                    Ao clicar no botão de confirmação, você será conectado ao ambiente seguro do <strong>PagBank</strong> para concluir seu pagamento com total proteção.
+                  </p>
+
+                  <div className={styles.pagBankMethodsList}>
+                    <div className={styles.methodPill}>
+                      <Zap size={14} />
+                      <span><strong>PIX</strong> (Aprovação na hora)</span>
+                    </div>
+                    <div className={styles.methodPill}>
+                      <CreditCard size={14} />
+                      <span><strong>Cartão de Crédito</strong> (em até 3x sem juros)</span>
+                    </div>
+                    <div className={styles.methodPill}>
+                      <FileText size={14} />
+                      <span><strong>Boleto Bancário</strong></span>
+                    </div>
+                  </div>
                 </div>
-
-                {/* PIX */}
-                {paymentMethod === 'pix' && (
-                  <div className={styles.paymentInfoNote}>
-                    <div className={styles.noteTitleRow}>
-                      <QrCode size={16} />
-                      <strong>PIX COM APROVAÇÃO IMEDIATA VIA PAGBANK</strong>
-                    </div>
-                    <p>O QR Code e o código Pix Copia e Cola serão gerados imediatamente ao finalizar o pedido. Aprovação 24/7 sem taxas extras.</p>
-                  </div>
-                )}
-
-                {/* CARTÃO DE CRÉDITO */}
-                {paymentMethod === 'credit' && (
-                  <div className={styles.cardFields}>
-                    <div className={styles.fieldWrapper}>
-                      <div className={styles.cardLabelRow}>
-                        <label className={styles.fieldLabel}>Número do Cartão *</label>
-                        <span className={styles.cardBrandBadge}>{cardBrand}</span>
-                      </div>
-                      <input 
-                        type="text" 
-                        name="number" 
-                        placeholder="0000 0000 0000 0000"
-                        maxLength={19}
-                        value={cardData.number} 
-                        onChange={handleCardChange} 
-                        className={cardErrors.number ? styles.inputError : ''}
-                      />
-                      {cardErrors.number && <span className={styles.errorText}><AlertCircle size={12} /> {cardErrors.number}</span>}
-                    </div>
-
-                    <div className={styles.fieldWrapper}>
-                      <label className={styles.fieldLabel}>Nome Impresso no Cartão *</label>
-                      <input 
-                        type="text" 
-                        name="name" 
-                        placeholder="COMO IMPRESSO NO CARTÃO"
-                        value={cardData.name} 
-                        onChange={handleCardChange} 
-                        className={cardErrors.name ? styles.inputError : ''}
-                      />
-                      {cardErrors.name && <span className={styles.errorText}><AlertCircle size={12} /> {cardErrors.name}</span>}
-                    </div>
-
-                    <div className={styles.cardTwoCols}>
-                      <div className={styles.fieldWrapper}>
-                        <label className={styles.fieldLabel}>Validade (MM/AA) *</label>
-                        <input 
-                          type="text" 
-                          name="expiry" 
-                          placeholder="MM/AA"
-                          maxLength={5}
-                          value={cardData.expiry} 
-                          onChange={handleCardChange} 
-                          className={cardErrors.expiry ? styles.inputError : ''}
-                        />
-                        {cardErrors.expiry && <span className={styles.errorText}><AlertCircle size={12} /> {cardErrors.expiry}</span>}
-                      </div>
-
-                      <div className={styles.fieldWrapper}>
-                        <label className={styles.fieldLabel}>CVC / Código de Segurança *</label>
-                        <input 
-                          type="text" 
-                          name="cvc" 
-                          placeholder="123"
-                          maxLength={4}
-                          value={cardData.cvc} 
-                          onChange={handleCardChange} 
-                          className={cardErrors.cvc ? styles.inputError : ''}
-                        />
-                        {cardErrors.cvc && <span className={styles.errorText}><AlertCircle size={12} /> {cardErrors.cvc}</span>}
-                      </div>
-                    </div>
-
-                    <div className={styles.fieldWrapper}>
-                      <label className={styles.fieldLabel}>Parcelamento PagBank Sem Juros</label>
-                      <select 
-                        name="installments" 
-                        value={cardData.installments} 
-                        onChange={handleCardChange} 
-                        className={styles.selectInput}
-                      >
-                        <option value="1">1x de R$ {total.toFixed(2)} sem juros</option>
-                        <option value="2">2x de R$ {(total / 2).toFixed(2)} sem juros</option>
-                        <option value="3">3x de R$ {(total / 3).toFixed(2)} sem juros</option>
-                      </select>
-                    </div>
-                  </div>
-                )}
-
-                {/* BOLETO */}
-                {paymentMethod === 'boleto' && (
-                  <div className={styles.paymentInfoNote}>
-                    <div className={styles.noteTitleRow}>
-                      <FileText size={16} />
-                      <strong>BOLETO BANCÁRIO PAGBANK</strong>
-                    </div>
-                    <p>O boleto será emitido com vencimento para 2 dias úteis. A compensação ocorre em até 48 horas úteis.</p>
-                  </div>
-                )}
 
                 <div className={styles.stepActionsBetween}>
                   <button type="button" onClick={() => setCurrentStep(2)} className={styles.secondaryBtn}>
@@ -978,11 +849,21 @@ export function Checkout({ user, onOpenAuthModal }) {
                   </button>
                   <button 
                     type="button" 
-                    onClick={handleCompleteOrder} 
+                    onClick={handleProceedToPagBank} 
                     className={styles.primaryBtn}
                     disabled={isProcessing}
                   >
-                    {isProcessing ? 'PROCESSANDO...' : `CONCLUIR COMPRA (R$ ${total.toFixed(2)})`}
+                    {isProcessing ? (
+                      <>
+                        <Loader2 size={16} className={styles.spinner} />
+                        <span>CONECTANDO COM PAGBANK...</span>
+                      </>
+                    ) : (
+                      <>
+                        <span>PAGAR COM PAGBANK (R$ {total.toFixed(2)})</span>
+                        <ArrowRight size={15} />
+                      </>
+                    )}
                   </button>
                 </div>
               </motion.section>
