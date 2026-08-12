@@ -18,6 +18,9 @@ import {
   ShieldAlert,
   AlertCircle,
   Eye,
+  EyeOff,
+  Lock,
+  KeyRound,
   Truck,
   CreditCard,
   Tag,
@@ -27,10 +30,19 @@ import {
   XCircle,
   HelpCircle as QuestionIcon,
   MessageSquareWarning,
-  Send
+  Send,
+  ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { maskCPF, maskPhone, maskCEP, validateCPF, validateEmail, validatePhone } from '../../utils/validators';
+import { 
+  maskCPF, 
+  maskPhone, 
+  maskCEP, 
+  validateCPF, 
+  validateEmail, 
+  validatePhone,
+  validatePasswordStrength 
+} from '../../utils/validators';
 import { fetchAddressByCep } from '../../services/viaCepService';
 import styles from './Perfil.module.css';
 
@@ -44,7 +56,7 @@ const ORDER_STEPS = [
 ];
 
 export function Perfil({ defaultTab = 'pedidos' }) {
-  const { user, logout } = useAuth();
+  const { user, logout, changePassword } = useAuth();
   const [activeTab, setActiveTab] = useState(defaultTab); // 'dados', 'enderecos', 'pedidos', 'seguranca'
   
   // DADOS DO USUÁRIO
@@ -59,6 +71,19 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   const [isEditingData, setIsEditingData] = useState(false);
   const [userErrors, setUserErrors] = useState({});
   const [saveSuccessFeedback, setSaveSuccessFeedback] = useState(false);
+
+  // DADOS DE ACESSO (SENHA)
+  const [isEditingPassword, setIsEditingPassword] = useState(false);
+  const [passwordData, setPasswordData] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  });
+  const [passwordErrors, setPasswordErrors] = useState({});
+  const [passwordSuccessFeedback, setPasswordSuccessFeedback] = useState(false);
+  const [showCurrentPass, setShowCurrentPass] = useState(false);
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [showConfirmPass, setShowConfirmPass] = useState(false);
 
   // ENDEREÇOS DO USUÁRIO
   const [addresses, setAddresses] = useState([
@@ -300,6 +325,57 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     setIsEditingData(false);
     setSaveSuccessFeedback(true);
     setTimeout(() => setSaveSuccessFeedback(false), 3000);
+  };
+
+  // -------------------------------------------------------------
+  // HANDLERS: DADOS DE ACESSO & ALTERAÇÃO DE SENHA
+  // -------------------------------------------------------------
+  const handlePasswordChange = (e) => {
+    const { name, value } = e.target;
+    setPasswordData(prev => ({ ...prev, [name]: value }));
+    if (passwordErrors[name]) {
+      setPasswordErrors(prev => ({ ...prev, [name]: null }));
+    }
+  };
+
+  const handlePasswordSubmit = (e) => {
+    e.preventDefault();
+    const errors = {};
+
+    if (!passwordData.currentPassword.trim()) {
+      errors.currentPassword = 'Por favor, informe sua senha atual para confirmar.';
+    }
+
+    const strength = validatePasswordStrength(passwordData.newPassword);
+    if (!strength.isValid) {
+      errors.newPassword = strength.message;
+    } else if (passwordData.newPassword === passwordData.currentPassword) {
+      errors.newPassword = 'A nova senha deve ser diferente da senha atual.';
+    }
+
+    if (passwordData.newPassword !== passwordData.confirmPassword) {
+      errors.confirmPassword = 'A confirmação de senha não confere com a nova senha.';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setPasswordErrors(errors);
+      return;
+    }
+
+    // Validação com o AuthContext
+    if (changePassword) {
+      const res = changePassword(passwordData.currentPassword, passwordData.newPassword);
+      if (!res.success) {
+        setPasswordErrors({ currentPassword: res.error });
+        return;
+      }
+    }
+
+    setPasswordErrors({});
+    setIsEditingPassword(false);
+    setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    setPasswordSuccessFeedback(true);
+    setTimeout(() => setPasswordSuccessFeedback(false), 3000);
   };
 
   // -------------------------------------------------------------
@@ -651,6 +727,189 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                   </div>
                 )}
               </form>
+
+              {/* CARD DE DADOS DE ACESSO (SENHA) */}
+              <div className={styles.subPanel}>
+                <div className={styles.panelHeader}>
+                  <div className={styles.panelTitleGroup}>
+                    <Lock size={16} />
+                    <h3 className={styles.subPanelTitle}>DADOS DE ACESSO & SEGURANÇA</h3>
+                  </div>
+
+                  {passwordSuccessFeedback && (
+                    <span className={styles.successBadge}>
+                      <Check size={14} /> Senha alterada com sucesso!
+                    </span>
+                  )}
+
+                  {!isEditingPassword && (
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        setIsEditingPassword(true);
+                        setPasswordErrors({});
+                        setPasswordData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+                      }} 
+                      className={styles.editBtn}
+                    >
+                      <KeyRound size={14} />
+                      <span>ALTERAR SENHA</span>
+                    </button>
+                  )}
+                </div>
+
+                {!isEditingPassword ? (
+                  /* VISUAL BLOQUEADO DA SENHA */
+                  <div className={styles.formGrid}>
+                    <div className={styles.inputField}>
+                      <label>Senha de Acesso</label>
+                      <input 
+                        type="text" 
+                        value="••••••••••••" 
+                        disabled 
+                        className={styles.inputLocked} 
+                      />
+                    </div>
+                    <div className={styles.inputField}>
+                      <label>Proteção de Acesso</label>
+                      <div className={styles.securityStatusBox}>
+                        <ShieldCheck size={15} color="#4ade80" />
+                        <span>Autenticação Criptografada Ativa</span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* FORMULÁRIO DE ALTERAÇÃO DE SENHA */
+                  <form onSubmit={handlePasswordSubmit} className={styles.passwordForm}>
+                    <div className={styles.inputField}>
+                      <label>Senha Atual *</label>
+                      <div className={styles.passwordInputWrapper}>
+                        <input 
+                          type={showCurrentPass ? "text" : "password"} 
+                          name="currentPassword"
+                          placeholder="Digite sua senha atual para confirmar"
+                          value={passwordData.currentPassword}
+                          onChange={handlePasswordChange}
+                          className={passwordErrors.currentPassword ? styles.inputError : ''}
+                          required 
+                        />
+                        <button 
+                          type="button" 
+                          onClick={() => setShowCurrentPass(!showCurrentPass)}
+                          className={styles.togglePasswordBtn}
+                          aria-label={showCurrentPass ? "Ocultar senha" : "Ver senha"}
+                        >
+                          {showCurrentPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                        </button>
+                      </div>
+                      {passwordErrors.currentPassword && (
+                        <span className={styles.errorText}>
+                          <AlertCircle size={12} /> {passwordErrors.currentPassword}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className={styles.formGrid}>
+                      <div className={styles.inputField}>
+                        <label>Nova Senha *</label>
+                        <div className={styles.passwordInputWrapper}>
+                          <input 
+                            type={showNewPass ? "text" : "password"} 
+                            name="newPassword"
+                            placeholder="Mínimo 8 caracteres, maiúscula e número"
+                            value={passwordData.newPassword}
+                            onChange={handlePasswordChange}
+                            className={passwordErrors.newPassword ? styles.inputError : ''}
+                            required 
+                          />
+                          <button 
+                            type="button" 
+                            onClick={() => setShowNewPass(!showNewPass)}
+                            className={styles.togglePasswordBtn}
+                            aria-label={showNewPass ? "Ocultar senha" : "Ver senha"}
+                          >
+                            {showNewPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        </div>
+                        {passwordErrors.newPassword && (
+                          <span className={styles.errorText}>
+                            <AlertCircle size={12} /> {passwordErrors.newPassword}
+                          </span>
+                        )}
+
+                        {/* REQUISITOS VISUAIS DE SENHA */}
+                        <div className={styles.passwordRulesList}>
+                          <span className={`${styles.ruleBadge} ${passwordData.newPassword.length >= 8 ? styles.ruleMet : ''}`}>
+                            {passwordData.newPassword.length >= 8 ? '✓' : '○'} 8+ caracteres
+                          </span>
+                          <span className={`${styles.ruleBadge} ${/[A-Z]/.test(passwordData.newPassword) ? styles.ruleMet : ''}`}>
+                            {/[A-Z]/.test(passwordData.newPassword) ? '✓' : '○'} 1 Letra maiúscula (A-Z)
+                          </span>
+                          <span className={`${styles.ruleBadge} ${/[0-9]/.test(passwordData.newPassword) ? styles.ruleMet : ''}`}>
+                            {/[0-9]/.test(passwordData.newPassword) ? '✓' : '○'} 1 Número (0-9)
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className={styles.inputField}>
+                        <label>Confirmar Nova Senha *</label>
+                        <div className={styles.passwordInputWrapper}>
+                          <input 
+                            type={showConfirmPass ? "text" : "password"} 
+                            name="confirmPassword"
+                            placeholder="Repita a nova senha"
+                            value={passwordData.confirmPassword}
+                            onChange={handlePasswordChange}
+                            className={passwordErrors.confirmPassword ? styles.inputError : ''}
+                            required 
+                          />
+                          <button 
+                            type="button" 
+                            onClick={() => setShowConfirmPass(!showConfirmPass)}
+                            className={styles.togglePasswordBtn}
+                            aria-label={showConfirmPass ? "Ocultar senha" : "Ver senha"}
+                          >
+                            {showConfirmPass ? <EyeOff size={15} /> : <Eye size={15} />}
+                          </button>
+                        </div>
+                        {passwordErrors.confirmPassword && (
+                          <span className={styles.errorText}>
+                            <AlertCircle size={12} /> {passwordErrors.confirmPassword}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className={styles.formActionsBetween}>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          alert(`Enviamos as instruções de redefinição de senha para o e-mail: ${userData.email}`);
+                        }}
+                        className={styles.forgotPasswordLink}
+                      >
+                        Esqueceu sua senha atual? Redefinir por e-mail
+                      </button>
+
+                      <div className={styles.btnGroup}>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            setIsEditingPassword(false);
+                            setPasswordErrors({});
+                          }} 
+                          className={styles.cancelBtn}
+                        >
+                          CANCELAR
+                        </button>
+                        <button type="submit" className={styles.saveBtn}>
+                          SALVAR NOVA SENHA
+                        </button>
+                      </div>
+                    </div>
+                  </form>
+                )}
+              </div>
             </div>
           )}
 

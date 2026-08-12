@@ -15,7 +15,14 @@ import {
   EyeOff
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
-import { validateEmail, validateCPF, validatePhone, maskCPF, maskPhone } from '../../utils/validators';
+import { 
+  validateEmail, 
+  validateCPF, 
+  validatePhone, 
+  validatePasswordStrength,
+  maskCPF, 
+  maskPhone 
+} from '../../utils/validators';
 import styles from './Auth.module.css';
 
 export function Auth() {
@@ -102,8 +109,9 @@ export function Auth() {
       setError('Telefone inválido com DDD.');
       return;
     }
-    if (registerData.password.length < 6) {
-      setError('A senha deve ter no mínimo 6 caracteres.');
+    const strength = validatePasswordStrength(registerData.password);
+    if (!strength.isValid) {
+      setError(strength.message);
       return;
     }
     if (registerData.password !== registerData.confirmPassword) {
@@ -280,7 +288,7 @@ export function Auth() {
                   <label>SENHA *</label>
                   <input 
                     type={showPassword ? "text" : "password"} 
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Mínimo 8 carac., maiúscula e número"
                     value={registerData.password}
                     onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
                     required 
@@ -296,6 +304,19 @@ export function Auth() {
                     required 
                   />
                 </div>
+              </div>
+
+              {/* REQUISITOS VISUAIS DE SENHA */}
+              <div className={styles.passwordRulesList}>
+                <span className={`${styles.ruleBadge} ${registerData.password.length >= 8 ? styles.ruleMet : ''}`}>
+                  {registerData.password.length >= 8 ? '✓' : '○'} 8+ caracteres
+                </span>
+                <span className={`${styles.ruleBadge} ${/[A-Z]/.test(registerData.password) ? styles.ruleMet : ''}`}>
+                  {/[A-Z]/.test(registerData.password) ? '✓' : '○'} 1 Letra maiúscula
+                </span>
+                <span className={`${styles.ruleBadge} ${/[0-9]/.test(registerData.password) ? styles.ruleMet : ''}`}>
+                  {/[0-9]/.test(registerData.password) ? '✓' : '○'} 1 Número
+                </span>
               </div>
 
               <button type="submit" className={styles.submitBtn}>

@@ -39,6 +39,7 @@ export function AuthProvider({ children }) {
         email: emailOrData.email || 'weslley@thr33.com',
         phone: emailOrData.phone || '(41) 99999-8888',
         cpf: emailOrData.cpf || '123.456.789-00',
+        password: emailOrData.password || password || '123456Aa',
         ...emailOrData
       };
     } else {
@@ -47,7 +48,8 @@ export function AuthProvider({ children }) {
         name: 'Weslley Kampa',
         email: emailOrData,
         phone: '(41) 99999-8888',
-        cpf: '123.456.789-00'
+        cpf: '123.456.789-00',
+        password: password || '123456Aa'
       };
     }
     setCurrentUser(userMock);
@@ -61,7 +63,8 @@ export function AuthProvider({ children }) {
       name: userData.name || 'Novo Cliente',
       email: userData.email,
       cpf: userData.cpf || '123.456.789-00',
-      phone: userData.phone || '(41) 99999-8888'
+      phone: userData.phone || '(41) 99999-8888',
+      password: userData.password || '123456Aa'
     };
     setCurrentUser(userMock);
     setIsAuthModalOpen(false);
@@ -76,6 +79,22 @@ export function AuthProvider({ children }) {
         ...updatedFields
       };
     });
+  };
+
+  const changePassword = (currentPassword, newPassword) => {
+    if (!currentUser) return { success: false, error: 'Usuário não autenticado.' };
+    
+    // Senha padrão se não definida
+    const savedPassword = currentUser.password || '123456Aa';
+    if (currentPassword !== savedPassword) {
+      return { 
+        success: false, 
+        error: 'Senha atual incorreta. Digite a senha cadastrada para autorizar a alteração.' 
+      };
+    }
+
+    updateUser({ password: newPassword });
+    return { success: true };
   };
 
   const logout = () => {
@@ -107,6 +126,7 @@ export function AuthProvider({ children }) {
       login,
       register,
       updateUser,
+      changePassword,
       logout,
       deleteAccount,
       isAuthModalOpen,

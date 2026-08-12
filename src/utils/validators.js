@@ -57,6 +57,43 @@ export function validateCEP(cep) {
 }
 
 /**
+ * Validação de requisitos e complexidade de Senha:
+ * - Mínimo de 8 caracteres
+ * - Pelo menos 1 letra maiúscula (A-Z)
+ * - Pelo menos 1 número (0-9)
+ */
+export function validatePasswordStrength(password) {
+  if (!password) {
+    return {
+      isValid: false,
+      hasMinLength: false,
+      hasUppercase: false,
+      hasNumber: false,
+      message: 'A senha deve atender a todos os requisitos de segurança.'
+    };
+  }
+
+  const hasMinLength = password.length >= 8;
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+
+  const isValid = hasMinLength && hasUppercase && hasNumber;
+
+  let message = '';
+  if (!hasMinLength) message = 'A nova senha deve ter no mínimo 8 caracteres.';
+  else if (!hasUppercase) message = 'A nova senha deve conter ao menos 1 letra maiúscula.';
+  else if (!hasNumber) message = 'A nova senha deve conter ao menos 1 número.';
+
+  return {
+    isValid,
+    hasMinLength,
+    hasUppercase,
+    hasNumber,
+    message
+  };
+}
+
+/**
  * Validação de Data de Validade do Cartão (MM/AA)
  */
 export function validateExpiryDate(expiry) {
