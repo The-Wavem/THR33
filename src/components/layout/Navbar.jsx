@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { User, ShoppingBag, Heart, LogOut, Package, ArrowRight } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
+import { preloadRoute } from '../../utils/preloader';
 import styles from './Navbar.module.css';
 
 export function Navbar({ onOpenCart }) {
@@ -27,13 +28,14 @@ export function Navbar({ onOpenCart }) {
       clearTimeout(dropdownTimerRef.current);
     }
     setIsProfileDropdownOpen(true);
+    preloadRoute('/perfil');
+    preloadRoute('/auth');
   };
 
   const handleProfileMouseLeave = () => {
     if (dropdownTimerRef.current) {
       clearTimeout(dropdownTimerRef.current);
     }
-    // Tolerância de 350ms para que o cliente não perca o menu ao mover o mouse
     dropdownTimerRef.current = setTimeout(() => {
       setIsProfileDropdownOpen(false);
     }, 350);
@@ -82,17 +84,24 @@ export function Navbar({ onOpenCart }) {
         </button>
 
         {/* Logo */}
-        <Link to="/" className={styles.logo} aria-label="THR33 Home">
+        <Link 
+          to="/" 
+          className={styles.logo} 
+          aria-label="THR33 Home"
+          onMouseEnter={() => preloadRoute('/')}
+        >
           <span className={styles.logoText}>THR33</span>
           <span className={styles.logoSub}>FOR THE FEW</span>
         </Link>
 
-        {/* Links de Navegação */}
+        {/* Links de Navegação com Preloading no Hover */}
         <nav className={`${styles.nav} ${isMobileMenuOpen ? styles.navOpen : ''}`}>
           <NavLink 
             to="/" 
             className={({ isActive }) => isActive ? `${styles.link} ${styles.active}` : styles.link}
             onClick={() => setIsMobileMenuOpen(false)}
+            onMouseEnter={() => preloadRoute('/')}
+            onTouchStart={() => preloadRoute('/')}
           >
             Início
           </NavLink>
@@ -100,6 +109,8 @@ export function Navbar({ onOpenCart }) {
             to="/catalogo" 
             className={({ isActive }) => isActive ? `${styles.link} ${styles.active}` : styles.link}
             onClick={() => setIsMobileMenuOpen(false)}
+            onMouseEnter={() => preloadRoute('/catalogo')}
+            onTouchStart={() => preloadRoute('/catalogo')}
           >
             Catálogo
           </NavLink>
@@ -107,6 +118,8 @@ export function Navbar({ onOpenCart }) {
             to="/drops-passados" 
             className={({ isActive }) => isActive ? `${styles.link} ${styles.active}` : styles.link}
             onClick={() => setIsMobileMenuOpen(false)}
+            onMouseEnter={() => preloadRoute('/drops-passados')}
+            onTouchStart={() => preloadRoute('/drops-passados')}
           >
             Drops Passados
           </NavLink>
@@ -114,6 +127,8 @@ export function Navbar({ onOpenCart }) {
             to="/sobre" 
             className={({ isActive }) => isActive ? `${styles.link} ${styles.active}` : styles.link}
             onClick={() => setIsMobileMenuOpen(false)}
+            onMouseEnter={() => preloadRoute('/sobre')}
+            onTouchStart={() => preloadRoute('/sobre')}
           >
             Sobre
           </NavLink>
@@ -121,7 +136,12 @@ export function Navbar({ onOpenCart }) {
 
         {/* Ações / Ícones do Usuário */}
         <div className={styles.actions}>
-          <Link to="/favoritos" className={styles.actionBtn} aria-label="Ver Favoritos / Wishlist">
+          <Link 
+            to="/favoritos" 
+            className={styles.actionBtn} 
+            aria-label="Ver Favoritos / Wishlist"
+            onMouseEnter={() => preloadRoute('/catalogo')}
+          >
             <Heart size={20} />
           </Link>
 
@@ -159,6 +179,7 @@ export function Navbar({ onOpenCart }) {
                       to="/perfil" 
                       className={styles.dropdownLink}
                       onClick={() => setIsProfileDropdownOpen(false)}
+                      onMouseEnter={() => preloadRoute('/perfil')}
                     >
                       <User size={14} />
                       <span>Minha Conta / Perfil</span>
@@ -168,6 +189,7 @@ export function Navbar({ onOpenCart }) {
                       to="/meus-pedidos" 
                       className={styles.dropdownLink}
                       onClick={() => setIsProfileDropdownOpen(false)}
+                      onMouseEnter={() => preloadRoute('/meus-pedidos')}
                     >
                       <Package size={14} />
                       <span>Meus Pedidos</span>
@@ -189,6 +211,7 @@ export function Navbar({ onOpenCart }) {
                       to="/auth?mode=login" 
                       className={styles.primaryAuthBtn}
                       onClick={() => setIsProfileDropdownOpen(false)}
+                      onMouseEnter={() => preloadRoute('/auth')}
                     >
                       ENTRAR
                     </Link>
@@ -197,6 +220,7 @@ export function Navbar({ onOpenCart }) {
                       to="/auth?mode=register" 
                       className={styles.secondaryAuthBtn}
                       onClick={() => setIsProfileDropdownOpen(false)}
+                      onMouseEnter={() => preloadRoute('/auth')}
                     >
                       CRIAR CONTA
                     </Link>
@@ -207,7 +231,12 @@ export function Navbar({ onOpenCart }) {
           </div>
 
           {/* Botão de Abrir Carrinho */}
-          <button onClick={handleCartClick} className={styles.actionBtn} aria-label={`Abrir Carrinho (${totalItemsCount} itens)`}>
+          <button 
+            onClick={handleCartClick} 
+            className={styles.actionBtn} 
+            aria-label={`Abrir Carrinho (${totalItemsCount} itens)`}
+            onMouseEnter={() => preloadRoute('/checkout')}
+          >
             <ShoppingBag size={20} />
             {totalItemsCount > 0 && (
               <span className={styles.cartBadge}>{totalItemsCount}</span>

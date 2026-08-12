@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, MapPin, Check } from 'lucide-react';
+import { preloadRoute } from '../../utils/preloader';
 import styles from './Footer.module.css';
 
 export function Footer() {
@@ -22,7 +23,11 @@ export function Footer() {
         <div className={styles.topGrid}>
           {/* COLUNA 1: MARCA & MANIFESTO */}
           <div className={styles.brandCol}>
-            <Link className={styles.logo} to="/">
+            <Link 
+              className={styles.logo} 
+              to="/"
+              onMouseEnter={() => preloadRoute('/')}
+            >
               <span className={styles.logoText}>THR33</span>
               <span className={styles.logoSub}>FOR THE FEW</span>
             </Link>
@@ -31,7 +36,7 @@ export function Footer() {
             </p>
             <span className={styles.locationBadge}>
               <MapPin size={12} />
-              <span>CURITIBA - PR</span>
+              <span>CURITIBA & ARAUCÁRIA - PR</span>
             </span>
           </div>
 
@@ -39,11 +44,31 @@ export function Footer() {
           <div className={styles.linksCol}>
             <h4 className={styles.colTitle}>EXPLORAR</h4>
             <ul className={styles.linksList}>
-              <li><Link to="/">Início</Link></li>
-              <li><Link to="/catalogo">Catálogo Completo</Link></li>
-              <li><Link to="/catalogo?drop=leak-two">Novo Drop (Leak Two)</Link></li>
-              <li><Link to="/drops-passados">Drops Passados</Link></li>
-              <li><Link to="/sobre">Sobre a THR33</Link></li>
+              <li>
+                <Link to="/" onMouseEnter={() => preloadRoute('/')}>
+                  Início
+                </Link>
+              </li>
+              <li>
+                <Link to="/catalogo" onMouseEnter={() => preloadRoute('/catalogo')}>
+                  Catálogo Completo
+                </Link>
+              </li>
+              <li>
+                <Link to="/catalogo?drop=leak-two" onMouseEnter={() => preloadRoute('/catalogo')}>
+                  Novo Drop (Leak Two)
+                </Link>
+              </li>
+              <li>
+                <Link to="/drops-passados" onMouseEnter={() => preloadRoute('/drops-passados')}>
+                  Drops Passados
+                </Link>
+              </li>
+              <li>
+                <Link to="/sobre" onMouseEnter={() => preloadRoute('/sobre')}>
+                  Sobre a THR33
+                </Link>
+              </li>
             </ul>
           </div>
 
@@ -51,11 +76,31 @@ export function Footer() {
           <div className={styles.linksCol}>
             <h4 className={styles.colTitle}>SUPORTE</h4>
             <ul className={styles.linksList}>
-              <li><Link to="/suporte">Central de Atendimento</Link></li>
-              <li><Link to="/suporte">Perguntas Frequentes (FAQ)</Link></li>
-              <li><Link to="/politicas">Trocas e Devoluções</Link></li>
-              <li><Link to="/politicas">Prazos e Entregas</Link></li>
-              <li><Link to="/perfil">Minha Conta</Link></li>
+              <li>
+                <Link to="/suporte" onMouseEnter={() => preloadRoute('/suporte')}>
+                  Central de Atendimento
+                </Link>
+              </li>
+              <li>
+                <Link to="/suporte" onMouseEnter={() => preloadRoute('/suporte')}>
+                  Perguntas Frequentes (FAQ)
+                </Link>
+              </li>
+              <li>
+                <Link to="/politicas" onMouseEnter={() => preloadRoute('/politicas')}>
+                  Trocas e Devoluções
+                </Link>
+              </li>
+              <li>
+                <Link to="/politicas" onMouseEnter={() => preloadRoute('/politicas')}>
+                  Prazos e Entregas
+                </Link>
+              </li>
+              <li>
+                <Link to="/perfil" onMouseEnter={() => preloadRoute('/perfil')}>
+                  Minha Conta
+                </Link>
+              </li>
             </ul>
           </div>
 
