@@ -19,10 +19,6 @@ export function PrivateLayout({ user, onLogout, cartCount, onOpenCart }) {
         onOpenCart={onOpenCart}
       />
 
-      <div className={styles.privateBanner}>
-        <span>ÁREA RESTRITA // PASSAPORTE AUTENTICADO: {user.passId || '#0482'}</span>
-      </div>
-
       <main className={styles.contentArea}>
         <Outlet />
       </main>

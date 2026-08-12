@@ -1,1357 +1,1225 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   User, 
-  Package, 
   MapPin, 
-  Shield, 
-  Copy, 
-  Check, 
+  Package, 
+  AlertTriangle, 
+  HelpCircle, 
   Plus, 
   Trash2, 
-  Edit3, 
-  LogOut, 
-  QrCode, 
-  CheckCircle2, 
-  Clock, 
-  Truck, 
-  Sparkles, 
-  X,
-  AlertTriangle,
-  Lock,
-  Save,
-  ShieldCheck,
-  AtSign,
-  Mail,
-  Phone,
-  CreditCard,
+  Check, 
+  Star, 
+  X, 
+  Loader2, 
+  LogOut,
+  Edit3,
+  ShieldAlert,
+  AlertCircle,
   Eye,
-  MessageSquare,
-  HelpCircle,
-  ExternalLink,
-  ChevronRight
+  Truck,
+  CreditCard,
+  Tag,
+  Copy,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  HelpCircle as QuestionIcon,
+  MessageSquareWarning,
+  Send
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { maskCPF, maskPhone, maskCEP, validateCPF, validateEmail, validatePhone } from '../../utils/validators';
+import { fetchAddressByCep } from '../../services/viaCepService';
 import styles from './Perfil.module.css';
 
-// EXEMPLOS DETALHADOS DE PEDIDOS E PEÇAS GARANTIDAS NOS DROPS
-const INITIAL_ORDERS = [
-  {
-    id: 'ORD-9021',
-    date: '04 AGO 2026',
-    status: 'EM TRÂNSITO',
-    statusType: 'shipping',
-    trackingCode: 'BR948201948BR',
-    subtotal: 'R$ 399,00',
-    discount: 'R$ 0,00',
-    shippingMethod: 'SEDEX EXPRESSO (1 a 2 dias úteis)',
-    shippingCost: 'R$ 24,90',
-    total: 'R$ 423,90',
-    paymentMethod: 'PIX INSTANTÂNEO',
-    paymentDetails: 'Desconto de 5% Aplicado • Chave Pix E-mail',
-    address: {
-      nome: 'WESLLEY K.',
-      rua: 'Alameda Santos',
-      numero: '1470',
-      complemento: 'Apt 82',
-      bairro: 'Cerqueira César',
-      cidade: 'São Paulo',
-      estado: 'SP',
-      cep: '01418-100'
-    },
-    timeline: [
-      { step: 1, label: '1. PEDIDO CONFIRMADO', date: '04 AGO — 14:20', done: true },
-      { step: 2, label: '2. SEPARAÇÃO NO ATELIÊ', date: '04 AGO — 16:45', done: true },
-      { step: 3, label: '3. DESPACHADO VIA SEDEX', date: '05 AGO — 09:10', done: true },
-      { step: 4, label: '4. ENTREGUE AO DESTINATÁRIO', date: 'EM TRÂNSITO', done: false }
-    ],
-    items: [
-      {
-        id: 'item-1',
-        title: 'CAMISA UTOPIA OVERSIZED',
-        size: 'G',
-        dropLot: '#04/33',
-        price: 'R$ 210,00',
-        image: 'https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&q=80&w=400'
-      },
-      {
-        id: 'item-2',
-        title: 'BONÉ ATELIÊ TÁTICO V.1',
-        size: 'ÚNICO',
-        dropLot: '#12/33',
-        price: 'R$ 189,00',
-        image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&q=80&w=400'
-      }
-    ]
-  },
-  {
-    id: 'ORD-8810',
-    date: '18 JUL 2026',
-    status: 'ENTREGUE',
-    statusType: 'delivered',
-    trackingCode: 'BR781290412BR',
-    subtotal: 'R$ 420,00',
-    discount: 'R$ -21,00 (CUPOM VIP)',
-    shippingMethod: 'FRETE GRÁTIS EXPRESSO (SEDEX)',
-    shippingCost: 'R$ 0,00 (GRÁTIS)',
-    total: 'R$ 399,00',
-    paymentMethod: 'CARTÃO DE CRÉDITO',
-    paymentDetails: 'PARCELADO EM 3X DE R$ 133,00 (MASTERCARD **** 4892)',
-    address: {
-      nome: 'WESLLEY K.',
-      rua: 'Alameda Santos',
-      numero: '1470',
-      complemento: 'Apt 82',
-      bairro: 'Cerqueira César',
-      cidade: 'São Paulo',
-      estado: 'SP',
-      cep: '01418-100'
-    },
-    timeline: [
-      { step: 1, label: '1. PEDIDO CONFIRMADO', date: '18 JUL — 10:15', done: true },
-      { step: 2, label: '2. SEPARAÇÃO NO ATELIÊ', date: '18 JUL — 11:30', done: true },
-      { step: 3, label: '3. DESPACHADO VIA SEDEX', date: '19 JUL — 08:00', done: true },
-      { step: 4, label: '4. ENTREGUE AO DESTINATÁRIO', date: '21 JUL — 14:40', done: true }
-    ],
-    items: [
-      {
-        id: 'item-3',
-        title: 'MOLETOM ACID TACTICAL 400GSM',
-        size: 'GG',
-        dropLot: '#02/25',
-        price: 'R$ 420,00',
-        image: 'https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&q=80&w=400'
-      }
-    ]
-  },
-  {
-    id: 'ORD-7402',
-    date: '02 MAI 2026',
-    status: 'DESPACHADO',
-    statusType: 'dispatched',
-    trackingCode: 'BR330198421BR',
-    subtotal: 'R$ 189,00',
-    discount: 'R$ 0,00',
-    shippingMethod: 'SEDEX PADRÃO',
-    shippingCost: 'R$ 18,00',
-    total: 'R$ 207,00',
-    paymentMethod: 'PIX INSTANTÂNEO',
-    paymentDetails: 'Chave Pix E-mail • Autenticado',
-    address: {
-      nome: 'WESLLEY K. (ATELIÊ)',
-      rua: 'Rua Fradique Coutinho',
-      numero: '350',
-      complemento: 'Conj 12',
-      bairro: 'Pinheiros',
-      cidade: 'São Paulo',
-      estado: 'SP',
-      cep: '05409-000'
-    },
-    timeline: [
-      { step: 1, label: '1. PEDIDO CONFIRMADO', date: '02 MAI — 11:00', done: true },
-      { step: 2, label: '2. SEPARAÇÃO NO ATELIÊ', date: '02 MAI — 15:00', done: true },
-      { step: 3, label: '3. DESPACHADO VIA SEDEX', date: '03 MAI — 09:30', done: true },
-      { step: 4, label: '4. ENTREGUE AO DESTINATÁRIO', date: 'AGUARDANDO', done: false }
-    ],
-    items: [
-      {
-        id: 'item-4',
-        title: 'CAMISA BOXY PROCESS V.1',
-        size: 'M',
-        dropLot: '#09/33',
-        price: 'R$ 189,00',
-        image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&q=80&w=400'
-      }
-    ]
-  }
-];
-
-// ENDEREÇOS INICIAIS DE EXEMPLO
-const INITIAL_ADDRESSES = [
-  {
-    id: 'addr-1',
-    isDefault: true,
-    label: 'CASA / ESTÚDIO',
-    nome: 'WESLLEY K.',
-    cep: '01418-100',
-    rua: 'Alameda Santos',
-    numero: '1470',
-    complemento: 'Apt 82',
-    bairro: 'Cerqueira César',
-    cidade: 'São Paulo',
-    estado: 'SP'
-  },
-  {
-    id: 'addr-2',
-    isDefault: false,
-    label: 'ESCRITÓRIO CENTRAL',
-    nome: 'WESLLEY K. (ATELIÊ)',
-    cep: '05409-000',
-    rua: 'Rua Fradique Coutinho',
-    numero: '350',
-    complemento: 'Conj 12',
-    bairro: 'Pinheiros',
-    cidade: 'São Paulo',
-    estado: 'SP'
-  }
+// ETAPAS DO PEDIDO
+const ORDER_STEPS = [
+  { key: 'waiting_payment', label: 'Aguardando Pagamento' },
+  { key: 'payment_approved', label: 'Pagamento Aprovado' },
+  { key: 'preparing', label: 'Preparando Envio (Ateliê)' },
+  { key: 'in_transit', label: 'Despachado / Em Trânsito' },
+  { key: 'delivered', label: 'Entregue' }
 ];
 
 export function Perfil({ defaultTab = 'pedidos' }) {
-  const { user, updateUser, logout, deleteAccount } = useAuth();
-  const location = useLocation();
-  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const [activeTab, setActiveTab] = useState(defaultTab); // 'dados', 'enderecos', 'pedidos', 'seguranca'
+  
+  // DADOS DO USUÁRIO
+  const [userData, setUserData] = useState({
+    name: user?.name || 'Usuário Ateliê',
+    email: user?.email || 'contato.thewavem@gmail.com',
+    cpf: user?.cpf || '123.456.789-00',
+    phone: user?.phone || '(41) 99999-8888'
+  });
 
-  // ABA ATIVA (pedidos | dados | enderecos | seguranca)
-  const [activeTab, setActiveTab] = useState(defaultTab);
-  const [showLogoutModal, setShowLogoutModal] = useState(false);
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [supportOrder, setSupportOrder] = useState(null);
-  const [showAddressModal, setShowAddressModal] = useState(false);
+  const [editFormData, setEditFormData] = useState({ ...userData });
+  const [isEditingData, setIsEditingData] = useState(false);
+  const [userErrors, setUserErrors] = useState({});
+  const [saveSuccessFeedback, setSaveSuccessFeedback] = useState(false);
 
-  // TRAVAR SCROLL DO BODY E LENIS QUANDO QUALQUER MODAL ESTIVER ABERTO
-  const isAnyModalOpen = Boolean(selectedOrder || supportOrder || showAddressModal || showLogoutModal || showDeleteModal);
+  // ENDEREÇOS DO USUÁRIO
+  const [addresses, setAddresses] = useState([
+    {
+      id: 1,
+      title: 'Casa',
+      street: 'Rua Comendador Araújo',
+      number: '333',
+      complement: 'Apt 12',
+      neighborhood: 'Batel',
+      city: 'Curitiba',
+      state: 'PR',
+      cep: '80420-000',
+      isDefault: true
+    }
+  ]);
+
+  const [isAddingAddress, setIsAddingAddress] = useState(false);
+  const [isSearchingCep, setIsSearchingCep] = useState(false);
+  const [cepError, setCepError] = useState(null);
+
+  const [newAddress, setNewAddress] = useState({
+    title: '',
+    street: '',
+    number: '',
+    complement: '',
+    neighborhood: '',
+    city: 'Curitiba',
+    state: 'PR',
+    cep: ''
+  });
+
+  // HISTÓRICO DE PEDIDOS & AVALIAÇÕES
+  const [orders, setOrders] = useState([
+    {
+      id: "THR33-9104",
+      date: "12/08/2026",
+      status: "Preparando Envio",
+      statusCode: "preparing",
+      trackingCode: "Aguardando postagem no Ateliê",
+      paymentMethod: "Cartão de Crédito PagBank (em 2x de R$ 117,40)",
+      coupon: { code: "FORTHEFEW", discount: 20.00 },
+      subtotal: 239.90,
+      shippingMethod: "SEDEX Expresso (1 a 2 dias úteis)",
+      shippingCost: 14.90,
+      total: 234.80,
+      address: {
+        name: "Usuário Ateliê",
+        street: "Rua Comendador Araújo",
+        number: "333",
+        complement: "Apt 12",
+        neighborhood: "Batel",
+        city: "Curitiba",
+        state: "PR",
+        cep: "80420-000"
+      },
+      items: [
+        { 
+          id: "item-101",
+          name: "Camiseta THR33 Boxy Logo", 
+          size: "M", 
+          price: 189.90, 
+          image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop", 
+          evaluated: false 
+        }
+      ]
+    },
+    {
+      id: "THR33-8921",
+      date: "10/08/2026",
+      status: "Em trânsito",
+      statusCode: "in_transit",
+      trackingCode: "BR987654321PR",
+      paymentMethod: "PIX Instantâneo PagBank (À Vista)",
+      coupon: null,
+      subtotal: 389.80,
+      shippingMethod: "SEDEX Expresso",
+      shippingCost: 14.90,
+      total: 404.70,
+      address: {
+        name: "Usuário Ateliê",
+        street: "Rua Comendador Araújo",
+        number: "333",
+        complement: "Apt 12",
+        neighborhood: "Batel",
+        city: "Curitiba",
+        state: "PR",
+        cep: "80420-000"
+      },
+      items: [
+        { 
+          id: "item-1",
+          name: "Camiseta THR33 Boxy Logo", 
+          size: "M", 
+          price: 189.90, 
+          image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop", 
+          evaluated: true 
+        },
+        { 
+          id: "item-2",
+          name: "Camiseta For The Few Heavy", 
+          size: "M", 
+          price: 199.90, 
+          image: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?q=80&w=600&auto=format&fit=crop", 
+          evaluated: false 
+        }
+      ]
+    },
+    {
+      id: "THR33-8410",
+      date: "25/07/2026",
+      status: "Entregue",
+      statusCode: "delivered",
+      trackingCode: "BR123456789PR",
+      paymentMethod: "Cartão de Crédito PagBank (em 3x de R$ 199,93)",
+      coupon: { code: "ATELIE20", discount: 40.00 },
+      subtotal: 599.80,
+      shippingMethod: "PAC Standard (3 a 5 dias)",
+      shippingCost: 0.00,
+      total: 559.80,
+      address: {
+        name: "Usuário Ateliê",
+        street: "Rua Comendador Araújo",
+        number: "333",
+        complement: "Apt 12",
+        neighborhood: "Batel",
+        city: "Curitiba",
+        state: "PR",
+        cep: "80420-000"
+      },
+      items: [
+        { 
+          id: "item-3",
+          name: "Calça Cargo Streetwear", 
+          size: "38", 
+          price: 599.80, 
+          image: "https://images.unsplash.com/photo-1517445312882-bc9910d016b7?q=80&w=600&auto=format&fit=crop", 
+          evaluated: true 
+        }
+      ]
+    }
+  ]);
+
+  // MODAIS
+  const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
+  const [cancelingOrder, setCancelingOrder] = useState(null);
+  const [cancelReason, setCancelReason] = useState('tamanho');
+  const [cancelOtherText, setCancelOtherText] = useState('');
+  
+  const [reportingIssueOrder, setReportingIssueOrder] = useState(null);
+  const [issueType, setIssueType] = useState('danificado');
+  const [issueDescription, setIssueDescription] = useState('');
+  const [copiedTracking, setCopiedTracking] = useState(false);
+
+  // MODAL DE AVALIAÇÃO DE PRODUTO
+  const [evaluatingItem, setEvaluatingItem] = useState(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+
+  // BLOQUEIO DO SCROLL DA PÁGINA (EIXO Y E RODA DO MOUSE) QUANDO QUALQUER MODAL ESTIVER ABERTO
+  const isAnyModalOpen = Boolean(selectedOrderDetails || cancelingOrder || reportingIssueOrder || evaluatingItem);
 
   useEffect(() => {
     if (isAnyModalOpen) {
+      const originalOverflow = document.body.style.overflow;
       document.body.style.overflow = 'hidden';
-      document.documentElement.style.overflow = 'hidden';
-    } else {
-      document.body.style.overflow = '';
-      document.documentElement.style.overflow = '';
-    }
 
-    return () => {
-      document.body.style.overflow = '';
-      document.documentElement.style.overflow = '';
-    };
+      const preventBackgroundScroll = (e) => {
+        const modalContainer = e.target.closest(`.${styles.orderDetailsModal}, .${styles.modalCard}`);
+        if (modalContainer) {
+          return;
+        }
+        e.preventDefault();
+      };
+
+      window.addEventListener('wheel', preventBackgroundScroll, { passive: false });
+      window.addEventListener('touchmove', preventBackgroundScroll, { passive: false });
+
+      return () => {
+        document.body.style.overflow = originalOverflow;
+        window.removeEventListener('wheel', preventBackgroundScroll);
+        window.removeEventListener('touchmove', preventBackgroundScroll);
+      };
+    }
   }, [isAnyModalOpen]);
 
-  // EFETUAR SINCRONISMO COM ROTA OU QUERY PARAMS (?tab=...)
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const tabParam = params.get('tab');
-
-    if (tabParam && ['pedidos', 'dados', 'enderecos', 'seguranca'].includes(tabParam)) {
-      setActiveTab(tabParam);
-    } else if (location.pathname === '/meus-pedidos') {
-      setActiveTab('pedidos');
-    } else if (location.pathname === '/configuracoes') {
-      setActiveTab('dados');
-    } else if (location.pathname === '/enderecos') {
-      setActiveTab('enderecos');
-    } else if (location.pathname === '/seguranca') {
-      setActiveTab('seguranca');
-    }
-  }, [location]);
-
-  // ESTADO DE CÓDIGOS DE RASTREIO COPIADOS
-  const [copiedTracking, setCopiedTracking] = useState(null);
-
-  // ESTADO DO FORMULÁRIO DE DADOS PESSOAIS
-  const [profileForm, setProfileForm] = useState({
-    name: user?.name || 'WESLLEY K.',
-    email: user?.email || 'weslley@atelier-thr33.com',
-    cpf: user?.cpf || '382.901.482-00',
-    phone: user?.phone || '(11) 98765-4321'
-  });
-
-  const [toastMessage, setToastMessage] = useState(null);
-
-  useEffect(() => {
-    if (user) {
-      setProfileForm({
-        name: user.name || 'WESLLEY K.',
-        email: user.email || 'weslley@atelier-thr33.com',
-        cpf: user.cpf || '382.901.482-00',
-        phone: user.phone || '(11) 98765-4321'
-      });
-    }
-  }, [user]);
-
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage(null);
-    }, 4000);
+  // -------------------------------------------------------------
+  // HANDLERS: DADOS DO USUÁRIO & VALIDAÇÃO
+  // -------------------------------------------------------------
+  const handleStartEdit = () => {
+    setEditFormData({ ...userData });
+    setUserErrors({});
+    setIsEditingData(true);
   };
 
-  const handleProfileSubmit = (e) => {
+  const handleCancelEdit = () => {
+    setEditFormData({ ...userData });
+    setUserErrors({});
+    setIsEditingData(false);
+  };
+
+  const handleUserChange = (e) => {
+    const { name, value } = e.target;
+    let formatted = value;
+
+    if (name === 'cpf') formatted = maskCPF(value);
+    if (name === 'phone') formatted = maskPhone(value);
+
+    setEditFormData(prev => ({ ...prev, [name]: formatted }));
+    if (userErrors[name]) {
+      setUserErrors(prev => ({ ...prev, [name]: null }));
+    }
+  };
+
+  const handleUserSubmit = (e) => {
     e.preventDefault();
-    updateUser(profileForm);
-    showToast('✓ DADOS DO PASSAPORTE ATUALIZADOS COM SUCESSO!');
+    const errors = {};
+
+    if (!editFormData.name.trim() || editFormData.name.trim().length < 3) {
+      errors.name = 'Nome deve ter no mínimo 3 caracteres.';
+    }
+    if (!validateEmail(editFormData.email)) {
+      errors.email = 'Informe um e-mail válido no formato usuario@dominio.com.';
+    }
+    if (!validateCPF(editFormData.cpf)) {
+      errors.cpf = 'CPF inválido. Verifique os números digitados.';
+    }
+    if (!validatePhone(editFormData.phone)) {
+      errors.phone = 'Telefone inválido com DDD (10 ou 11 dígitos).';
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setUserErrors(errors);
+      return;
+    }
+
+    setUserData({ ...editFormData });
+    setUserErrors({});
+    setIsEditingData(false);
+    setSaveSuccessFeedback(true);
+    setTimeout(() => setSaveSuccessFeedback(false), 3000);
   };
 
-  // ESTADO DOS ENDEREÇOS
-  const [addresses, setAddresses] = useState(() => {
-    try {
-      const saved = localStorage.getItem('thr33_saved_addresses');
-      return saved ? JSON.parse(saved) : INITIAL_ADDRESSES;
-    } catch {
-      return INITIAL_ADDRESSES;
+  // -------------------------------------------------------------
+  // HANDLERS: ENDEREÇOS COM VIACEP
+  // -------------------------------------------------------------
+  const handleAddressInputChange = async (e) => {
+    const { name, value } = e.target;
+    let formatted = value;
+
+    if (name === 'cep') {
+      formatted = maskCEP(value);
+      const clean = formatted.replace(/\D/g, '');
+      if (clean.length === 8) {
+        setIsSearchingCep(true);
+        setCepError(null);
+        const res = await fetchAddressByCep(clean);
+        setIsSearchingCep(false);
+        if (res.success) {
+          setNewAddress(prev => ({
+            ...prev,
+            street: res.data.street || prev.street,
+            neighborhood: res.data.neighborhood || prev.neighborhood,
+            city: res.data.city || prev.city,
+            state: res.data.state || prev.state,
+            complement: res.data.complement || prev.complement
+          }));
+        } else {
+          setCepError(res.error);
+        }
+      }
     }
-  });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem('thr33_saved_addresses', JSON.stringify(addresses));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [addresses]);
-
-  const [editingAddress, setEditingAddress] = useState(null);
-  const [addressForm, setAddressForm] = useState({
-    label: '',
-    nome: '',
-    cep: '',
-    rua: '',
-    numero: '',
-    complemento: '',
-    bairro: '',
-    cidade: '',
-    estado: 'SP',
-    isDefault: false
-  });
-
-  const handleOpenNewAddress = () => {
-    setEditingAddress(null);
-    setAddressForm({
-      label: 'CASA / ENTREGA',
-      nome: profileForm.name || 'WESLLEY K.',
-      cep: '',
-      rua: '',
-      numero: '',
-      complemento: '',
-      bairro: '',
-      cidade: 'São Paulo',
-      estado: 'SP',
-      isDefault: addresses.length === 0
-    });
-    setShowAddressModal(true);
+    setNewAddress(prev => ({ ...prev, [name]: formatted }));
   };
 
-  const handleOpenEditAddress = (addr) => {
-    setEditingAddress(addr);
-    setAddressForm({ ...addr });
-    setShowAddressModal(true);
+  const handleAddAddress = (e) => {
+    e.preventDefault();
+    if (!newAddress.title || !newAddress.cep || !newAddress.street || !newAddress.number) {
+      alert('Por favor, preencha os campos obrigatórios do endereço.');
+      return;
+    }
+
+    setAddresses([
+      ...addresses, 
+      { 
+        ...newAddress, 
+        id: Date.now(), 
+        isDefault: addresses.length === 0 
+      }
+    ]);
+    setIsAddingAddress(false);
+    setNewAddress({ title: '', street: '', number: '', complement: '', neighborhood: '', city: 'Curitiba', state: 'PR', cep: '' });
   };
 
   const handleDeleteAddress = (id) => {
-    const updated = addresses.filter(a => a.id !== id);
-    if (updated.length > 0 && !updated.some(a => a.isDefault)) {
-      updated[0].isDefault = true;
+    if (window.confirm('Deseja realmente excluir este endereço?')) {
+      setAddresses(addresses.filter(a => a.id !== id));
     }
-    setAddresses(updated);
-    showToast('Endereço removido.');
   };
 
   const handleSetDefaultAddress = (id) => {
-    const updated = addresses.map(a => ({
+    setAddresses(addresses.map(a => ({
       ...a,
       isDefault: a.id === id
-    }));
-    setAddresses(updated);
-    showToast('✓ Endereço marcado como principal.');
+    })));
   };
 
-  const handleSaveAddress = (e) => {
+  // -------------------------------------------------------------
+  // HANDLERS: AVALIAÇÃO DE PRODUTO
+  // -------------------------------------------------------------
+  const handleOpenReviewModal = (item, orderId) => {
+    setEvaluatingItem({ ...item, orderId });
+    setReviewRating(5);
+    setReviewComment('');
+  };
+
+  const handleSubmitReview = (e) => {
     e.preventDefault();
-    if (editingAddress) {
-      const updated = addresses.map(a => {
-        if (a.id === editingAddress.id) {
-          return { ...addressForm, id: editingAddress.id };
-        }
-        return addressForm.isDefault ? { ...a, isDefault: false } : a;
-      });
-      setAddresses(updated);
-      showToast('✓ Endereço atualizado com sucesso.');
-    } else {
-      const newId = `addr-${Date.now()}`;
-      let updated = addresses;
-      if (addressForm.isDefault) {
-        updated = updated.map(a => ({ ...a, isDefault: false }));
+    if (!evaluatingItem) return;
+
+    setOrders(prevOrders => prevOrders.map(ord => {
+      if (ord.id === evaluatingItem.orderId) {
+        return {
+          ...ord,
+          items: ord.items.map(it => it.id === evaluatingItem.id ? { ...it, evaluated: true } : it)
+        };
       }
-      updated = [...updated, { ...addressForm, id: newId }];
-      setAddresses(updated);
-      showToast('✓ Novo endereço cadastrado!');
+      return ord;
+    }));
+
+    // Se estiver no modal de detalhes, atualiza também
+    if (selectedOrderDetails && selectedOrderDetails.id === evaluatingItem.orderId) {
+      setSelectedOrderDetails(prev => ({
+        ...prev,
+        items: prev.items.map(it => it.id === evaluatingItem.id ? { ...it, evaluated: true } : it)
+      }));
     }
-    setShowAddressModal(false);
+
+    setEvaluatingItem(null);
+    alert('Obrigado pela sua avaliação! Seu feedback apoia o desenvolvimento da THR33.');
   };
 
-  // ESTADO DE ALTERAÇÃO DE SENHA
-  const [securityForm, setSecurityForm] = useState({
-    currentPassword: '',
-    newPassword: '',
-    confirmPassword: ''
-  });
-
-  const handleSecuritySubmit = (e) => {
+  // -------------------------------------------------------------
+  // HANDLERS: CANCELAMENTO DE PEDIDO (EM PREPARAÇÃO)
+  // -------------------------------------------------------------
+  const handleConfirmCancelOrder = (e) => {
     e.preventDefault();
-    if (securityForm.newPassword !== securityForm.confirmPassword) {
-      alert('As novas senhas não coincidem!');
-      return;
+    if (!cancelingOrder) return;
+
+    setOrders(prev => prev.map(ord => {
+      if (ord.id === cancelingOrder.id) {
+        return {
+          ...ord,
+          status: 'Cancelado',
+          statusCode: 'canceled'
+        };
+      }
+      return ord;
+    }));
+
+    if (selectedOrderDetails && selectedOrderDetails.id === cancelingOrder.id) {
+      setSelectedOrderDetails(prev => ({
+        ...prev,
+        status: 'Cancelado',
+        statusCode: 'canceled'
+      }));
     }
-    if (securityForm.newPassword.length < 6) {
-      alert('A nova senha deve possuir pelo menos 6 caracteres.');
-      return;
-    }
-    showToast('✓ SENHA ATUALIZADA COM SUCESSO! SEU PASSAPORTE ESTÁ PROTEGIDO.');
-    setSecurityForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
+
+    const orderId = cancelingOrder.id;
+    setCancelingOrder(null);
+    alert(`Pedido #${orderId} cancelado com sucesso. O estorno de valores foi solicitado automaticamente junto ao PagBank.`);
   };
 
-  const handleCopyTracking = (code) => {
+  // -------------------------------------------------------------
+  // HANDLERS: PROBLEMAS COM O PEDIDO (SUPORTE)
+  // -------------------------------------------------------------
+  const handleSubmitIssue = (e) => {
+    e.preventDefault();
+    if (!reportingIssueOrder) return;
+
+    const protocol = `SUP-${Math.floor(100000 + Math.random() * 900000)}`;
+    const orderId = reportingIssueOrder.id;
+    setReportingIssueOrder(null);
+    setIssueDescription('');
+
+    alert(`Solicitação registrada com sucesso!\n\nProtocolo: #${protocol}\nPedido: #${orderId}\n\nNossa equipe de pós-venda do Ateliê entrará em contato pelo seu e-mail (${userData.email}) em até 24 horas úteis.`);
+  };
+
+  const handleCopyTrackingCode = (code) => {
+    if (!code || code.includes('Aguardando')) return;
     navigator.clipboard.writeText(code);
-    setCopiedTracking(code);
-    setTimeout(() => {
-      setCopiedTracking(null);
-    }, 2500);
+    setCopiedTracking(true);
+    setTimeout(() => setCopiedTracking(false), 2000);
   };
 
-  const handleOpenWhatsappSupport = (orderId) => {
-    const text = encodeURIComponent(`Olá equipe Ateliê THR33! Preciso de atendimento/suporte referente ao pedido #${orderId}.`);
-    window.open(`https://wa.me/5511999999999?text=${text}`, '_blank');
+  // -------------------------------------------------------------
+  // HANDLERS: DANGER ZONE
+  // -------------------------------------------------------------
+  const handleDeleteAccount = () => {
+    const confirmation = window.prompt("TEM CERTEZA? Esta ação é permanente e irreversível.\n\nDigite 'EXCLUIR' para confirmar a exclusão da sua conta:");
+    if (confirmation === 'EXCLUIR') {
+      alert("Sua conta foi excluída com sucesso de nossos servidores.");
+      if (logout) logout();
+      window.location.href = '/';
+    }
   };
 
-  const tabsConfig = [
-    { id: 'pedidos', label: '01. MEUS PEDIDOS & DROPS', icon: Package },
-    { id: 'dados', label: '02. DADOS PESSOAIS', icon: User },
-    { id: 'enderecos', label: '03. ENDEREÇOS TÁTICOS', icon: MapPin },
-    { id: 'seguranca', label: '04. SEGURANÇA & ACESSO', icon: Shield }
-  ];
+  const firstName = userData.name.split(' ')[0] || 'Usuário';
+
+  // HELPER PARA CALCULAR O ÍNDICE DA ETAPA ATUAL NA TIMELINE
+  const getStepIndex = (code) => {
+    switch (code) {
+      case 'waiting_payment': return 0;
+      case 'payment_approved': return 1;
+      case 'preparing': return 2;
+      case 'in_transit': return 3;
+      case 'delivered': return 4;
+      default: return -1;
+    }
+  };
 
   return (
-    <div className={styles.perfilContainer}>
-      
-      {/* TOAST FLUTUANTE DE NOTIFICAÇÃO TÁTICA */}
-      <AnimatePresence>
-        {toastMessage && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className={styles.tacticalToast}
+    <main className={styles.container}>
+      {/* HEADER LIMPO DE BOAS-VINDAS */}
+      <header className={styles.welcomeHeader}>
+        <h1 className={styles.title}>Bem vindo de volta, {firstName}</h1>
+        
+        <div className={styles.headerActions}>
+          <Link to="/suporte" className={styles.helpBtn}>
+            <HelpCircle size={16} />
+            <span>CENTRAL DE AJUDA</span>
+          </Link>
+          <button type="button" onClick={logout} className={styles.logoutBtn} title="Sair da Conta">
+            <LogOut size={15} />
+            <span>SAIR</span>
+          </button>
+        </div>
+      </header>
+
+      <div className={styles.profileGrid}>
+        {/* SIDEBAR DE NAVEGAÇÃO DAS ABAS */}
+        <aside className={styles.tabsNav} aria-label="Navegação do Perfil">
+          <button 
+            type="button"
+            className={`${styles.tabLink} ${activeTab === 'dados' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('dados')}
           >
-            <Sparkles size={16} className={styles.toastIcon} />
-            <span>{toastMessage}</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* 1. HEADER HERO: PASSAPORTE DIGITAL DO MEMBRO */}
-      <div className={styles.passportCard}>
-        <div className={styles.cardBodyGrid}>
-          {/* LADO ESQUERDO: INFORMAÇÕES DO USUÁRIO */}
-          <div className={styles.userInfoCol}>
-            <div className={styles.passNumberBadge}>
-              <span>MEMBER REGISTRY</span>
-              <strong className={styles.passNumber}>{user?.passId || '#0482'}</strong>
-            </div>
-
-            <h1 className={styles.userNameHeader}>{user?.name || 'WESLLEY K.'}</h1>
-
-            <div className={styles.statusTierBox}>
-              <span className={styles.tierLabel}>NÍVEL DE ACESSO:</span>
-              <span className={styles.tierValue}>{user?.tier || 'STATUS: MEMBRO VIP // ATELIÊ R.U.A'}</span>
-            </div>
-
-            <div className={styles.userMetaFlex}>
-              <div className={styles.metaItem}>
-                <span className={styles.metaKey}>CADASTRO:</span>
-                <span className={styles.metaVal}>{user?.createdAt || '14/03/2024'}</span>
-              </div>
-              <div className={styles.metaItem}>
-                <span className={styles.metaKey}>E-MAIL:</span>
-                <span className={styles.metaVal}>{user?.email || 'weslley@atelier-thr33.com'}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* LADO DIREITO: QR CODE TÁTICO DE AUTENTICAÇÃO */}
-          <div className={styles.qrCodeCol}>
-            <div className={styles.qrFrame}>
-              <div className={styles.qrCornerTL} />
-              <div className={styles.qrCornerTR} />
-              <div className={styles.qrCornerBL} />
-              <div className={styles.qrCornerBR} />
-
-              <svg className={styles.qrSvg} viewBox="0 0 100 100" fill="currentColor">
-                <rect x="5" y="5" width="25" height="25" fill="#F2E3B3" />
-                <rect x="9" y="9" width="17" height="17" fill="#000000" />
-                <rect x="13" y="13" width="9" height="9" fill="#F2E3B3" />
-
-                <rect x="70" y="5" width="25" height="25" fill="#F2E3B3" />
-                <rect x="74" y="9" width="17" height="17" fill="#000000" />
-                <rect x="78" y="13" width="9" height="9" fill="#F2E3B3" />
-
-                <rect x="5" y="70" width="25" height="25" fill="#F2E3B3" />
-                <rect x="9" y="74" width="17" height="17" fill="#000000" />
-                <rect x="13" y="78" width="9" height="9" fill="#F2E3B3" />
-
-                {/* MATRIX PATTERN */}
-                <rect x="36" y="8" width="8" height="8" fill="#FFF" />
-                <rect x="48" y="14" width="14" height="6" fill="#FFF" />
-                <rect x="36" y="24" width="6" height="12" fill="#FFF" />
-                <rect x="46" y="24" width="16" height="6" fill="#F2E3B3" />
-                
-                <rect x="8" y="36" width="10" height="10" fill="#FFF" />
-                <rect x="22" y="38" width="16" height="6" fill="#FFF" />
-                <rect x="42" y="36" width="12" height="12" fill="#FFF" />
-                <rect x="58" y="38" width="14" height="6" fill="#FFF" />
-                <rect x="76" y="36" width="18" height="8" fill="#F2E3B3" />
-
-                <rect x="8" y="52" width="18" height="8" fill="#FFF" />
-                <rect x="30" y="52" width="12" height="12" fill="#F2E3B3" />
-                <rect x="48" y="54" width="16" height="6" fill="#FFF" />
-                <rect x="68" y="52" width="12" height="12" fill="#FFF" />
-
-                <rect x="36" y="70" width="12" height="12" fill="#FFF" />
-                <rect x="52" y="72" width="18" height="6" fill="#F2E3B3" />
-                <rect x="74" y="70" width="20" height="20" fill="#FFF" />
-                <rect x="78" y="74" width="12" height="12" fill="#000000" />
-
-                <rect x="36" y="86" width="18" height="8" fill="#FFF" />
-                <rect x="58" y="84" width="10" height="10" fill="#FFF" />
-              </svg>
-              <div className={styles.qrScanline} />
-            </div>
-
-            <div className={styles.qrCaption}>
-              <QrCode size={12} />
-              <span>QR DE AUTENTICAÇÃO VIP</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* 2. NAVEGADOR DE ABAS TÁTICO */}
-      <div className={styles.tabsNavContainer}>
-        <div className={styles.tabsGrid}>
-          {tabsConfig.map(tab => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  navigate(`?tab=${tab.id}`, { replace: true });
-                }}
-                className={`${styles.tabBtn} ${isActive ? styles.tabBtnActive : ''}`}
-              >
-                <Icon size={16} className={styles.tabIcon} />
-                <span>{tab.label}</span>
-                {isActive && (
-                  <motion.div 
-                    layoutId="activeTabGlow"
-                    className={styles.activeTabGlow} 
-                    transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                  />
-                )}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* 3. CONTEÚDO DAS ABAS */}
-      <div className={styles.tabContentBox}>
-        <AnimatePresence mode="wait">
+            <User size={16} />
+            <span>Meus Dados</span>
+          </button>
           
-          {/* ABA 01: MEUS PEDIDOS & DROPS */}
-          {activeTab === 'pedidos' && (
-            <motion.div 
-              key="tab-pedidos"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.2 }}
-              className={styles.tabSection}
-            >
-              <div className={styles.sectionHeaderFlex}>
-                <div>
-                  <h2 className={styles.sectionTitle}>HISTÓRICO DE PEDIDOS & DROPS GARANTIDOS</h2>
-                  <p className={styles.sectionSub}>Acompanhe o status do envio, rastreio SEDEX e os lotes numerados das suas peças.</p>
-                </div>
-                <div className={styles.counterBadge}>
-                  TOTAL: <strong>{INITIAL_ORDERS.length} PEDIDOS</strong>
-                </div>
-              </div>
+          <button 
+            type="button"
+            className={`${styles.tabLink} ${activeTab === 'enderecos' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('enderecos')}
+          >
+            <MapPin size={16} />
+            <span>Endereços</span>
+          </button>
+          
+          <button 
+            type="button"
+            className={`${styles.tabLink} ${activeTab === 'pedidos' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('pedidos')}
+          >
+            <Package size={16} />
+            <span>Meus Pedidos & Avaliações</span>
+          </button>
+          
+          <button 
+            type="button"
+            className={`${styles.tabLink} ${styles.dangerTab} ${activeTab === 'seguranca' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('seguranca')}
+          >
+            <AlertTriangle size={16} />
+            <span>Danger Zone</span>
+          </button>
+        </aside>
 
-              <div className={styles.ordersList}>
-                {INITIAL_ORDERS.map((order) => (
-                  <div key={order.id} className={styles.orderCard}>
-                    
-                    {/* TOP DE PEDIDO */}
-                    <div className={styles.orderTopBar}>
-                      <div className={styles.orderIdent}>
-                        <span className={styles.orderTag}>PEDIDO:</span>
-                        <strong className={styles.orderNum}>#{order.id}</strong>
-                        <span className={styles.orderDate}>• {order.date}</span>
-                      </div>
-
-                      <div className={styles.orderStatusBadge} data-status={order.statusType}>
-                        {order.statusType === 'shipping' && <Truck size={14} />}
-                        {order.statusType === 'delivered' && <CheckCircle2 size={14} />}
-                        {order.statusType === 'dispatched' && <Clock size={14} />}
-                        <span>{order.status}</span>
-                      </div>
-                    </div>
-
-                    {/* LISTA DE ITENS DO PEDIDO COM LOTE NUMERADO */}
-                    <div className={styles.orderItemsGrid}>
-                      {order.items.map((item) => (
-                        <div key={item.id} className={styles.orderItemRow}>
-                          <img src={item.image} alt={item.title} className={styles.itemThumb} />
-                          
-                          <div className={styles.itemDetails}>
-                            <h4 className={styles.itemTitle}>{item.title}</h4>
-                            <div className={styles.itemMetaLine}>
-                              <span className={styles.sizeBadge}>TAMANHO: {item.size}</span>
-                              <span className={styles.lotBadge}>
-                                LOTE NUMERADO: <strong>{item.dropLot}</strong>
-                              </span>
-                            </div>
-                          </div>
-
-                          <div className={styles.itemPriceCol}>
-                            <span>{item.price}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-
-                    {/* RASTREIO E TOTAL */}
-                    <div className={styles.orderMiddleBar}>
-                      <div className={styles.trackingBox}>
-                        <span className={styles.trackLabel}>CÓDIGO DE RASTREIO SEDEX:</span>
-                        <code className={styles.trackCode}>{order.trackingCode}</code>
-                        
-                        <button 
-                          onClick={() => handleCopyTracking(order.trackingCode)}
-                          className={styles.btnCopyTrack}
-                        >
-                          {copiedTracking === order.trackingCode ? (
-                            <>
-                              <Check size={14} color="#000000" />
-                              <span>COPIADO!</span>
-                            </>
-                          ) : (
-                            <>
-                              <Copy size={14} />
-                              <span>COPIAR RASTREIO</span>
-                            </>
-                          )}
-                        </button>
-                      </div>
-
-                      <div className={styles.orderTotalBox}>
-                        <span className={styles.totalLabel}>TOTAL DO PEDIDO:</span>
-                        <strong className={styles.totalValue}>{order.total}</strong>
-                      </div>
-                    </div>
-
-                    {/* RODAPÉ DO CARD: AÇÕES RÁPIDAS (DETALHES DA COMPRA & SUPORTE) */}
-                    <div className={styles.orderCardFooterActions}>
-                      <button 
-                        onClick={() => setSelectedOrder(order)} 
-                        className={styles.btnViewDetails}
-                      >
-                        <Eye size={15} />
-                        <span>[ 👁 VER DETALHES DA COMPRA ]</span>
-                      </button>
-
-                      <button 
-                        onClick={() => setSupportOrder(order)} 
-                        className={styles.btnOrderSupport}
-                      >
-                        <MessageSquare size={15} />
-                        <span>[ 💬 SUPORTE // AJUDA ]</span>
-                      </button>
-                    </div>
-
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          )}
-
-          {/* ABA 02: DADOS PESSOAIS */}
+        {/* ÁREA DE CONTEÚDO DINÂMICO */}
+        <section className={styles.tabContent}>
+          {/* TAB 1: DADOS PESSOAIS */}
           {activeTab === 'dados' && (
-            <motion.div 
-              key="tab-dados"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.2 }}
-              className={styles.tabSection}
-            >
-              <div className={styles.sectionHeaderFlex}>
-                <div>
-                  <h2 className={styles.sectionTitle}>DADOS PESSOAIS & CADASTRO DO PASSAPORTE</h2>
-                  <p className={styles.sectionSub}>Mantenha seus dados atualizados para confirmações de compras e envios dos drops.</p>
-                </div>
+            <div className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <h2 className={styles.panelTitle}>DADOS PESSOAIS</h2>
+                
+                {saveSuccessFeedback && (
+                  <span className={styles.successBadge}>
+                    <Check size={14} /> Dados atualizados com sucesso!
+                  </span>
+                )}
+
+                {!isEditingData && (
+                  <button 
+                    type="button" 
+                    onClick={handleStartEdit} 
+                    className={styles.editBtn}
+                  >
+                    <Edit3 size={14} />
+                    <span>EDITAR DADOS</span>
+                  </button>
+                )}
               </div>
 
-              <form onSubmit={handleProfileSubmit} className={styles.formBrutal}>
-                <div className={styles.formGrid2}>
-                  
-                  <div className={styles.inputGroup}>
-                    <label className={styles.inputLabel}>NOME COMPLETO *</label>
-                    <div className={styles.inputWithIcon}>
-                      <User size={16} className={styles.fieldIcon} />
-                      <input 
-                        type="text"
-                        required
-                        value={profileForm.name}
-                        onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
-                        placeholder="EX: WESLLEY K."
-                      />
-                    </div>
-                  </div>
-
-                  <div className={styles.inputGroup}>
-                    <label className={styles.inputLabel}>E-MAIL DE NOTIFICAÇÃO *</label>
-                    <div className={styles.inputWithIcon}>
-                      <Mail size={16} className={styles.fieldIcon} />
-                      <input 
-                        type="email"
-                        required
-                        value={profileForm.email}
-                        onChange={(e) => setProfileForm({ ...profileForm, email: e.target.value })}
-                        placeholder="seuemail@exemplo.com"
-                      />
-                    </div>
-                  </div>
-
-                  <div className={styles.inputGroup}>
-                    <label className={styles.inputLabel}>CPF (REGISTRO FISCAL) *</label>
-                    <div className={styles.inputWithIcon}>
-                      <CreditCard size={16} className={styles.fieldIcon} />
-                      <input 
-                        type="text"
-                        required
-                        value={profileForm.cpf}
-                        onChange={(e) => setProfileForm({ ...profileForm, cpf: e.target.value })}
-                        placeholder="000.000.000-00"
-                      />
-                    </div>
-                  </div>
-
-                  <div className={styles.inputGroup}>
-                    <label className={styles.inputLabel}>TELEFONE / WHATSAPP *</label>
-                    <div className={styles.inputWithIcon}>
-                      <Phone size={16} className={styles.fieldIcon} />
-                      <input 
-                        type="text"
-                        required
-                        value={profileForm.phone}
-                        onChange={(e) => setProfileForm({ ...profileForm, phone: e.target.value })}
-                        placeholder="(11) 99999-9999"
-                      />
-                    </div>
-                  </div>
-
+              <form onSubmit={handleUserSubmit} className={styles.formGrid}>
+                <div className={styles.inputField}>
+                  <label>Nome Completo *</label>
+                  <input 
+                    type="text" 
+                    name="name"
+                    value={isEditingData ? editFormData.name : userData.name} 
+                    onChange={handleUserChange} 
+                    disabled={!isEditingData}
+                    className={`${!isEditingData ? styles.inputLocked : ''} ${userErrors.name ? styles.inputError : ''}`}
+                    required 
+                  />
+                  {userErrors.name && (
+                    <span className={styles.errorText}>
+                      <AlertCircle size={12} /> {userErrors.name}
+                    </span>
+                  )}
                 </div>
 
-                <div className={styles.formActionsBar}>
-                  <button type="submit" className={styles.btnSavePrimary}>
-                    <Save size={16} />
-                    <span>[ SALVAR ALTERAÇÕES DADOS ]</span>
-                  </button>
+                <div className={styles.inputField}>
+                  <label>E-mail *</label>
+                  <input 
+                    type="email" 
+                    name="email"
+                    value={isEditingData ? editFormData.email : userData.email} 
+                    onChange={handleUserChange} 
+                    disabled={!isEditingData}
+                    className={`${!isEditingData ? styles.inputLocked : ''} ${userErrors.email ? styles.inputError : ''}`}
+                    required 
+                  />
+                  {userErrors.email && (
+                    <span className={styles.errorText}>
+                      <AlertCircle size={12} /> {userErrors.email}
+                    </span>
+                  )}
                 </div>
+
+                <div className={styles.inputField}>
+                  <label>CPF *</label>
+                  <input 
+                    type="text" 
+                    name="cpf"
+                    maxLength={14}
+                    value={isEditingData ? editFormData.cpf : userData.cpf} 
+                    onChange={handleUserChange} 
+                    disabled={!isEditingData}
+                    className={`${!isEditingData ? styles.inputLocked : ''} ${userErrors.cpf ? styles.inputError : ''}`}
+                    required
+                  />
+                  {userErrors.cpf && (
+                    <span className={styles.errorText}>
+                      <AlertCircle size={12} /> {userErrors.cpf}
+                    </span>
+                  )}
+                </div>
+
+                <div className={styles.inputField}>
+                  <label>Telefone / WhatsApp *</label>
+                  <input 
+                    type="text" 
+                    name="phone"
+                    maxLength={15}
+                    value={isEditingData ? editFormData.phone : userData.phone} 
+                    onChange={handleUserChange} 
+                    disabled={!isEditingData}
+                    className={`${!isEditingData ? styles.inputLocked : ''} ${userErrors.phone ? styles.inputError : ''}`}
+                    required 
+                  />
+                  {userErrors.phone && (
+                    <span className={styles.errorText}>
+                      <AlertCircle size={12} /> {userErrors.phone}
+                    </span>
+                  )}
+                </div>
+
+                {isEditingData && (
+                  <div className={styles.formActions}>
+                    <button type="button" onClick={handleCancelEdit} className={styles.cancelBtn}>
+                      CANCELAR
+                    </button>
+                    <button type="submit" className={styles.saveBtn}>
+                      SALVAR ALTERAÇÕES
+                    </button>
+                  </div>
+                )}
               </form>
-            </motion.div>
+            </div>
           )}
 
-          {/* ABA 03: ENDEREÇOS TÁTICOS */}
+          {/* TAB 2: ENDEREÇOS */}
           {activeTab === 'enderecos' && (
-            <motion.div 
-              key="tab-enderecos"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.2 }}
-              className={styles.tabSection}
-            >
-              <div className={styles.sectionHeaderFlex}>
-                <div>
-                  <h2 className={styles.sectionTitle}>ENDEREÇOS SALVOS PARA ENTREGA</h2>
-                  <p className={styles.sectionSub}>Os endereços cadastrados aqui se refletem automaticamente na etapa 02 do Checkout.</p>
-                </div>
-
-                <button onClick={handleOpenNewAddress} className={styles.btnAddAddress}>
-                  <Plus size={16} />
-                  <span>[ + CADASTRAR NOVO ENDEREÇO ]</span>
+            <div className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <h2 className={styles.panelTitle}>MEUS ENDEREÇOS DE ENTREGA</h2>
+                <button 
+                  type="button"
+                  onClick={() => setIsAddingAddress(!isAddingAddress)} 
+                  className={styles.addBtn}
+                >
+                  <Plus size={14} />
+                  <span>{isAddingAddress ? 'CANCELAR' : 'NOVO ENDEREÇO'}</span>
                 </button>
               </div>
 
-              <div className={styles.addressesGrid}>
-                {addresses.map((addr) => (
-                  <div key={addr.id} className={`${styles.addressCard} ${addr.isDefault ? styles.addressCardDefault : ''}`}>
-                    
-                    <div className={styles.addrHeaderBar}>
-                      <div className={styles.addrLabelBox}>
-                        <MapPin size={14} />
-                        <strong>{addr.label || 'ENDEREÇO'}</strong>
-                      </div>
+              {isAddingAddress && (
+                <form onSubmit={handleAddAddress} className={styles.addressForm}>
+                  <h3 className={styles.formSectionTitle}>CADASTRAR NOVO ENDEREÇO</h3>
+                  
+                  <div className={styles.inputField}>
+                    <label>Identificação do Endereço (Ex: Casa, Trabalho, Estúdio) *</label>
+                    <input 
+                      type="text" 
+                      name="title"
+                      placeholder="Ex: Casa"
+                      value={newAddress.title} 
+                      onChange={handleAddressInputChange} 
+                      required 
+                    />
+                  </div>
 
+                  <div className={styles.inputRow}>
+                    <div className={styles.inputField}>
+                      <label>CEP *</label>
+                      <div className={styles.cepSearchWrapper}>
+                        <input 
+                          type="text" 
+                          name="cep"
+                          placeholder="00000-000"
+                          maxLength={9}
+                          value={newAddress.cep} 
+                          onChange={handleAddressInputChange} 
+                          required 
+                        />
+                        {isSearchingCep && <Loader2 size={16} className={styles.spinner} />}
+                      </div>
+                      {cepError && <span className={styles.errorText}>{cepError}</span>}
+                    </div>
+
+                    <div className={styles.inputField}>
+                      <label>Rua / Logradouro *</label>
+                      <input 
+                        type="text" 
+                        name="street"
+                        placeholder="Rua / Avenida" 
+                        value={newAddress.street} 
+                        onChange={handleAddressInputChange} 
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div className={styles.inputRowTriple}>
+                    <div className={styles.inputField}>
+                      <label>Número *</label>
+                      <input 
+                        type="text" 
+                        name="number"
+                        placeholder="123" 
+                        value={newAddress.number} 
+                        onChange={handleAddressInputChange} 
+                        required 
+                      />
+                    </div>
+
+                    <div className={styles.inputField}>
+                      <label>Complemento</label>
+                      <input 
+                        type="text" 
+                        name="complement"
+                        placeholder="Apt, Bloco" 
+                        value={newAddress.complement} 
+                        onChange={handleAddressInputChange} 
+                      />
+                    </div>
+
+                    <div className={styles.inputField}>
+                      <label>Bairro *</label>
+                      <input 
+                        type="text" 
+                        name="neighborhood"
+                        placeholder="Bairro" 
+                        value={newAddress.neighborhood} 
+                        onChange={handleAddressInputChange} 
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <div className={styles.inputRow}>
+                    <div className={styles.inputField}>
+                      <label>Cidade *</label>
+                      <input 
+                        type="text" 
+                        name="city"
+                        value={newAddress.city} 
+                        onChange={handleAddressInputChange} 
+                        required 
+                      />
+                    </div>
+
+                    <div className={styles.inputField}>
+                      <label>UF *</label>
+                      <input 
+                        type="text" 
+                        name="state"
+                        maxLength={2}
+                        value={newAddress.state} 
+                        onChange={handleAddressInputChange} 
+                        required 
+                      />
+                    </div>
+                  </div>
+
+                  <button type="submit" className={styles.saveBtn}>CADASTRAR ENDEREÇO</button>
+                </form>
+              )}
+
+              <div className={styles.addressList}>
+                {addresses.map((addr) => (
+                  <div key={addr.id} className={`${styles.addressCard} ${addr.isDefault ? styles.defaultCard : ''}`}>
+                    <div className={styles.addrHeader}>
+                      <strong>{addr.title.toUpperCase()}</strong>
                       {addr.isDefault ? (
-                        <span className={styles.badgeDefault}>[ ENDEREÇO PRINCIPAL // PADRÃO ]</span>
+                        <span className={styles.defaultBadge}>PADRÃO</span>
                       ) : (
                         <button 
+                          type="button" 
                           onClick={() => handleSetDefaultAddress(addr.id)} 
-                          className={styles.btnSetDefault}
+                          className={styles.setDefaultLink}
                         >
-                          DEFINIR COMO PADRÃO
+                          Definir como padrão
                         </button>
                       )}
                     </div>
-
-                    <div className={styles.addrBody}>
-                      <p className={styles.addrRecipient}><strong>{addr.nome}</strong></p>
-                      <p className={styles.addrLine}>{addr.rua}, {addr.numero} {addr.complemento ? `— ${addr.complemento}` : ''}</p>
-                      <p className={styles.addrLine}>{addr.bairro} — {addr.cidade}/{addr.estado}</p>
-                      <p className={styles.addrCep}>CEP: <strong>{addr.cep}</strong></p>
-                    </div>
-
-                    <div className={styles.addrFooterActions}>
-                      <button onClick={() => handleOpenEditAddress(addr)} className={styles.btnAddrAction}>
-                        <Edit3 size={14} />
-                        <span>EDITAR</span>
+                    <p className={styles.addrText}>{addr.street}, {addr.number} {addr.complement && `• ${addr.complement}`}</p>
+                    <p className={styles.addrText}>{addr.neighborhood} — {addr.city}/{addr.state} | CEP: {addr.cep}</p>
+                    
+                    <div className={styles.cardActions}>
+                      <button 
+                        type="button"
+                        onClick={() => handleDeleteAddress(addr.id)} 
+                        className={styles.deleteLink}
+                      >
+                        <Trash2 size={13} />
+                        <span>Excluir</span>
                       </button>
-
-                      {addresses.length > 1 && (
-                        <button onClick={() => handleDeleteAddress(addr.id)} className={`${styles.btnAddrAction} ${styles.btnAddrDelete}`}>
-                          <Trash2 size={14} />
-                          <span>EXCLUIR</span>
-                        </button>
-                      )}
                     </div>
-
                   </div>
                 ))}
               </div>
-            </motion.div>
+            </div>
           )}
 
-          {/* ABA 04: SEGURANÇA & ACESSO */}
+          {/* TAB 3: PEDIDOS & AVALIAÇÕES */}
+          {activeTab === 'pedidos' && (
+            <div className={styles.panel}>
+              <div className={styles.panelHeader}>
+                <h2 className={styles.panelTitle}>HISTÓRICO DE PEDIDOS ({orders.length})</h2>
+              </div>
+              
+              <div className={styles.ordersList}>
+                {orders.map((order) => {
+                  const isDelivered = order.statusCode === 'delivered';
+                  const isPreparing = order.statusCode === 'preparing' || order.statusCode === 'waiting_payment';
+                  const isCanceled = order.statusCode === 'canceled';
+
+                  return (
+                    <article key={order.id} className={styles.orderCard}>
+                      <header className={styles.orderMeta}>
+                        <div>
+                          <span className={styles.orderId}>PEDIDO #{order.id}</span>
+                          <span className={styles.orderDate}>Realizado em {order.date}</span>
+                        </div>
+                        
+                        <div className={styles.statusBox}>
+                          <span className={`
+                            ${styles.statusTag} 
+                            ${isDelivered ? styles.statusDelivered : ''}
+                            ${isCanceled ? styles.statusCanceled : ''}
+                          `}>
+                            {order.status.toUpperCase()}
+                          </span>
+                          <span className={styles.tracking}>
+                            Rastreio: <strong>{order.trackingCode}</strong>
+                          </span>
+                        </div>
+                      </header>
+
+                      {/* ITENS DO PEDIDO */}
+                      <div className={styles.orderItems}>
+                        {order.items.map((item) => (
+                          <div key={item.id} className={styles.orderItemRow}>
+                            <img src={item.image} alt={item.name} className={styles.itemThumb} />
+                            <div className={styles.itemInfo}>
+                              <strong className={styles.itemTitle}>{item.name}</strong>
+                              <span className={styles.itemMetaText}>Tamanho: {item.size} | R$ {item.price.toFixed(2)}</span>
+                            </div>
+                            
+                            <button 
+                              type="button"
+                              className={`${styles.reviewBtn} ${item.evaluated ? styles.evaluatedBtn : ''}`}
+                              onClick={() => !item.evaluated && handleOpenReviewModal(item, order.id)}
+                              disabled={item.evaluated || isCanceled}
+                            >
+                              {item.evaluated ? (
+                                <>
+                                  <Check size={12} />
+                                  <span>AVALIADO</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Star size={12} />
+                                  <span>AVALIAR PRODUTO</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* FOOTER DO CARD COM BOTÃO DE VER DETALHES */}
+                      <footer className={styles.orderFooter}>
+                        <div className={styles.orderFooterLeft}>
+                          <span>Total do Pedido:</span>
+                          <strong className={styles.orderTotalValue}>R$ {order.total.toFixed(2)}</strong>
+                        </div>
+
+                        <div className={styles.orderFooterActions}>
+                          <button 
+                            type="button" 
+                            onClick={() => setSelectedOrderDetails(order)} 
+                            className={styles.viewDetailsBtn}
+                          >
+                            <Eye size={14} />
+                            <span>VER DETALHES DO PEDIDO</span>
+                          </button>
+                        </div>
+                      </footer>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* TAB 4: DANGER ZONE */}
           {activeTab === 'seguranca' && (
-            <motion.div 
-              key="tab-seguranca"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              transition={{ duration: 0.2 }}
-              className={styles.tabSection}
-            >
-              <div className={styles.sectionHeaderFlex}>
-                <div>
-                  <h2 className={styles.sectionTitle}>SEGURANÇA DA CONTA & SENHA DE ACESSO</h2>
-                  <p className={styles.sectionSub}>Altere suas credenciais de segurança e gerencie a sessão do seu Passaporte Ateliê.</p>
+            <div className={styles.panel}>
+              <h2 className={`${styles.panelTitle} ${styles.dangerText}`}>DANGER ZONE</h2>
+              <p className={styles.dangerDesc}>
+                A exclusão da conta removerá permanentemente seu passaporte de acesso, histórico de compras, endereços e preferências da plataforma THR33.
+              </p>
+              
+              <div className={styles.dangerBox}>
+                <div className={styles.dangerBoxInfo}>
+                  <div className={styles.dangerBoxTitle}>
+                    <ShieldAlert size={18} color="#ef4444" />
+                    <strong>Excluir Minha Conta Permanente</strong>
+                  </div>
+                  <p>Todos os seus dados serão apagados imediatamente de nossos servidores com total conformidade à LGPD.</p>
                 </div>
+                <button type="button" onClick={handleDeleteAccount} className={styles.deleteAccountBtn}>
+                  EXCLUIR CONTA
+                </button>
               </div>
-
-              <div className={styles.securityGrid}>
-                {/* BLOCO DE TROCA DE SENHA */}
-                <form onSubmit={handleSecuritySubmit} className={styles.formBrutal}>
-                  <h3 className={styles.subSectionHeading}>
-                    <Lock size={16} />
-                    <span>ALTERAÇÃO DE SENHA</span>
-                  </h3>
-
-                  <div className={styles.inputGroup}>
-                    <label className={styles.inputLabel}>SENHA ATUAL *</label>
-                    <input 
-                      type="password"
-                      required
-                      value={securityForm.currentPassword}
-                      onChange={(e) => setSecurityForm({ ...securityForm, currentPassword: e.target.value })}
-                      placeholder="••••••••••••"
-                    />
-                  </div>
-
-                  <div className={styles.inputGroup}>
-                    <label className={styles.inputLabel}>NOVA SENHA *</label>
-                    <input 
-                      type="password"
-                      required
-                      value={securityForm.newPassword}
-                      onChange={(e) => setSecurityForm({ ...securityForm, newPassword: e.target.value })}
-                      placeholder="Mínimo 6 caracteres"
-                    />
-                  </div>
-
-                  <div className={styles.inputGroup}>
-                    <label className={styles.inputLabel}>CONFIRMAR NOVA SENHA *</label>
-                    <input 
-                      type="password"
-                      required
-                      value={securityForm.confirmPassword}
-                      onChange={(e) => setSecurityForm({ ...securityForm, confirmPassword: e.target.value })}
-                      placeholder="Repita a nova senha"
-                    />
-                  </div>
-
-                  <button type="submit" className={styles.btnSavePrimary}>
-                    <ShieldCheck size={16} />
-                    <span>[ ATUALIZAR SENHA DE ACESSO ]</span>
-                  </button>
-                </form>
-
-                {/* BLOCO DE AÇÕES CRÍTICAS (LOGOUT & EXCLUSÃO) */}
-                <div className={styles.logoutDangerCard}>
-                  <div className={styles.dangerHeader}>
-                    <AlertTriangle size={20} className={styles.dangerIcon} />
-                    <div>
-                      <h3 className={styles.dangerTitle}>GERENCIAMENTO DA SESSÃO E DA CONTA</h3>
-                      <p className={styles.dangerText}>
-                        Escolha uma das ações críticas abaixo para desconectar sua sessão atual ou encerrar definitivamente sua conta.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className={styles.criticalButtonsGroup}>
-                    {/* OPÇÃO 01: LOGOUT */}
-                    <button onClick={() => setShowLogoutModal(true)} className={styles.btnLogoutDanger}>
-                      <LogOut size={16} />
-                      <span>[ SAIR DA CONTA // DESCONECTAR SESSÃO ]</span>
-                    </button>
-
-                    {/* OPÇÃO 02: EXCLUIR CONTA */}
-                    <button onClick={() => setShowDeleteModal(true)} className={styles.btnDeleteAccountDanger}>
-                      <Trash2 size={16} />
-                      <span>[ EXCLUIR CONTA DEFINITIVAMENTE ]</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-            </motion.div>
+            </div>
           )}
-
-        </AnimatePresence>
+        </section>
       </div>
 
-      {/* MODAL 01: DETALHAMENTO COMPLETO DO PEDIDO (ORDER DETAILS MODAL) */}
+      {/* ============================================================
+          MODAL 1: DETALHES COMPLETOS DO PEDIDO (COM TIMELINE & AÇÕES)
+          ============================================================ */}
       <AnimatePresence>
-        {selectedOrder && (
-          <div className={styles.modalOverlay} data-lenis-prevent>
+        {selectedOrderDetails && (
+          <div className={styles.modalBackdrop} onClick={() => setSelectedOrderDetails(null)}>
             <motion.div 
+              className={styles.orderDetailsModal}
+              onClick={(e) => e.stopPropagation()}
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className={styles.orderDetailsModalCard}
+              transition={{ duration: 0.25 }}
             >
-              {/* TOP HEADER */}
-              <div className={styles.orderDetailsHeader}>
-                <div className={styles.orderDetailsTitleGroup}>
-                  <Package size={20} className={styles.headerIcon} />
-                  <div>
-                    <h3>DETALHAMENTO DA COMPRA #{selectedOrder.id}</h3>
-                    <span className={styles.orderDateSub}>REALIZADO EM: {selectedOrder.date}</span>
-                  </div>
+              <header className={styles.modalHeader}>
+                <div className={styles.modalTitleGroup}>
+                  <span className={styles.modalSubTag}>DETALHES DO PEDIDO</span>
+                  <h3 className={styles.modalOrderTitle}>PEDIDO #{selectedOrderDetails.id}</h3>
+                  <span className={styles.modalDate}>Realizado em {selectedOrderDetails.date}</span>
                 </div>
-
-                <div className={styles.headerRightFlex}>
-                  <div className={styles.orderStatusBadge} data-status={selectedOrder.statusType}>
-                    {selectedOrder.statusType === 'shipping' && <Truck size={14} />}
-                    {selectedOrder.statusType === 'delivered' && <CheckCircle2 size={14} />}
-                    {selectedOrder.statusType === 'dispatched' && <Clock size={14} />}
-                    <span>{selectedOrder.status}</span>
-                  </div>
-
-                  <button onClick={() => setSelectedOrder(null)} className={styles.btnCloseModal}>
-                    <X size={20} />
-                  </button>
-                </div>
-              </div>
-
-              {/* CONTEÚDO DO MODAL DE DETALHES */}
-              <div className={styles.orderDetailsBody}>
-                
-                {/* 1. SEÇÃO DE ITENS ADQUIRIDOS */}
-                <div className={styles.detailSectionBox}>
-                  <h4 className={styles.detailSectionHeading}>
-                    <span>1. PEÇAS ADQUIRIDAS E LOTES NUMERADOS</span>
-                  </h4>
-                  <div className={styles.modalItemsList}>
-                    {selectedOrder.items.map((item) => (
-                      <div key={item.id} className={styles.modalItemRow}>
-                        <img src={item.image} alt={item.title} className={styles.modalItemThumb} />
-                        <div className={styles.modalItemInfo}>
-                          <strong className={styles.modalItemTitle}>{item.title}</strong>
-                          <div className={styles.modalItemMeta}>
-                            <span>TAMANHO: {item.size}</span>
-                            <span className={styles.modalLotTag}>LOTE EXCLUSIVO: {item.dropLot}</span>
-                          </div>
-                        </div>
-                        <div className={styles.modalItemPrice}>{item.price}</div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 2. LINHA DO TEMPO DO RASTREIO (TIMELINE) */}
-                <div className={styles.detailSectionBox}>
-                  <h4 className={styles.detailSectionHeading}>
-                    <span>2. STATUS E HISTÓRICO DE ENTREGA</span>
-                  </h4>
-
-                  <div className={styles.timelineContainer}>
-                    {selectedOrder.timeline.map((stepItem, idx) => (
-                      <div 
-                        key={idx} 
-                        className={`${styles.timelineStep} ${stepItem.done ? styles.stepDone : styles.stepPending}`}
-                      >
-                        <div className={styles.stepDotContainer}>
-                          <div className={styles.stepDot}>
-                            {stepItem.done ? <Check size={12} /> : <span>{stepItem.step}</span>}
-                          </div>
-                          {idx < selectedOrder.timeline.length - 1 && (
-                            <div className={`${styles.stepLine} ${selectedOrder.timeline[idx + 1].done ? styles.lineDone : ''}`} />
-                          )}
-                        </div>
-
-                        <div className={styles.stepContent}>
-                          <span className={styles.stepTitle}>{stepItem.label}</span>
-                          <span className={styles.stepDate}>{stepItem.date}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className={styles.trackingInfoBar}>
-                    <span className={styles.trackLabel}>CÓDIGO DE RASTREIO SEDEX:</span>
-                    <code className={styles.trackCode}>{selectedOrder.trackingCode}</code>
-                    <button 
-                      onClick={() => handleCopyTracking(selectedOrder.trackingCode)}
-                      className={styles.btnCopyTrack}
-                    >
-                      {copiedTracking === selectedOrder.trackingCode ? (
-                        <>
-                          <Check size={14} color="#000000" />
-                          <span>COPIADO!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={14} />
-                          <span>COPIAR</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* 3. RESUMO FINANCEIRO E PAGAMENTO & ENDEREÇO (2 COLUNAS) */}
-                <div className={styles.detailsGrid2}>
-                  
-                  {/* FINANCEIRO E PAGAMENTO */}
-                  <div className={styles.detailSectionBox}>
-                    <h4 className={styles.detailSectionHeading}>
-                      <span>3. RESUMO FINANCEIRO & PAGAMENTO</span>
-                    </h4>
-
-                    <div className={styles.financialRows}>
-                      <div className={styles.finRow}>
-                        <span>SUBTOTAL DAS PEÇAS:</span>
-                        <strong>{selectedOrder.subtotal}</strong>
-                      </div>
-                      <div className={styles.finRow}>
-                        <span>DESCONTO APLICADO:</span>
-                        <strong className={styles.discountVal}>{selectedOrder.discount}</strong>
-                      </div>
-                      <div className={styles.finRow}>
-                        <span>FRETE ({selectedOrder.shippingMethod}):</span>
-                        <strong>{selectedOrder.shippingCost}</strong>
-                      </div>
-                      <div className={`${styles.finRow} ${styles.finTotalRow}`}>
-                        <span>VALOR TOTAL PAGO:</span>
-                        <strong className={styles.finTotalVal}>{selectedOrder.total}</strong>
-                      </div>
-                    </div>
-
-                    <div className={styles.paymentMethodBlock}>
-                      <span className={styles.paymentMetaLabel}>FORMA DE PAGAMENTO UTILIZADA:</span>
-                      <strong className={styles.paymentMethodTitle}>
-                        <CreditCard size={14} />
-                        <span>{selectedOrder.paymentMethod}</span>
-                      </strong>
-                      <p className={styles.paymentDetailsText}>{selectedOrder.paymentDetails}</p>
-                    </div>
-                  </div>
-
-                  {/* ENDEREÇO DE DESPACHO */}
-                  <div className={styles.detailSectionBox}>
-                    <h4 className={styles.detailSectionHeading}>
-                      <span>4. ENDEREÇO DE DESPACHO DA ENCOMENDA</span>
-                    </h4>
-
-                    <div className={styles.addressDetailBox}>
-                      <div className={styles.addressHeaderLabel}>
-                        <MapPin size={14} />
-                        <strong>DESTINATÁRIO: {selectedOrder.address.nome}</strong>
-                      </div>
-                      <p>{selectedOrder.address.rua}, {selectedOrder.address.numero} {selectedOrder.address.complemento ? `— ${selectedOrder.address.complemento}` : ''}</p>
-                      <p>{selectedOrder.address.bairro} — {selectedOrder.address.cidade}/{selectedOrder.address.estado}</p>
-                      <p>CEP: <strong>{selectedOrder.address.cep}</strong></p>
-                    </div>
-
-                    <div className={styles.supportHelpBoxModal}>
-                      <HelpCircle size={16} />
-                      <div>
-                        <strong>DÚVIDAS OU ALTERAÇÕES DE DESTINO?</strong>
-                        <p>Entre em contato com nossa equipe tática para suporte de frete.</p>
-                      </div>
-                    </div>
-                  </div>
-
-                </div>
-
-              </div>
-
-              {/* FOOTER DO MODAL DE DETALHES */}
-              <div className={styles.orderDetailsFooter}>
-                <button 
-                  onClick={() => {
-                    const current = selectedOrder;
-                    setSelectedOrder(null);
-                    setSupportOrder(current);
-                  }}
-                  className={styles.btnModalOrderSupport}
-                >
-                  <MessageSquare size={16} />
-                  <span>[ 💬 SOLICITAR TROCA OU AJUDA COM ESTE PEDIDO ]</span>
-                </button>
 
                 <button 
-                  onClick={() => setSelectedOrder(null)} 
-                  className={styles.btnCancelModal}
+                  type="button" 
+                  onClick={() => setSelectedOrderDetails(null)} 
+                  className={styles.closeModalBtn}
                 >
-                  FECHAR
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
-
-      {/* MODAL 02: SUPORTE DIRETO & ATENDIMENTO DO PEDIDO */}
-      <AnimatePresence>
-        {supportOrder && (
-          <div className={styles.modalOverlay} data-lenis-prevent>
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className={styles.modalSupportCard}
-            >
-              <div className={styles.modalHeader}>
-                <div className={styles.supportTitleBox}>
-                  <MessageSquare size={20} color="#000000" />
-                  <h3>SUPORTE & ATENDIMENTO TÁTICO ATELIÊ</h3>
-                </div>
-                <button onClick={() => setSupportOrder(null)} className={styles.btnCloseModal}>
                   <X size={20} />
                 </button>
-              </div>
+              </header>
 
-              <div className={styles.supportBodyContent}>
-                <div className={styles.supportOrderBadgeBar}>
-                  <span>ATENDIMENTO PARA O PEDIDO:</span>
-                  <strong>#{supportOrder.id}</strong>
-                  <span className={styles.orderDateSub}>({supportOrder.date})</span>
-                </div>
-
-                <p className={styles.supportIntroText}>
-                  Escolha um dos canais rápidos abaixo para tirar dúvidas, solicitar troca de tamanho ou falar diretamente com a equipe do Ateliê:
-                </p>
-
-                <div className={styles.supportOptionsGrid}>
+              {/* TIMELINE VISUAL DE PROGRESSO DO ENVIO */}
+              {selectedOrderDetails.statusCode !== 'canceled' ? (
+                <div className={styles.timelineSection}>
+                  <span className={styles.sectionLabel}>STATUS & RASTREAMENTO DO ENVIO:</span>
                   
-                  {/* OPÇÃO 01: WHATSAPP */}
-                  <button 
-                    onClick={() => handleOpenWhatsappSupport(supportOrder.id)}
-                    className={styles.btnSupportOptionPrimary}
-                  >
-                    <MessageSquare size={18} />
-                    <div className={styles.btnOptionText}>
-                      <strong>FAÇO UM ATENDIMENTO DIRETO NO WHATSAPP</strong>
-                      <span>Abertura imediata com o número #{supportOrder.id} pré-preenchido</span>
-                    </div>
-                    <ChevronRight size={18} />
-                  </button>
+                  <div className={styles.timelineStepper}>
+                    {ORDER_STEPS.map((step, idx) => {
+                      const currentIdx = getStepIndex(selectedOrderDetails.statusCode);
+                      const isCompleted = idx < currentIdx;
+                      const isCurrent = idx === currentIdx;
 
-                  {/* OPÇÃO 02: SOLICITAR TROCA */}
-                  <button 
-                    onClick={() => {
-                      showToast(`✓ Solicitação de troca registrada para o Pedido #${supportOrder.id}. Nossa equipe entrará em contato via E-mail.`);
-                      setSupportOrder(null);
-                    }}
-                    className={styles.btnSupportOptionSecondary}
-                  >
-                    <HelpCircle size={18} />
-                    <div className={styles.btnOptionText}>
-                      <strong>SOLICITAR TROCA DE TAMANHO OU DEVOLUÇÃO</strong>
-                      <span>Registrar protocolo de troca para as peças deste pedido</span>
-                    </div>
-                    <ChevronRight size={18} />
-                  </button>
+                      return (
+                        <div key={step.key} className={styles.timelineStepItem}>
+                          <div className={`
+                            ${styles.timelineDot} 
+                            ${isCompleted ? styles.dotCompleted : ''} 
+                            ${isCurrent ? styles.dotCurrent : ''}
+                          `}>
+                            {isCompleted ? <Check size={12} /> : idx + 1}
+                          </div>
+                          <span className={`${styles.timelineStepLabel} ${isCurrent ? styles.activeTimelineLabel : ''}`}>
+                            {step.label}
+                          </span>
+                          {idx < ORDER_STEPS.length - 1 && (
+                            <div className={`${styles.timelineConnector} ${idx < currentIdx ? styles.connectorActive : ''}`} />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
 
+                  {/* CÓDIGO DE RASTREIO */}
+                  <div className={styles.trackingInfoCard}>
+                    <Truck size={16} />
+                    <div className={styles.trackingDetails}>
+                      <span>Código de Rastreamento (Correios):</span>
+                      <strong>{selectedOrderDetails.trackingCode}</strong>
+                    </div>
+                    {selectedOrderDetails.trackingCode && !selectedOrderDetails.trackingCode.includes('Aguardando') && (
+                      <button 
+                        type="button" 
+                        onClick={() => handleCopyTrackingCode(selectedOrderDetails.trackingCode)}
+                        className={styles.copyTrackingBtn}
+                      >
+                        {copiedTracking ? <Check size={12} /> : <Copy size={12} />}
+                        <span>{copiedTracking ? 'COPIADO!' : 'COPIAR'}</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <div className={styles.canceledNoticeBox}>
+                  <XCircle size={20} color="#ef4444" />
+                  <div>
+                    <strong>PEDIDO CANCELADO</strong>
+                    <p>Este pedido foi cancelado e o reembolso solicitado junto ao PagBank.</p>
+                  </div>
+                </div>
+              )}
+
+              {/* LISTAGEM DOS ITENS */}
+              <div className={styles.modalItemsSection}>
+                <span className={styles.sectionLabel}>ITENS INCLUSOS ({selectedOrderDetails.items.length}):</span>
+                <div className={styles.modalItemsList}>
+                  {selectedOrderDetails.items.map((item) => (
+                    <div key={item.id} className={styles.modalItemRow}>
+                      <img src={item.image} alt={item.name} />
+                      <div className={styles.modalItemInfo}>
+                        <strong>{item.name}</strong>
+                        <span>Tamanho: <strong>{item.size}</strong> • R$ {item.price.toFixed(2)}</span>
+                      </div>
+                      
+                      <button 
+                        type="button"
+                        className={`${styles.reviewBtn} ${item.evaluated ? styles.evaluatedBtn : ''}`}
+                        onClick={() => !item.evaluated && handleOpenReviewModal(item, selectedOrderDetails.id)}
+                        disabled={item.evaluated || selectedOrderDetails.statusCode === 'canceled'}
+                      >
+                        {item.evaluated ? (
+                          <>
+                            <Check size={12} />
+                            <span>AVALIADO</span>
+                          </>
+                        ) : (
+                          <>
+                            <Star size={12} />
+                            <span>AVALIAR</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ))}
                 </div>
               </div>
 
-              <div className={styles.modalActions}>
-                <button onClick={() => setSupportOrder(null)} className={styles.btnCancelModal}>
-                  FECHAR SUPORTE
-                </button>
+              {/* GRADE COM ENDEREÇO DE ENTREGA + RESUMO FINANCEIRO */}
+              <div className={styles.detailsTwoCols}>
+                {/* ENDEREÇO DE ENVIO */}
+                <div className={styles.detailsBlock}>
+                  <div className={styles.blockTitleRow}>
+                    <MapPin size={15} />
+                    <strong>ENDEREÇO DE ENTREGA</strong>
+                  </div>
+                  <p className={styles.blockText}>
+                    <strong>{selectedOrderDetails.address.name}</strong><br />
+                    {selectedOrderDetails.address.street}, {selectedOrderDetails.address.number} {selectedOrderDetails.address.complement && `• ${selectedOrderDetails.address.complement}`}<br />
+                    {selectedOrderDetails.address.neighborhood} — {selectedOrderDetails.address.city}/{selectedOrderDetails.address.state}<br />
+                    CEP: {selectedOrderDetails.address.cep}
+                  </p>
+                  <span className={styles.shippingMethodBadge}>
+                    <Truck size={13} /> {selectedOrderDetails.shippingMethod}
+                  </span>
+                </div>
+
+                {/* PAGAMENTO E VALORES */}
+                <div className={styles.detailsBlock}>
+                  <div className={styles.blockTitleRow}>
+                    <CreditCard size={15} />
+                    <strong>PAGAMENTO & VALORES</strong>
+                  </div>
+                  
+                  <div className={styles.financialRows}>
+                    <div className={styles.finRow}>
+                      <span>Forma:</span>
+                      <strong>{selectedOrderDetails.paymentMethod}</strong>
+                    </div>
+
+                    <div className={styles.finRow}>
+                      <span>Subtotal:</span>
+                      <span>R$ {selectedOrderDetails.subtotal.toFixed(2)}</span>
+                    </div>
+
+                    {selectedOrderDetails.coupon && (
+                      <div className={`${styles.finRow} ${styles.finDiscount}`}>
+                        <span>Cupom ({selectedOrderDetails.coupon.code}):</span>
+                        <span>- R$ {selectedOrderDetails.coupon.discount.toFixed(2)}</span>
+                      </div>
+                    )}
+
+                    <div className={styles.finRow}>
+                      <span>Frete:</span>
+                      <span>{selectedOrderDetails.shippingCost === 0 ? 'GRÁTIS' : `R$ ${selectedOrderDetails.shippingCost.toFixed(2)}`}</span>
+                    </div>
+
+                    <div className={`${styles.finRow} ${styles.finTotal}`}>
+                      <span>TOTAL PAGO:</span>
+                      <strong>R$ {selectedOrderDetails.total.toFixed(2)}</strong>
+                    </div>
+                  </div>
+                </div>
               </div>
+
+              {/* SEÇÃO DE CUIDADOS & SUPORTE DO CLIENTE */}
+              <footer className={styles.modalFooterActions}>
+                {/* BOTÃO CANCELAR: DISPONÍVEL SE ESTIVER EM PREPARAÇÃO */}
+                {(selectedOrderDetails.statusCode === 'preparing' || selectedOrderDetails.statusCode === 'waiting_payment') && (
+                  <div className={styles.careActionBox}>
+                    <div className={styles.careActionText}>
+                      <Clock size={15} color="#fbbf24" />
+                      <span>Pedido em separação. Você pode solicitar o cancelamento antes do despacho.</span>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => setCancelingOrder(selectedOrderDetails)} 
+                      className={styles.cancelOrderBtn}
+                    >
+                      <XCircle size={14} />
+                      <span>CANCELAR PEDIDO</span>
+                    </button>
+                  </div>
+                )}
+
+                {/* BOTÃO PROBLEMAS COM O PEDIDO: DISPONÍVEL SE EM TRÂNSITO OU ENTREGUE */}
+                {(selectedOrderDetails.statusCode === 'in_transit' || selectedOrderDetails.statusCode === 'delivered') && (
+                  <div className={styles.careActionBox}>
+                    <div className={styles.careActionText}>
+                      <MessageSquareWarning size={15} color="#4ade80" />
+                      <span>Precisa de ajuda, troca, devolução ou relatar algum imprevisto com a entrega?</span>
+                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => setReportingIssueOrder(selectedOrderDetails)} 
+                      className={styles.reportIssueBtn}
+                    >
+                      <QuestionIcon size={14} />
+                      <span>PROBLEMAS COM O PEDIDO</span>
+                    </button>
+                  </div>
+                )}
+              </footer>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-      {/* MODAL PARA CADASTRAR/EDITAR ENDEREÇO */}
+      {/* ============================================================
+          MODAL 2: CANCELAMENTO DO PEDIDO
+          ============================================================ */}
       <AnimatePresence>
-        {showAddressModal && (
-          <div className={styles.modalOverlay} data-lenis-prevent>
+        {cancelingOrder && (
+          <div className={styles.modalBackdrop} onClick={() => setCancelingOrder(null)}>
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
               className={styles.modalCard}
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
             >
               <div className={styles.modalHeader}>
-                <h3>{editingAddress ? 'EDITAR ENDEREÇO TÁTICO' : 'CADASTRAR NOVO ENDEREÇO'}</h3>
-                <button onClick={() => setShowAddressModal(false)} className={styles.btnCloseModal}>
+                <h3 className={styles.modalTitle}>CANCELAR PEDIDO #{cancelingOrder.id}</h3>
+                <button type="button" onClick={() => setCancelingOrder(null)} className={styles.closeModalBtn}>
                   <X size={18} />
                 </button>
               </div>
 
-              <form onSubmit={handleSaveAddress} className={styles.modalForm}>
-                <div className={styles.inputGroup}>
-                  <label className={styles.inputLabel}>NOME DO ENDEREÇO (EX: CASA, TRABALHO)</label>
-                  <input 
-                    type="text" 
-                    required 
-                    value={addressForm.label} 
-                    onChange={(e) => setAddressForm({ ...addressForm, label: e.target.value })}
-                    placeholder="EX: CASA / ESTÚDIO"
-                  />
+              <p className={styles.modalDesc}>
+                Tem certeza que deseja cancelar este pedido? Se aprovado, o estorno do valor de <strong>R$ {cancelingOrder.total.toFixed(2)}</strong> será processado automaticamente pelo PagBank.
+              </p>
+
+              <form onSubmit={handleConfirmCancelOrder} className={styles.reviewForm}>
+                <div className={styles.inputField}>
+                  <label>Qual o motivo do cancelamento?</label>
+                  <select 
+                    value={cancelReason} 
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    className={styles.selectInput}
+                  >
+                    <option value="tamanho">Comprei o tamanho/cor errado</option>
+                    <option value="arrependimento">Mudei de ideia</option>
+                    <option value="endereco">Endereço de entrega incorreto</option>
+                    <option value="frete">Prazo de frete não atende</option>
+                    <option value="outro">Outro motivo</option>
+                  </select>
                 </div>
 
-                <div className={styles.inputGroup}>
-                  <label className={styles.inputLabel}>NOME DO DESTINATÁRIO *</label>
-                  <input 
-                    type="text" 
-                    required 
-                    value={addressForm.nome} 
-                    onChange={(e) => setAddressForm({ ...addressForm, nome: e.target.value })}
-                    placeholder="Nome completo do recebedor"
-                  />
-                </div>
-
-                <div className={styles.inputGrid2}>
-                  <div className={styles.inputGroup}>
-                    <label className={styles.inputLabel}>CEP *</label>
+                {cancelReason === 'outro' && (
+                  <div className={styles.inputField}>
+                    <label>Especifique o motivo:</label>
                     <input 
                       type="text" 
-                      required 
-                      value={addressForm.cep} 
-                      onChange={(e) => setAddressForm({ ...addressForm, cep: e.target.value })}
-                      placeholder="00000-000"
+                      placeholder="Descreva brevemente..." 
+                      value={cancelOtherText}
+                      onChange={(e) => setCancelOtherText(e.target.value)}
+                      required
                     />
                   </div>
-
-                  <div className={styles.inputGroup}>
-                    <label className={styles.inputLabel}>BAIRRO *</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={addressForm.bairro} 
-                      onChange={(e) => setAddressForm({ ...addressForm, bairro: e.target.value })}
-                      placeholder="Bairro"
-                    />
-                  </div>
-                </div>
-
-                <div className={styles.inputGrid3}>
-                  <div className={styles.inputGroupCol2}>
-                    <label className={styles.inputLabel}>LOGRADOURO / RUA *</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={addressForm.rua} 
-                      onChange={(e) => setAddressForm({ ...addressForm, rua: e.target.value })}
-                      placeholder="Rua, Alameda, Av..."
-                    />
-                  </div>
-
-                  <div className={styles.inputGroup}>
-                    <label className={styles.inputLabel}>NÚMERO *</label>
-                    <input 
-                      type="text" 
-                      required 
-                      value={addressForm.numero} 
-                      onChange={(e) => setAddressForm({ ...addressForm, numero: e.target.value })}
-                      placeholder="123"
-                    />
-                  </div>
-                </div>
-
-                <div className={styles.inputGrid2}>
-                  <div className={styles.inputGroup}>
-                    <label className={styles.inputLabel}>COMPLEMENTO</label>
-                    <input 
-                      type="text" 
-                      value={addressForm.complemento} 
-                      onChange={(e) => setAddressForm({ ...addressForm, complemento: e.target.value })}
-                      placeholder="Apt 82, Bloco B..."
-                    />
-                  </div>
-
-                  <div className={styles.inputGrid2Inner}>
-                    <div className={styles.inputGroup}>
-                      <label className={styles.inputLabel}>CIDADE *</label>
-                      <input 
-                        type="text" 
-                        required 
-                        value={addressForm.cidade} 
-                        onChange={(e) => setAddressForm({ ...addressForm, cidade: e.target.value })}
-                        placeholder="São Paulo"
-                      />
-                    </div>
-
-                    <div className={styles.inputGroup}>
-                      <label className={styles.inputLabel}>UF *</label>
-                      <input 
-                        type="text" 
-                        required 
-                        value={addressForm.estado} 
-                        onChange={(e) => setAddressForm({ ...addressForm, estado: e.target.value.toUpperCase() })}
-                        maxLength={2}
-                        placeholder="SP"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <label className={styles.checkboxLabel}>
-                  <input 
-                    type="checkbox" 
-                    checked={addressForm.isDefault} 
-                    onChange={(e) => setAddressForm({ ...addressForm, isDefault: e.target.checked })}
-                  />
-                  <span>DEFINIR COMO ENDEREÇO PRINCIPAL PARA ENTREGAS</span>
-                </label>
+                )}
 
                 <div className={styles.modalActions}>
-                  <button type="button" onClick={() => setShowAddressModal(false)} className={styles.btnCancelModal}>
-                    CANCELAR
+                  <button type="button" onClick={() => setCancelingOrder(null)} className={styles.cancelBtn}>
+                    Manter Pedido
                   </button>
-                  <button type="submit" className={styles.btnSubmitModal}>
-                    [ SALVAR ENDEREÇO ]
+                  <button type="submit" className={styles.confirmCancelBtn}>
+                    CONFIRMAR CANCELAMENTO
                   </button>
                 </div>
               </form>
@@ -1360,82 +1228,148 @@ export function Perfil({ defaultTab = 'pedidos' }) {
         )}
       </AnimatePresence>
 
-      {/* MODAL DE CONFIRMAÇÃO DE LOGOUT */}
+      {/* ============================================================
+          MODAL 3: PROBLEMAS COM O PEDIDO (SUPORTE / TROCAS)
+          ============================================================ */}
       <AnimatePresence>
-        {showLogoutModal && (
-          <div className={styles.modalOverlay} data-lenis-prevent>
+        {reportingIssueOrder && (
+          <div className={styles.modalBackdrop} onClick={() => setReportingIssueOrder(null)}>
             <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className={styles.modalConfirmCard}
+              className={styles.modalCard}
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
             >
-              <div className={styles.confirmIconBox}>
-                <AlertTriangle size={32} color="#000000" />
-              </div>
-              <h3>DESCONECTAR SESSÃO?</h3>
-              <p>Você precisará autenticar seu Passaporte novamente para acessar compras e rastreios VIP.</p>
-              
-              <div className={styles.confirmActions}>
-                <button onClick={() => setShowLogoutModal(false)} className={styles.btnCancelModal}>
-                  CONTINUAR CONECTADO
-                </button>
-                <button 
-                  onClick={() => {
-                    setShowLogoutModal(false);
-                    logout();
-                    navigate('/');
-                  }} 
-                  className={styles.btnConfirmLogout}
-                >
-                  [ SIM, SAIR DA CONTA ]
+              <div className={styles.modalHeader}>
+                <h3 className={styles.modalTitle}>AJUDA COM O PEDIDO #{reportingIssueOrder.id}</h3>
+                <button type="button" onClick={() => setReportingIssueOrder(null)} className={styles.closeModalBtn}>
+                  <X size={18} />
                 </button>
               </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
 
-      {/* MODAL DE CONFIRMAÇÃO DE EXCLUSÃO DE CONTA */}
-      <AnimatePresence>
-        {showDeleteModal && (
-          <div className={styles.modalOverlay} data-lenis-prevent>
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 15 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className={styles.modalDeleteCard}
-            >
-              <div className={styles.deleteIconBox}>
-                <Trash2 size={32} color="#FFFFFF" />
-              </div>
-              <h3>EXCLUIR CONTA DEFINITIVAMENTE?</h3>
-              <p>
-                <strong>ATENÇÃO: ESTA AÇÃO É IRREVERSÍVEL.</strong><br />
-                O seu Passaporte Ateliê, histórico de pedidos e endereços cadastrados serão excluídos permanentemente do sistema.
+              <p className={styles.modalDesc}>
+                Conte-nos o que aconteceu. Nossa equipe de controle de qualidade e suporte do Ateliê atenderá sua solicitação prioritariamente.
               </p>
-              
-              <div className={styles.confirmActions}>
-                <button onClick={() => setShowDeleteModal(false)} className={styles.btnCancelModal}>
-                  CANCELAR // MANTER CONTA
-                </button>
-                <button 
-                  onClick={() => {
-                    setShowDeleteModal(false);
-                    deleteAccount();
-                    navigate('/');
-                  }} 
-                  className={styles.btnConfirmDeleteFinal}
-                >
-                  [ SIM, EXCLUIR CONTA DEFINITIVAMENTE ]
-                </button>
-              </div>
+
+              <form onSubmit={handleSubmitIssue} className={styles.reviewForm}>
+                <div className={styles.inputField}>
+                  <label>Qual situação ocorreu com o pedido?</label>
+                  <select 
+                    value={issueType} 
+                    onChange={(e) => setIssueType(e.target.value)}
+                    className={styles.selectInput}
+                  >
+                    <option value="danificado">📦 Produto danificado ou com defeito de confecção</option>
+                    <option value="nao_chegou">❌ Pedido não chegou / Extravio no transporte</option>
+                    <option value="errado">🔄 Tamanho ou item entregue incorreto</option>
+                    <option value="indevida">⚠️ Cobrança indevida ou problema no pagamento</option>
+                    <option value="outro">💬 Outro tipo de solicitação</option>
+                  </select>
+                </div>
+
+                <div className={styles.inputField}>
+                  <label>Descreva detalhes da sua solicitação *</label>
+                  <textarea 
+                    rows={4}
+                    placeholder="Explique o que aconteceu para que possamos agilizar sua troca, reenvio ou suporte..."
+                    value={issueDescription}
+                    onChange={(e) => setIssueDescription(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className={styles.modalActions}>
+                  <button type="button" onClick={() => setReportingIssueOrder(null)} className={styles.cancelBtn}>
+                    Voltar
+                  </button>
+                  <button type="submit" className={styles.saveBtn}>
+                    <Send size={13} />
+                    <span>ENVIAR AO SUPORTE</span>
+                  </button>
+                </div>
+              </form>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
 
-    </div>
+      {/* ============================================================
+          MODAL 4: AVALIAÇÃO DE PRODUTO
+          ============================================================ */}
+      <AnimatePresence>
+        {evaluatingItem && (
+          <div className={styles.modalBackdrop} onClick={() => setEvaluatingItem(null)}>
+            <motion.div 
+              className={styles.modalCard}
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className={styles.modalHeader}>
+                <h3 className={styles.modalTitle}>AVALIAR PRODUTO</h3>
+                <button type="button" onClick={() => setEvaluatingItem(null)} className={styles.closeModalBtn}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className={styles.modalItemPreview}>
+                <img src={evaluatingItem.image} alt={evaluatingItem.name} />
+                <div>
+                  <strong>{evaluatingItem.name}</strong>
+                  <span>Tamanho: {evaluatingItem.size}</span>
+                </div>
+              </div>
+
+              <form onSubmit={handleSubmitReview} className={styles.reviewForm}>
+                <div className={styles.ratingPicker}>
+                  <label>Sua Nota (1 a 5 estrelas):</label>
+                  <div className={styles.starsSelectRow}>
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <button
+                        key={star}
+                        type="button"
+                        onClick={() => setReviewRating(star)}
+                        className={styles.starBtn}
+                      >
+                        <Star 
+                          size={24} 
+                          fill={star <= reviewRating ? "#ffffff" : "none"} 
+                          color={star <= reviewRating ? "#ffffff" : "#525252"} 
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className={styles.inputField}>
+                  <label>Seu Comentário sobre o caimento, tecido e acabamento:</label>
+                  <textarea 
+                    rows={4}
+                    placeholder="Ex: O tecido heavyweight é impressionante e a modelagem Boxy veste perfeitamente..."
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className={styles.modalActions}>
+                  <button type="button" onClick={() => setEvaluatingItem(null)} className={styles.cancelBtn}>
+                    Cancelar
+                  </button>
+                  <button type="submit" className={styles.saveBtn}>
+                    PUBLICAR AVALIAÇÃO
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </main>
   );
 }
 
