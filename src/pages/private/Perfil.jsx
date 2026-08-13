@@ -61,16 +61,30 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   
   // DADOS DO USUÁRIO
   const [userData, setUserData] = useState({
-    name: user?.name || 'Usuário Ateliê',
-    email: user?.email || 'contato.thewavem@gmail.com',
-    cpf: user?.cpf || '123.456.789-00',
-    phone: user?.phone || '(41) 99999-8888'
+    name: user?.name || user?.displayName || '',
+    email: user?.email || '',
+    cpf: user?.cpf || '',
+    phone: user?.phone || ''
   });
 
   const [editFormData, setEditFormData] = useState({ ...userData });
   const [isEditingData, setIsEditingData] = useState(false);
   const [userErrors, setUserErrors] = useState({});
   const [saveSuccessFeedback, setSaveSuccessFeedback] = useState(false);
+
+  // Sincroniza dinamicamente com o perfil carregado do Firebase Auth / Firestore
+  useEffect(() => {
+    if (user) {
+      const updated = {
+        name: user.name || user.displayName || '',
+        email: user.email || '',
+        cpf: user.cpf || '',
+        phone: user.phone || ''
+      };
+      setUserData(updated);
+      setEditFormData(updated);
+    }
+  }, [user]);
 
   // DADOS DE ACESSO (SENHA)
   const [isEditingPassword, setIsEditingPassword] = useState(false);

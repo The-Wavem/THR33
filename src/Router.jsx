@@ -2,6 +2,7 @@ import React, { lazy, Suspense } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { PublicLayout } from './layouts/PublicLayout';
 import { PrivateLayout } from './layouts/PrivateLayout';
+import { ProtectedRoute } from './components/common/ProtectedRoute';
 import { LoadingScreen } from './components/ui/LoadingScreen';
 import { ScrollToTop } from './components/common/ScrollToTop';
 import { CartDrawer } from './components/cart/CartDrawer';
@@ -30,7 +31,7 @@ export function AppRoutes() {
   const navigate = useNavigate();
   const location = useLocation();
   const { totalItemsCount, setIsCartOpen, addToCart } = useCart();
-  const { user, logout } = useAuth();
+  const { user, logout, loading } = useAuth();
 
   const handleOpenAuth = (originPath = null, tab = 'login') => {
     const from = originPath || location.pathname;
@@ -44,6 +45,7 @@ export function AppRoutes() {
 
       <Suspense fallback={<LoadingScreen message="CARREGANDO ATELIÊ // FOR THE FEW" />}>
         <Routes>
+          {/* ROTAS PÚBLICAS GLOBAIS */}
           <Route 
             element={
               <PublicLayout 
@@ -67,9 +69,6 @@ export function AppRoutes() {
             {/* ROTA DINÂMICA DE PRODUTO */}
             <Route path="/produto/:slug" element={<ProdutoDetalhe onAddToCart={addToCart} />} />
 
-            {/* ROTA DE CHECKOUT */}
-            <Route path="/checkout" element={<Checkout user={user} onOpenAuthModal={handleOpenAuth} />} />
-
             {/* ROTA DE AUTENTICAÇÃO TÁTICA (LOGIN & CADASTRO) */}
             <Route path="/auth" element={<Auth />} />
             <Route path="/login" element={<Auth />} />
@@ -89,16 +88,23 @@ export function AppRoutes() {
             <Route path="*" element={<NotFound />} />
           </Route>
 
+          {/* ROTAS PRIVADAS & PROTEGIDAS COM PROTECTEDROUTE GUARD */}
           <Route 
             element={
-              <PrivateLayout 
-                user={user}
-                onLogout={logout}
-                cartCount={totalItemsCount}
-                onOpenCart={() => setIsCartOpen(true)}
-              />
+              <ProtectedRoute>
+                <PrivateLayout 
+                  user={user}
+                  loading={loading}
+                  onLogout={logout}
+                  cartCount={totalItemsCount}
+                  onOpenCart={() => setIsCartOpen(true)}
+                />
+              </ProtectedRoute>
             }
           >
+            {/* ROTA DE CHECKOUT (SOMENTE CLIENTES AUTENTICADOS) */}
+            <Route path="/checkout" element={<Checkout user={user} onOpenAuthModal={handleOpenAuth} />} />
+
             {/* PAINEL TÁTICO PASSAPORTE ATELIÊ */}
             <Route path="/perfil" element={<Perfil defaultTab="dados" />} />
             <Route path="/minha-conta" element={<Perfil defaultTab="pedidos" />} />

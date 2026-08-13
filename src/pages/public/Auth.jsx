@@ -1,45 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { useLocation, useNavigate, Link } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Lock, 
-  User, 
-  Mail, 
-  ShieldCheck, 
-  ArrowRight, 
-  Check, 
-  AlertCircle, 
-  Phone, 
-  FileText,
-  Eye,
-  EyeOff
-} from 'lucide-react';
+import { Eye, EyeOff, AlertCircle, ArrowRight, Lock } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { 
   validateEmail, 
-  validateCPF, 
-  validatePhone, 
-  validatePasswordStrength,
-  maskCPF, 
-  maskPhone 
+  validatePassword, 
+  validateMaxLength,
+  maskCPF,
+  maskPhone
 } from '../../utils/validators';
 import styles from './Auth.module.css';
 
 export function Auth() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { login, register, isAuthenticated } = useAuth();
+  const { login, register, loginWithGoogle, isAuthenticated } = useAuth();
 
-  // Define se o modo inicial é 'login' ou 'register' com base no parâmetro da URL (?mode=register) ou state
   const queryParams = new URLSearchParams(location.search);
-  const queryMode = queryParams.get('mode');
-  const stateMode = location.state?.tab;
-  const initialMode = queryMode === 'register' || stateMode === 'register' ? 'register' : 'login';
+  const initialMode = queryParams.get('mode') === 'register' ? 'register' : 'login';
 
   const [mode, setMode] = useState(initialMode);
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+
+  // Redireciona se já estiver autenticado
+  useEffect(() => {
+    if (isAuthenticated) {
+      const from = location.state?.from || '/perfil';
+      navigate(from, { replace: true });
+    }
+  }, [isAuthenticated, navigate, location.state]);
 
   useEffect(() => {
     const currentMode = queryParams.get('mode');
@@ -49,17 +41,8 @@ export function Auth() {
     }
   }, [location.search]);
 
-  // Se já estiver autenticado, redireciona para a conta
-  useEffect(() => {
-    if (isAuthenticated) {
-      navigate('/perfil', { replace: true });
-    }
-  }, [isAuthenticated, navigate]);
-
-  // Form de Login
+  // Form States
   const [loginData, setLoginData] = useState({ email: '', password: '' });
-
-  // Form de Cadastro
   const [registerData, setRegisterData] = useState({
     name: '',
     email: '',
@@ -69,88 +52,137 @@ export function Auth() {
     confirmPassword: ''
   });
 
-  const handleLoginSubmit = (e) => {
+  // HANDLER LOGIN / CADASTRO COM GOOGLE
+  const handleGoogleAuth = async () => {
+    try {
+      setError('');
+      setSubmitting(true);
+      await loginWithGoogle();
+      const from = location.state?.from || '/perfil';
+      navigate(from);
+    } catch (err) {
+      console.error("Erro Google Auth:", err);
+      if (err.code === 'auth/popup-closed-by-user') {
+        setError('O pop-up do Google foi fechado antes de concluir a autenticação.');
+      } else if (err.code === 'auth/popup-blocked') {
+        setError('O navegador bloqueou a janela pop-up do Google. Permita pop-ups para continuar.');
+      } else {
+        setError('Erro ao autenticar com a Conta Google. Tente novamente.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // SUBMIT LOGIN TRADICIONAL
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
     if (!validateEmail(loginData.email)) {
-      setError('Informe um e-mail válido.');
-      return;
-    }
-    if (!loginData.password) {
-      setError('Informe sua senha.');
+      setError('Por favor, informe um e-mail válido.');
       return;
     }
 
-    login(loginData.email, loginData.password);
-    setSuccessMessage('Login efetuado com sucesso! Redirecionando...');
-    setTimeout(() => {
-      navigate('/perfil');
-    }, 600);
+    try {
+      setSubmitting(true);
+      await login(loginData.email, loginData.password);
+      const from = location.state?.from || '/perfil';
+      navigate(from);
+    } catch (err) {
+      console.error("Erro no login:", err);
+      if (err.code === 'auth/invalid-credential' || err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+        setError('E-mail ou senha incorretos.');
+      } else if (err.code === 'auth/too-many-requests') {
+        setError('Muitas tentativas malsucedidas. Tente novamente mais tarde.');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('Formato de e-mail inválido.');
+      } else {
+        setError('Erro ao realizar login. Verifique seus dados e tente novamente.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
-  const handleRegisterSubmit = (e) => {
+  // SUBMIT CADASTRO TRADICIONAL
+  const handleRegisterSubmit = async (e) => {
     e.preventDefault();
     setError('');
 
-    if (!registerData.name.trim() || registerData.name.trim().length < 3) {
-      setError('Informe seu nome completo (mínimo 3 caracteres).');
+    // Validação de Nome
+    if (!registerData.name.trim() || !validateMaxLength(registerData.name, 100)) {
+      setError('O nome completo deve ter no máximo 100 caracteres.');
       return;
     }
+
+    // Validação de E-mail
     if (!validateEmail(registerData.email)) {
-      setError('Informe um e-mail válido.');
+      setError('Por favor, informe um formato de e-mail válido.');
       return;
     }
-    if (registerData.cpf && !validateCPF(registerData.cpf)) {
-      setError('CPF inválido. Verifique os números digitados.');
+
+    // Validação estrita de Senha (8+ chars, 1 Maiúscula, 1 Número)
+    const passValidation = validatePassword(registerData.password);
+    if (!passValidation.isValid) {
+      setError(passValidation.message);
       return;
     }
-    if (registerData.phone && !validatePhone(registerData.phone)) {
-      setError('Telefone inválido com DDD.');
-      return;
-    }
-    const strength = validatePasswordStrength(registerData.password);
-    if (!strength.isValid) {
-      setError(strength.message);
-      return;
-    }
+
+    // Confirmação de Senha
     if (registerData.password !== registerData.confirmPassword) {
       setError('As senhas não coincidem.');
       return;
     }
 
-    register(registerData);
-    setSuccessMessage('Cadastro realizado com sucesso! Redirecionando...');
-    setTimeout(() => {
-      navigate('/perfil');
-    }, 600);
+    try {
+      setSubmitting(true);
+      await register(registerData);
+      const from = location.state?.from || '/perfil';
+      navigate(from);
+    } catch (err) {
+      console.error("Erro no cadastro:", err);
+      if (err.code === 'auth/email-already-in-use') {
+        setError('Este e-mail já está cadastrado em nossa plataforma.');
+      } else if (err.code === 'auth/weak-password') {
+        setError('A senha fornecida é considerada fraca pelo servidor.');
+      } else if (err.code === 'auth/invalid-email') {
+        setError('E-mail inválido.');
+      } else {
+        setError('Erro ao criar conta. Tente novamente.');
+      }
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
     <main className={styles.container}>
-      <motion.div 
-        className={styles.authCard}
-        initial={{ opacity: 0, y: 15 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3 }}
-      >
-        {/* ALTERNÂNCIA DE ABAS */}
+      <div className={styles.authCard}>
         <div className={styles.tabHeaders}>
           <button 
             type="button"
             className={`${styles.tabBtn} ${mode === 'login' ? styles.activeTab : ''}`}
-            onClick={() => { setMode('login'); setError(''); setSuccessMessage(''); }}
+            onClick={() => { setMode('login'); setError(''); }}
           >
             ENTRAR
           </button>
           <button 
             type="button"
             className={`${styles.tabBtn} ${mode === 'register' ? styles.activeTab : ''}`}
-            onClick={() => { setMode('register'); setError(''); setSuccessMessage(''); }}
+            onClick={() => { setMode('register'); setError(''); }}
           >
             CRIAR CONTA
           </button>
         </div>
+
+        {/* AVISO DE ACESSO RESTRITO / REDIRECIONAMENTO */}
+        {location.state?.message && !error && (
+          <div className={styles.infoNotice}>
+            <Lock size={14} />
+            <span>{location.state.message}</span>
+          </div>
+        )}
 
         {error && (
           <div className={styles.errorMessage}>
@@ -159,18 +191,32 @@ export function Auth() {
           </div>
         )}
 
-        {successMessage && (
-          <div className={styles.successMessage}>
-            <Check size={14} />
-            <span>{successMessage}</span>
-          </div>
-        )}
+        {/* BOTÃO LOGIN SOCIAL COM O GOOGLE */}
+        <button 
+          type="button" 
+          onClick={handleGoogleAuth} 
+          disabled={submitting}
+          className={styles.googleBtn}
+          aria-label={mode === 'login' ? 'Entrar com o Google' : 'Criar conta com o Google'}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.62z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          <span>{mode === 'login' ? 'CONTINUAR COM O GOOGLE' : 'CRIAR CONTA COM GOOGLE'}</span>
+        </button>
+
+        {/* DIVISOR OU */}
+        <div className={styles.divider}>
+          <span>OU VIA E-MAIL</span>
+        </div>
 
         <AnimatePresence mode="wait">
-          {/* FORMULÁRIO DE LOGIN */}
           {mode === 'login' ? (
             <motion.form 
-              key="login-form"
+              key="login"
               onSubmit={handleLoginSubmit} 
               className={styles.form}
               initial={{ opacity: 0, x: -10 }}
@@ -184,6 +230,7 @@ export function Auth() {
                   type="email" 
                   placeholder="seu.email@exemplo.com"
                   value={loginData.email}
+                  maxLength={120}
                   onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
                   required 
                 />
@@ -193,11 +240,11 @@ export function Auth() {
                 <div className={styles.labelRow}>
                   <label>SENHA *</label>
                   <a 
-                    href="#esqueceu" 
-                    onClick={(e) => { 
-                      e.preventDefault(); 
-                      alert('Enviamos um link seguro de recuperação para seu e-mail.'); 
-                    }} 
+                    href="#recuperar" 
+                    onClick={(e) => {
+                      e.preventDefault();
+                      alert('Instruções de recuperação foram enviadas ao seu e-mail cadastrado.');
+                    }}
                     className={styles.forgotLink}
                   >
                     Esqueceu a senha?
@@ -222,15 +269,14 @@ export function Auth() {
                 </div>
               </div>
 
-              <button type="submit" className={styles.submitBtn}>
-                <span>ACESSAR MINHA CONTA</span>
+              <button type="submit" disabled={submitting} className={styles.submitBtn}>
+                <span>{submitting ? 'AUTENTICANDO...' : 'ACESSAR MINHA CONTA'}</span>
                 <ArrowRight size={15} />
               </button>
             </motion.form>
           ) : (
-            /* FORMULÁRIO DE CADASTRO */
             <motion.form 
-              key="register-form"
+              key="register"
               onSubmit={handleRegisterSubmit} 
               className={styles.form}
               initial={{ opacity: 0, x: -10 }}
@@ -244,6 +290,7 @@ export function Auth() {
                   type="text" 
                   placeholder="Seu nome completo"
                   value={registerData.name}
+                  maxLength={100}
                   onChange={(e) => setRegisterData({ ...registerData, name: e.target.value })}
                   required 
                 />
@@ -255,6 +302,7 @@ export function Auth() {
                   type="email" 
                   placeholder="seu.email@exemplo.com"
                   value={registerData.email}
+                  maxLength={120}
                   onChange={(e) => setRegisterData({ ...registerData, email: e.target.value })}
                   required 
                 />
@@ -266,8 +314,8 @@ export function Auth() {
                   <input 
                     type="text" 
                     placeholder="000.000.000-00"
-                    maxLength={14}
                     value={registerData.cpf}
+                    maxLength={14}
                     onChange={(e) => setRegisterData({ ...registerData, cpf: maskCPF(e.target.value) })}
                   />
                 </div>
@@ -276,8 +324,8 @@ export function Auth() {
                   <input 
                     type="text" 
                     placeholder="(41) 99999-9999"
-                    maxLength={15}
                     value={registerData.phone}
+                    maxLength={20}
                     onChange={(e) => setRegisterData({ ...registerData, phone: maskPhone(e.target.value) })}
                   />
                 </div>
@@ -286,19 +334,29 @@ export function Auth() {
               <div className={styles.rowTwo}>
                 <div className={styles.inputGroup}>
                   <label>SENHA *</label>
-                  <input 
-                    type={showPassword ? "text" : "password"} 
-                    placeholder="Mínimo 8 carac., maiúscula e número"
-                    value={registerData.password}
-                    onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
-                    required 
-                  />
+                  <div className={styles.passwordInputWrapper}>
+                    <input 
+                      type={showPassword ? "text" : "password"} 
+                      placeholder="Mín. 8 chars, 1 A-Z, 1 num"
+                      value={registerData.password}
+                      onChange={(e) => setRegisterData({ ...registerData, password: e.target.value })}
+                      required 
+                    />
+                    <button 
+                      type="button" 
+                      onClick={() => setShowPassword(!showPassword)} 
+                      className={styles.togglePasswordBtn}
+                      aria-label={showPassword ? "Ocultar senha" : "Ver senha"}
+                    >
+                      {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                    </button>
+                  </div>
                 </div>
                 <div className={styles.inputGroup}>
                   <label>CONFIRMAR SENHA *</label>
                   <input 
                     type={showPassword ? "text" : "password"} 
-                    placeholder="Repita sua senha"
+                    placeholder="••••••••"
                     value={registerData.confirmPassword}
                     onChange={(e) => setRegisterData({ ...registerData, confirmPassword: e.target.value })}
                     required 
@@ -312,21 +370,21 @@ export function Auth() {
                   {registerData.password.length >= 8 ? '✓' : '○'} 8+ caracteres
                 </span>
                 <span className={`${styles.ruleBadge} ${/[A-Z]/.test(registerData.password) ? styles.ruleMet : ''}`}>
-                  {/[A-Z]/.test(registerData.password) ? '✓' : '○'} 1 Letra maiúscula
+                  {/[A-Z]/.test(registerData.password) ? '✓' : '○'} 1 Letra maiúscula (A-Z)
                 </span>
                 <span className={`${styles.ruleBadge} ${/[0-9]/.test(registerData.password) ? styles.ruleMet : ''}`}>
-                  {/[0-9]/.test(registerData.password) ? '✓' : '○'} 1 Número
+                  {/[0-9]/.test(registerData.password) ? '✓' : '○'} 1 Número (0-9)
                 </span>
               </div>
 
-              <button type="submit" className={styles.submitBtn}>
-                <span>CONCLUIR CADASTRO</span>
+              <button type="submit" disabled={submitting} className={styles.submitBtn}>
+                <span>{submitting ? 'CRIANDO CONTA...' : 'CONCLUIR CADASTRO'}</span>
                 <ArrowRight size={15} />
               </button>
             </motion.form>
           )}
         </AnimatePresence>
-      </motion.div>
+      </div>
     </main>
   );
 }

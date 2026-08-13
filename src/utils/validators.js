@@ -1,6 +1,71 @@
 // UTILITÁRIOS DE VALIDAÇÃO E MÁSCARAS DE DADOS (BRASIL / E-COMMERCE)
 
 /**
+ * Valida se o e-mail possui um formato válido e não excede o limite.
+ */
+export const validateEmail = (email) => {
+  if (!email || email.length > 120) return false;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email.trim());
+};
+
+/**
+ * Valida as regras de senha de alta segurança da THR33:
+ * - Mínimo de 8 caracteres
+ * - Pelo menos 1 letra maiúscula (A-Z)
+ * - Pelo menos 1 número (0-9)
+ */
+export const validatePassword = (password) => {
+  if (!password) return { isValid: false, message: 'Senha é obrigatória.' };
+  if (password.length < 8) return { isValid: false, message: 'A senha deve ter no mínimo 8 caracteres.' };
+  if (!/[A-Z]/.test(password)) return { isValid: false, message: 'A senha deve conter ao menos 1 letra maiúscula (A-Z).' };
+  if (!/[0-9]/.test(password)) return { isValid: false, message: 'A senha deve conter ao menos 1 número (0-9).' };
+
+  return { isValid: true, message: '' };
+};
+
+/**
+ * Validação de requisitos e complexidade de Senha com métricas detalhadas:
+ */
+export function validatePasswordStrength(password) {
+  if (!password) {
+    return {
+      isValid: false,
+      hasMinLength: false,
+      hasUppercase: false,
+      hasNumber: false,
+      message: 'A senha deve atender a todos os requisitos de segurança.'
+    };
+  }
+
+  const hasMinLength = password.length >= 8;
+  const hasUppercase = /[A-Z]/.test(password);
+  const hasNumber = /[0-9]/.test(password);
+
+  const isValid = hasMinLength && hasUppercase && hasNumber;
+
+  let message = '';
+  if (!hasMinLength) message = 'A nova senha deve ter no mínimo 8 caracteres.';
+  else if (!hasUppercase) message = 'A nova senha deve conter ao menos 1 letra maiúscula (A-Z).';
+  else if (!hasNumber) message = 'A nova senha deve conter ao menos 1 número (0-9).';
+
+  return {
+    isValid,
+    hasMinLength,
+    hasUppercase,
+    hasNumber,
+    message
+  };
+}
+
+/**
+ * Valida o limite de caracteres genéricos para evitar estouro de buffers/payloads.
+ */
+export const validateMaxLength = (value, maxLength = 100) => {
+  return typeof value === 'string' && value.trim().length <= maxLength;
+};
+
+/**
  * Validação algorítmica de CPF oficial (Cálculo dos dígitos verificadores)
  */
 export function validateCPF(cpf) {
@@ -8,7 +73,7 @@ export function validateCPF(cpf) {
   const clean = cpf.replace(/\D/g, '');
 
   if (clean.length !== 11) return false;
-  if (/^(\d)\1+$/.test(clean)) return false; // Rejeita 111.111.111-11, 222...
+  if (/^(\d)\1+$/.test(clean)) return false;
 
   let sum = 0;
   for (let i = 0; i < 9; i++) {
@@ -30,15 +95,6 @@ export function validateCPF(cpf) {
 }
 
 /**
- * Validação de E-mail padrão RFC
- */
-export function validateEmail(email) {
-  if (!email) return false;
-  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return re.test(email.trim());
-}
-
-/**
  * Validação de Telefone / Celular (10 ou 11 dígitos com DDD)
  */
 export function validatePhone(phone) {
@@ -54,43 +110,6 @@ export function validateCEP(cep) {
   if (!cep) return false;
   const clean = cep.replace(/\D/g, '');
   return clean.length === 8;
-}
-
-/**
- * Validação de requisitos e complexidade de Senha:
- * - Mínimo de 8 caracteres
- * - Pelo menos 1 letra maiúscula (A-Z)
- * - Pelo menos 1 número (0-9)
- */
-export function validatePasswordStrength(password) {
-  if (!password) {
-    return {
-      isValid: false,
-      hasMinLength: false,
-      hasUppercase: false,
-      hasNumber: false,
-      message: 'A senha deve atender a todos os requisitos de segurança.'
-    };
-  }
-
-  const hasMinLength = password.length >= 8;
-  const hasUppercase = /[A-Z]/.test(password);
-  const hasNumber = /[0-9]/.test(password);
-
-  const isValid = hasMinLength && hasUppercase && hasNumber;
-
-  let message = '';
-  if (!hasMinLength) message = 'A nova senha deve ter no mínimo 8 caracteres.';
-  else if (!hasUppercase) message = 'A nova senha deve conter ao menos 1 letra maiúscula.';
-  else if (!hasNumber) message = 'A nova senha deve conter ao menos 1 número.';
-
-  return {
-    isValid,
-    hasMinLength,
-    hasUppercase,
-    hasNumber,
-    message
-  };
 }
 
 /**
@@ -153,6 +172,7 @@ export function validateCardNumber(number) {
 // -------------------------------------------------------------
 
 export function maskCPF(value) {
+  if (!value) return '';
   const clean = value.replace(/\D/g, '').slice(0, 11);
   return clean
     .replace(/^(\d{3})(\d)/, '$1.$2')
@@ -161,6 +181,7 @@ export function maskCPF(value) {
 }
 
 export function maskPhone(value) {
+  if (!value) return '';
   const clean = value.replace(/\D/g, '').slice(0, 11);
   if (clean.length <= 10) {
     return clean
@@ -173,16 +194,19 @@ export function maskPhone(value) {
 }
 
 export function maskCEP(value) {
+  if (!value) return '';
   const clean = value.replace(/\D/g, '').slice(0, 8);
   return clean.replace(/^(\d{5})(\d)/, '$1-$2');
 }
 
 export function maskCardNumber(value) {
+  if (!value) return '';
   const clean = value.replace(/\D/g, '').slice(0, 16);
   return clean.replace(/(\d{4})(?=\d)/g, '$1 ');
 }
 
 export function maskExpiry(value) {
+  if (!value) return '';
   const clean = value.replace(/\D/g, '').slice(0, 4);
   return clean.replace(/^(\d{2})(\d)/, '$1/$2');
 }

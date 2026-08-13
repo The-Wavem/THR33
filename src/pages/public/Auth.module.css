@@ -48,6 +48,74 @@
   background-color: rgba(255, 255, 255, 0.02);
 }
 
+.infoNotice {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-active);
+  color: var(--text-primary);
+  padding: 0.8rem 1rem;
+  font-size: 0.78rem;
+  margin-bottom: 1.5rem;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+/* BOTÃO GOOGLE SOCIAL */
+.googleBtn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.9rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  transition: background-color var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
+  margin-bottom: 1.5rem;
+  text-transform: uppercase;
+}
+
+.googleBtn:hover {
+  background-color: var(--bg-card);
+  border-color: var(--text-primary);
+  transform: translateY(-1px);
+}
+
+.googleBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* DIVISOR OU */
+.divider {
+  display: flex;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.divider::before,
+.divider::after {
+  content: '';
+  flex: 1;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.divider span {
+  padding: 0 0.75rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+
 .errorMessage {
   display: flex;
   align-items: center;

@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight, Tag } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { useAuth } from '../../context/AuthContext';
 import styles from './CartDrawer.module.css';
 
 export function CartDrawer() {
@@ -74,9 +75,21 @@ export function CartDrawer() {
     }
   };
 
+  const { user } = useAuth();
+
   const handleGoToCheckout = () => {
     closeCart();
-    navigate('/checkout');
+    if (!user) {
+      navigate('/auth', { 
+        state: { 
+          from: '/checkout', 
+          tab: 'login',
+          message: 'Faça login ou crie sua conta para finalizar o pedido com segurança.' 
+        } 
+      });
+    } else {
+      navigate('/checkout');
+    }
   };
 
   const getItemPrice = (item) => {

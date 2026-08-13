@@ -4,12 +4,27 @@ import { Navbar } from '../components/layout/Navbar';
 import { Footer } from '../components/layout/Footer';
 import styles from './PrivateLayout.module.css';
 
-export function PrivateLayout({ user, onLogout, cartCount, onOpenCart }) {
+export function PrivateLayout({ user, loading, onLogout, cartCount, onOpenCart }) {
   const location = useLocation();
 
-  // Proteção de Rota: Se não houver usuário logado, redireciona
+  // Se o Firebase ainda estiver autenticando ou carregando a sessão, aguarda
+  if (loading) {
+    return null;
+  }
+
+  // Proteção Estrita de Rota: Redireciona usuários não autenticados no Firebase para Login/Cadastro
   if (!user) {
-    return <Navigate to="/" replace />;
+    return (
+      <Navigate 
+        to="/auth" 
+        state={{ 
+          from: location.pathname, 
+          tab: 'login',
+          message: 'Acesso Restrito: Faça login ou crie sua conta para acessar esta área.' 
+        }} 
+        replace 
+      />
+    );
   }
 
   return (

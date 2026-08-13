@@ -70,24 +70,38 @@ export function Checkout({ user, onOpenAuthModal }) {
   // CONTROLE DE ETAPAS: 1 = Identificação, 2 = Entrega & Frete, 3 = Pagamento, 4 = Sucesso
   const [currentStep, setCurrentStep] = useState(1);
 
+  // Redireciona se o usuário não estiver autenticado
+  useEffect(() => {
+    if (!user) {
+      navigate('/auth', { 
+        replace: true, 
+        state: { 
+          from: '/checkout', 
+          tab: 'login',
+          message: 'Autenticação necessária para finalizar seu pedido com segurança.' 
+        } 
+      });
+    }
+  }, [user, navigate]);
+
   // ESTADOS DO CLIENTE (ETAPA 1)
   const [clientData, setClientData] = useState({
-    name: user?.name || 'Weslley Kampa',
-    email: user?.email || 'cliente@thr33.com',
-    cpf: '',
-    phone: user?.phone || '(41) 99888-7766'
+    name: user?.name || user?.displayName || '',
+    email: user?.email || '',
+    cpf: user?.cpf || '',
+    phone: user?.phone || ''
   });
   const [isEditingAccountData, setIsEditingAccountData] = useState(false);
   const [clientErrors, setClientErrors] = useState({});
 
-  // Sincroniza se o usuário logado mudar
+  // Sincroniza quando os dados do usuário autenticado no Firebase forem carregados
   useEffect(() => {
     if (user) {
       setClientData(prev => ({
-        ...prev,
-        name: user.name || prev.name,
-        email: user.email || prev.email,
-        phone: user.phone || prev.phone
+        name: user.name || user.displayName || prev.name || '',
+        email: user.email || prev.email || '',
+        cpf: user.cpf || prev.cpf || '',
+        phone: user.phone || prev.phone || ''
       }));
     }
   }, [user]);
