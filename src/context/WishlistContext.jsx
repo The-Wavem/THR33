@@ -4,57 +4,43 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../services/firebaseConfig';
 
 const WishlistContext = createContext();
-const WISHLIST_STORAGE_KEY = 'thr33_wishlist';
 
 export function WishlistProvider({ children }) {
   const { currentUser } = useAuth();
-  const [wishlistItems, setWishlistItems] = useState(() => {
-    try {
-      const saved = localStorage.getItem(WISHLIST_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  });
+  const [wishlistItems, setWishlistItems] = useState([]);
 
-  // 1. Carrega a Wishlist do Firestore assim que o usuário autentica
+  // Busca inicial da Wishlist no Firestore quando o usuário loga
   useEffect(() => {
-    async function loadUserWishlist() {
+    async function syncWishlistFromFirestore() {
       if (currentUser?.uid) {
         try {
           const userRef = doc(db, 'users', currentUser.uid);
           const userSnap = await getDoc(userRef);
-          if (userSnap.exists() && Array.isArray(userSnap.data().wishlist)) {
-            setWishlistItems(userSnap.data().wishlist);
-            try {
-              localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(userSnap.data().wishlist));
-            } catch (e) {
-              console.warn(e);
-            }
+          if (userSnap.exists()) {
+            setWishlistItems(userSnap.data().wishlist || []);
+          } else {
+            setWishlistItems([]);
           }
         } catch (error) {
-          console.warn("Aviso ao carregar wishlist do Firestore:", error.message);
+          console.warn("Erro ao buscar wishlist no Firestore:", error.message);
+          setWishlistItems([]);
         }
+      } else {
+        setWishlistItems([]);
       }
     }
-    loadUserWishlist();
+    syncWishlistFromFirestore();
   }, [currentUser]);
 
-  // 2. Função auxiliar para sincronizar no Estado, LocalStorage e Firestore
-  const syncWishlist = async (newWishlist) => {
-    setWishlistItems(newWishlist);
-    try {
-      localStorage.setItem(WISHLIST_STORAGE_KEY, JSON.stringify(newWishlist));
-    } catch (e) {
-      console.warn("Erro ao salvar wishlist no localStorage:", e);
-    }
-
+  // Função central de gravação remota exclusiva no Cloud Firestore
+  const updateFirestoreWishlist = async (updatedList) => {
+    setWishlistItems(updatedList);
     if (currentUser?.uid) {
       try {
         const userRef = doc(db, 'users', currentUser.uid);
-        await setDoc(userRef, { wishlist: newWishlist }, { merge: true });
+        await setDoc(userRef, { wishlist: updatedList }, { merge: true });
       } catch (error) {
-        console.warn("Erro ao sincronizar wishlist no Firestore:", error.message);
+        console.error("Erro ao gravar wishlist no Firestore:", error.message);
       }
     }
   };
@@ -80,13 +66,13 @@ export function WishlistProvider({ children }) {
     };
 
     const updated = [...wishlistItems, newItem];
-    syncWishlist(updated);
+    updateFirestoreWishlist(updated);
   };
 
   const removeFromWishlist = (id) => {
     if (!id) return;
     const updated = wishlistItems.filter((item) => item.id !== id && item.slug !== id);
-    syncWishlist(updated);
+    updateFirestoreWishlist(updated);
   };
 
   const toggleWishlist = (product) => {
@@ -100,7 +86,7 @@ export function WishlistProvider({ children }) {
   };
 
   const clearWishlist = () => {
-    syncWishlist([]);
+    updateFirestoreWishlist([]);
   };
 
   return (

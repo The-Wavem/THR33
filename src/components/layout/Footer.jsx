@@ -36,7 +36,7 @@ export function Footer() {
             </p>
             <span className={styles.locationBadge}>
               <MapPin size={12} />
-              <span>CURITIBA & ARAUCÁRIA - PR</span>
+              <span>CURITIBA - PR</span>
             </span>
           </div>
 

@@ -35,8 +35,7 @@ export function AuthProvider({ children }) {
           displayName: user.displayName || 'Cliente THR33',
           photoURL: user.photoURL || '',
           cpf: '',
-          phone: '',
-          profileComplete: false
+          phone: ''
         };
         setCurrentUser(baseUserData);
         setLoading(false);
@@ -55,8 +54,7 @@ export function AuthProvider({ children }) {
               displayName: user.displayName || data.name,
               photoURL: user.photoURL || data.photoURL || '',
               phone: data.phone || '',
-              cpf: data.cpf || '',
-              profileComplete: Boolean(data.cpf && data.phone)
+              cpf: data.cpf || ''
             }));
           }
         } catch (error) {
@@ -97,8 +95,7 @@ export function AuthProvider({ children }) {
         addresses: [], // Começa zerado
         wishlist: [],  // Começa zerado
         createdAt: new Date().toISOString(),
-        provider: 'password',
-        profileComplete: Boolean(cpf && phone)
+        provider: 'password'
       });
     } catch (err) {
       console.warn("Não foi possível gravar perfil estendido no Firestore:", err.message);
@@ -116,8 +113,6 @@ export function AuthProvider({ children }) {
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
 
-    let isProfileComplete = false;
-
     // Tenta gravar/sincronizar no Firestore sem bloquear o redirecionamento do usuário
     try {
       const userDocRef = doc(db, 'users', user.uid);
@@ -133,12 +128,10 @@ export function AuthProvider({ children }) {
           addresses: [], // Começa zerado
           wishlist: [],  // Começa zerado
           createdAt: new Date().toISOString(),
-          provider: 'google',
-          profileComplete: false
+          provider: 'google'
         });
       } else {
         const docData = userDoc.data();
-        isProfileComplete = Boolean(docData.cpf && docData.phone);
         await setDoc(userDocRef, {
           name: user.displayName || docData.name || 'Cliente THR33',
           photoURL: user.photoURL || docData.photoURL || ''
@@ -150,12 +143,11 @@ export function AuthProvider({ children }) {
 
     setIsAuthModalOpen(false);
     return {
-      user,
-      isProfileComplete
+      user
     };
   };
 
-  // COMPLETAR PERFIL OBRIGATÓRIO (CPF E WHATSAPP)
+  // COMPLETAR PERFIL (CPF E WHATSAPP)
   const completeProfile = async ({ cpf, phone, name }) => {
     if (!auth.currentUser) throw new Error("Usuário não autenticado.");
     const uid = auth.currentUser.uid;
@@ -163,8 +155,7 @@ export function AuthProvider({ children }) {
 
     const updatedData = {
       cpf: cpf.trim(),
-      phone: phone.trim(),
-      profileComplete: true
+      phone: phone.trim()
     };
     if (name) {
       updatedData.name = name.trim();

@@ -36,24 +36,12 @@ import {
 } from '../../utils/validators';
 import { fetchAddressByCep } from '../../services/viaCepService';
 import { useAuth } from '../../context/AuthContext';
-import { doc, setDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
 import styles from './Checkout.module.css';
 
-// Endereços pré-cadastrados para agilidade
-const INITIAL_SAVED_ADDRESSES = [
-  {
-    id: 'addr-1',
-    label: 'Endereço Principal',
-    cep: '80420-000',
-    street: 'Rua Comendador Araújo',
-    number: '333',
-    complement: 'Apt 301',
-    neighborhood: 'Batel',
-    city: 'Curitiba',
-    state: 'PR'
-  }
-];
+// Lista inicial de endereços limpa
+const INITIAL_SAVED_ADDRESSES = [];
 
 export function Checkout({ user: propUser, onOpenAuthModal }) {
   const navigate = useNavigate();
@@ -100,21 +88,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   const [isEditingAccountData, setIsEditingAccountData] = useState(false);
   const [clientErrors, setClientErrors] = useState({});
 
-  // Sincroniza quando os dados do usuário autenticado no Firebase forem carregados
-  useEffect(() => {
-    if (user) {
-      setClientData(prev => ({
-        name: user.name || user.displayName || prev.name || '',
-        email: user.email || prev.email || '',
-        cpf: user.cpf || prev.cpf || '',
-        phone: user.phone || prev.phone || ''
-      }));
-    }
-  }, [user]);
-
   // ESTADOS DE ENDEREÇO & FRETE (ETAPA 2)
   const [savedAddresses, setSavedAddresses] = useState(INITIAL_SAVED_ADDRESSES);
-  const [selectedAddressId, setSelectedAddressId] = useState('addr-1');
+  const [selectedAddressId, setSelectedAddressId] = useState('');
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [cepApiMessage, setCepApiMessage] = useState(null);
@@ -125,10 +101,47 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     number: '',
     neighborhood: '',
     complement: '',
-    city: '',
-    state: ''
+    city: 'Curitiba',
+    state: 'PR'
   });
   const [addressErrors, setAddressErrors] = useState({});
+
+  // Sincroniza e pré-preenche dados pessoais e endereço padrão do usuário
+  useEffect(() => {
+    const active = currentUser || user;
+    if (active) {
+      // 1. Dados Pessoais
+      setClientData(prev => ({
+        name: active.displayName || active.name || prev.name || '',
+        email: active.email || prev.email || '',
+        cpf: active.cpf || prev.cpf || '',
+        phone: active.phone || prev.phone || ''
+      }));
+
+      // 2. Busca o endereço padrão no array de endereços do Firestore
+      const userAddresses = active.addresses || [];
+      if (userAddresses.length > 0) {
+        setSavedAddresses(userAddresses);
+        const defaultAddr = userAddresses.find(a => a.isDefault) || userAddresses[0];
+        setSelectedAddressId(defaultAddr.id);
+        setIsAddingNewAddress(false);
+
+        setAddressForm(prev => ({
+          ...prev,
+          cep: defaultAddr.cep || prev.cep || '',
+          street: defaultAddr.street || prev.street || '',
+          number: defaultAddr.number || prev.number || '',
+          complement: defaultAddr.complement || prev.complement || '',
+          neighborhood: defaultAddr.neighborhood || prev.neighborhood || '',
+          city: defaultAddr.city || prev.city || 'Curitiba',
+          state: defaultAddr.state || prev.state || 'PR'
+        }));
+      } else {
+        setSavedAddresses([]);
+        setIsAddingNewAddress(true);
+      }
+    }
+  }, [currentUser, user]);
 
   // OPÇÃO DE FRETE SELECIONADA
   const [shippingOptions, setShippingOptions] = useState([
@@ -376,14 +389,54 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       const generatedOrder = `THR-${orderRef.id.slice(0, 6).toUpperCase()}`;
       setOrderNumber(generatedOrder);
 
-      // 2. Se o usuário estiver autenticado, salva/atualiza o perfil e o endereço principal
-      if (user?.uid && updateUser) {
-        await updateUser({
-          name: clientData.name,
-          cpf: clientData.cpf,
-          phone: clientData.phone,
-          lastAddress: orderData.shippingAddress
-        });
+      // 2. Se o usuário estiver autenticado, salva/atualiza o perfil e adiciona o endereço ao array addresses se novo
+      if (user?.uid) {
+        try {
+          const userRef = doc(db, 'users', user.uid);
+          const userSnap = await getDoc(userRef);
+          const currentAddresses = userSnap.exists() ? (userSnap.data().addresses || []) : [];
+
+          // Monta o novo endereço vindo do formulário de Checkout
+          const newAddressFromCheckout = {
+            id: `addr_${Date.now()}`,
+            title: 'Checkout',
+            cep: addressToSave.cep,
+            street: addressToSave.street,
+            number: addressToSave.number,
+            complement: addressToSave.complement || '',
+            neighborhood: addressToSave.neighborhood || '',
+            city: addressToSave.city,
+            state: addressToSave.state,
+            isDefault: currentAddresses.length === 0
+          };
+
+          // Verifica se esse CEP/Número já existe para não duplicar no array
+          const addressExists = currentAddresses.some(
+            a => a.cep === addressToSave.cep && a.number === addressToSave.number
+          );
+
+          const updatedAddresses = addressExists 
+            ? currentAddresses 
+            : [...currentAddresses, newAddressFromCheckout];
+
+          await setDoc(userRef, {
+            name: clientData.name,
+            cpf: clientData.cpf,
+            phone: clientData.phone,
+            addresses: updatedAddresses
+          }, { merge: true });
+
+          if (updateUser) {
+            updateUser({
+              name: clientData.name,
+              cpf: clientData.cpf,
+              phone: clientData.phone,
+              addresses: updatedAddresses
+            });
+          }
+        } catch (syncErr) {
+          console.warn("Aviso ao atualizar perfil no Checkout:", syncErr.message);
+        }
       }
     } catch (err) {
       console.warn("Aviso ao salvar pedido no Firestore:", err.message);
