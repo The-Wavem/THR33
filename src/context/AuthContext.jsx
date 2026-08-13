@@ -23,77 +23,71 @@ export function AuthProvider({ children }) {
   const [authOriginPath, setAuthOriginPath] = useState(null);
   const [initialAuthTab, setInitialAuthTab] = useState('login');
 
-  // Listener em tempo real do estado de autenticação do Firebase
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      if (firebaseUser) {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        // 1. Define imediatamente o usuário autenticado com dados do Auth (RÁPIDO / SEM ESPERAR FIRESTORE)
+        const baseUserData = {
+          uid: user.uid,
+          id: user.uid,
+          email: user.email,
+          name: user.displayName || 'Cliente THR33',
+          displayName: user.displayName || 'Cliente THR33',
+          photoURL: user.photoURL || '',
+          cpf: '',
+          phone: '',
+          profileComplete: false
+        };
+        setCurrentUser(baseUserData);
+        setLoading(false);
+
+        // 2. Busca dados estendidos do Firestore em segundo plano (SEM BLOQUEAR)
         try {
-          // Busca os dados complementares gravados no Firestore (CPF, telefone, endereços)
-          const userDocRef = doc(db, 'users', firebaseUser.uid);
+          const userDocRef = doc(db, 'users', user.uid);
           const userDoc = await getDoc(userDocRef);
           
           if (userDoc.exists()) {
             const data = userDoc.data();
-            setCurrentUser({
-              uid: firebaseUser.uid,
-              id: firebaseUser.uid,
-              email: firebaseUser.email,
-              name: firebaseUser.displayName || data.name || 'Cliente THR33',
-              displayName: firebaseUser.displayName || data.name,
-              photoURL: firebaseUser.photoURL || data.photoURL || '',
+            setCurrentUser((prev) => ({
+              ...prev,
+              ...data,
+              name: user.displayName || data.name || 'Cliente THR33',
+              displayName: user.displayName || data.name,
+              photoURL: user.photoURL || data.photoURL || '',
               phone: data.phone || '',
               cpf: data.cpf || '',
-              ...data
-            });
-          } else {
-            setCurrentUser({
-              uid: firebaseUser.uid,
-              id: firebaseUser.uid,
-              email: firebaseUser.email,
-              name: firebaseUser.displayName || 'Cliente THR33',
-              displayName: firebaseUser.displayName,
-              photoURL: firebaseUser.photoURL || ''
-            });
+              profileComplete: Boolean(data.cpf && data.phone)
+            }));
           }
         } catch (error) {
-          console.error("Erro ao carregar dados do usuário no Firestore:", error);
-          setCurrentUser({
-            uid: firebaseUser.uid,
-            id: firebaseUser.uid,
-            email: firebaseUser.email,
-            name: firebaseUser.displayName || 'Cliente THR33',
-            displayName: firebaseUser.displayName,
-            photoURL: firebaseUser.photoURL || ''
-          });
+          console.warn("Aviso: Firestore indisponível no momento. Mantendo perfil básico.", error.message);
         }
       } else {
         setCurrentUser(null);
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => unsubscribe();
   }, []);
 
-  // Função de Login Tradicional com E-mail e Senha
+  // Login tradicional E-mail/Senha
   const login = async (email, password) => {
     const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
     setIsAuthModalOpen(false);
     return userCredential.user;
   };
 
-  // Função de Cadastro Tradicional no Firebase Auth + Firestore
+  // Cadastro tradicional E-mail/Senha
   const register = async ({ email, password, name, cpf, phone }) => {
-    // 1. Cria a conta no Firebase Auth
     const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
     const user = userCredential.user;
 
-    // 2. Atualiza o perfil básico com o nome do cliente
     if (name) {
       await updateProfile(user, { displayName: name.trim() });
     }
 
-    // 3. Salva o perfil completo na coleção de usuários do Firestore
+    // Salva perfil no Firestore sem travar o fluxo
     try {
       await setDoc(doc(db, 'users', user.uid), {
         name: name ? name.trim() : '',
@@ -101,49 +95,94 @@ export function AuthProvider({ children }) {
         cpf: cpf ? cpf.trim() : '',
         phone: phone ? phone.trim() : '',
         createdAt: new Date().toISOString(),
-        provider: 'password'
+        provider: 'password',
+        profileComplete: Boolean(cpf && phone)
       });
-    } catch (firestoreError) {
-      console.warn("Aviso ao gravar documento inicial no Firestore:", firestoreError);
+    } catch (err) {
+      console.warn("Não foi possível gravar perfil estendido no Firestore:", err.message);
     }
 
     setIsAuthModalOpen(false);
     return user;
   };
 
-  // LOGIN / CADASTRO COM O GOOGLE
+  // Login com Google
   const loginWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
-    // Força a seleção de conta para evitar logins automáticos indesejados
     provider.setCustomParameters({ prompt: 'select_account' });
 
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
 
-    // Sincroniza dados com o Firestore (Cria se não existir, atualiza sem apagar outros campos)
-    const userDocRef = doc(db, 'users', user.uid);
-    const userDoc = await getDoc(userDocRef);
+    let isProfileComplete = false;
 
-    if (!userDoc.exists()) {
-      await setDoc(userDocRef, {
-        name: user.displayName || 'Cliente THR33',
-        email: user.email || '',
-        photoURL: user.photoURL || '',
-        cpf: '',
-        phone: user.phoneNumber || '',
-        createdAt: new Date().toISOString(),
-        provider: 'google'
-      });
-    } else {
-      // Atualiza a foto de perfil/nome caso tenha mudado na conta Google mantendo outros dados
-      await setDoc(userDocRef, {
-        name: user.displayName || 'Cliente THR33',
-        photoURL: user.photoURL || ''
-      }, { merge: true });
+    // Tenta gravar/sincronizar no Firestore sem bloquear o redirecionamento do usuário
+    try {
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists()) {
+        await setDoc(userDocRef, {
+          name: user.displayName || 'Cliente THR33',
+          email: user.email || '',
+          photoURL: user.photoURL || '',
+          cpf: '',
+          phone: user.phoneNumber || '',
+          createdAt: new Date().toISOString(),
+          provider: 'google',
+          profileComplete: false
+        });
+      } else {
+        const docData = userDoc.data();
+        isProfileComplete = Boolean(docData.cpf && docData.phone);
+        await setDoc(userDocRef, {
+          name: user.displayName || docData.name || 'Cliente THR33',
+          photoURL: user.photoURL || docData.photoURL || ''
+        }, { merge: true });
+      }
+    } catch (err) {
+      console.warn("Aviso: Falha ao sincronizar Firestore com login Google.", err.message);
     }
 
     setIsAuthModalOpen(false);
-    return user;
+    return {
+      user,
+      isProfileComplete
+    };
+  };
+
+  // COMPLETAR PERFIL OBRIGATÓRIO (CPF E WHATSAPP)
+  const completeProfile = async ({ cpf, phone, name }) => {
+    if (!auth.currentUser) throw new Error("Usuário não autenticado.");
+    const uid = auth.currentUser.uid;
+    const userDocRef = doc(db, 'users', uid);
+
+    const updatedData = {
+      cpf: cpf.trim(),
+      phone: phone.trim(),
+      profileComplete: true
+    };
+    if (name) {
+      updatedData.name = name.trim();
+      try {
+        await updateProfile(auth.currentUser, { displayName: name.trim() });
+      } catch (err) {
+        console.warn("Erro ao atualizar displayName:", err);
+      }
+    }
+
+    try {
+      await setDoc(userDocRef, updatedData, { merge: true });
+    } catch (err) {
+      console.warn("Aviso ao salvar completeProfile no Firestore:", err.message);
+    }
+
+    setCurrentUser(prev => ({
+      ...prev,
+      ...updatedData
+    }));
+
+    return true;
   };
 
   // Atualização de Perfil no Firestore e no Estado Local
@@ -212,6 +251,7 @@ export function AuthProvider({ children }) {
     login,
     register,
     loginWithGoogle,
+    completeProfile,
     updateUser,
     changePassword,
     logout,
