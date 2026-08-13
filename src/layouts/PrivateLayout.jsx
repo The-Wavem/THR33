@@ -1,13 +1,30 @@
 import React from 'react';
-import { Navigate, Outlet } from 'react-router-dom';
+import { Navigate, Outlet, useLocation } from 'react-router-dom';
 import { Navbar } from '../components/layout/Navbar';
 import { Footer } from '../components/layout/Footer';
 import styles from './PrivateLayout.module.css';
 
-export function PrivateLayout({ user, onLogout, cartCount, onOpenCart }) {
-  // Proteção de Rota: Se não houver usuário logado, redireciona
+export function PrivateLayout({ user, loading, onLogout, cartCount, onOpenCart }) {
+  const location = useLocation();
+
+  // Se o Firebase ainda estiver autenticando ou carregando a sessão, aguarda
+  if (loading) {
+    return null;
+  }
+
+  // Proteção Estrita de Rota: Redireciona usuários não autenticados no Firebase para Login/Cadastro
   if (!user) {
-    return <Navigate to="/" replace />;
+    return (
+      <Navigate 
+        to="/auth" 
+        state={{ 
+          from: location.pathname, 
+          tab: 'login',
+          message: 'Acesso Restrito: Faça login ou crie sua conta para acessar esta área.' 
+        }} 
+        replace 
+      />
+    );
   }
 
   return (
@@ -19,12 +36,10 @@ export function PrivateLayout({ user, onLogout, cartCount, onOpenCart }) {
         onOpenCart={onOpenCart}
       />
 
-      <div className={styles.privateBanner}>
-        <span>ÁREA RESTRITA // PASSAPORTE AUTENTICADO: {user.passId || '#0482'}</span>
-      </div>
-
       <main className={styles.contentArea}>
-        <Outlet />
+        <div key={location.pathname} className={styles.pageMotionWrapper}>
+          <Outlet />
+        </div>
       </main>
 
       <Footer />

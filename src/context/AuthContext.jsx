@@ -1,76 +1,236 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged,
+  updateProfile,
+  updatePassword as fbUpdatePassword,
+  GoogleAuthProvider,
+  signInWithPopup
+} from 'firebase/auth';
+import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { auth, db } from '../services/firebaseConfig';
 
 const AuthContext = createContext();
 
-const USER_STORAGE_KEY = 'thr33_user_profile';
-
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem(USER_STORAGE_KEY);
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [currentUser, setCurrentUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
+  // Modal and Navigation State (Compatibilidade com Checkout e Navbar)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authOriginPath, setAuthOriginPath] = useState(null);
-  const [initialAuthTab, setInitialAuthTab] = useState('login'); // 'login' | 'register'
+  const [initialAuthTab, setInitialAuthTab] = useState('login');
 
   useEffect(() => {
-    try {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(user));
+        // 1. Define imediatamente o usuário autenticado com dados do Auth (RÁPIDO / SEM ESPERAR FIRESTORE)
+        const baseUserData = {
+          uid: user.uid,
+          id: user.uid,
+          email: user.email,
+          name: user.displayName || 'Cliente THR33',
+          displayName: user.displayName || 'Cliente THR33',
+          photoURL: user.photoURL || '',
+          cpf: '',
+          phone: ''
+        };
+        setCurrentUser(baseUserData);
+        setLoading(false);
+
+        // 2. Busca dados estendidos do Firestore em segundo plano (SEM BLOQUEAR)
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userDocRef);
+          
+          if (userDoc.exists()) {
+            const data = userDoc.data();
+            setCurrentUser((prev) => ({
+              ...prev,
+              ...data,
+              name: user.displayName || data.name || 'Cliente THR33',
+              displayName: user.displayName || data.name,
+              photoURL: user.photoURL || data.photoURL || '',
+              phone: data.phone || '',
+              cpf: data.cpf || ''
+            }));
+          }
+        } catch (error) {
+          console.warn("Aviso: Firestore indisponível no momento. Mantendo perfil básico.", error.message);
+        }
       } else {
-        localStorage.removeItem(USER_STORAGE_KEY);
+        setCurrentUser(null);
+        setLoading(false);
       }
-    } catch (e) {
-      console.error('Erro ao guardar sessão de usuário:', e);
-    }
-  }, [user]);
-
-  const DEFAULT_USER_EXTRAS = {
-    passId: '#0482',
-    tier: 'STATUS: MEMBRO VIP // ATELIÊ R.U.A',
-    createdAt: '14/03/2024',
-    phone: '(11) 98765-4321',
-    instagram: '@weslley.k',
-    cpf: '382.901.482-00'
-  };
-
-  const login = (userData) => {
-    const formattedUser = {
-      ...DEFAULT_USER_EXTRAS,
-      id: userData.id || `usr-${Date.now()}`,
-      name: userData.name || userData.nome || 'WESLLEY K.',
-      email: userData.email || 'weslley@atelier-thr33.com',
-      ...userData
-    };
-    setUser(formattedUser);
-    setIsAuthModalOpen(false);
-    return formattedUser;
-  };
-
-  const updateUser = (updatedFields) => {
-    setUser(prev => {
-      if (!prev) return null;
-      return {
-        ...prev,
-        ...updatedFields
-      };
     });
+
+    return () => unsubscribe();
+  }, []);
+
+  // Login tradicional E-mail/Senha
+  const login = async (email, password) => {
+    const userCredential = await signInWithEmailAndPassword(auth, email.trim(), password);
+    setIsAuthModalOpen(false);
+    return userCredential.user;
   };
 
-  const logout = () => {
-    setUser(null);
-    localStorage.removeItem(USER_STORAGE_KEY);
+  // Cadastro tradicional E-mail/Senha
+  const register = async ({ email, password, name, cpf, phone }) => {
+    const userCredential = await createUserWithEmailAndPassword(auth, email.trim(), password);
+    const user = userCredential.user;
+
+    if (name) {
+      await updateProfile(user, { displayName: name.trim() });
+    }
+
+    // Salva perfil no Firestore sem travar o fluxo
+    try {
+      await setDoc(doc(db, 'users', user.uid), {
+        name: name ? name.trim() : '',
+        email: email.trim(),
+        cpf: cpf ? cpf.trim() : '',
+        phone: phone ? phone.trim() : '',
+        addresses: [], // Começa zerado
+        wishlist: [],  // Começa zerado
+        createdAt: new Date().toISOString(),
+        provider: 'password'
+      });
+    } catch (err) {
+      console.warn("Não foi possível gravar perfil estendido no Firestore:", err.message);
+    }
+
+    setIsAuthModalOpen(false);
+    return user;
   };
 
-  const deleteAccount = () => {
-    setUser(null);
-    localStorage.removeItem(USER_STORAGE_KEY);
-    localStorage.removeItem('thr33_saved_addresses');
+  // Login com Google
+  const loginWithGoogle = async () => {
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
+
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+
+    // Tenta gravar/sincronizar no Firestore sem bloquear o redirecionamento do usuário
+    try {
+      const userDocRef = doc(db, 'users', user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists()) {
+        await setDoc(userDocRef, {
+          name: user.displayName || 'Cliente THR33',
+          email: user.email || '',
+          photoURL: user.photoURL || '',
+          cpf: '',
+          phone: user.phoneNumber || '',
+          addresses: [], // Começa zerado
+          wishlist: [],  // Começa zerado
+          createdAt: new Date().toISOString(),
+          provider: 'google'
+        });
+      } else {
+        const docData = userDoc.data();
+        await setDoc(userDocRef, {
+          name: user.displayName || docData.name || 'Cliente THR33',
+          photoURL: user.photoURL || docData.photoURL || ''
+        }, { merge: true });
+      }
+    } catch (err) {
+      console.warn("Aviso: Falha ao sincronizar Firestore com login Google.", err.message);
+    }
+
+    setIsAuthModalOpen(false);
+    return {
+      user
+    };
+  };
+
+  // COMPLETAR PERFIL (CPF E WHATSAPP)
+  const completeProfile = async ({ cpf, phone, name }) => {
+    if (!auth.currentUser) throw new Error("Usuário não autenticado.");
+    const uid = auth.currentUser.uid;
+    const userDocRef = doc(db, 'users', uid);
+
+    const updatedData = {
+      cpf: cpf.trim(),
+      phone: phone.trim()
+    };
+    if (name) {
+      updatedData.name = name.trim();
+      try {
+        await updateProfile(auth.currentUser, { displayName: name.trim() });
+      } catch (err) {
+        console.warn("Erro ao atualizar displayName:", err);
+      }
+    }
+
+    try {
+      await setDoc(userDocRef, updatedData, { merge: true });
+    } catch (err) {
+      console.warn("Aviso ao salvar completeProfile no Firestore:", err.message);
+    }
+
+    setCurrentUser(prev => ({
+      ...prev,
+      ...updatedData
+    }));
+
+    return true;
+  };
+
+  // Atualização de Perfil no Firestore e no Estado Local
+  const updateUser = async (updatedFields) => {
+    if (!currentUser) return;
+    try {
+      if (auth.currentUser && updatedFields.name) {
+        try {
+          await updateProfile(auth.currentUser, { displayName: updatedFields.name.trim() });
+        } catch (nameErr) {
+          console.warn("Aviso ao atualizar displayName:", nameErr.message);
+        }
+      }
+      const userDocRef = doc(db, 'users', currentUser.uid);
+      await setDoc(userDocRef, updatedFields, { merge: true });
+      setCurrentUser(prev => ({ ...prev, ...updatedFields }));
+    } catch (err) {
+      console.warn("Aviso ao atualizar perfil no Firestore:", err.message);
+      setCurrentUser(prev => ({ ...prev, ...updatedFields }));
+    }
+  };
+
+  // Alteração de Senha Segura
+  const changePassword = async (currentPassword, newPassword) => {
+    if (!auth.currentUser) return { success: false, error: 'Usuário não autenticado.' };
+    try {
+      await fbUpdatePassword(auth.currentUser, newPassword);
+      return { success: true };
+    } catch (err) {
+      console.error("Erro ao alterar senha no Firebase:", err);
+      if (err.code === 'auth/requires-recent-login') {
+        return { success: false, error: 'Por segurança, faça login novamente antes de alterar sua senha.' };
+      }
+      return { success: false, error: err.message || 'Erro ao alterar senha.' };
+    }
+  };
+
+  // Função de Logout Real
+  const logout = async () => {
+    await signOut(auth);
+    setCurrentUser(null);
+  };
+
+  // Exclusão de Conta
+  const deleteAccount = async () => {
+    if (auth.currentUser) {
+      try {
+        await auth.currentUser.delete();
+      } catch (err) {
+        console.error("Erro ao excluir conta:", err);
+      }
+    }
+    await logout();
   };
 
   const openAuthModal = (originPath = null, tab = 'login') => {
@@ -83,24 +243,35 @@ export function AuthProvider({ children }) {
     setIsAuthModalOpen(false);
   };
 
+  const value = {
+    currentUser,
+    user: currentUser,
+    isAuthenticated: !!currentUser,
+    login,
+    register,
+    loginWithGoogle,
+    completeProfile,
+    updateUser,
+    changePassword,
+    logout,
+    deleteAccount,
+    loading,
+    isAuthModalOpen,
+    openAuthModal,
+    closeAuthModal,
+    authOriginPath,
+    setAuthOriginPath,
+    initialAuthTab,
+    setInitialAuthTab
+  };
+
   return (
-    <AuthContext.Provider value={{
-      user,
-      login,
-      updateUser,
-      logout,
-      deleteAccount,
-      isAuthModalOpen,
-      openAuthModal,
-      closeAuthModal,
-      authOriginPath,
-      setAuthOriginPath,
-      initialAuthTab,
-      setInitialAuthTab
-    }}>
-      {children}
+    <AuthContext.Provider value={value}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 }
 
 export const useAuth = () => useContext(AuthContext);
+
+export default AuthContext;

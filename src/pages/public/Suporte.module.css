@@ -1,182 +1,277 @@
-.pageContainer {
-  padding: 4rem 2rem;
-  background-color: #0F0E0D;
-  color: #FFFFFF;
-  font-family: 'Space Mono', monospace, sans-serif;
-  min-height: 80vh;
-}
-
-.contentWrapper {
-  max-width: 1000px;
+.container {
+  max-width: 1280px;
   margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 3rem;
+  padding: 3rem 1.5rem 6rem;
+  color: var(--text-primary);
 }
 
 .header {
   text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
+  margin-bottom: 3.5rem;
 }
 
 .tag {
-  color: #F2E3B3;
-  font-weight: 700;
   font-size: 0.75rem;
-  letter-spacing: 0.15em;
+  letter-spacing: 2px;
+  color: var(--text-muted);
 }
 
-.header h1 {
-  font-family: 'Arial Black', sans-serif;
-  font-size: 3rem;
-  text-transform: uppercase;
-  line-height: 1;
-  margin: 0;
+.title {
+  font-family: var(--font-heading);
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-weight: 800;
+  margin-top: 0.3rem;
 }
 
-.header p {
-  color: #CCCCCC;
-  font-size: 0.875rem;
-  max-width: 600px;
-  margin: 0;
-}
-
-.contactGrid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-}
-
-.contactCard {
-  background-color: #161514;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  padding: 2rem;
-  box-shadow: 6px 6px 0px #000000;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-  justify-content: space-between;
-}
-
-.cardHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.iconAcid { 
-  color: #F2E3B3; 
-}
-
-.contactCard h3 {
-  font-family: 'Arial Black', sans-serif;
-  font-size: 1.25rem;
-  margin: 0;
-}
-
-.contactCard p {
-  font-size: 0.8125rem;
-  color: #AAAAAA;
-  line-height: 1.6;
-  margin: 0;
-}
-
-.btnAction {
-  margin-top: 1rem;
-  padding: 1rem;
-  background-color: #F2E3B3;
-  color: #000000;
-  border: 1px solid #000000;
-  font-family: 'Arial Black', sans-serif;
-  font-size: 0.75rem;
-  text-decoration: none;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: 3px 3px 0px #000000;
-  transition: background-color 0.15s ease;
-}
-
-.btnAction:hover { 
-  background-color: #FFFFFF; 
-}
-
-.hoursCard {
-  grid-column: span 2;
-  background-color: #000000;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  padding: 1.5rem;
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  color: #888888;
-}
-
-.hoursText {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-}
-
-.hoursText strong { 
-  color: #FFFFFF; 
-  font-family: 'Arial Black', sans-serif; 
-}
-
-.quickServices h2 {
-  font-family: 'Arial Black', sans-serif;
-  font-size: 1.5rem;
-  border-bottom: 2px solid rgba(255, 255, 255, 0.1);
-  padding-bottom: 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.servicesGrid {
+.channelsGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 1.5rem;
+  margin-bottom: 4rem;
 }
 
-.serviceItem {
-  background-color: #1A1816;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 1.5rem;
-  text-decoration: none;
-  color: #FFFFFF;
+.channelCard {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 2.25rem 1.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
-  transition: all 0.2s ease;
+  align-items: center;
+  text-align: center;
+  gap: 0.9rem;
+  transition: border-color var(--transition-fast), transform var(--transition-fast);
 }
 
-.serviceItem:hover {
-  border-color: #F2E3B3;
-  transform: translateY(-4px);
+.channelCard:hover {
+  border-color: var(--border-active);
+  transform: translateY(-2px);
 }
 
-.serviceItem strong { 
-  font-family: 'Arial Black', sans-serif; 
-  font-size: 0.875rem; 
+.iconWrapper {
+  width: 52px;
+  height: 52px;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-primary);
+  margin-bottom: 0.25rem;
 }
 
-.serviceItem span { 
-  font-size: 0.6875rem; 
-  color: #888888; 
-  line-height: 1.5; 
+.channelCard h3 {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  letter-spacing: 1.5px;
+  font-weight: 800;
 }
 
-@media (max-width: 768px) {
-  .contactGrid, .servicesGrid { 
-    grid-template-columns: 1fr; 
-  }
-  .hoursCard { 
-    grid-column: span 1; 
-  }
-  .header h1 { 
-    font-size: 2rem; 
-  }
+.channelCard p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.hours {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.channelBtn {
+  margin-top: 0.5rem;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.75rem 1.4rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-decoration: none;
+  background-color: transparent;
+  transition: all var(--transition-fast);
+}
+
+.channelBtn:hover {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+}
+
+.faqSection {
+  margin-bottom: 4rem;
+}
+
+.faqHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.75rem;
+  margin-bottom: 1.5rem;
+  color: var(--text-primary);
+}
+
+.sectionTitle {
+  font-family: var(--font-heading);
+  font-size: 1.3rem;
+  letter-spacing: 1px;
+  font-weight: 800;
+}
+
+.accordionList {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border-color);
+}
+
+.faqItem {
+  border-bottom: 1px solid var(--border-color);
+}
+
+.faqQuestion {
+  width: 100%;
+  padding: 1.25rem 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.faqQuestion:hover {
+  color: var(--text-secondary);
+}
+
+.activeQuestionText {
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+}
+
+.chevron {
+  display: flex;
+  align-items: center;
+  color: var(--text-muted);
+}
+
+.faqAnswerWrapper {
+  overflow: hidden;
+}
+
+.faqAnswer {
+  padding-bottom: 1.5rem;
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  line-height: 1.7;
+}
+
+.feedbackSection {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 3rem 2rem;
+}
+
+.feedbackBox {
+  max-width: 700px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  text-align: center;
+}
+
+.feedbackTitleGroup {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  color: var(--text-primary);
+}
+
+.feedbackTitleGroup h2 {
+  font-family: var(--font-heading);
+  font-size: 1.25rem;
+  letter-spacing: 1px;
+  font-weight: 800;
+}
+
+.feedbackBox p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.feedbackForm {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.inputRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.feedbackForm input,
+.selectInput,
+.feedbackForm textarea {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.85rem 1rem;
+  font-size: 0.85rem;
+  outline: none;
+  font-family: var(--font-body);
+  transition: border-color var(--transition-fast);
+}
+
+.feedbackForm input:focus,
+.selectInput:focus,
+.feedbackForm textarea:focus {
+  border-color: var(--border-active);
+}
+
+.sendBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  padding: 0.95rem;
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 1.5px;
+  border: none;
+  cursor: pointer;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.sendBtn:hover {
+  opacity: 0.92;
+  transform: translateY(-1px);
+}
+
+.successMessage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  background-color: rgba(74, 222, 128, 0.1);
+  border: 1px solid #4ade80;
+  color: #4ade80;
+  padding: 1.1rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+@media (max-width: 850px) {
+  .channelsGrid { grid-template-columns: 1fr; }
+  .inputRow { grid-template-columns: 1fr; }
 }

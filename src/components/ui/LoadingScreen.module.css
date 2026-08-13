@@ -1,0 +1,86 @@
+.loadingContainer {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: var(--bg-primary, #0a0a0a);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loadingContent {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.75rem;
+}
+
+.logoBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.logoText {
+  font-family: var(--font-heading, 'Syne', sans-serif);
+  font-size: 2.75rem;
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: var(--text-primary, #ffffff);
+  line-height: 1;
+}
+
+.logoSub {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: var(--text-secondary, #a3a3a3);
+  text-transform: uppercase;
+  margin-top: 0.35rem;
+}
+
+.progressBarWrapper {
+  width: 180px;
+  height: 2px;
+  background-color: rgba(255, 255, 255, 0.08);
+  position: relative;
+  overflow: hidden;
+  border-radius: 1px;
+}
+
+.progressBar {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, #ffffff, transparent);
+}
+
+.statusBox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.statusDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #ffffff;
+  box-shadow: 0 0 8px rgba(255, 255, 255, 0.8);
+  animation: pulseDot 1.2s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+.statusText {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--text-muted, #737373);
+  text-transform: uppercase;
+}
