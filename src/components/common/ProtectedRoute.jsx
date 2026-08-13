@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
 export function ProtectedRoute({ children }) {
-  const { currentUser, isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
   const location = useLocation();
 
   // Enquanto o Firebase SDK valida a sessão / token no navegador
@@ -25,7 +25,7 @@ export function ProtectedRoute({ children }) {
     );
   }
 
-  // Se não estiver autenticado, redireciona para a tela de login
+  // Se não estiver autenticado, redireciona para a tela de autenticação preservando a rota de origem
   if (!isAuthenticated) {
     return (
       <Navigate 
@@ -34,21 +34,6 @@ export function ProtectedRoute({ children }) {
           from: location.pathname,
           tab: 'login',
           message: 'Autenticação necessária para acessar esta área restrita.' 
-        }} 
-        replace 
-      />
-    );
-  }
-
-  // Se estiver autenticado mas faltar CPF ou Telefone (ex: login inicial com Google), direciona internamente para completar cadastro
-  if (currentUser && (!currentUser.cpf || !currentUser.phone)) {
-    return (
-      <Navigate 
-        to="/auth" 
-        state={{ 
-          from: location.pathname,
-          requireComplete: true,
-          message: 'Confirme seu CPF e WhatsApp para validar seu cadastro e prosseguir.' 
         }} 
         replace 
       />

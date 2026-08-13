@@ -44,6 +44,8 @@ import {
   validatePasswordStrength 
 } from '../../utils/validators';
 import { fetchAddressByCep } from '../../services/viaCepService';
+import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '../../services/firebaseConfig';
 import styles from './Perfil.module.css';
 
 // ETAPAS DO PEDIDO
@@ -56,15 +58,17 @@ const ORDER_STEPS = [
 ];
 
 export function Perfil({ defaultTab = 'pedidos' }) {
-  const { user, logout, changePassword } = useAuth();
+  const { user, currentUser, updateUser, logout, changePassword } = useAuth();
   const [activeTab, setActiveTab] = useState(defaultTab); // 'dados', 'enderecos', 'pedidos', 'seguranca'
   
+  const activeUser = currentUser || user;
+
   // DADOS DO USUÁRIO
   const [userData, setUserData] = useState({
-    name: user?.name || user?.displayName || '',
-    email: user?.email || '',
-    cpf: user?.cpf || '',
-    phone: user?.phone || ''
+    name: activeUser?.name || activeUser?.displayName || '',
+    email: activeUser?.email || '',
+    cpf: activeUser?.cpf || '',
+    phone: activeUser?.phone || ''
   });
 
   const [editFormData, setEditFormData] = useState({ ...userData });
@@ -74,17 +78,18 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
   // Sincroniza dinamicamente com o perfil carregado do Firebase Auth / Firestore
   useEffect(() => {
-    if (user) {
+    const active = currentUser || user;
+    if (active) {
       const updated = {
-        name: user.name || user.displayName || '',
-        email: user.email || '',
-        cpf: user.cpf || '',
-        phone: user.phone || ''
+        name: active.name || active.displayName || '',
+        email: active.email || '',
+        cpf: active.cpf || '',
+        phone: active.phone || ''
       };
       setUserData(updated);
       setEditFormData(updated);
     }
-  }, [user]);
+  }, [currentUser, user]);
 
   // DADOS DE ACESSO (SENHA)
   const [isEditingPassword, setIsEditingPassword] = useState(false);
@@ -100,21 +105,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   const [showConfirmPass, setShowConfirmPass] = useState(false);
 
   // ENDEREÇOS DO USUÁRIO
-  const [addresses, setAddresses] = useState([
-    {
-      id: 1,
-      title: 'Casa',
-      street: 'Rua Comendador Araújo',
-      number: '333',
-      complement: 'Apt 12',
-      neighborhood: 'Batel',
-      city: 'Curitiba',
-      state: 'PR',
-      cep: '80420-000',
-      isDefault: true
-    }
-  ]);
-
+  const [addresses, setAddresses] = useState([]);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [cepError, setCepError] = useState(null);
@@ -130,116 +121,115 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     cep: ''
   });
 
-  // HISTÓRICO DE PEDIDOS & AVALIAÇÕES
-  const [orders, setOrders] = useState([
-    {
-      id: "THR33-9104",
-      date: "12/08/2026",
-      status: "Preparando Envio",
-      statusCode: "preparing",
-      trackingCode: "Aguardando postagem no Ateliê",
-      paymentMethod: "Cartão de Crédito PagBank (em 2x de R$ 117,40)",
-      coupon: { code: "FORTHEFEW", discount: 20.00 },
-      subtotal: 239.90,
-      shippingMethod: "SEDEX Expresso (1 a 2 dias úteis)",
-      shippingCost: 14.90,
-      total: 234.80,
-      address: {
-        name: "Usuário Ateliê",
-        street: "Rua Comendador Araújo",
-        number: "333",
-        complement: "Apt 12",
-        neighborhood: "Batel",
-        city: "Curitiba",
-        state: "PR",
-        cep: "80420-000"
-      },
-      items: [
-        { 
-          id: "item-101",
-          name: "Camiseta THR33 Boxy Logo", 
-          size: "M", 
-          price: 189.90, 
-          image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop", 
-          evaluated: false 
+  // HISTÓRICO DE PEDIDOS & AVALIAÇÕES (FIRESTORE)
+  const [orders, setOrders] = useState([]);
+  const [loadingOrders, setLoadingOrders] = useState(false);
+
+  // 1. CARREGA ENDEREÇOS DO USUÁRIO DO FIRESTORE
+  useEffect(() => {
+    async function loadUserAddresses() {
+      const activeUid = currentUser?.uid || user?.uid;
+      if (!activeUid) return;
+
+      try {
+        const userRef = doc(db, 'users', activeUid);
+        const userSnap = await getDoc(userRef);
+        if (userSnap.exists()) {
+          const data = userSnap.data();
+          if (Array.isArray(data.addresses)) {
+            setAddresses(data.addresses);
+          } else {
+            setAddresses([]);
+          }
+        } else {
+          setAddresses([]);
         }
-      ]
-    },
-    {
-      id: "THR33-8921",
-      date: "10/08/2026",
-      status: "Em trânsito",
-      statusCode: "in_transit",
-      trackingCode: "BR987654321PR",
-      paymentMethod: "PIX Instantâneo PagBank (À Vista)",
-      coupon: null,
-      subtotal: 389.80,
-      shippingMethod: "SEDEX Expresso",
-      shippingCost: 14.90,
-      total: 404.70,
-      address: {
-        name: "Usuário Ateliê",
-        street: "Rua Comendador Araújo",
-        number: "333",
-        complement: "Apt 12",
-        neighborhood: "Batel",
-        city: "Curitiba",
-        state: "PR",
-        cep: "80420-000"
-      },
-      items: [
-        { 
-          id: "item-1",
-          name: "Camiseta THR33 Boxy Logo", 
-          size: "M", 
-          price: 189.90, 
-          image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop", 
-          evaluated: true 
-        },
-        { 
-          id: "item-2",
-          name: "Camiseta For The Few Heavy", 
-          size: "M", 
-          price: 199.90, 
-          image: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?q=80&w=600&auto=format&fit=crop", 
-          evaluated: false 
-        }
-      ]
-    },
-    {
-      id: "THR33-8410",
-      date: "25/07/2026",
-      status: "Entregue",
-      statusCode: "delivered",
-      trackingCode: "BR123456789PR",
-      paymentMethod: "Cartão de Crédito PagBank (em 3x de R$ 199,93)",
-      coupon: { code: "ATELIE20", discount: 40.00 },
-      subtotal: 599.80,
-      shippingMethod: "PAC Standard (3 a 5 dias)",
-      shippingCost: 0.00,
-      total: 559.80,
-      address: {
-        name: "Usuário Ateliê",
-        street: "Rua Comendador Araújo",
-        number: "333",
-        complement: "Apt 12",
-        neighborhood: "Batel",
-        city: "Curitiba",
-        state: "PR",
-        cep: "80420-000"
-      },
-      items: [
-        { 
-          id: "item-3",
-          name: "Calça Cargo Streetwear", 
-          size: "38", 
-          price: 599.80, 
-          image: "https://images.unsplash.com/photo-1517445312882-bc9910d016b7?q=80&w=600&auto=format&fit=crop", 
-          evaluated: true 
-        }
-      ]
+      } catch (err) {
+        console.warn("Aviso ao carregar endereços do Firestore:", err.message);
+        setAddresses([]);
+      }
     }
-  ]);
+    loadUserAddresses();
+  }, [currentUser, user]);
+
+  // 2. BUSCA PEDIDOS REAIS DO CLIENTE NA COLEÇÃO 'orders'
+  useEffect(() => {
+    async function fetchUserOrders() {
+      const activeUid = currentUser?.uid || user?.uid;
+      if (!activeUid) return;
+
+      setLoadingOrders(true);
+      try {
+        const q = query(collection(db, 'orders'), where('userId', '==', activeUid));
+        const querySnapshot = await getDocs(q);
+        const fetched = [];
+        querySnapshot.forEach((docSnap) => {
+          const data = docSnap.data();
+          const dateStr = data.createdAt ? new Date(data.createdAt).toLocaleDateString('pt-BR') : 'Hoje';
+
+          let statusText = data.status || 'Aguardando Pagamento';
+          let statusCode = 'waiting_payment';
+          if (statusText === 'Aprovado' || statusText === 'Pagamento Aprovado') {
+            statusText = 'Pagamento Aprovado';
+            statusCode = 'payment_approved';
+          } else if (statusText === 'Preparando Envio' || statusText === 'preparing') {
+            statusText = 'Preparando Envio';
+            statusCode = 'preparing';
+          } else if (statusText === 'Em trânsito' || statusText === 'Despachado' || statusText === 'in_transit') {
+            statusText = 'Em trânsito';
+            statusCode = 'in_transit';
+          } else if (statusText === 'Entregue' || statusText === 'delivered') {
+            statusText = 'Entregue';
+            statusCode = 'delivered';
+          }
+
+          fetched.push({
+            id: `THR-${docSnap.id.slice(0, 6).toUpperCase()}`,
+            rawId: docSnap.id,
+            date: dateStr,
+            status: statusText,
+            statusCode: statusCode,
+            trackingCode: data.trackingCode || 'Processando envio',
+            paymentMethod: data.paymentMethod === 'pix' 
+              ? 'PIX Instantâneo PagBank (À Vista)' 
+              : data.paymentMethod === 'credit' 
+                ? 'Cartão de Crédito PagBank' 
+                : 'Boleto Bancário',
+            coupon: data.discountAmount ? { code: "DESCONTO", discount: data.discountAmount } : null,
+            subtotal: data.subtotal || data.total,
+            shippingMethod: 'SEDEX Expresso (1 a 2 dias úteis)',
+            shippingCost: data.shippingCost || 0,
+            total: data.total,
+            address: data.shippingAddress ? {
+              name: data.clientName || 'Cliente THR33',
+              street: data.shippingAddress.street || 'Rua',
+              number: data.shippingAddress.number || '',
+              complement: data.shippingAddress.complement || '',
+              neighborhood: data.shippingAddress.neighborhood || '',
+              city: data.shippingAddress.city || 'Curitiba',
+              state: data.shippingAddress.state || 'PR',
+              cep: data.shippingAddress.cep || ''
+            } : null,
+            items: (data.items || []).map((item, idx) => ({
+              id: item.id || `item-${idx}`,
+              name: item.name,
+              size: item.size || 'M',
+              price: item.price,
+              image: item.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop',
+              evaluated: item.evaluated || false
+            }))
+          });
+        });
+
+        setOrders(fetched);
+      } catch (err) {
+        console.warn("Aviso ao buscar pedidos no Firestore:", err.message);
+      } finally {
+        setLoadingOrders(false);
+      }
+    }
+    fetchUserOrders();
+  }, [currentUser, user, activeTab]);
 
   // MODAIS
   const [selectedOrderDetails, setSelectedOrderDetails] = useState(null);
@@ -312,7 +302,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     }
   };
 
-  const handleUserSubmit = (e) => {
+  const handleUserSubmit = async (e) => {
     e.preventDefault();
     const errors = {};
 
@@ -332,6 +322,14 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     if (Object.keys(errors).length > 0) {
       setUserErrors(errors);
       return;
+    }
+
+    if (updateUser) {
+      await updateUser({
+        name: editFormData.name,
+        cpf: editFormData.cpf,
+        phone: editFormData.phone
+      });
     }
 
     setUserData({ ...editFormData });
@@ -425,36 +423,70 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     setNewAddress(prev => ({ ...prev, [name]: formatted }));
   };
 
-  const handleAddAddress = (e) => {
+  const handleAddAddress = async (e) => {
     e.preventDefault();
     if (!newAddress.title || !newAddress.cep || !newAddress.street || !newAddress.number) {
       alert('Por favor, preencha os campos obrigatórios do endereço.');
       return;
     }
 
-    setAddresses([
+    const updated = [
       ...addresses, 
       { 
         ...newAddress, 
         id: Date.now(), 
         isDefault: addresses.length === 0 
       }
-    ]);
+    ];
+
+    setAddresses(updated);
     setIsAddingAddress(false);
     setNewAddress({ title: '', street: '', number: '', complement: '', neighborhood: '', city: 'Curitiba', state: 'PR', cep: '' });
-  };
 
-  const handleDeleteAddress = (id) => {
-    if (window.confirm('Deseja realmente excluir este endereço?')) {
-      setAddresses(addresses.filter(a => a.id !== id));
+    const activeUid = currentUser?.uid || user?.uid;
+    if (activeUid) {
+      try {
+        await setDoc(doc(db, 'users', activeUid), { addresses: updated }, { merge: true });
+      } catch (err) {
+        console.warn("Aviso ao salvar endereço no Firestore:", err.message);
+      }
     }
   };
 
-  const handleSetDefaultAddress = (id) => {
-    setAddresses(addresses.map(a => ({
+  const handleDeleteAddress = async (id) => {
+    if (window.confirm('Deseja realmente excluir este endereço?')) {
+      const filtered = addresses.filter(a => a.id !== id);
+      if (filtered.length > 0 && !filtered.some(a => a.isDefault)) {
+        filtered[0].isDefault = true;
+      }
+      setAddresses(filtered);
+
+      const activeUid = currentUser?.uid || user?.uid;
+      if (activeUid) {
+        try {
+          await setDoc(doc(db, 'users', activeUid), { addresses: filtered }, { merge: true });
+        } catch (err) {
+          console.warn("Aviso ao excluir endereço no Firestore:", err.message);
+        }
+      }
+    }
+  };
+
+  const handleSetDefaultAddress = async (id) => {
+    const updated = addresses.map(a => ({
       ...a,
       isDefault: a.id === id
-    })));
+    }));
+    setAddresses(updated);
+
+    const activeUid = currentUser?.uid || user?.uid;
+    if (activeUid) {
+      try {
+        await setDoc(doc(db, 'users', activeUid), { addresses: updated }, { merge: true });
+      } catch (err) {
+        console.warn("Aviso ao atualizar endereço padrão no Firestore:", err.message);
+      }
+    }
   };
 
   // -------------------------------------------------------------
@@ -1055,39 +1087,46 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                 </form>
               )}
 
-              <div className={styles.addressList}>
-                {addresses.map((addr) => (
-                  <div key={addr.id} className={`${styles.addressCard} ${addr.isDefault ? styles.defaultCard : ''}`}>
-                    <div className={styles.addrHeader}>
-                      <strong>{addr.title.toUpperCase()}</strong>
-                      {addr.isDefault ? (
-                        <span className={styles.defaultBadge}>PADRÃO</span>
-                      ) : (
+              {addresses.length === 0 ? (
+                <div className={styles.emptyBox}>
+                  <p>Você ainda não possui endereços salvos.</p>
+                  <small>Cadastre seu endereço para agilizar suas compras no checkout.</small>
+                </div>
+              ) : (
+                <div className={styles.addressList}>
+                  {addresses.map((addr) => (
+                    <div key={addr.id} className={`${styles.addressCard} ${addr.isDefault ? styles.defaultCard : ''}`}>
+                      <div className={styles.addrHeader}>
+                        <strong>{(addr.title || 'ENDEREÇO').toUpperCase()}</strong>
+                        {addr.isDefault ? (
+                          <span className={styles.defaultBadge}>PADRÃO</span>
+                        ) : (
+                          <button 
+                            type="button" 
+                            onClick={() => handleSetDefaultAddress(addr.id)} 
+                            className={styles.setDefaultLink}
+                          >
+                            Definir como padrão
+                          </button>
+                        )}
+                      </div>
+                      <p className={styles.addrText}>{addr.street}, {addr.number} {addr.complement && `• ${addr.complement}`}</p>
+                      <p className={styles.addrText}>{addr.neighborhood} — {addr.city}/{addr.state} | CEP: {addr.cep}</p>
+                      
+                      <div className={styles.cardActions}>
                         <button 
-                          type="button" 
-                          onClick={() => handleSetDefaultAddress(addr.id)} 
-                          className={styles.setDefaultLink}
+                          type="button"
+                          onClick={() => handleDeleteAddress(addr.id)} 
+                          className={styles.deleteLink}
                         >
-                          Definir como padrão
+                          <Trash2 size={13} />
+                          <span>Excluir</span>
                         </button>
-                      )}
+                      </div>
                     </div>
-                    <p className={styles.addrText}>{addr.street}, {addr.number} {addr.complement && `• ${addr.complement}`}</p>
-                    <p className={styles.addrText}>{addr.neighborhood} — {addr.city}/{addr.state} | CEP: {addr.cep}</p>
-                    
-                    <div className={styles.cardActions}>
-                      <button 
-                        type="button"
-                        onClick={() => handleDeleteAddress(addr.id)} 
-                        className={styles.deleteLink}
-                      >
-                        <Trash2 size={13} />
-                        <span>Excluir</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -1098,7 +1137,18 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                 <h2 className={styles.panelTitle}>HISTÓRICO DE PEDIDOS ({orders.length})</h2>
               </div>
               
-              <div className={styles.ordersList}>
+              {loadingOrders ? (
+                <div className={styles.emptyBox}>
+                  <p>Buscando pedidos no Firestore...</p>
+                  <small>Aguarde um instante enquanto conectamos ao banco de dados.</small>
+                </div>
+              ) : orders.length === 0 ? (
+                <div className={styles.emptyBox}>
+                  <p>Sua conta ainda não possui pedidos registrados.</p>
+                  <small>Explore o catálogo e faça seu primeiro pedido.</small>
+                </div>
+              ) : (
+                <div className={styles.ordersList}>
                 {orders.map((order) => {
                   const isDelivered = order.statusCode === 'delivered';
                   const isPreparing = order.statusCode === 'preparing' || order.statusCode === 'waiting_payment';
@@ -1180,6 +1230,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                   );
                 })}
               </div>
+            )}
             </div>
           )}
 

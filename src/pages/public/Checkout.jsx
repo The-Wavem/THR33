@@ -35,6 +35,9 @@ import {
   maskCEP
 } from '../../utils/validators';
 import { fetchAddressByCep } from '../../services/viaCepService';
+import { useAuth } from '../../context/AuthContext';
+import { doc, setDoc, collection, addDoc } from 'firebase/firestore';
+import { db } from '../../services/firebaseConfig';
 import styles from './Checkout.module.css';
 
 // Endereços pré-cadastrados para agilidade
@@ -52,14 +55,17 @@ const INITIAL_SAVED_ADDRESSES = [
   }
 ];
 
-export function Checkout({ user, onOpenAuthModal }) {
+export function Checkout({ user: propUser, onOpenAuthModal }) {
   const navigate = useNavigate();
+  const { currentUser, user: authUser, updateUser } = useAuth();
+  const user = currentUser || authUser || propUser;
+
   const { 
     cartItems, 
     subtotal, 
     discountAmount, 
     shippingCost, 
-    setShippingCost,
+    setShippingCost, 
     total, 
     appliedCoupon, 
     applyCoupon, 
@@ -198,10 +204,20 @@ export function Checkout({ user, onOpenAuthModal }) {
     return Object.keys(errors).length === 0;
   };
 
-  const handleNextToStep2 = (e) => {
+  const handleNextToStep2 = async (e) => {
     e.preventDefault();
     if (validateStep1()) {
       setIsEditingAccountData(false);
+
+      // Sincroniza em tempo real com o perfil do usuário no AuthContext e Firestore
+      if (updateUser) {
+        await updateUser({
+          name: clientData.name,
+          cpf: clientData.cpf,
+          phone: clientData.phone
+        });
+      }
+
       setCurrentStep(2);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -301,20 +317,84 @@ export function Checkout({ user, onOpenAuthModal }) {
   };
 
   // -------------------------------------------------------------
-  // HANDLERS ETAPA 3: CONEXÃO COM GATEWAY PAGBANK
+  // HANDLERS ETAPA 3: CONEXÃO COM GATEWAY PAGBANK & SYNC FIRESTORE
   // -------------------------------------------------------------
-  const handleProceedToPagBank = (e) => {
+  const handleProceedToPagBank = async (e) => {
     e.preventDefault();
     setIsProcessing(true);
 
-    setTimeout(() => {
-      setIsProcessing(false);
-      const generatedOrder = `THR-${Math.floor(1000 + Math.random() * 9000)}`;
+    const addressToSave = activeAddress || {
+      cep: addressForm.cep || '80420-000',
+      street: addressForm.street || 'Rua Comendador Araújo',
+      number: addressForm.number || '333',
+      neighborhood: addressForm.neighborhood || 'Batel',
+      city: addressForm.city || 'Curitiba',
+      state: addressForm.state || 'PR',
+      complement: addressForm.complement || ''
+    };
+
+    const trackingCode = `BR${Math.floor(100000000 + Math.random() * 900000000)}PR`;
+
+    const orderData = {
+      userId: user?.uid || 'guest',
+      clientName: clientData.name,
+      clientEmail: clientData.email,
+      clientCpf: clientData.cpf,
+      clientPhone: clientData.phone,
+      items: cartItems.map(item => ({
+        id: item.id || item.slug,
+        name: item.name,
+        size: item.size || 'M',
+        fit: item.fit || 'boxy',
+        price: item.price,
+        quantity: item.quantity || 1,
+        image: item.image,
+        evaluated: false
+      })),
+      subtotal,
+      discountAmount,
+      shippingCost,
+      total,
+      paymentMethod,
+      shippingAddress: {
+        cep: addressToSave.cep || '',
+        street: addressToSave.street || '',
+        number: addressToSave.number || '',
+        neighborhood: addressToSave.neighborhood || '',
+        city: addressToSave.city || '',
+        state: addressToSave.state || '',
+        complement: addressToSave.complement || ''
+      },
+      status: 'Aprovado',
+      trackingCode,
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      // 1. Grava o pedido no Firestore na coleção global 'orders'
+      const orderRef = await addDoc(collection(db, 'orders'), orderData);
+      const generatedOrder = `THR-${orderRef.id.slice(0, 6).toUpperCase()}`;
       setOrderNumber(generatedOrder);
+
+      // 2. Se o usuário estiver autenticado, salva/atualiza o perfil e o endereço principal
+      if (user?.uid && updateUser) {
+        await updateUser({
+          name: clientData.name,
+          cpf: clientData.cpf,
+          phone: clientData.phone,
+          lastAddress: orderData.shippingAddress
+        });
+      }
+    } catch (err) {
+      console.warn("Aviso ao salvar pedido no Firestore:", err.message);
+      const fallbackOrder = `THR-${Math.floor(1000 + Math.random() * 9000)}`;
+      setOrderNumber(fallbackOrder);
+    } finally {
+      setIsProcessing(false);
       setCurrentStep(4);
       clearCart();
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }, 1400);
+    }
   };
 
   const handleCopyPix = () => {
@@ -494,15 +574,11 @@ export function Checkout({ user, onOpenAuthModal }) {
                     <div className={styles.lockedDataGrid}>
                       <div className={styles.lockedItem}>
                         <span className={styles.lockedLabel}>NOME</span>
-                        <strong className={styles.lockedValue}>{clientData.name}</strong>
+                        <strong className={styles.lockedValue}>{clientData.name || 'Cliente THR33'}</strong>
                       </div>
                       <div className={styles.lockedItem}>
                         <span className={styles.lockedLabel}>E-MAIL</span>
                         <strong className={styles.lockedValue}>{clientData.email}</strong>
-                      </div>
-                      <div className={styles.lockedItem}>
-                        <span className={styles.lockedLabel}>TELEFONE / WHATSAPP</span>
-                        <strong className={styles.lockedValue}>{clientData.phone}</strong>
                       </div>
                     </div>
                   ) : (
@@ -531,41 +607,46 @@ export function Checkout({ user, onOpenAuthModal }) {
                         />
                         {clientErrors.email && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.email}</span>}
                       </div>
-
-                      <div className={styles.fieldWrapper}>
-                        <label className={styles.fieldLabel}>Telefone / WhatsApp *</label>
-                        <input 
-                          type="text" 
-                          name="phone" 
-                          maxLength={15}
-                          value={clientData.phone} 
-                          onChange={handleClientChange} 
-                          className={clientErrors.phone ? styles.inputError : ''}
-                        />
-                        {clientErrors.phone && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.phone}</span>}
-                      </div>
                     </div>
                   )}
                 </div>
 
-                {/* CPF (SEMPRE ABERTO PARA DIGITAÇÃO / VALIDAÇÃO NA COMPRA) */}
+                {/* CPF E TELEFONE/WHATSAPP (SEMPRE ABERTOS PARA PREENCHIMENTO / VALIDAÇÃO DIRETA) */}
                 <div className={styles.cpfEntrySection}>
-                  <div className={styles.fieldWrapper}>
-                    <div className={styles.labelWithBadge}>
-                      <label className={styles.fieldLabel}>CPF DO TITULAR DA COMPRA *</label>
-                      <span className={styles.requiredBadge}>Obrigatório para NF e PagBank</span>
+                  <div className={styles.identificationFieldsGrid}>
+                    <div className={styles.fieldWrapper}>
+                      <div className={styles.labelWithBadge}>
+                        <label className={styles.fieldLabel}>CPF DO TITULAR DA COMPRA *</label>
+                        <span className={styles.requiredBadge}>NF / PagBank</span>
+                      </div>
+                      <input 
+                        type="text" 
+                        name="cpf" 
+                        placeholder="000.000.000-00"
+                        maxLength={14}
+                        value={clientData.cpf} 
+                        onChange={handleClientChange} 
+                        className={clientErrors.cpf ? styles.inputError : ''}
+                      />
+                      {clientErrors.cpf && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.cpf}</span>}
                     </div>
-                    <input 
-                      type="text" 
-                      name="cpf" 
-                      placeholder="000.000.000-00"
-                      maxLength={14}
-                      value={clientData.cpf} 
-                      onChange={handleClientChange} 
-                      className={clientErrors.cpf ? styles.inputError : ''}
-                      autoFocus
-                    />
-                    {clientErrors.cpf && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.cpf}</span>}
+
+                    <div className={styles.fieldWrapper}>
+                      <div className={styles.labelWithBadge}>
+                        <label className={styles.fieldLabel}>TELEFONE / WHATSAPP *</label>
+                        <span className={styles.requiredBadge}>Rastreio de Envio</span>
+                      </div>
+                      <input 
+                        type="text" 
+                        name="phone" 
+                        placeholder="(41) 99999-9999"
+                        maxLength={15}
+                        value={clientData.phone} 
+                        onChange={handleClientChange} 
+                        className={clientErrors.phone ? styles.inputError : ''}
+                      />
+                      {clientErrors.phone && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.phone}</span>}
+                    </div>
                   </div>
                 </div>
 

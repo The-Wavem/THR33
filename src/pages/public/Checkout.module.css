@@ -248,6 +248,18 @@
   padding: 1.25rem 1.5rem;
 }
 
+.identificationFieldsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+@media (max-width: 640px) {
+  .identificationFieldsGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
 .labelWithBadge {
   display: flex;
   justify-content: space-between;

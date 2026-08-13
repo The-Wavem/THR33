@@ -94,6 +94,8 @@ export function AuthProvider({ children }) {
         email: email.trim(),
         cpf: cpf ? cpf.trim() : '',
         phone: phone ? phone.trim() : '',
+        addresses: [], // Começa zerado
+        wishlist: [],  // Começa zerado
         createdAt: new Date().toISOString(),
         provider: 'password',
         profileComplete: Boolean(cpf && phone)
@@ -128,6 +130,8 @@ export function AuthProvider({ children }) {
           photoURL: user.photoURL || '',
           cpf: '',
           phone: user.phoneNumber || '',
+          addresses: [], // Começa zerado
+          wishlist: [],  // Começa zerado
           createdAt: new Date().toISOString(),
           provider: 'google',
           profileComplete: false
@@ -190,13 +194,17 @@ export function AuthProvider({ children }) {
     if (!currentUser) return;
     try {
       if (auth.currentUser && updatedFields.name) {
-        await updateProfile(auth.currentUser, { displayName: updatedFields.name.trim() });
+        try {
+          await updateProfile(auth.currentUser, { displayName: updatedFields.name.trim() });
+        } catch (nameErr) {
+          console.warn("Aviso ao atualizar displayName:", nameErr.message);
+        }
       }
       const userDocRef = doc(db, 'users', currentUser.uid);
-      await updateDoc(userDocRef, updatedFields);
+      await setDoc(userDocRef, updatedFields, { merge: true });
       setCurrentUser(prev => ({ ...prev, ...updatedFields }));
     } catch (err) {
-      console.error("Erro ao atualizar perfil no Firestore:", err);
+      console.warn("Aviso ao atualizar perfil no Firestore:", err.message);
       setCurrentUser(prev => ({ ...prev, ...updatedFields }));
     }
   };
