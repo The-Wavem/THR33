@@ -1,0 +1,728 @@
+.vitrineContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1.5rem;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.breadcrumb {
+  font-size: 0.75rem;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+  font-weight: 800;
+  margin-top: 0.3rem;
+}
+
+.headerActions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.primaryBtn {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  padding: 0.75rem 1.4rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: opacity var(--transition-fast);
+  border: none;
+  white-space: nowrap;
+}
+
+.primaryBtn:hover:not(:disabled) { 
+  opacity: 0.9; 
+}
+
+.primaryBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.secondaryBtn {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  padding: 0.75rem 1.2rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.secondaryBtn:hover { 
+  border-color: var(--text-primary); 
+  background-color: var(--bg-surface);
+}
+
+.layoutGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: 2rem;
+  align-items: start;
+  width: 100%;
+  min-width: 0;
+}
+
+/* TABS DE SLIDES */
+.slidesTabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.25rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.tabBtn {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 0.65rem 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-width: 110px;
+  flex-shrink: 0;
+}
+
+.tabTop {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.tabIcon {
+  color: var(--text-muted);
+}
+
+.tabBtn span {
+  font-family: var(--font-heading);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.activeTab, .tabBtn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+.activeTab .tabIcon {
+  color: var(--text-primary);
+}
+
+.tagFlex {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.onlineTag { font-size: 0.65rem; color: #4ade80; font-weight: 700; }
+.offlineTag { font-size: 0.65rem; color: var(--text-muted); font-weight: 700; }
+
+/* COLUNA DO EDITOR */
+.editorCol {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
+}
+
+/* FORM CARD */
+.formCard {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: clamp(1.25rem, 2vw, 1.75rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.cardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.cardTop h3 {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  letter-spacing: 1px;
+}
+
+.cardTopActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.switchLabel {
+  font-size: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.switchLabel input[type="checkbox"] {
+  accent-color: #4ade80;
+  width: 15px;
+  height: 15px;
+}
+
+.deleteSlideBtn {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #f87171;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  transition: opacity var(--transition-fast);
+  padding: 0.2rem 0.4rem;
+}
+
+.deleteSlideBtn:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.formGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.1rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.inputField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.inputField label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+.inputField input {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.75rem 0.9rem;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  outline: none;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast);
+}
+
+.inputField input:focus {
+  border-color: var(--border-active);
+}
+
+/* CONTROLE DE BOTÕES DINÂMICOS */
+.buttonsControlSection {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.buttonsControlHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.75rem;
+}
+
+.buttonsHeaderTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.sectionIcon {
+  color: #38bdf8;
+}
+
+.buttonsHeaderTitle label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-primary);
+}
+
+.presetButtonsGroup {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.presetBtn {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.35rem 0.7rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.presetBtn:hover, .activePreset {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+.emptyButtonsNotice {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1rem;
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px dashed var(--border-color);
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.buttonsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.buttonItemCard {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.buttonCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.buttonIndexBadge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.variantSwitcher {
+  display: flex;
+  gap: 0.25rem;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  padding: 0.2rem;
+}
+
+.variantOption {
+  background: transparent;
+  border: none;
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.25rem 0.6rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.activeVariant {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  font-weight: 800;
+}
+
+.removeBtn {
+  background: transparent;
+  border: none;
+  color: #f87171;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem;
+  transition: opacity var(--transition-fast);
+}
+
+.removeBtn:hover {
+  opacity: 0.8;
+}
+
+.buttonInputsRow {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.75rem;
+}
+
+.buttonInputField {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.buttonInputField label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.buttonInputField input {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.6rem 0.75rem;
+  font-size: 0.8rem;
+  font-family: var(--font-body);
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+  transition: border-color var(--transition-fast);
+}
+
+.buttonInputField input:focus {
+  border-color: var(--border-active);
+}
+
+.linkInputWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.linkInputIcon {
+  position: absolute;
+  left: 0.65rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.linkInputWrapper input {
+  padding-left: 1.8rem;
+}
+
+.placeholderRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.placeholderHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.sparkleIcon {
+  color: #38bdf8;
+}
+
+.placeholderRow small {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.presetChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.chipBtn {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-primary);
+  color: var(--text-secondary);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.chipBtn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+}
+
+/* PREVIEW */
+.previewCol {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: clamp(1.25rem, 2vw, 1.75rem);
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  position: sticky;
+  top: 90px;
+}
+
+.previewHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.previewIcon {
+  color: #4ade80;
+}
+
+.previewTag {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+
+.previewHeroWrapper {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: 16/9;
+  min-height: 220px;
+  max-height: 380px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  box-sizing: border-box;
+  background-color: #0d0d0d;
+}
+
+.previewBg {
+  position: absolute;
+  inset: 0;
+  background-size: cover;
+  background-position: center;
+  transition: background-image 0.3s ease;
+}
+
+.previewOverlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(10, 10, 10, 0.45) 0%, rgba(10, 10, 10, 0.88) 100%);
+}
+
+.previewContent {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  padding: clamp(0.75rem, 2vw, 1.5rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.previewBadge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(4px);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  max-width: 90%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.previewBadgeDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: #4ade80;
+  flex-shrink: 0;
+}
+
+.previewTitle {
+  font-family: var(--font-heading);
+  font-size: clamp(1rem, 2vw, 1.5rem);
+  font-weight: 800;
+  line-height: 1.15;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.previewSubtitle {
+  font-size: clamp(0.68rem, 1.1vw, 0.8rem);
+  color: var(--text-secondary);
+  letter-spacing: 0.5px;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  word-break: break-word;
+}
+
+.previewButtons {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: 100%;
+}
+
+.previewPrimaryCta {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0.45rem 0.9rem;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.previewSecondaryCta {
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.62rem;
+  font-weight: 600;
+  padding: 0.45rem 0.9rem;
+  letter-spacing: 1px;
+  white-space: nowrap;
+}
+
+.previewHint {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.loadingWrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 5rem;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.spinningIcon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+/* BREAKPOINTS RESPONSIVOS */
+@media (max-width: 1120px) {
+  .layoutGrid {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  .previewCol {
+    position: static;
+  }
+}
+
+@media (max-width: 768px) {
+  .buttonInputsRow {
+    grid-template-columns: 1fr;
+  }
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .headerActions {
+    width: 100%;
+  }
+  .primaryBtn, .secondaryBtn {
+    flex: 1;
+    justify-content: center;
+  }
+}

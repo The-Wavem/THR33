@@ -31,6 +31,7 @@ const AdminLayout = lazy(() => import('./layouts/AdminLayout').then(m => ({ defa
 const CmsDashboard = lazy(() => import('./pages/admin/CmsDashboard').then(m => ({ default: m.CmsDashboard || m.default })));
 const CmsAnalytics = lazy(() => import('./pages/admin/CmsAnalytics').then(m => ({ default: m.CmsAnalytics || m.default })));
 const CmsProdutos = lazy(() => import('./pages/admin/CmsProdutos').then(m => ({ default: m.CmsProdutos || m.default })));
+const CmsVitrine = lazy(() => import('./pages/admin/CmsVitrine').then(m => ({ default: m.CmsVitrine || m.default })));
 
 export function AppRoutes() {
   const navigate = useNavigate();
@@ -131,6 +132,7 @@ export function AppRoutes() {
             <Route index element={<CmsDashboard />} />
             <Route path="analytics" element={<CmsAnalytics />} />
             <Route path="produtos" element={<CmsProdutos />} />
+            <Route path="vitrine" element={<CmsVitrine />} />
           </Route>
 
           {/* ALIAS DE CONVENIÊNCIA PARA /admin */}
@@ -145,6 +147,7 @@ export function AppRoutes() {
             <Route index element={<CmsDashboard />} />
             <Route path="analytics" element={<CmsAnalytics />} />
             <Route path="produtos" element={<CmsProdutos />} />
+            <Route path="vitrine" element={<CmsVitrine />} />
           </Route>
         </Routes>
       </Suspense>
