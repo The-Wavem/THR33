@@ -32,6 +32,7 @@ const CmsDashboard = lazy(() => import('./pages/admin/CmsDashboard').then(m => (
 const CmsAnalytics = lazy(() => import('./pages/admin/CmsAnalytics').then(m => ({ default: m.CmsAnalytics || m.default })));
 const CmsProdutos = lazy(() => import('./pages/admin/CmsProdutos').then(m => ({ default: m.CmsProdutos || m.default })));
 const CmsVitrine = lazy(() => import('./pages/admin/CmsVitrine').then(m => ({ default: m.CmsVitrine || m.default })));
+const CmsPedidos = lazy(() => import('./pages/admin/CmsPedidos').then(m => ({ default: m.CmsPedidos || m.default })));
 
 export function AppRoutes() {
   const navigate = useNavigate();
@@ -133,6 +134,7 @@ export function AppRoutes() {
             <Route path="analytics" element={<CmsAnalytics />} />
             <Route path="produtos" element={<CmsProdutos />} />
             <Route path="vitrine" element={<CmsVitrine />} />
+            <Route path="pedidos" element={<CmsPedidos />} />
           </Route>
 
           {/* ALIAS DE CONVENIÊNCIA PARA /admin */}
@@ -148,6 +150,7 @@ export function AppRoutes() {
             <Route path="analytics" element={<CmsAnalytics />} />
             <Route path="produtos" element={<CmsProdutos />} />
             <Route path="vitrine" element={<CmsVitrine />} />
+            <Route path="pedidos" element={<CmsPedidos />} />
           </Route>
         </Routes>
       </Suspense>

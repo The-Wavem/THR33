@@ -88,6 +88,17 @@ export function CmsProdutos() {
     fetchProducts();
   }, []);
 
+  // Trava a rolagem do fundo (eixo Y) quando o drawer de produto estiver aberto
+  useEffect(() => {
+    if (isFormOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [isFormOpen]);
+
   // Handlers do Formulário
   const handleInputChange = (e) => {
     const { name, value, type, checked } = e.target;

@@ -16,7 +16,8 @@ import {
   Clock, 
   ArrowRight,
   ShieldCheck,
-  FileText
+  FileText,
+  Calendar
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { maskCPF } from '../../utils/validators';
@@ -31,6 +32,21 @@ const STATUS_OPTIONS = [
   { value: 'Devolvido', label: 'Devolvido', color: '#c084fc' }
 ];
 
+// Helper para obter datas formatadas no formato YYYY-MM-DD
+const getTodayISO = () => new Date().toISOString().split('T')[0];
+
+const getDaysAgoISO = (days) => {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString().split('T')[0];
+};
+
+const formatDateBR = (isoStr) => {
+  if (!isoStr) return '';
+  const [year, month, day] = isoStr.split('-');
+  return `${day}/${month}/${year}`;
+};
+
 // Pedidos mock de exemplo caso o Firestore ainda não tenha transações
 const MOCK_ORDERS = [
   {
@@ -43,7 +59,7 @@ const MOCK_ORDERS = [
     paymentMethod: "PIX",
     status: "Aprovado",
     trackingCode: "BR982173641TH",
-    createdAt: new Date(Date.now() - 3600000 * 4).toISOString(),
+    createdAt: new Date().toISOString(), // Hoje
     shippingAddress: {
       street: "Rua Brigadeiro Franco",
       number: "1820",
@@ -75,7 +91,7 @@ const MOCK_ORDERS = [
     paymentMethod: "Cartão de Crédito",
     status: "Em Trânsito",
     trackingCode: "BR741289654TH",
-    createdAt: new Date(Date.now() - 3600000 * 28).toISOString(),
+    createdAt: new Date(Date.now() - 3600000 * 24 * 3).toISOString(), // 3 dias atrás
     shippingAddress: {
       street: "Av. Paulista",
       number: "1000",
@@ -107,11 +123,11 @@ const MOCK_ORDERS = [
     paymentMethod: "PIX",
     status: "Troca Solicitada",
     trackingCode: "BR412896325TH",
-    createdAt: new Date(Date.now() - 3600000 * 72).toISOString(),
+    createdAt: new Date(Date.now() - 3600000 * 24 * 12).toISOString(), // 12 dias atrás
     reverseLogistics: {
       code: "REV-84910238BR",
       reason: "Tamanho Boxy menor que o esperado",
-      generatedAt: new Date(Date.now() - 3600000 * 12).toISOString()
+      generatedAt: new Date(Date.now() - 3600000 * 24 * 2).toISOString()
     },
     shippingAddress: {
       street: "Rua XV de Novembro",
@@ -142,6 +158,12 @@ export function CmsPedidos() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Filtros de Data & Período
+  const [dateRangePreset, setDateRangePreset] = useState('all'); // '1d' | '7d' | '30d' | 'custom' | 'all'
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const todayStr = getTodayISO();
 
   // Modal de Detalhes & Logística Reversa
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -175,6 +197,64 @@ export function CmsPedidos() {
     fetchOrders();
   }, []);
 
+  // Trava a rolagem do fundo (eixo Y) quando o drawer de detalhes do pedido estiver aberto
+  useEffect(() => {
+    if (selectedOrder) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [selectedOrder]);
+
+  // Handlers do Seletor de Período Rápido
+  const handlePresetChange = (preset) => {
+    setDateRangePreset(preset);
+    const today = getTodayISO();
+
+    if (preset === '1d') {
+      setStartDate(today);
+      setEndDate(today);
+    } else if (preset === '7d') {
+      setStartDate(getDaysAgoISO(7));
+      setEndDate(today);
+    } else if (preset === '30d') {
+      setStartDate(getDaysAgoISO(30));
+      setEndDate(today);
+    } else if (preset === 'all') {
+      setStartDate('');
+      setEndDate('');
+    }
+  };
+
+  // Handler de Data Customizada com Validação Rigorosa
+  const handleCustomDateChange = (type, value) => {
+    const today = getTodayISO();
+    let validatedVal = value;
+
+    // 1. Validação: Não permitir datas no futuro
+    if (validatedVal > today) {
+      validatedVal = today;
+    }
+
+    if (type === 'start') {
+      // 2. Validação: Se a data inicial for maior que a final atual, ajusta a final para a inicial
+      if (endDate && validatedVal > endDate) {
+        setEndDate(validatedVal);
+      }
+      setStartDate(validatedVal);
+    } else if (type === 'end') {
+      // 3. Validação: Se a data final for menor que a data inicial atual, ajusta a inicial para a final
+      if (startDate && validatedVal < startDate) {
+        setStartDate(validatedVal);
+      }
+      setEndDate(validatedVal);
+    }
+
+    setDateRangePreset('custom');
+  };
+
   // 2. Atualizar Status do Pedido no Firestore
   const handleStatusChange = async (orderId, newStatus) => {
     try {
@@ -186,7 +266,6 @@ export function CmsPedidos() {
       }
     } catch (err) {
       console.warn("Aviso ao atualizar status no Firestore:", err.message);
-      // Fallback de atualização em memória
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
       if (selectedOrder?.id === orderId) {
         setSelectedOrder(prev => ({ ...prev, status: newStatus }));
@@ -235,36 +314,72 @@ export function CmsPedidos() {
     }
   };
 
-  // Métricas Calculadas
+  // Filtragem Geral (Por Data, Status e Busca Textual/CPF)
+  const filteredOrders = useMemo(() => {
+    return orders.filter(order => {
+      // 1. Filtro por Período de Datas
+      if (startDate || endDate) {
+        if (!order.createdAt) return false;
+        const orderDateStr = new Date(order.createdAt).toISOString().split('T')[0];
+        if (startDate && endDate) {
+          if (orderDateStr < startDate || orderDateStr > endDate) return false;
+        } else if (startDate && orderDateStr < startDate) {
+          return false;
+        } else if (endDate && orderDateStr > endDate) {
+          return false;
+        }
+      }
+
+      // 2. Filtro por Status
+      if (statusFilter !== 'all' && order.status !== statusFilter) {
+        return false;
+      }
+
+      // 3. Filtro por Busca
+      if (searchTerm.trim()) {
+        const client = (order.clientName || '').toLowerCase();
+        const cpf = (order.clientCpf || '').replace(/\D/g, '');
+        const id = (order.id || '').toLowerCase();
+        const email = (order.clientEmail || '').toLowerCase();
+        const search = searchTerm.toLowerCase().replace(/\D/g, '');
+        const textSearch = searchTerm.toLowerCase();
+
+        const matchesSearch = 
+          client.includes(textSearch) || 
+          id.includes(textSearch) || 
+          email.includes(textSearch) || 
+          (search && cpf.includes(search));
+
+        if (!matchesSearch) return false;
+      }
+
+      return true;
+    });
+  }, [orders, startDate, endDate, statusFilter, searchTerm]);
+
+  // Métricas Calculadas sobre os Pedidos Filtrados por Período
   const metrics = useMemo(() => {
-    const total = orders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
-    const count = orders.length;
-    const exchanges = orders.filter(o => o.status === 'Troca Solicitada' || o.status === 'Devolvido').length;
+    // Calcula métricas sobre os pedidos dentro do período selecionado
+    const ordersInPeriod = orders.filter(order => {
+      if (!startDate && !endDate) return true;
+      if (!order.createdAt) return false;
+      const orderDateStr = new Date(order.createdAt).toISOString().split('T')[0];
+      if (startDate && endDate) {
+        return orderDateStr >= startDate && orderDateStr <= endDate;
+      }
+      if (startDate) return orderDateStr >= startDate;
+      if (endDate) return orderDateStr <= endDate;
+      return true;
+    });
+
+    const total = ordersInPeriod.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+    const count = ordersInPeriod.length;
+    const exchanges = ordersInPeriod.filter(o => o.status === 'Troca Solicitada' || o.status === 'Devolvido').length;
     const exchangeRate = count > 0 ? ((exchanges / count) * 100).toFixed(1) : '0.0';
     const averageTicket = count > 0 ? (total / count).toFixed(2) : '0.00';
 
-    return { total, count, exchanges, exchangeRate, averageTicket };
-  }, [orders]);
-
-  // Filtragem
-  const filteredOrders = orders.filter(order => {
-    const client = (order.clientName || '').toLowerCase();
-    const cpf = (order.clientCpf || '').replace(/\D/g, '');
-    const id = (order.id || '').toLowerCase();
-    const email = (order.clientEmail || '').toLowerCase();
-    const search = searchTerm.toLowerCase().replace(/\D/g, '');
-    const textSearch = searchTerm.toLowerCase();
-
-    const matchesSearch = 
-      client.includes(textSearch) || 
-      id.includes(textSearch) || 
-      email.includes(textSearch) || 
-      (search && cpf.includes(search));
-
-    const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
-
-    return matchesSearch && matchesStatus;
-  });
+    return { total, count, exchanges, exchangeRate, averageTicket, ordersInPeriodCount: count };
+  }, [orders, startDate, endDate]);
 
   return (
     <div className={styles.container}>
@@ -274,16 +389,102 @@ export function CmsPedidos() {
           <span className={styles.breadcrumb}>CMS / GESTÃO DE VENDAS & SUPORTE</span>
           <h1 className={styles.title}>PEDIDOS & LOGÍSTICA REVERSA</h1>
         </div>
-        <button 
-          onClick={fetchOrders} 
-          disabled={refreshing} 
-          className={styles.refreshBtn}
-          title="Sincronizar Pedidos"
-        >
-          <RotateCw size={14} className={refreshing ? styles.spinning : ''} />
-          <span>{refreshing ? 'Sincronizando...' : 'Sincronizar Pedidos'}</span>
-        </button>
+
+        {/* BARRA DE CONTROLES DO TOPO (SELETOR DE PERÍODOS + SINCRONIZAÇÃO) */}
+        <div className={styles.headerRightControls}>
+          {/* SELETOR DE PERÍODO & DATAS */}
+          <div className={styles.dateFilterBox}>
+            <div className={styles.datePresetsRow}>
+              <button 
+                type="button" 
+                className={`${styles.presetBtn} ${dateRangePreset === '1d' ? styles.activePreset : ''}`}
+                onClick={() => handlePresetChange('1d')}
+              >
+                1 Dia
+              </button>
+              <button 
+                type="button" 
+                className={`${styles.presetBtn} ${dateRangePreset === '7d' ? styles.activePreset : ''}`}
+                onClick={() => handlePresetChange('7d')}
+              >
+                7 Dias
+              </button>
+              <button 
+                type="button" 
+                className={`${styles.presetBtn} ${dateRangePreset === '30d' ? styles.activePreset : ''}`}
+                onClick={() => handlePresetChange('30d')}
+              >
+                30 Dias
+              </button>
+              <button 
+                type="button" 
+                className={`${styles.presetBtn} ${dateRangePreset === 'all' ? styles.activePreset : ''}`}
+                onClick={() => handlePresetChange('all')}
+              >
+                Todos
+              </button>
+            </div>
+
+            <div className={styles.customDateInputs}>
+              <div className={styles.dateInputGroup}>
+                <Calendar size={12} className={styles.dateInputIcon} />
+                <input 
+                  type="date" 
+                  value={startDate}
+                  max={endDate || todayStr}
+                  onChange={(e) => handleCustomDateChange('start', e.target.value)}
+                  title="Data Inicial (não pode ser posterior à final)"
+                  aria-label="Data Inicial"
+                />
+              </div>
+              <span className={styles.dateSeparator}>até</span>
+              <div className={styles.dateInputGroup}>
+                <Calendar size={12} className={styles.dateInputIcon} />
+                <input 
+                  type="date" 
+                  value={endDate}
+                  min={startDate}
+                  max={todayStr}
+                  onChange={(e) => handleCustomDateChange('end', e.target.value)}
+                  title="Data Final (máximo até hoje)"
+                  aria-label="Data Final"
+                />
+              </div>
+              {(startDate || endDate) && (
+                <button 
+                  type="button" 
+                  onClick={() => handlePresetChange('all')} 
+                  className={styles.clearDateBtn}
+                  title="Limpar filtro de período"
+                  aria-label="Limpar datas"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <button 
+            onClick={fetchOrders} 
+            disabled={refreshing} 
+            className={styles.refreshBtn}
+            title="Sincronizar Pedidos"
+          >
+            <RotateCw size={14} className={refreshing ? styles.spinning : ''} />
+            <span>{refreshing ? 'Sincronizando...' : 'Sincronizar Pedidos'}</span>
+          </button>
+        </div>
       </header>
+
+      {/* FEEDBACK VISUAL DO PERÍODO SELECIONADO */}
+      {(startDate || endDate) && (
+        <div className={styles.activePeriodBadge}>
+          <Calendar size={13} className={styles.periodBadgeIcon} />
+          <span>
+            Exibindo dados de <strong>{startDate ? formatDateBR(startDate) : 'Início'}</strong> até <strong>{endDate ? formatDateBR(endDate) : 'Hoje'}</strong> • <strong>{metrics.ordersInPeriodCount}</strong> pedidos no período
+          </span>
+        </div>
+      )}
 
       {/* CARDS DE KPIS */}
       <section className={styles.kpiGrid}>
@@ -293,7 +494,7 @@ export function CmsPedidos() {
             <span className={styles.kpiLabel}>FATURAMENTO TOTAL</span>
           </div>
           <strong className={styles.kpiValue}>R$ {metrics.total.toFixed(2)}</strong>
-          <small className={styles.kpiSub}>Total em vendas confirmadas</small>
+          <small className={styles.kpiSub}>Total no período selecionado</small>
         </div>
 
         <div className={styles.kpiCard}>
@@ -302,7 +503,7 @@ export function CmsPedidos() {
             <span className={styles.kpiLabel}>TOTAL DE PEDIDOS</span>
           </div>
           <strong className={styles.kpiValue}>{metrics.count}</strong>
-          <small className={styles.kpiSub}>Transações registradas</small>
+          <small className={styles.kpiSub}>Transações no período</small>
         </div>
 
         <div className={styles.kpiCard}>
@@ -320,11 +521,11 @@ export function CmsPedidos() {
             <span className={styles.kpiLabel}>TAXA DE TROCAS / DEVOLUÇÕES</span>
           </div>
           <strong className={styles.kpiValue}>{metrics.exchangeRate}%</strong>
-          <small className={styles.kpiSub}>{metrics.exchanges} solicitações ativas</small>
+          <small className={styles.kpiSub}>{metrics.exchanges} solicitações no período</small>
         </div>
       </section>
 
-      {/* CONTROLE DE BUSCA E FILTROS */}
+      {/* CONTROLE DE BUSCA E FILTROS DE STATUS */}
       <div className={styles.controlBar}>
         <div className={styles.searchBox}>
           <Search size={15} className={styles.searchIcon} />
@@ -346,17 +547,30 @@ export function CmsPedidos() {
             className={`${styles.filterBtn} ${statusFilter === 'all' ? styles.activeFilter : ''}`}
             onClick={() => setStatusFilter('all')}
           >
-            TODOS ({orders.length})
+            TODOS ({filteredOrders.length})
           </button>
-          {STATUS_OPTIONS.map(st => (
-            <button
-              key={st.value}
-              className={`${styles.filterBtn} ${statusFilter === st.value ? styles.activeFilter : ''}`}
-              onClick={() => setStatusFilter(st.value)}
-            >
-              {st.label.toUpperCase()}
-            </button>
-          ))}
+          {STATUS_OPTIONS.map(st => {
+            const countForStatus = orders.filter(o => {
+              if (startDate || endDate) {
+                if (!o.createdAt) return false;
+                const dStr = new Date(o.createdAt).toISOString().split('T')[0];
+                if (startDate && endDate && (dStr < startDate || dStr > endDate)) return false;
+                if (startDate && dStr < startDate) return false;
+                if (endDate && dStr > endDate) return false;
+              }
+              return o.status === st.value;
+            }).length;
+
+            return (
+              <button
+                key={st.value}
+                className={`${styles.filterBtn} ${statusFilter === st.value ? styles.activeFilter : ''}`}
+                onClick={() => setStatusFilter(st.value)}
+              >
+                {st.label.toUpperCase()} ({countForStatus})
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -390,7 +604,7 @@ export function CmsPedidos() {
                 <td colSpan="8" className={styles.centerText}>
                   <div className={styles.emptyWrapper}>
                     <AlertCircle size={18} />
-                    <span>Nenhum pedido encontrado para estes filtros.</span>
+                    <span>Nenhum pedido encontrado para o período e filtros selecionados.</span>
                   </div>
                 </td>
               </tr>
