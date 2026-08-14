@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Truck, Star, Plus } from 'lucide-react';
 import { PRODUCTS_DATA } from '../../data/productsData';
+import { analyticsService } from '../../services/analyticsService';
 import styles from './ProdutoDetalhe.module.css';
 
 // MOCK PADRÃO / FALLBACK COMPLETO DO PRODUTO
@@ -100,7 +101,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
   const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
   const [shippingError, setShippingError] = useState(null);
 
-  // Sincroniza parâmetros quando o produto muda
+  // Sincroniza parâmetros quando o produto muda e registra telemetria
   useEffect(() => {
     setSelectedImageIndex(0);
     setQuantity(1);
@@ -112,7 +113,12 @@ export function ProdutoDetalhe({ onAddToCart }) {
     if (product.sizes && product.sizes.length > 0) {
       setSelectedSize(product.sizes[0]);
     }
-  }, [currentParam]);
+
+    if (product.id || currentParam) {
+      analyticsService.trackProductView(product.id || currentParam, product.name);
+      analyticsService.trackPageView('produto_detalhe');
+    }
+  }, [currentParam, product.id, product.name]);
 
   const handlePrevImage = () => {
     setSelectedImageIndex((prev) => (prev === 0 ? product.images.length - 1 : prev - 1));

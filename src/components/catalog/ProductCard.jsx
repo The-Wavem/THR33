@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
+import { analyticsService } from '../../services/analyticsService';
 import styles from './ProductCard.module.css';
 
 export function ProductCard({ product }) {
@@ -11,6 +12,10 @@ export function ProductCard({ product }) {
   const productId = product.slug || product.id;
   const isFav = isFavorite(productId);
 
+  const handleTrackClick = () => {
+    analyticsService.trackProductView(productId, product.name);
+  };
+
   const handleFavoriteClick = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -18,7 +23,7 @@ export function ProductCard({ product }) {
   };
 
   return (
-    <div className={styles.card}>
+    <div className={styles.card} onClick={handleTrackClick}>
       <div className={styles.imageWrapper}>
         {product.isRelease && <span className={styles.badge}>LANÇAMENTO</span>}
         
@@ -36,7 +41,11 @@ export function ProductCard({ product }) {
 
         {/* BOTÕES DE AÇÃO: VER DETALHES + FAVORITAR */}
         <div className={styles.overlayActions}>
-          <Link className={styles.overlayBtn} to={`/produto/${productId}`}>
+          <Link 
+            className={styles.overlayBtn} 
+            to={`/produto/${productId}`}
+            onClick={handleTrackClick}
+          >
             VER DETALHES
           </Link>
 

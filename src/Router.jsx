@@ -29,6 +29,7 @@ const NotFound = lazy(() => import('./pages/public/NotFound').then(m => ({ defau
 const Perfil = lazy(() => import('./pages/private/Perfil').then(m => ({ default: m.Perfil || m.default })));
 const AdminLayout = lazy(() => import('./layouts/AdminLayout').then(m => ({ default: m.AdminLayout || m.default })));
 const CmsDashboard = lazy(() => import('./pages/admin/CmsDashboard').then(m => ({ default: m.CmsDashboard || m.default })));
+const CmsAnalytics = lazy(() => import('./pages/admin/CmsAnalytics').then(m => ({ default: m.CmsAnalytics || m.default })));
 
 export function AppRoutes() {
   const navigate = useNavigate();
@@ -127,6 +128,7 @@ export function AppRoutes() {
             }
           >
             <Route index element={<CmsDashboard />} />
+            <Route path="analytics" element={<CmsAnalytics />} />
           </Route>
 
           {/* ALIAS DE CONVENIÊNCIA PARA /admin */}
@@ -139,6 +141,7 @@ export function AppRoutes() {
             }
           >
             <Route index element={<CmsDashboard />} />
+            <Route path="analytics" element={<CmsAnalytics />} />
           </Route>
         </Routes>
       </Suspense>

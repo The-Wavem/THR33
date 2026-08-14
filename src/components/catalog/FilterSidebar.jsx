@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, X, ArrowRight } from 'lucide-react';
+import { analyticsService } from '../../services/analyticsService';
 import styles from './FilterSidebar.module.css';
 
 export function FilterSidebar({ 
@@ -20,6 +21,9 @@ export function FilterSidebar({
     e.preventDefault();
     if (onSearchSubmit) {
       onSearchSubmit(searchTerm.trim());
+      if (searchTerm.trim()) {
+        analyticsService.trackFilterUse('busca', searchTerm.trim());
+      }
     }
   };
 
@@ -30,13 +34,17 @@ export function FilterSidebar({
     }
   };
 
-  // Funções de toggle multi-seleção
+  // Funções de toggle multi-seleção com telemetria atômica
   const toggleCategory = (cat) => {
     setFilters(prev => {
       const current = prev.categories || [];
-      const updated = current.includes(cat)
-        ? current.filter(c => c !== cat)
-        : [...current, cat];
+      const isSelecting = !current.includes(cat);
+      if (isSelecting) {
+        analyticsService.trackFilterUse('categoria', cat);
+      }
+      const updated = isSelecting
+        ? [...current, cat]
+        : current.filter(c => c !== cat);
       return { ...prev, categories: updated };
     });
   };
@@ -44,9 +52,13 @@ export function FilterSidebar({
   const toggleFit = (fit) => {
     setFilters(prev => {
       const current = prev.fits || [];
-      const updated = current.includes(fit)
-        ? current.filter(f => f !== fit)
-        : [...current, fit];
+      const isSelecting = !current.includes(fit);
+      if (isSelecting) {
+        analyticsService.trackFilterUse('modelagem', fit);
+      }
+      const updated = isSelecting
+        ? [...current, fit]
+        : current.filter(f => f !== fit);
       return { ...prev, fits: updated };
     });
   };
@@ -54,9 +66,13 @@ export function FilterSidebar({
   const toggleDrop = (drop) => {
     setFilters(prev => {
       const current = prev.drops || [];
-      const updated = current.includes(drop)
-        ? current.filter(d => d !== drop)
-        : [...current, drop];
+      const isSelecting = !current.includes(drop);
+      if (isSelecting) {
+        analyticsService.trackFilterUse('drop', drop);
+      }
+      const updated = isSelecting
+        ? [...current, drop]
+        : current.filter(d => d !== drop);
       return { ...prev, drops: updated };
     });
   };
@@ -64,9 +80,13 @@ export function FilterSidebar({
   const toggleSize = (size) => {
     setFilters(prev => {
       const current = prev.sizes || [];
-      const updated = current.includes(size)
-        ? current.filter(s => s !== size)
-        : [...current, size];
+      const isSelecting = !current.includes(size);
+      if (isSelecting) {
+        analyticsService.trackFilterUse('tamanho', size);
+      }
+      const updated = isSelecting
+        ? [...current, size]
+        : current.filter(s => s !== size);
       return { ...prev, sizes: updated };
     });
   };

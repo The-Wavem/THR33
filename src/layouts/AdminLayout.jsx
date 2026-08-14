@@ -5,6 +5,7 @@ import {
   ShoppingBag, 
   Image, 
   Package, 
+  BarChart3, 
   ArrowLeft, 
   ShieldCheck, 
   LogOut 
@@ -35,6 +36,13 @@ export function AdminLayout() {
           >
             <LayoutDashboard size={16} className={styles.navIcon} />
             <span>Visão Geral & CRM</span>
+          </NavLink>
+          <NavLink 
+            to="/cms/analytics" 
+            className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
+          >
+            <BarChart3 size={16} className={styles.navIcon} />
+            <span>Métricas & Atividades</span>
           </NavLink>
           <NavLink 
             to="/cms/produtos" 

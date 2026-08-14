@@ -6,6 +6,7 @@ import FilterSidebar from '../../components/catalog/FilterSidebar';
 import ProductCard from '../../components/catalog/ProductCard';
 import ProductCardSkeleton from '../../components/catalog/ProductCardSkeleton';
 import { PRODUCTS_DATA } from '../../data/productsData';
+import { analyticsService } from '../../services/analyticsService';
 import styles from './Catalogo.module.css';
 
 // Variantes de animação staggered para a grade de cards
@@ -54,6 +55,11 @@ export function Catalogo() {
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+
+  // 0. Telemetria: Registra visualização de página do Catálogo
+  useEffect(() => {
+    analyticsService.trackPageView('catalogo');
+  }, []);
 
   // 1. SINCRONIZAÇÃO: Ler parâmetros da URL e atualizar estados internos
   useEffect(() => {
