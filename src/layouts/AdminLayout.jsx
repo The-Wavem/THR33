@@ -6,6 +6,7 @@ import {
   Image, 
   Package, 
   BarChart3, 
+  Target,
   ArrowLeft, 
   ShieldCheck, 
   LogOut 
@@ -43,6 +44,13 @@ export function AdminLayout() {
           >
             <BarChart3 size={16} className={styles.navIcon} />
             <span>Métricas & Atividades</span>
+          </NavLink>
+          <NavLink 
+            to="/cms/campanhas" 
+            className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
+          >
+            <Target size={16} className={styles.navIcon} />
+            <span>Campanhas & UTMs</span>
           </NavLink>
           <NavLink 
             to="/cms/produtos" 
