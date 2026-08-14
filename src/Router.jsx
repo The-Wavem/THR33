@@ -3,6 +3,7 @@ import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { PublicLayout } from './layouts/PublicLayout';
 import { PrivateLayout } from './layouts/PrivateLayout';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { AdminRoute } from './components/common/AdminRoute';
 import { LoadingScreen } from './components/ui/LoadingScreen';
 import { ScrollToTop } from './components/common/ScrollToTop';
 import { CartDrawer } from './components/cart/CartDrawer';
@@ -26,6 +27,8 @@ const BrindeDetalhe = lazy(() => import('./pages/public/BrindeDetalhe').then(m =
 const NotFound = lazy(() => import('./pages/public/NotFound').then(m => ({ default: m.NotFound || m.default })));
 
 const Perfil = lazy(() => import('./pages/private/Perfil').then(m => ({ default: m.Perfil || m.default })));
+const AdminLayout = lazy(() => import('./layouts/AdminLayout').then(m => ({ default: m.AdminLayout || m.default })));
+const CmsDashboard = lazy(() => import('./pages/admin/CmsDashboard').then(m => ({ default: m.CmsDashboard || m.default })));
 
 export function AppRoutes() {
   const navigate = useNavigate();
@@ -112,6 +115,30 @@ export function AppRoutes() {
             <Route path="/configuracoes" element={<Perfil defaultTab="dados" />} />
             <Route path="/enderecos" element={<Perfil defaultTab="enderecos" />} />
             <Route path="/seguranca" element={<Perfil defaultTab="seguranca" />} />
+          </Route>
+
+          {/* PAINEL ADMINISTRATIVO CMS ENGINE (TD-93) PROTEGIDO POR ROLE */}
+          <Route 
+            path="/cms" 
+            element={
+              <AdminRoute>
+                <AdminLayout />
+              </AdminRoute>
+            }
+          >
+            <Route index element={<CmsDashboard />} />
+          </Route>
+
+          {/* ALIAS DE CONVENIÊNCIA PARA /admin */}
+          <Route 
+            path="/admin" 
+            element={
+              <AdminRoute>
+                <AdminLayout />
+              </AdminRoute>
+            }
+          >
+            <Route index element={<CmsDashboard />} />
           </Route>
         </Routes>
       </Suspense>

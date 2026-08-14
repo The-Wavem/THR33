@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, ShoppingBag, Heart, LogOut, Package, ArrowRight, Gift } from 'lucide-react';
+import { User, ShoppingBag, Heart, LogOut, Package, ArrowRight, Gift, ShieldCheck } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -51,7 +51,7 @@ export function Navbar({ onOpenCart }) {
   const catalogWrapperRef = useRef(null);
 
   const { openCart, totalItemsCount } = useCart();
-  const { currentUser, isAuthenticated, logout } = useAuth();
+  const { currentUser, isAuthenticated, isAdmin, logout } = useAuth();
   const { favoritesCount } = useWishlist();
   const navigate = useNavigate();
 
@@ -290,6 +290,23 @@ export function Navbar({ onOpenCart }) {
           >
             Sobre
           </NavLink>
+
+          {/* SESSÃO EXCLUSIVA DO ADMINISTRADOR (LIBERADA DINAMICAMENTE NO NAVBAR) */}
+          {isAdmin && (
+            <NavLink 
+              to="/cms" 
+              className={({ isActive }) => 
+                `${styles.link} ${styles.adminNavLink} ${isActive ? styles.adminLinkActive : ''}`
+              }
+              onClick={() => setIsMobileMenuOpen(false)}
+              onMouseEnter={() => preloadRoute('/cms')}
+              onTouchStart={() => preloadRoute('/cms')}
+            >
+              <ShieldCheck size={13} className={styles.adminNavIcon} />
+              <span>Painel CMS</span>
+              <span className={styles.adminNavBadge}>ADM</span>
+            </NavLink>
+          )}
         </nav>
 
         {/* Ações / Ícones do Usuário */}
@@ -336,12 +353,36 @@ export function Navbar({ onOpenCart }) {
                 >
                   {isAuthenticated ? (
                     <div className={styles.dropdownContent}>
-                      <p className={styles.greeting}>
-                        Olá, <strong>{currentUser?.name?.split(' ')[0] || 'Usuário'}</strong>
-                      </p>
+                      <div className={styles.greetingHeader}>
+                        <p className={styles.greeting}>
+                          Olá, <strong>{currentUser?.name?.split(' ')[0] || 'Usuário'}</strong>
+                        </p>
+                        {isAdmin && (
+                          <span className={styles.adminUserPill}>ADMIN</span>
+                        )}
+                      </div>
                       <span className={styles.userEmail}>{currentUser?.email}</span>
                       <hr className={styles.divider} />
                       
+                      {/* ATALHO DIRETO AO PAINEL CMS SE FOR ADM */}
+                      {isAdmin && (
+                        <>
+                          <Link 
+                            to="/cms" 
+                            className={styles.adminHighlightLink}
+                            onClick={() => setIsProfileDropdownOpen(false)}
+                            onMouseEnter={() => preloadRoute('/cms')}
+                          >
+                            <div className={styles.adminHighlightLeft}>
+                              <ShieldCheck size={14} className={styles.adminIconGlow} />
+                              <span>PAINEL CMS ENGINE</span>
+                            </div>
+                            <span className={styles.adminBadgePill}>ADM</span>
+                          </Link>
+                          <hr className={styles.divider} />
+                        </>
+                      )}
+
                       <Link 
                         to="/perfil" 
                         className={styles.dropdownLink}
