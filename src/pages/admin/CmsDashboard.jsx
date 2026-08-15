@@ -20,7 +20,7 @@ export function CmsDashboard() {
     totalRevenue: 0,
     totalOrders: 0,
     totalUsers: 0,
-    deadStockCount: 2
+    deadStockCount: 0
   });
 
   // CRM 360 Search
@@ -34,18 +34,33 @@ export function CmsDashboard() {
       try {
         const ordersSnap = await getDocs(collection(db, 'orders'));
         const usersSnap = await getDocs(collection(db, 'users'));
+        const prodsSnap = await getDocs(collection(db, 'products'));
 
         let revenue = 0;
         ordersSnap.forEach((doc) => {
           revenue += (doc.data().total || 0);
         });
 
-        setMetrics(prev => ({
-          ...prev,
+        let deadStockCounter = 0;
+        if (!prodsSnap.empty) {
+          prodsSnap.forEach(d => {
+            const p = d.data() || {};
+            const daysIdle = Number(p.daysWithoutSale || 0);
+            const totalStock = p.stock 
+              ? Object.values(p.stock).reduce((a, b) => Number(a) + Number(b), 0) 
+              : (Number(p.totalStock) || 0);
+            if (daysIdle >= 45 && totalStock > 0) {
+              deadStockCounter += 1;
+            }
+          });
+        }
+
+        setMetrics({
           totalRevenue: revenue,
           totalOrders: ordersSnap.size,
-          totalUsers: usersSnap.size
-        }));
+          totalUsers: usersSnap.size,
+          deadStockCount: deadStockCounter
+        });
       } catch (err) {
         console.warn("Aviso ao carregar métricas do Firestore:", err.message);
       }
