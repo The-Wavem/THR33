@@ -12,6 +12,10 @@ export function ProductCard({ product }) {
   const productId = product.slug || product.id;
   const isFav = isFavorite(productId);
 
+  const priceNum = Number(product.price || 0);
+  const discountPriceNum = Number(product.discountPrice || 0);
+  const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product.discountActive !== false);
+
   const handleTrackClick = () => {
     analyticsService.trackProductView(productId, product.name);
   };
@@ -25,7 +29,11 @@ export function ProductCard({ product }) {
   return (
     <div className={styles.card} onClick={handleTrackClick}>
       <div className={styles.imageWrapper}>
-        {product.isRelease && <span className={styles.badge}>LANÇAMENTO</span>}
+        {hasDiscount ? (
+          <span className={styles.promoBadge}>PROMOÇÃO</span>
+        ) : product.isRelease ? (
+          <span className={styles.badge}>LANÇAMENTO</span>
+        ) : null}
         
         {/* Placeholder com Shimmer enquanto a imagem carrega */}
         {!imageLoaded && <div className={styles.imagePlaceholderShimmer} />}
@@ -70,11 +78,28 @@ export function ProductCard({ product }) {
 
       <div className={styles.details}>
         <div className={styles.tagsRow}>
-          <span className={styles.fitTag}>{product.fit?.toUpperCase()} FIT</span>
+          <span className={styles.fitTag}>{(product.fit || 'boxy').toUpperCase()} FIT</span>
           <span className={styles.dropTag}>{product.drop === 'leak-two' ? 'LEAK TWO' : 'DROP ANTERIOR'}</span>
         </div>
+        
         <h3 className={styles.productName}>{product.name}</h3>
-        <p className={styles.price}>R$ {product.price?.toFixed(2)}</p>
+
+        <div className={styles.priceRow}>
+          {hasDiscount ? (
+            <>
+              <span className={styles.oldPrice}>
+                R$ {priceNum.toFixed(2).replace('.', ',')}
+              </span>
+              <span className={styles.promoPrice}>
+                R$ {discountPriceNum.toFixed(2).replace('.', ',')}
+              </span>
+            </>
+          ) : (
+            <span className={styles.regularPrice}>
+              R$ {priceNum.toFixed(2).replace('.', ',')}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

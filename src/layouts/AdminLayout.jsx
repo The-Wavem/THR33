@@ -3,6 +3,7 @@ import { NavLink, Outlet, Link } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   ShoppingBag, 
+  Percent,
   Image, 
   Package, 
   BarChart3, 
@@ -79,6 +80,13 @@ export function AdminLayout() {
             >
               <ShoppingBag size={16} className={styles.navIcon} />
               <span>Catálogo & SKUs</span>
+            </NavLink>
+            <NavLink 
+              to="/cms/descontos" 
+              className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
+            >
+              <Percent size={16} className={styles.navIcon} />
+              <span>Descontos & Liquidação</span>
             </NavLink>
             <NavLink 
               to="/cms/vitrine" 

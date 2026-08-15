@@ -33,6 +33,7 @@ const CmsAnalytics = lazy(() => import('./pages/admin/CmsAnalytics').then(m => (
 const CmsCampanhas = lazy(() => import('./pages/admin/CmsCampanhas').then(m => ({ default: m.CmsCampanhas || m.default })));
 const CmsCupons = lazy(() => import('./pages/admin/CmsCupons').then(m => ({ default: m.CmsCupons || m.default })));
 const CmsProdutos = lazy(() => import('./pages/admin/CmsProdutos').then(m => ({ default: m.CmsProdutos || m.default })));
+const CmsDescontos = lazy(() => import('./pages/admin/CmsDescontos').then(m => ({ default: m.CmsDescontos || m.default })));
 const CmsVitrine = lazy(() => import('./pages/admin/CmsVitrine').then(m => ({ default: m.CmsVitrine || m.default })));
 const CmsPedidos = lazy(() => import('./pages/admin/CmsPedidos').then(m => ({ default: m.CmsPedidos || m.default })));
 
@@ -137,6 +138,7 @@ export function AppRoutes() {
             <Route path="campanhas" element={<CmsCampanhas />} />
             <Route path="cupons" element={<CmsCupons />} />
             <Route path="produtos" element={<CmsProdutos />} />
+            <Route path="descontos" element={<CmsDescontos />} />
             <Route path="vitrine" element={<CmsVitrine />} />
             <Route path="pedidos" element={<CmsPedidos />} />
           </Route>
@@ -155,6 +157,7 @@ export function AppRoutes() {
             <Route path="campanhas" element={<CmsCampanhas />} />
             <Route path="cupons" element={<CmsCupons />} />
             <Route path="produtos" element={<CmsProdutos />} />
+            <Route path="descontos" element={<CmsDescontos />} />
             <Route path="vitrine" element={<CmsVitrine />} />
             <Route path="pedidos" element={<CmsPedidos />} />
           </Route>

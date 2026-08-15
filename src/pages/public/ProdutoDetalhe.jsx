@@ -152,9 +152,13 @@ export function ProdutoDetalhe({ onAddToCart }) {
   const reviews = product.reviews || DEFAULT_REVIEWS;
 
   const priceNum = Number(product.price || 0);
-  const originalPriceNum = Number(product.originalPrice || 0);
+  const discountPriceNum = Number(product.discountPrice || 0);
+  const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product.discountActive !== false);
+  const effectivePrice = hasDiscount ? discountPriceNum : priceNum;
+  const discountPercentage = hasDiscount ? Math.round(((priceNum - discountPriceNum) / priceNum) * 100) : 0;
+
   const installmentsCount = product.installments || 3;
-  const installmentValue = (priceNum / installmentsCount).toFixed(2);
+  const installmentValue = (effectivePrice / installmentsCount).toFixed(2).replace('.', ',');
 
   const availableStock = product.stock 
     ? Number(product.stock[selectedSize] || 0) 
@@ -219,10 +223,16 @@ export function ProdutoDetalhe({ onAddToCart }) {
   const handleAddToCart = () => {
     if (availableStock <= 0) return;
     
+    const cartProduct = {
+      ...product,
+      price: effectivePrice,
+      originalPrice: priceNum
+    };
+
     if (onAddToCart) {
-      onAddToCart(product, selectedSize, quantity, selectedColor);
+      onAddToCart(cartProduct, selectedSize, quantity, selectedColor);
     } else {
-      addToCart(product, selectedSize, quantity, selectedColor);
+      addToCart(cartProduct, selectedSize, quantity, selectedColor);
     }
 
     setIsAddedFeedback(true);
@@ -280,10 +290,25 @@ export function ProdutoDetalhe({ onAddToCart }) {
               <span className={styles.dropBadge}>{product.drop === 'leak-two' ? 'LEAK TWO' : (product.drop?.toUpperCase() || 'DROP EXCLUSIVO')}</span>
             </div>
             <h1 className={styles.title}>{product.name}</h1>
+            
+            {/* Bloco de Preços */}
             <div className={styles.priceContainer}>
-              <span className={styles.price}>R$ {priceNum.toFixed(2)}</span>
-              {originalPriceNum > priceNum && (
-                <span className={styles.oldPrice}>R$ {originalPriceNum.toFixed(2)}</span>
+              {hasDiscount ? (
+                <div className={styles.discountPriceWrapper}>
+                  <span className={styles.originalPriceStriked}>
+                    R$ {priceNum.toFixed(2).replace('.', ',')}
+                  </span>
+                  <span className={styles.currentPriceHighlight}>
+                    R$ {discountPriceNum.toFixed(2).replace('.', ',')}
+                  </span>
+                  <span className={styles.discountBadge}>
+                    -{discountPercentage}% OFF
+                  </span>
+                </div>
+              ) : (
+                <span className={styles.currentPrice}>
+                  R$ {priceNum.toFixed(2).replace('.', ',')}
+                </span>
               )}
               <span className={styles.installments}>
                 ou {installmentsCount}x de R$ {installmentValue} sem juros
@@ -341,23 +366,23 @@ export function ProdutoDetalhe({ onAddToCart }) {
             </small>
           </div>
 
-          {/* QUANTIDADE E BOTÕES DE AÇÃO */}
-          <div className={styles.purchaseControls}>
-            <div className={styles.quantitySelector}>
+          {/* Bloco de Ações e Quantidade */}
+          <div className={styles.actionsRow}>
+            <div className={styles.quantityControl}>
               <button 
-                type="button"
-                className={styles.qtyBtn} 
+                type="button" 
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
                 disabled={quantity <= 1 || availableStock === 0}
+                aria-label="Diminuir quantidade"
               >
                 -
               </button>
-              <span className={styles.qtyValue}>{quantity}</span>
+              <span className={styles.quantityValue}>{quantity}</span>
               <button 
-                type="button"
-                className={styles.qtyBtn} 
+                type="button" 
                 onClick={() => setQuantity(Math.min(availableStock, quantity + 1))}
                 disabled={quantity >= availableStock || availableStock === 0}
+                aria-label="Aumentar quantidade"
               >
                 +
               </button>
@@ -365,11 +390,11 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
             <button 
               type="button"
-              className={`${styles.addToCartBtn} ${isAddedFeedback ? styles.addedSuccess : ''}`}
+              className={`${styles.addToBagButton} ${isAddedFeedback ? styles.addedSuccess : ''}`}
               onClick={handleAddToCart}
               disabled={availableStock === 0}
             >
-              <ShoppingBag size={17} />
+              <ShoppingBag size={18} />
               <span>
                 {isAddedFeedback 
                   ? 'ADICIONADO À SACOLA!' 
@@ -379,12 +404,12 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
             <button 
               type="button"
-              className={`${styles.wishlistBtn} ${isFavorite ? styles.favorited : ''}`}
+              className={`${styles.wishlistButton} ${isFavorite ? styles.favorited : ''}`}
               onClick={() => toggleWishlist(product)}
               title={isFavorite ? "Remover dos favoritos" : "Salvar nos favoritos"}
               aria-label="Favoritar produto"
             >
-              <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
+              <Heart size={18} fill={isFavorite ? "#ef4444" : "none"} stroke={isFavorite ? "#ef4444" : "currentColor"} />
             </button>
           </div>
 
