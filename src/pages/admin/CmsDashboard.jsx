@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, query, where } from 'firebase/firestore';
 import { 
   DollarSign, 
@@ -9,13 +10,17 @@ import {
   Package, 
   RotateCcw, 
   Tag, 
-  TrendingUp 
+  TrendingUp,
+  ArrowRight
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { maskCPF } from '../../utils/validators';
+import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsDashboard.module.css';
 
 export function CmsDashboard() {
+  const navigate = useNavigate();
+
   const [metrics, setMetrics] = useState({
     totalRevenue: 0,
     totalOrders: 0,
@@ -23,12 +28,15 @@ export function CmsDashboard() {
     deadStockCount: 0
   });
 
+  const [utmList, setUtmList] = useState([]);
+  const [deadStockList, setDeadStockList] = useState([]);
+
   // CRM 360 Search
   const [searchCpf, setSearchCpf] = useState('');
   const [searching, setSearching] = useState(false);
   const [clientFound, setClientFound] = useState(null);
 
-  // 1. Carrega métricas globais do Firestore
+  // 1. Carrega métricas globais e tabelas dinâmicas diretamente do Firestore
   useEffect(() => {
     async function loadMetrics() {
       try {
@@ -36,30 +44,79 @@ export function CmsDashboard() {
         const usersSnap = await getDocs(collection(db, 'users'));
         const prodsSnap = await getDocs(collection(db, 'products'));
 
+        const allOrders = [];
         let revenue = 0;
+        const utmMap = {};
+
         ordersSnap.forEach((doc) => {
-          revenue += (doc.data().total || 0);
+          const ord = { id: doc.id, ...doc.data() };
+          allOrders.push(ord);
+          revenue += Number(ord.total || 0);
+
+          // Agrupamento de UTMs reais
+          const source = ord.utm_source || 'Direto / Orgânico';
+          const campaign = ord.utm_campaign || 'Geral';
+          const key = `${source}___${campaign}`;
+          if (!utmMap[key]) {
+            utmMap[key] = { source, campaign, revenue: 0, ordersCount: 0 };
+          }
+          utmMap[key].revenue += Number(ord.total || 0);
+          utmMap[key].ordersCount += 1;
         });
 
-        let deadStockCounter = 0;
+        // Ordena campanhas por receita
+        const sortedUtms = Object.values(utmMap).sort((a, b) => b.revenue - a.revenue);
+        setUtmList(sortedUtms);
+
+        // Consolidação de Dead Stock real
+        const deadItems = [];
         if (!prodsSnap.empty) {
           prodsSnap.forEach(d => {
-            const p = d.data() || {};
-            const daysIdle = Number(p.daysWithoutSale || 0);
+            const p = { id: d.id, ...d.data() };
+            
+            // Procura histórico de vendas desta peça
+            const matchingOrders = allOrders.filter(o => 
+              (o.items || []).some(it => it.id === p.id || it.slug === p.id || it.name === p.name)
+            );
+
+            let daysIdle = 0;
+            if (matchingOrders.length > 0) {
+              const sorted = [...matchingOrders].sort((a, b) => 
+                new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
+              );
+              const lastSaleDate = sorted[0]?.createdAt;
+              if (lastSaleDate) {
+                daysIdle = Math.max(0, Math.floor((Date.now() - new Date(lastSaleDate).getTime()) / (1000 * 60 * 60 * 24)));
+              }
+            } else if (p.createdAt) {
+              daysIdle = Math.max(0, Math.floor((Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24)));
+            } else {
+              daysIdle = Number(p.daysWithoutSale || 0);
+            }
+
             const totalStock = p.stock 
               ? Object.values(p.stock).reduce((a, b) => Number(a) + Number(b), 0) 
               : (Number(p.totalStock) || 0);
+
             if (daysIdle >= 45 && totalStock > 0) {
-              deadStockCounter += 1;
+              deadItems.push({
+                id: p.id,
+                sku: `THR33-${(p.category || 'TS').slice(0, 2).toUpperCase()}-ALL`,
+                name: p.name || 'Produto THR33',
+                daysIdle,
+                totalStock
+              });
             }
           });
         }
+
+        setDeadStockList(deadItems);
 
         setMetrics({
           totalRevenue: revenue,
           totalOrders: ordersSnap.size,
           totalUsers: usersSnap.size,
-          deadStockCount: deadStockCounter
+          deadStockCount: deadItems.length
         });
       } catch (err) {
         console.warn("Aviso ao carregar métricas do Firestore:", err.message);
@@ -123,7 +180,7 @@ export function CmsDashboard() {
     <div className={styles.dashboard}>
       <header className={styles.pageHeader}>
         <div>
-          <span className={styles.breadcrumb}>CMS / PAINEL DE CONTROLE</span>
+          <span className={styles.breadcrumb}>CMS // PAINEL DE CONTROLE</span>
           <h1 className={styles.title}>VISÃO GERAL DO SISTEMA</h1>
         </div>
       </header>
@@ -132,7 +189,10 @@ export function CmsDashboard() {
       <section className={styles.kpiGrid}>
         <div className={styles.kpiCard}>
           <div className={styles.kpiHeader}>
-            <span className={styles.kpiLabel}>FATURAMENTO TOTAL</span>
+            <span className={styles.kpiLabel}>
+              FATURAMENTO TOTAL
+              <InfoTooltip text="Soma total de todos os pedidos finalizados com pagamento aprovado no site." title="Faturamento Bruto" />
+            </span>
             <DollarSign size={16} className={styles.kpiIcon} />
           </div>
           <strong className={styles.kpiValue}>R$ {metrics.totalRevenue.toFixed(2)}</strong>
@@ -141,7 +201,10 @@ export function CmsDashboard() {
 
         <div className={styles.kpiCard}>
           <div className={styles.kpiHeader}>
-            <span className={styles.kpiLabel}>TOTAL DE PEDIDOS</span>
+            <span className={styles.kpiLabel}>
+              TOTAL DE PEDIDOS
+              <InfoTooltip text="Contagem total de pedidos gerados no e-commerce aprovados ou em processamento." title="Volume de Pedidos" />
+            </span>
             <ShoppingBag size={16} className={styles.kpiIcon} />
           </div>
           <strong className={styles.kpiValue}>{metrics.totalOrders}</strong>
@@ -150,7 +213,10 @@ export function CmsDashboard() {
 
         <div className={styles.kpiCard}>
           <div className={styles.kpiHeader}>
-            <span className={styles.kpiLabel}>BASE DE CLIENTES</span>
+            <span className={styles.kpiLabel}>
+              BASE DE CLIENTES
+              <InfoTooltip text="Total de clientes com conta criada no banco de dados do sistema." title="Usuários Registrados" />
+            </span>
             <Users size={16} className={styles.kpiIcon} />
           </div>
           <strong className={styles.kpiValue}>{metrics.totalUsers}</strong>
@@ -159,7 +225,10 @@ export function CmsDashboard() {
 
         <div className={`${styles.kpiCard} ${styles.alertCard}`}>
           <div className={styles.kpiHeader}>
-            <span className={styles.kpiLabel}>ALERTA DE DEAD STOCK</span>
+            <span className={styles.kpiLabel}>
+              ALERTA DE DEAD STOCK
+              <InfoTooltip text="Peças com estoque físico positivo sem nenhuma venda há mais de 45 dias. Exige desconto ou ação de marketing." title="Giro de Estoque" />
+            </span>
             <AlertTriangle size={16} className={styles.kpiAlertIcon} />
           </div>
           <strong className={styles.kpiValue}>{metrics.deadStockCount} SKUs</strong>
@@ -170,7 +239,10 @@ export function CmsDashboard() {
       {/* 2. CRM 360º & LOGÍSTICA REVERSA */}
       <section className={styles.crmSection}>
         <div className={styles.sectionHeader}>
-          <h2>CRM 360º & SUPORTE RÁPIDO</h2>
+          <h2>
+            CRM 360º & SUPORTE RÁPIDO
+            <InfoTooltip text="Puxa dados cadastrais, múltiplos endereços e histórico de compras via CPF para agilizar atendimentos e trocas." title="Consulta Unificada" />
+          </h2>
           <p>Digite o CPF do cliente para puxar todo o histórico de compras e emitir etiqueta de devolução na hora.</p>
         </div>
 
@@ -230,7 +302,7 @@ export function CmsDashboard() {
         )}
       </section>
 
-      {/* 3. GRID DE ANALYTICS (UTMS E DEAD STOCK) */}
+      {/* 3. GRID DE ANALYTICS (UTMS E DEAD STOCK 100% FIRESTORE) */}
       <section className={styles.analyticsGrid}>
         {/* Rastreamento de Campanhas */}
         <div className={styles.panelBox}>
@@ -247,9 +319,21 @@ export function CmsDashboard() {
               </tr>
             </thead>
             <tbody>
-              <tr><td>Instagram Ads</td><td>Drop_Leak_Two</td><td>R$ 1.450,00</td></tr>
-              <tr><td>TikTok Orgânico</td><td>Video_Atelie_Curitiba</td><td>R$ 680,00</td></tr>
-              <tr><td>Google Search</td><td>Marca_Streetwear</td><td>R$ 420,00</td></tr>
+              {utmList.length === 0 ? (
+                <tr>
+                  <td colSpan="3" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.5rem 0' }}>
+                    Nenhuma venda com UTM registrada ainda.
+                  </td>
+                </tr>
+              ) : (
+                utmList.map((item, idx) => (
+                  <tr key={idx}>
+                    <td>{item.source}</td>
+                    <td>{item.campaign} ({item.ordersCount} ped.)</td>
+                    <td><strong>R$ {item.revenue.toFixed(2)}</strong></td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
@@ -264,34 +348,33 @@ export function CmsDashboard() {
             <thead>
               <tr>
                 <th>SKU</th>
-                <th>Peça / Tamanho</th>
+                <th>Peça / Estoque</th>
                 <th>Dias Parado</th>
                 <th>Ação</th>
               </tr>
             </thead>
             <tbody>
-              <tr>
-                <td>THR33-TS-OFF-PP</td>
-                <td>Camiseta For The Few - PP</td>
-                <td>48 dias</td>
-                <td>
-                  <button className={styles.promoBtn} onClick={() => alert('Campanha de cupom 20% criada!')}>
-                    <Tag size={12} />
-                    <span>Criar Promoção</span>
-                  </button>
-                </td>
-              </tr>
-              <tr>
-                <td>THR33-RG-GRA-G</td>
-                <td>Regata Athletic - G</td>
-                <td>52 dias</td>
-                <td>
-                  <button className={styles.promoBtn} onClick={() => alert('Campanha de cupom 20% criada!')}>
-                    <Tag size={12} />
-                    <span>Criar Promoção</span>
-                  </button>
-                </td>
-              </tr>
+              {deadStockList.length === 0 ? (
+                <tr>
+                  <td colSpan="4" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '1.5rem 0' }}>
+                    Nenhum SKU parado há mais de 45 dias. Estoque 100% saudável!
+                  </td>
+                </tr>
+              ) : (
+                deadStockList.map((item) => (
+                  <tr key={item.id}>
+                    <td><code>{item.sku}</code></td>
+                    <td>{item.name} ({item.totalStock} un.)</td>
+                    <td><span style={{ color: '#f87171', fontWeight: '700' }}>{item.daysIdle} dias</span></td>
+                    <td>
+                      <button className={styles.promoBtn} onClick={() => navigate('/cms/cupons')}>
+                        <Tag size={12} />
+                        <span>Criar Promoção</span>
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>

@@ -23,6 +23,7 @@ import {
   Link as LinkIcon
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
+import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsCupons.module.css';
 
 export function CmsCupons() {
@@ -594,25 +595,37 @@ export function CmsCupons() {
       {/* KPIS */}
       <section className={styles.kpiGrid}>
         <div className={styles.kpiCard}>
-          <span className={styles.kpiLabel}>FATURAMENTO VIA CUPONS</span>
+          <span className={styles.kpiLabel}>
+            FATURAMENTO VIA CUPONS
+            <InfoTooltip text="Total de vendas brutas originadas e creditadas a cupons da marca e de parceiros." title="Receita por Cupons" />
+          </span>
           <strong className={styles.kpiValue}>R$ {metrics.gross.toFixed(2)}</strong>
           <small className={styles.kpiSub}>{metrics.totalUses} pedidos realizados</small>
         </div>
 
         <div className={`${styles.profitCard} ${styles.kpiCard}`}>
-          <span className={styles.kpiLabel}>LUCRO LÍQUIDO THR33</span>
+          <span className={styles.kpiLabel}>
+            LUCRO LÍQUIDO THR33
+            <InfoTooltip text="Receita bruta total subtraída dos descontos concedidos aos compradores e das comissões pagas/pendentes aos parceiros." title="Caixa Real da Marca" />
+          </span>
           <strong className={styles.kpiValue}>R$ {metrics.netProfit.toFixed(2)}</strong>
           <small className={styles.kpiSub}>Caixa real da marca</small>
         </div>
 
         <div className={`${styles.kpiCard} ${metrics.pending > 0 ? styles.pendingCard : ''}`}>
-          <span className={styles.kpiLabel}>REPASSES PENDENTES (A PAGAR)</span>
+          <span className={styles.kpiLabel}>
+            REPASSES PENDENTES (A PAGAR)
+            <InfoTooltip text="Comissão gerada em vendas recentes que ainda não foi transferida via Pix para o parceiro." title="Saldo a Pagar" />
+          </span>
           <strong className={styles.kpiValue}>R$ {metrics.pending.toFixed(2)}</strong>
           <small className={styles.kpiSub}>Comissões aguardando Pix</small>
         </div>
 
         <div className={styles.kpiCard}>
-          <span className={styles.kpiLabel}>REPASSES JÁ LIQUIDADOS</span>
+          <span className={styles.kpiLabel}>
+            REPASSES JÁ LIQUIDADOS
+            <InfoTooltip text="Total acumulado de comissões que já foram transferidas e comprovadas via Pix aos parceiros." title="Total Pago" />
+          </span>
           <strong className={styles.kpiValue}>R$ {metrics.paid.toFixed(2)}</strong>
           <small className={styles.kpiSub}>Total transferido a parceiros</small>
         </div>
@@ -1121,7 +1134,10 @@ export function CmsCupons() {
 
             <form onSubmit={handleSaveCoupon} className={styles.form}>
               <div className={styles.inputGroup}>
-                <label>TIPO DE CUPOM</label>
+                <label>
+                  TIPO DE CUPOM
+                  <InfoTooltip text="O comissionamento de parceiros sobe automaticamente conforme as metas de peças vendidas: 1-9 peças (8%), 10-19 peças (10%), 20+ peças (15%). Cupons da marca têm 0% de repasse." title="Meritocracia e Regras" />
+                </label>
                 <div className={styles.typeSelector}>
                   <button
                     type="button"

@@ -21,6 +21,7 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
+import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsAnalytics.module.css';
 
 export function CmsAnalytics() {
@@ -513,7 +514,10 @@ export function CmsAnalytics() {
           <div className={styles.kpiGrid}>
             <div className={styles.kpiCard}>
               <div className={styles.kpiHeader}>
-                <span className={styles.kpiLabel}>CONVERSÃO GERAL</span>
+                <span className={styles.kpiLabel}>
+                  CONVERSÃO GERAL
+                  <InfoTooltip text="Porcentagem de visitantes que visualizaram uma peça e concluíram o pagamento (benchmark ideal: 2% a 4%)." title="Taxa de Conversão" />
+                </span>
                 <TrendingUp size={14} color="#4ade80" />
               </div>
               <strong className={styles.kpiValue}>{funnel.overallConversionRate}%</strong>
@@ -522,7 +526,10 @@ export function CmsAnalytics() {
 
             <div className={`${styles.kpiCard} ${Number(funnel.cartAbandonmentRate) > 50 ? styles.alertKpi : ''}`}>
               <div className={styles.kpiHeader}>
-                <span className={styles.kpiLabel}>ABANDONO DE SACOLA</span>
+                <span className={styles.kpiLabel}>
+                  ABANDONO DE SACOLA
+                  <InfoTooltip text="Mede quantos clientes adicionaram produtos ao carrinho mas fecharam o navegador antes de concluir a compra." title="Abandono de Sacola" />
+                </span>
                 <AlertCircle size={14} color={Number(funnel.cartAbandonmentRate) > 50 ? '#f87171' : '#a3a3a3'} />
               </div>
               <strong className={styles.kpiValue}>{funnel.cartAbandonmentRate}%</strong>
@@ -531,7 +538,10 @@ export function CmsAnalytics() {
 
             <div className={styles.kpiCard}>
               <div className={styles.kpiHeader}>
-                <span className={styles.kpiLabel}>DESISTÊNCIAS</span>
+                <span className={styles.kpiLabel}>
+                  DESISTÊNCIAS / REMOÇÕES
+                  <InfoTooltip text="Quantidade de vezes que um cliente deletou manualmente uma peça da sacola após ver o frete ou valor total." title="Atrito no Carrinho" />
+                </span>
                 <ShoppingBag size={14} color="#f87171" />
               </div>
               <strong className={styles.kpiValue}>{funnel.cartRemoves} itens</strong>
@@ -540,7 +550,10 @@ export function CmsAnalytics() {
 
             <div className={styles.kpiCard}>
               <div className={styles.kpiHeader}>
-                <span className={styles.kpiLabel}>VIEWS DETALHADAS</span>
+                <span className={styles.kpiLabel}>
+                  VIEWS DETALHADAS
+                  <InfoTooltip text="Total de acessos e visualizações profundas nas páginas detalhadas de produtos da vitrine." title="Visualizações PDP" />
+                </span>
                 <Eye size={14} color="#60a5fa" />
               </div>
               <strong className={styles.kpiValue}>{funnel.views}</strong>

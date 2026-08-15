@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { PRODUCTS_DATA } from '../../data/productsData';
+import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsProdutos.module.css';
 
 export function CmsProdutos() {
@@ -527,7 +528,10 @@ export function CmsProdutos() {
 
               {/* BADGE CUSTOMIZADO */}
               <div className={styles.formGroup}>
-                <label>BADGE PERSONALIZADO (TAG NA VITRINE)</label>
+                <label>
+                  BADGE PERSONALIZADO (TAG NA VITRINE)
+                  <InfoTooltip text="Destaque visual sobre a imagem do card na vitrine e catálogo." title="Tag Promocional" />
+                </label>
                 <input 
                   type="text" 
                   name="customBadge"
@@ -541,7 +545,10 @@ export function CmsProdutos() {
               <div className={styles.stockSection}>
                 <div className={styles.stockHeader}>
                   <Package size={14} className={styles.stockIcon} />
-                  <label>ESTOQUE POR TAMANHO (GRADE DE SKUs)</label>
+                  <label>
+                    ESTOQUE POR TAMANHO (GRADE DE SKUs)
+                    <InfoTooltip text="Define a quantidade disponível de cada tamanho. Se zerar, o botão de compra fica bloqueado." title="Inventário por SKU" />
+                  </label>
                 </div>
                 <div className={styles.stockGrid}>
                   {['PP', 'P', 'M', 'G', 'GG'].map(size => (

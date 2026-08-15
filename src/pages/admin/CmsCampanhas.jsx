@@ -15,6 +15,7 @@ import {
   Layers
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
+import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsCampanhas.module.css';
 
 const DEFAULT_CAMPAIGNS = [
@@ -204,7 +205,10 @@ export function CmsCampanhas() {
           </div>
 
           <div className={styles.inputGroup}>
-            <label>ORIGEM (UTM_SOURCE) *</label>
+            <label>
+              ORIGEM (UTM_SOURCE) *
+              <InfoTooltip text="De onde veio o usuário. Exemplos: instagram, tiktok, google, whatsapp." title="Fonte de Tráfego" />
+            </label>
             <input 
               type="text" 
               placeholder="Ex: instagram, tiktok, whatsapp, google" 
@@ -214,7 +218,10 @@ export function CmsCampanhas() {
           </div>
 
           <div className={styles.inputGroup}>
-            <label>MÍDIA (UTM_MEDIUM) *</label>
+            <label>
+              MÍDIA (UTM_MEDIUM) *
+              <InfoTooltip text="O formato do link divulgado. Exemplos: stories, bio, reels, cpc, influencer." title="Meio / Canal" />
+            </label>
             <input 
               type="text" 
               placeholder="Ex: stories, bio, reels, cpc, newsletter" 
@@ -224,7 +231,10 @@ export function CmsCampanhas() {
           </div>
 
           <div className={styles.inputGroup}>
-            <label>CAMPANHA (UTM_CAMPAIGN) *</label>
+            <label>
+              CAMPANHA (UTM_CAMPAIGN) *
+              <InfoTooltip text="Identificador único da ação. Exemplos: leak_two, dia_dos_pais, lancamento_boxy." title="Nome da Campanha" />
+            </label>
             <input 
               type="text" 
               placeholder="Ex: leak_two, atelie_curitiba, for_the_few" 
