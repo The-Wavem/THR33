@@ -1,7 +1,18 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Trash2, Plus, Minus, ShoppingBag, ArrowRight, Tag } from 'lucide-react';
+import { 
+  X, 
+  Trash2, 
+  Plus, 
+  Minus, 
+  ShoppingBag, 
+  ArrowRight, 
+  Tag, 
+  CheckCircle2, 
+  AlertCircle,
+  Loader2 
+} from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import styles from './CartDrawer.module.css';
@@ -18,7 +29,8 @@ export function CartDrawer() {
     appliedCoupon,
     applyCoupon,
     removeCoupon,
-    couponError,
+    couponFeedback,
+    validatingCoupon,
     total,
     totalItemsCount
   } = useCart();
@@ -26,6 +38,7 @@ export function CartDrawer() {
   const [couponInput, setCouponInput] = useState('');
   const itemsListRef = useRef(null);
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   // BLOQUEIO TOTAL E INFALÍVEL DO EIXO Y (RODAGEM DO MOUSE / TOUCH / TECLADO)
   useEffect(() => {
@@ -65,17 +78,15 @@ export function CartDrawer() {
     }
   }, [isCartOpen]);
 
-  const handleApplyCoupon = (e) => {
+  const handleApplyCoupon = async (e) => {
     e.preventDefault();
     if (couponInput.trim()) {
-      const success = applyCoupon(couponInput.trim());
+      const success = await applyCoupon(couponInput.trim());
       if (success) {
         setCouponInput('');
       }
     }
   };
-
-  const { user } = useAuth();
 
   const handleGoToCheckout = () => {
     closeCart();
@@ -208,19 +219,25 @@ export function CartDrawer() {
                         <Tag size={14} className={styles.inputIcon} />
                         <input 
                           type="text" 
-                          placeholder="Cupom (ex: FORTHEFEW)" 
+                          placeholder="Cupom (ex: EDU10)" 
                           value={couponInput}
-                          onChange={(e) => setCouponInput(e.target.value)}
+                          onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
                           className={styles.toolInput}
                         />
                       </div>
-                      <button type="submit" className={styles.toolBtn}>APLICAR</button>
+                      <button 
+                        type="submit" 
+                        disabled={validatingCoupon || !couponInput.trim()} 
+                        className={styles.toolBtn}
+                      >
+                        {validatingCoupon ? <Loader2 size={13} className={styles.spinning} /> : 'APLICAR'}
+                      </button>
                     </form>
                   ) : (
                     <div className={styles.appliedCouponBadge}>
                       <div className={styles.couponTagInfo}>
                         <Tag size={13} />
-                        <span>CUPOM <strong>{appliedCoupon.code}</strong> ({appliedCoupon.label})</span>
+                        <span>CUPOM <strong>{appliedCoupon.code}</strong> (-{appliedCoupon.discountPercent}%)</span>
                       </div>
                       <button type="button" onClick={removeCoupon} className={styles.removeCouponBtn} aria-label="Remover cupom">
                         <X size={14} />
@@ -228,7 +245,12 @@ export function CartDrawer() {
                     </div>
                   )}
 
-                  {couponError && <span className={styles.errorText}>{couponError}</span>}
+                  {couponFeedback.message && (
+                    <span className={couponFeedback.isError ? styles.errorText : styles.successText}>
+                      {couponFeedback.isError ? <AlertCircle size={12} /> : <CheckCircle2 size={12} />}
+                      <span>{couponFeedback.message}</span>
+                    </span>
+                  )}
                 </div>
 
                 {/* Linhas de Valores */}

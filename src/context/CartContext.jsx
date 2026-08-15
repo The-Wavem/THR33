@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
+import { couponService } from '../services/couponService';
 
 const CartContext = createContext();
 
@@ -49,8 +50,11 @@ export function CartProvider({ children }) {
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [shippingCost, setShippingCost] = useState(0);
   const [shippingDetails, setShippingDetails] = useState(null);
+  
+  // Estados de Cupom
   const [appliedCoupon, setAppliedCoupon] = useState(null);
-  const [couponError, setCouponError] = useState(null);
+  const [couponFeedback, setCouponFeedback] = useState({ message: '', isError: false });
+  const [validatingCoupon, setValidatingCoupon] = useState(false);
 
   // Persistência no LocalStorage
   useEffect(() => {
@@ -63,6 +67,73 @@ export function CartProvider({ children }) {
 
   const openCart = () => setIsCartOpen(true);
   const closeCart = () => setIsCartOpen(false);
+
+  // Cálculos financeiros
+  const subtotal = useMemo(() => {
+    return cartItems.reduce((acc, item) => {
+      const p = parsePriceNumber(item.price);
+      const q = Number(item.quantity) || 1;
+      return acc + (p * q);
+    }, 0);
+  }, [cartItems]);
+
+  const discountAmount = useMemo(() => {
+    if (!appliedCoupon || subtotal <= 0) return 0;
+    const pct = Number(appliedCoupon.discountPercent || (appliedCoupon.discountPercentage ? appliedCoupon.discountPercentage * 100 : 0)) || 0;
+    return (subtotal * pct) / 100;
+  }, [subtotal, appliedCoupon]);
+
+  const total = useMemo(() => {
+    return Math.max(0, subtotal - discountAmount + (cartItems.length > 0 ? Number(shippingCost || 0) : 0));
+  }, [subtotal, discountAmount, cartItems.length, shippingCost]);
+
+  const totalItemsCount = useMemo(() => {
+    return cartItems.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
+  }, [cartItems]);
+
+  // Ações de Cupom com validação no Firestore
+  const applyCoupon = async (code) => {
+    if (!code || !code.trim()) {
+      setCouponFeedback({ message: 'Digite um código de cupom.', isError: true });
+      return false;
+    }
+
+    setValidatingCoupon(true);
+    setCouponFeedback({ message: '', isError: false });
+
+    try {
+      const result = await couponService.validateCoupon(code, subtotal);
+
+      if (result.isValid) {
+        setAppliedCoupon({
+          id: result.coupon.id,
+          code: result.coupon.code,
+          type: result.coupon.type || 'affiliate',
+          discountPercent: result.discountPercent,
+          label: `${result.discountPercent}% OFF`,
+          partnerName: result.coupon.partnerName
+        });
+        setCouponFeedback({ message: result.message, isError: false });
+        setValidatingCoupon(false);
+        return true;
+      } else {
+        setAppliedCoupon(null);
+        setCouponFeedback({ message: result.message, isError: true });
+        setValidatingCoupon(false);
+        return false;
+      }
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponFeedback({ message: 'Erro ao validar cupom. Tente novamente.', isError: true });
+      setValidatingCoupon(false);
+      return false;
+    }
+  };
+
+  const removeCoupon = () => {
+    setAppliedCoupon(null);
+    setCouponFeedback({ message: 'Cupom removido com sucesso.', isError: false });
+  };
 
   // Adicionar item ao carrinho
   const addToCart = (product, size = 'M', quantity = 1, color = null) => {
@@ -124,58 +195,15 @@ export function CartProvider({ children }) {
           return item;
         })
         .filter(Boolean)
-    );
+      );
   };
 
   // Limpar carrinho
   const clearCart = () => {
     setCartItems([]);
-  };
-
-  // Aplicar cupom
-  const applyCoupon = (code) => {
-    if (!code) return false;
-    const cleanCode = code.trim().toUpperCase();
-    if (cleanCode === 'FORTHEFEW' || cleanCode === 'FORTHEFEW10') {
-      setAppliedCoupon({ code: cleanCode, discountPercentage: 0.10, label: '10% OFF' });
-      setCouponError(null);
-      return true;
-    } else if (cleanCode === 'DROPVIP' || cleanCode === 'ATELIE20') {
-      setAppliedCoupon({ code: cleanCode, discountPercentage: 0.20, label: '20% OFF VIP' });
-      setCouponError(null);
-      return true;
-    } else {
-      setCouponError('Cupom inválido ou expirado.');
-      return false;
-    }
-  };
-
-  const removeCoupon = () => {
     setAppliedCoupon(null);
-    setCouponError(null);
+    setCouponFeedback({ message: '', isError: false });
   };
-
-  // Cálculos financeiros seguros
-  const subtotal = useMemo(() => {
-    return cartItems.reduce((acc, item) => {
-      const p = parsePriceNumber(item.price);
-      const q = Number(item.quantity) || 1;
-      return acc + (p * q);
-    }, 0);
-  }, [cartItems]);
-
-  const discountAmount = useMemo(() => {
-    if (!appliedCoupon) return 0;
-    return subtotal * (appliedCoupon.discountPercentage || 0);
-  }, [subtotal, appliedCoupon]);
-
-  const total = useMemo(() => {
-    return Math.max(0, subtotal - discountAmount + (Number(shippingCost) || 0));
-  }, [subtotal, discountAmount, shippingCost]);
-
-  const totalItemsCount = useMemo(() => {
-    return cartItems.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
-  }, [cartItems]);
 
   return (
     <CartContext.Provider
@@ -195,7 +223,9 @@ export function CartProvider({ children }) {
         setAppliedCoupon,
         applyCoupon,
         removeCoupon,
-        couponError,
+        couponFeedback,
+        couponError: couponFeedback.isError ? couponFeedback.message : null,
+        validatingCoupon,
         shippingCost,
         setShippingCost,
         shippingDetails,

@@ -871,6 +871,26 @@
   cursor: pointer;
 }
 
+.couponErrorText {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #f87171;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-top: 0.35rem;
+}
+
+.couponSuccessText {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  color: #4ade80;
+  font-size: 0.7rem;
+  font-weight: 600;
+  margin-top: 0.35rem;
+}
+
 .summaryValues {
   display: flex;
   flex-direction: column;

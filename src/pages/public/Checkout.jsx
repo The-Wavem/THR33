@@ -38,6 +38,7 @@ import { fetchAddressByCep } from '../../services/viaCepService';
 import { useAuth } from '../../context/AuthContext';
 import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
+import { couponService } from '../../services/couponService';
 import styles from './Checkout.module.css';
 
 // Lista inicial de endereços limpa
@@ -58,6 +59,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     appliedCoupon, 
     applyCoupon, 
     removeCoupon,
+    couponFeedback,
+    validatingCoupon,
     clearCart 
   } = useCart();
 
@@ -347,6 +350,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     };
 
     const trackingCode = `BR${Math.floor(100000000 + Math.random() * 900000000)}PR`;
+    const totalItemsCount = cartItems.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
 
     const orderData = {
       userId: user?.uid || 'guest',
@@ -366,6 +370,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       })),
       subtotal,
       discountAmount,
+      couponCode: appliedCoupon ? appliedCoupon.code : null,
+      couponId: appliedCoupon ? (appliedCoupon.id || null) : null,
       shippingCost,
       total,
       paymentMethod,
@@ -389,7 +395,22 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       const generatedOrder = `THR-${orderRef.id.slice(0, 6).toUpperCase()}`;
       setOrderNumber(generatedOrder);
 
-      // 2. Se o usuário estiver autenticado, salva/atualiza o perfil e adiciona o endereço ao array addresses se novo
+      // 2. Se um cupom foi utilizado, atualiza métricas e saldo de comissões do parceiro
+      if (appliedCoupon?.id || appliedCoupon?.code) {
+        try {
+          const couponDocId = appliedCoupon.id || `coupon_${appliedCoupon.code.toLowerCase()}`;
+          await couponService.recordCouponUsage(
+            couponDocId,
+            subtotal,
+            discountAmount,
+            totalItemsCount
+          );
+        } catch (couponErr) {
+          console.warn("Aviso ao registrar uso do cupom:", couponErr.message);
+        }
+      }
+
+      // 3. Se o usuário estiver autenticado, salva/atualiza o perfil e adiciona o endereço ao array addresses se novo
       if (user?.uid) {
         try {
           const userRef = doc(db, 'users', user.uid);
@@ -456,11 +477,13 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     setTimeout(() => setCopiedPix(false), 2500);
   };
 
-  const handleApplyCouponInline = (e) => {
+  const handleApplyCouponInline = async (e) => {
     e.preventDefault();
     if (couponInput.trim()) {
-      applyCoupon(couponInput.trim());
-      setCouponInput('');
+      const ok = await applyCoupon(couponInput.trim());
+      if (ok) {
+        setCouponInput('');
+      }
     }
   };
 
@@ -1045,21 +1068,34 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           {/* Cupom de Desconto */}
           <div className={styles.couponBlock}>
             {!appliedCoupon ? (
-              <div className={styles.inlineCouponForm}>
-                <div className={styles.couponInputWrapper}>
-                  <Tag size={13} className={styles.couponIcon} />
-                  <input 
-                    type="text" 
-                    placeholder="Cupom (ex: FORTHEFEW)" 
-                    value={couponInput}
-                    onChange={(e) => setCouponInput(e.target.value)}
-                    className={styles.couponInput}
-                  />
+              <>
+                <div className={styles.inlineCouponForm}>
+                  <div className={styles.couponInputWrapper}>
+                    <Tag size={13} className={styles.couponIcon} />
+                    <input 
+                      type="text" 
+                      placeholder="Cupom (ex: EDU10)" 
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                      className={styles.couponInput}
+                    />
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={handleApplyCouponInline} 
+                    disabled={validatingCoupon || !couponInput.trim()}
+                    className={styles.couponBtn}
+                  >
+                    {validatingCoupon ? <Loader2 size={13} className={styles.spinner} /> : 'APLICAR'}
+                  </button>
                 </div>
-                <button type="button" onClick={handleApplyCouponInline} className={styles.couponBtn}>
-                  APLICAR
-                </button>
-              </div>
+                {couponFeedback?.message && (
+                  <span className={couponFeedback.isError ? styles.couponErrorText : styles.couponSuccessText}>
+                    {couponFeedback.isError ? <AlertCircle size={11} /> : <CheckCircle2 size={11} />}
+                    <span>{couponFeedback.message}</span>
+                  </span>
+                )}
+              </>
             ) : (
               <div className={styles.appliedCouponTag}>
                 <div className={styles.couponTagText}>
