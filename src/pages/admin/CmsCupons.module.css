@@ -1,0 +1,337 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2.5rem;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1.5rem;
+}
+
+.breadcrumb {
+  font-size: 0.75rem;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-weight: 800;
+  margin-top: 0.3rem;
+}
+
+.createBtn {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  padding: 0.85rem 1.6rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.createBtn:hover { opacity: 0.9; }
+
+/* KPIS */
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.5rem;
+}
+
+.kpiCard {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.profitCard {
+  border-color: #4ade80;
+}
+
+.kpiLabel {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary);
+}
+
+.kpiValue {
+  font-size: 1.8rem;
+  font-weight: 800;
+}
+
+.kpiSub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+/* TIERS DE COMISSÃO */
+.tierSection {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.tierHeader h3 {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  letter-spacing: 1px;
+}
+
+.tierHeader p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-top: 0.2rem;
+}
+
+.tierGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+}
+
+.tierCard {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: center;
+  text-align: center;
+}
+
+.topTierCard {
+  border-color: #facc15;
+}
+
+.tierBadge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.tierCard strong {
+  font-size: 1rem;
+}
+
+.tierPercent {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #4ade80;
+}
+
+/* TABELA */
+.tableCard {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+
+.tableHeader {
+  padding: 1.5rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.tableHeader h2 {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  letter-spacing: 1px;
+}
+
+.tableHeader span {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.table th, .table td {
+  padding: 1.2rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.table th {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+}
+
+.couponCode {
+  font-family: monospace;
+  font-weight: 800;
+  font-size: 1rem;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  padding: 0.25rem 0.5rem;
+}
+
+.pixText, .itemsSoldText {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.discountBadge {
+  color: #f87171;
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.commissionCol {
+  display: flex;
+  flex-direction: column;
+}
+
+.commissionPercent {
+  font-size: 0.7rem;
+  color: #4ade80;
+  font-weight: 700;
+}
+
+.profitText {
+  color: #4ade80;
+}
+
+.statusToggleBtn {
+  border: 1px solid var(--border-color);
+  padding: 0.35rem 0.7rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.activeStatus { color: #4ade80; }
+.inactiveStatus { color: var(--text-muted); }
+
+.deleteBtn {
+  color: #f87171;
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.centerText {
+  text-align: center;
+  padding: 3rem;
+  color: var(--text-muted);
+}
+
+/* MODAL */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(4px);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.modal {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  max-width: 500px;
+  width: 100%;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.modalTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
+}
+
+.modalTop h2 {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+}
+
+.closeBtn {
+  font-size: 1.8rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.inputGroup label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+.inputGroup input {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.8rem 1rem;
+  font-size: 0.85rem;
+  outline: none;
+}
+
+.checkboxLabel {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+}
+
+.submitBtn {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  padding: 0.9rem;
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 1.5px;
+  margin-top: 0.5rem;
+  cursor: pointer;
+}
+
+@media (max-width: 850px) {
+  .tierGrid { grid-template-columns: 1fr; }
+  .header { flex-direction: column; align-items: flex-start; gap: 1rem; }
+}

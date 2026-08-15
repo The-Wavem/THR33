@@ -36,57 +36,61 @@ export function FilterSidebar({
 
   // Funções de toggle multi-seleção com telemetria atômica
   const toggleCategory = (cat) => {
+    const current = filters.categories || [];
+    const isSelecting = !current.includes(cat);
+    if (isSelecting) {
+      analyticsService.trackFilterUse('categoria', cat);
+    }
     setFilters(prev => {
-      const current = prev.categories || [];
-      const isSelecting = !current.includes(cat);
-      if (isSelecting) {
-        analyticsService.trackFilterUse('categoria', cat);
-      }
-      const updated = isSelecting
-        ? [...current, cat]
-        : current.filter(c => c !== cat);
+      const prevCats = prev.categories || [];
+      const updated = prevCats.includes(cat)
+        ? prevCats.filter(c => c !== cat)
+        : [...prevCats, cat];
       return { ...prev, categories: updated };
     });
   };
 
   const toggleFit = (fit) => {
+    const current = filters.fits || [];
+    const isSelecting = !current.includes(fit);
+    if (isSelecting) {
+      analyticsService.trackFilterUse('modelagem', fit);
+    }
     setFilters(prev => {
-      const current = prev.fits || [];
-      const isSelecting = !current.includes(fit);
-      if (isSelecting) {
-        analyticsService.trackFilterUse('modelagem', fit);
-      }
-      const updated = isSelecting
-        ? [...current, fit]
-        : current.filter(f => f !== fit);
+      const prevFits = prev.fits || [];
+      const updated = prevFits.includes(fit)
+        ? prevFits.filter(f => f !== fit)
+        : [...prevFits, fit];
       return { ...prev, fits: updated };
     });
   };
 
   const toggleDrop = (drop) => {
+    const current = filters.drops || [];
+    const isSelecting = !current.includes(drop);
+    if (isSelecting) {
+      analyticsService.trackFilterUse('drop', drop);
+    }
     setFilters(prev => {
-      const current = prev.drops || [];
-      const isSelecting = !current.includes(drop);
-      if (isSelecting) {
-        analyticsService.trackFilterUse('drop', drop);
-      }
-      const updated = isSelecting
-        ? [...current, drop]
-        : current.filter(d => d !== drop);
+      const prevDrops = prev.drops || [];
+      const updated = prevDrops.includes(drop)
+        ? prevDrops.filter(d => d !== drop)
+        : [...prevDrops, drop];
       return { ...prev, drops: updated };
     });
   };
 
   const toggleSize = (size) => {
+    const current = filters.sizes || [];
+    const isSelecting = !current.includes(size);
+    if (isSelecting) {
+      analyticsService.trackFilterUse('tamanho', size);
+    }
     setFilters(prev => {
-      const current = prev.sizes || [];
-      const isSelecting = !current.includes(size);
-      if (isSelecting) {
-        analyticsService.trackFilterUse('tamanho', size);
-      }
-      const updated = isSelecting
-        ? [...current, size]
-        : current.filter(s => s !== size);
+      const prevSizes = prev.sizes || [];
+      const updated = prevSizes.includes(size)
+        ? prevSizes.filter(s => s !== size)
+        : [...prevSizes, size];
       return { ...prev, sizes: updated };
     });
   };

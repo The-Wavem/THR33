@@ -45,17 +45,42 @@
 
 .navMenu {
   flex: 1;
-  padding: 1.5rem 1rem;
+  padding: 1.25rem 0.75rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 1.5rem;
+  overflow-y: auto;
+}
+
+.navMenu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.navMenu::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+}
+
+.navSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sectionTitle {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  padding: 0.25rem 0.75rem 0.4rem;
+  user-select: none;
 }
 
 .navItem {
   display: flex;
   align-items: center;
   gap: 0.65rem;
-  padding: 0.8rem 1rem;
+  padding: 0.75rem 0.85rem;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--text-secondary);
@@ -80,7 +105,7 @@
 }
 
 .sidebarFooter {
-  padding: 1.5rem;
+  padding: 1.25rem;
   border-top: 1px solid var(--border-color);
 }
 

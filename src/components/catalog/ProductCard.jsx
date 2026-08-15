@@ -44,7 +44,10 @@ export function ProductCard({ product }) {
           <Link 
             className={styles.overlayBtn} 
             to={`/produto/${productId}`}
-            onClick={handleTrackClick}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTrackClick();
+            }}
           >
             VER DETALHES
           </Link>

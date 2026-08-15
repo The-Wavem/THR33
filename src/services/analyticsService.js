@@ -3,6 +3,29 @@ import { db } from './firebaseConfig';
 
 const SUMMARY_DOC_REF = doc(db, 'analytics', 'summary');
 
+// Cache em memória para evitar registros duplicados em curto intervalo (StrictMode do React, double-clicks, bubbling)
+const recentEvents = new Map();
+const DEDUPLICATION_WINDOW_MS = 1000;
+
+function shouldTrack(eventKey) {
+  const now = Date.now();
+  const lastTime = recentEvents.get(eventKey) || 0;
+  if (now - lastTime < DEDUPLICATION_WINDOW_MS) {
+    return false;
+  }
+  recentEvents.set(eventKey, now);
+
+  // Limpeza de cache antigo periodicamente para não acumular memória
+  if (recentEvents.size > 100) {
+    for (const [key, timestamp] of recentEvents.entries()) {
+      if (now - timestamp > DEDUPLICATION_WINDOW_MS * 5) {
+        recentEvents.delete(key);
+      }
+    }
+  }
+  return true;
+}
+
 export const analyticsService = {
   /**
    * Registra a seleção de um filtro no catálogo (Ex: fit_boxy, cat_camisa)
@@ -11,6 +34,10 @@ export const analyticsService = {
     if (!value) return;
     const cleanGroup = String(filterGroup).toLowerCase().replace(/\s+/g, '_');
     const cleanValue = String(value).toLowerCase().replace(/\s+/g, '_');
+    const eventKey = `filter:${cleanGroup}_${cleanValue}`;
+
+    if (!shouldTrack(eventKey)) return;
+
     const fieldKey = `filters.${cleanGroup}_${cleanValue}`;
     try {
       await setDoc(SUMMARY_DOC_REF, {
@@ -28,6 +55,10 @@ export const analyticsService = {
   async trackProductView(productId, productName) {
     if (!productId) return;
     const cleanId = String(productId).replace(/[./#$\[\]]/g, '_');
+    const eventKey = `product:${cleanId}`;
+
+    if (!shouldTrack(eventKey)) return;
+
     const countKey = `products.${cleanId}.views`;
     const nameKey = `products.${cleanId}.name`;
     try {
@@ -47,6 +78,10 @@ export const analyticsService = {
   async trackPageView(pageName) {
     if (!pageName) return;
     const cleanName = String(pageName).replace(/[./#$\[\]]/g, '_');
+    const eventKey = `page:${cleanName}`;
+
+    if (!shouldTrack(eventKey)) return;
+
     const pageKey = `pageViews.${cleanName}`;
     try {
       await setDoc(SUMMARY_DOC_REF, {
@@ -60,3 +95,4 @@ export const analyticsService = {
 };
 
 export default analyticsService;
+

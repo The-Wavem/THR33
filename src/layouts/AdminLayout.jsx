@@ -7,6 +7,7 @@ import {
   Package, 
   BarChart3, 
   Target,
+  Ticket,
   ArrowLeft, 
   ShieldCheck, 
   LogOut 
@@ -30,49 +31,70 @@ export function AdminLayout() {
         </div>
 
         <nav className={styles.navMenu}>
-          <NavLink 
-            to="/cms" 
-            end 
-            className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
-          >
-            <LayoutDashboard size={16} className={styles.navIcon} />
-            <span>Visão Geral & CRM</span>
-          </NavLink>
-          <NavLink 
-            to="/cms/analytics" 
-            className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
-          >
-            <BarChart3 size={16} className={styles.navIcon} />
-            <span>Métricas & Atividades</span>
-          </NavLink>
-          <NavLink 
-            to="/cms/campanhas" 
-            className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
-          >
-            <Target size={16} className={styles.navIcon} />
-            <span>Campanhas & UTMs</span>
-          </NavLink>
-          <NavLink 
-            to="/cms/produtos" 
-            className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
-          >
-            <ShoppingBag size={16} className={styles.navIcon} />
-            <span>Catálogo & SKUs</span>
-          </NavLink>
-          <NavLink 
-            to="/cms/vitrine" 
-            className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
-          >
-            <Image size={16} className={styles.navIcon} />
-            <span>Vitrine & Banners</span>
-          </NavLink>
-          <NavLink 
-            to="/cms/pedidos" 
-            className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
-          >
-            <Package size={16} className={styles.navIcon} />
-            <span>Pedidos & Trocas</span>
-          </NavLink>
+          {/* SEÇÃO 1: DADOS & PERFORMANCE */}
+          <div className={styles.navSection}>
+            <span className={styles.sectionTitle}>DADOS & PERFORMANCE</span>
+            <NavLink 
+              to="/cms" 
+              end 
+              className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
+            >
+              <LayoutDashboard size={16} className={styles.navIcon} />
+              <span>Visão Geral & CRM</span>
+            </NavLink>
+            <NavLink 
+              to="/cms/analytics" 
+              className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
+            >
+              <BarChart3 size={16} className={styles.navIcon} />
+              <span>Métricas & Atividades</span>
+            </NavLink>
+          </div>
+
+          {/* SEÇÃO 2: MARKETING & RASTREIOS EXTERNOS */}
+          <div className={styles.navSection}>
+            <span className={styles.sectionTitle}>MARKETING & RASTREIOS</span>
+            <NavLink 
+              to="/cms/campanhas" 
+              className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
+            >
+              <Target size={16} className={styles.navIcon} />
+              <span>Campanhas & UTMs</span>
+            </NavLink>
+            <NavLink 
+              to="/cms/cupons" 
+              className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
+            >
+              <Ticket size={16} className={styles.navIcon} />
+              <span>Cupons & Parceiros</span>
+            </NavLink>
+          </div>
+
+          {/* SEÇÃO 3: GESTÃO DA LOJA & PRODUTOS */}
+          <div className={styles.navSection}>
+            <span className={styles.sectionTitle}>GESTÃO DA LOJA</span>
+            <NavLink 
+              to="/cms/produtos" 
+              className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
+            >
+              <ShoppingBag size={16} className={styles.navIcon} />
+              <span>Catálogo & SKUs</span>
+            </NavLink>
+            <NavLink 
+              to="/cms/vitrine" 
+              className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
+            >
+              <Image size={16} className={styles.navIcon} />
+              <span>Vitrine & Banners</span>
+            </NavLink>
+            <NavLink 
+              to="/cms/pedidos" 
+              className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
+            >
+              <Package size={16} className={styles.navIcon} />
+              <span>Pedidos & Trocas</span>
+            </NavLink>
+          </div>
         </nav>
 
         <div className={styles.sidebarFooter}>
