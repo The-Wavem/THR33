@@ -15,7 +15,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
-import { PRODUCTS_DATA } from '../../data/productsData';
+import { catalogService } from '../../services/catalogService';
+import { seedService } from '../../services/seedService';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsProdutos.module.css';
 
@@ -39,14 +40,14 @@ export function CmsProdutos() {
     drop: 'leak-two',
     price: '',
     originalPrice: '',
-    customBadge: 'LANÇAMENTO',
+    discount: '',
+    customBadge: '',
     isRelease: true,
-    isFeatured: false,
+    isFeatured: true,
     image: '',
     description: '',
-    // Grade de Estoque / SKUs
     stock: {
-      PP: 10,
+      PP: 5,
       P: 15,
       M: 20,
       G: 15,
@@ -54,32 +55,15 @@ export function CmsProdutos() {
     }
   });
 
-  // 1. Carrega produtos do Firestore (com fallback para PRODUCTS_DATA inicial)
+  // 1. Carrega produtos 100% do Firestore via catalogService
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      const snap = await getDocs(collection(db, 'products'));
-      if (!snap.empty) {
-        const list = [];
-        snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-        setProducts(list);
-      } else {
-        // Popula com dados mock se o Firestore ainda estiver vazio
-        setProducts(PRODUCTS_DATA.map(p => ({
-          ...p,
-          customBadge: p.isRelease ? 'LANÇAMENTO' : '',
-          isFeatured: true,
-          stock: { PP: 5, P: 10, M: 15, G: 10, GG: 5 }
-        })));
-      }
+      await seedService.seedCatalogIfEmpty();
+      const list = await catalogService.getAllProducts();
+      setProducts(list);
     } catch (err) {
-      console.warn("Aviso ao carregar produtos do Firestore:", err.message);
-      setProducts(PRODUCTS_DATA.map(p => ({
-        ...p,
-        customBadge: p.isRelease ? 'LANÇAMENTO' : '',
-        isFeatured: true,
-        stock: { PP: 5, P: 10, M: 15, G: 10, GG: 5 }
-      })));
+      console.error("Erro ao carregar catálogo do Firestore:", err);
     } finally {
       setLoading(false);
     }

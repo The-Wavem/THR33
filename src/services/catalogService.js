@@ -1,66 +1,112 @@
-import { productsData } from '../data/productsData';
+import { collection, getDocs, doc, getDoc, query, where, orderBy } from 'firebase/firestore';
+import { db } from './firebaseConfig';
 
-/**
- * Camada de abstração de catálogo.
- * Prepara o sistema para futura conexão com Firestore / API REST sem alterar a UI.
- */
 export const catalogService = {
-  // Retorna todos os produtos
-  getAllProducts: () => {
-    return productsData;
+  /**
+   * Busca todos os produtos ativos do catálogo ordenados por atualização
+   */
+  async getAllProducts() {
+    try {
+      const q = query(collection(db, 'products'), orderBy('updatedAt', 'desc'));
+      const snap = await getDocs(q);
+      const list = [];
+      snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+      return list;
+    } catch (err) {
+      // Fallback sem orderBy caso índice composto não exista imediatamente
+      try {
+        const snap = await getDocs(collection(db, 'products'));
+        const list = [];
+        snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+        return list;
+      } catch (e) {
+        console.error("Erro ao buscar produtos no Firestore:", e);
+        return [];
+      }
+    }
   },
 
-  // Retorna produto por slug
-  getProductBySlug: (slug) => {
-    return productsData.find((p) => p.slug === slug) || null;
+  /**
+   * Busca produto individual por ID ou Slug
+   */
+  async getProductById(idOrSlug) {
+    if (!idOrSlug) return null;
+    try {
+      // 1. Tenta buscar diretamente pelo ID do documento
+      const docRef = doc(db, 'products', idOrSlug);
+      const snap = await getDoc(docRef);
+      if (snap.exists()) {
+        return { id: snap.id, ...snap.data() };
+      }
+
+      // 2. Tenta buscar por campo slug ou id caso seja slug customizado
+      const q = query(collection(db, 'products'), where('slug', '==', idOrSlug));
+      const querySnap = await getDocs(q);
+      if (!querySnap.empty) {
+        const d = querySnap.docs[0];
+        return { id: d.id, ...d.data() };
+      }
+
+      return null;
+    } catch (err) {
+      console.error(`Erro ao buscar produto ${idOrSlug}:`, err);
+      return null;
+    }
   },
 
-  // Retorna produtos por categoria
-  getProductsByCategory: (categorySlug) => {
-    if (!categorySlug || categorySlug === 'todos') return productsData;
-    return productsData.filter((p) => p.category.toLowerCase() === categorySlug.toLowerCase());
+  /**
+   * Busca apenas lançamentos / releases
+   */
+  async getReleases() {
+    try {
+      const q = query(collection(db, 'products'), where('isRelease', '==', true));
+      const snap = await getDocs(q);
+      const list = [];
+      snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+      return list;
+    } catch (err) {
+      console.error("Erro ao buscar lançamentos:", err);
+      return [];
+    }
   },
 
-  // EXTRAÇÃO DINÂMICA DE META-DADOS DO BANCO/ARRAY
-  getDynamicMetadata: () => {
-    const activeProducts = productsData;
+  /**
+   * Busca produtos do tipo brinde / vale-presente
+   */
+  async getGifts() {
+    try {
+      const q = query(collection(db, 'products'), where('type', '==', 'brinde'));
+      const snap = await getDocs(q);
+      const list = [];
+      snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+      return list;
+    } catch (err) {
+      console.error("Erro ao buscar brindes:", err);
+      return [];
+    }
+  },
 
-    // 1. Categorias únicas com contagem de itens
-    const categoriesMap = new Map();
-    activeProducts.forEach((p) => {
-      const cat = p.category ? p.category.toLowerCase() : 'outros';
-      const count = categoriesMap.get(cat) || 0;
-      categoriesMap.set(cat, count + 1);
-    });
+  /**
+   * Busca brinde / vale-presente individual por ID
+   */
+  async getGiftById(id) {
+    return this.getProductById(id);
+  },
 
-    const categories = Array.from(categoriesMap.entries()).map(([slug, count]) => ({
-      slug,
-      label: slug.toUpperCase().replace('-', ' '),
-      count
-    }));
-
-    // 2. Fits/Cortes únicos que realmente existem nas peças
-    const fits = Array.from(
-      new Set(activeProducts.map((p) => p.fit).filter(Boolean))
-    );
-
-    // 3. Tamanhos únicos
-    const sizes = Array.from(
-      new Set(activeProducts.flatMap((p) => p.sizes || []))
-    );
-
-    // 4. Faixa de preço min/max real
-    const prices = activeProducts.map((p) => p.priceNum || 0);
-    const minPrice = prices.length ? Math.min(...prices) : 0;
-    const maxPrice = prices.length ? Math.max(...prices) : 500;
-
-    return {
-      categories,
-      fits,
-      sizes,
-      minPrice,
-      maxPrice
-    };
+  /**
+   * Busca produtos filtrados por categoria
+   */
+  async getProductsByCategory(category) {
+    try {
+      const q = query(collection(db, 'products'), where('category', '==', category));
+      const snap = await getDocs(q);
+      const list = [];
+      snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+      return list;
+    } catch (err) {
+      console.error(`Erro ao buscar produtos da categoria ${category}:`, err);
+      return [];
+    }
   }
 };
 

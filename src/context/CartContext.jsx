@@ -21,17 +21,6 @@ const sanitizeItem = (item) => ({
   quantity: Number(item.quantity) > 0 ? Number(item.quantity) : 1
 });
 
-const DEFAULT_INITIAL_ITEM = {
-  id: "thr33-boxy-black",
-  name: "Camiseta THR33 Boxy Logo",
-  size: "M",
-  color: { id: "preto", name: "Preto Piano" },
-  fit: "Boxy Fit",
-  price: 189.90,
-  quantity: 1,
-  image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop"
-};
-
 export function CartProvider({ children }) {
   const [cartItems, setCartItems] = useState(() => {
     try {
@@ -42,9 +31,9 @@ export function CartProvider({ children }) {
           return parsed.map(sanitizeItem);
         }
       }
-      return [DEFAULT_INITIAL_ITEM];
+      return [];
     } catch {
-      return [DEFAULT_INITIAL_ITEM];
+      return [];
     }
   });
 

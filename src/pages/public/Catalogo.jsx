@@ -5,7 +5,8 @@ import { X, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import FilterSidebar from '../../components/catalog/FilterSidebar';
 import ProductCard from '../../components/catalog/ProductCard';
 import ProductCardSkeleton from '../../components/catalog/ProductCardSkeleton';
-import { PRODUCTS_DATA } from '../../data/productsData';
+import { catalogService } from '../../services/catalogService';
+import { seedService } from '../../services/seedService';
 import { analyticsService } from '../../services/analyticsService';
 import styles from './Catalogo.module.css';
 
@@ -41,6 +42,10 @@ export function Catalogo() {
   const { categorySlug } = useParams();
   const topRef = useRef(null);
 
+  // Produtos carregados do Firestore
+  const [products, setProducts] = useState([]);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+
   // Estados de Filtros Multi-Seleção e Busca
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({
@@ -56,9 +61,22 @@ export function Catalogo() {
   const [isLoading, setIsLoading] = useState(false);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
-  // 0. Telemetria: Registra visualização de página do Catálogo
+  // 0. Telemetria e Busca de Produtos no Firestore
   useEffect(() => {
     analyticsService.trackPageView('catalogo');
+    async function loadCatalog() {
+      setLoadingProducts(true);
+      try {
+        await seedService.seedCatalogIfEmpty();
+        const data = await catalogService.getAllProducts();
+        setProducts(data);
+      } catch (err) {
+        console.error("Erro ao carregar catálogo:", err);
+      } finally {
+        setLoadingProducts(false);
+      }
+    }
+    loadCatalog();
   }, []);
 
   // 1. SINCRONIZAÇÃO: Ler parâmetros da URL e atualizar estados internos
@@ -202,13 +220,16 @@ export function Catalogo() {
 
   // Motor de Filtragem e Ordenação Multi-Critério
   const filteredProducts = useMemo(() => {
-    return PRODUCTS_DATA.filter((product) => {
+    return products.filter((product) => {
+      // Ignora brindes da listagem geral de vestuário se type for brinde
+      if (product.type === 'brinde') return false;
+
       // 1. Busca textual confirmada
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
         const matchName = product.name?.toLowerCase().includes(q);
         const matchDesc = product.description?.toLowerCase().includes(q);
-        const matchTag = product.tag?.toLowerCase().includes(q);
+        const matchTag = product.customBadge?.toLowerCase().includes(q) || product.tag?.toLowerCase().includes(q);
         if (!matchName && !matchDesc && !matchTag) return false;
       }
       // 2. Categorias (Multi-Seleção: OR)
@@ -223,18 +244,19 @@ export function Catalogo() {
       if (filters.drops && filters.drops.length > 0) {
         if (!filters.drops.includes(product.drop?.toLowerCase())) return false;
       }
-      // 5. Tamanhos (Multi-Seleção: Se o produto tiver qualquer um dos tamanhos selecionados)
+      // 5. Tamanhos (Multi-Seleção: Se o produto tiver qualquer um dos tamanhos selecionados com estoque)
       if (filters.sizes && filters.sizes.length > 0) {
-        const hasMatchingSize = product.sizes?.some(sz => filters.sizes.includes(sz));
+        const hasMatchingSize = (product.sizes && product.sizes.some(sz => filters.sizes.includes(sz))) ||
+          (product.stock && filters.sizes.some(sz => Number(product.stock[sz]) > 0));
         if (!hasMatchingSize) return false;
       }
       return true;
     }).sort((a, b) => {
-      if (sortOrder === 'price-low') return a.price - b.price;
-      if (sortOrder === 'price-high') return b.price - a.price;
+      if (sortOrder === 'price-low') return Number(a.price || 0) - Number(b.price || 0);
+      if (sortOrder === 'price-high') return Number(b.price || 0) - Number(a.price || 0);
       return (b.isRelease ? 1 : 0) - (a.isRelease ? 1 : 0);
     });
-  }, [filters, searchQuery, sortOrder]);
+  }, [products, filters, searchQuery, sortOrder]);
 
   // Cálculo de Paginação
   const totalItems = filteredProducts.length;

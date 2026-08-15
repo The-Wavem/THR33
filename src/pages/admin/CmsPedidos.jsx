@@ -47,111 +47,6 @@ const formatDateBR = (isoStr) => {
   return `${day}/${month}/${year}`;
 };
 
-// Pedidos mock de exemplo caso o Firestore ainda não tenha transações
-const MOCK_ORDERS = [
-  {
-    id: "ord_8921a4f0",
-    clientName: "Lucas Mendonça",
-    clientCpf: "12345678900",
-    clientEmail: "lucas.mendonca@gmail.com",
-    clientPhone: "(41) 99876-5432",
-    total: 379.80,
-    paymentMethod: "PIX",
-    status: "Aprovado",
-    trackingCode: "BR982173641TH",
-    createdAt: new Date().toISOString(), // Hoje
-    shippingAddress: {
-      street: "Rua Brigadeiro Franco",
-      number: "1820",
-      complement: "Apto 402",
-      neighborhood: "Batel",
-      city: "Curitiba",
-      state: "PR",
-      cep: "80250-030"
-    },
-    items: [
-      {
-        id: "thr33-boxy-black",
-        name: "Camiseta THR33 Boxy Logo",
-        size: "M",
-        fit: "Boxy Fit",
-        quantity: 2,
-        price: 189.90,
-        image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop"
-      }
-    ]
-  },
-  {
-    id: "ord_7312b9c1",
-    clientName: "Mariana Siqueira",
-    clientCpf: "98765432199",
-    clientEmail: "mari.siqueira@outlook.com",
-    clientPhone: "(11) 98123-4567",
-    total: 459.90,
-    paymentMethod: "Cartão de Crédito",
-    status: "Em Trânsito",
-    trackingCode: "BR741289654TH",
-    createdAt: new Date(Date.now() - 3600000 * 24 * 3).toISOString(), // 3 dias atrás
-    shippingAddress: {
-      street: "Av. Paulista",
-      number: "1000",
-      complement: "Conj 81",
-      neighborhood: "Bela Vista",
-      city: "São Paulo",
-      state: "SP",
-      cep: "01310-100"
-    },
-    items: [
-      {
-        id: "jaqueta-street-atelie",
-        name: "Jaqueta Street Ateliê",
-        size: "G",
-        fit: "Normal Fit",
-        quantity: 1,
-        price: 459.90,
-        image: "https://images.unsplash.com/photo-1551028719-00167b16eac5?q=80&w=600&auto=format&fit=crop"
-      }
-    ]
-  },
-  {
-    id: "ord_6541f8e2",
-    clientName: "Gabriel Ferreira",
-    clientCpf: "45678912300",
-    clientEmail: "gabriel.f@gmail.com",
-    clientPhone: "(41) 99111-2233",
-    total: 199.90,
-    paymentMethod: "PIX",
-    status: "Troca Solicitada",
-    trackingCode: "BR412896325TH",
-    createdAt: new Date(Date.now() - 3600000 * 24 * 12).toISOString(), // 12 dias atrás
-    reverseLogistics: {
-      code: "REV-84910238BR",
-      reason: "Tamanho Boxy menor que o esperado",
-      generatedAt: new Date(Date.now() - 3600000 * 24 * 2).toISOString()
-    },
-    shippingAddress: {
-      street: "Rua XV de Novembro",
-      number: "450",
-      complement: "",
-      neighborhood: "Centro",
-      city: "Curitiba",
-      state: "PR",
-      cep: "80020-310"
-    },
-    items: [
-      {
-        id: "for-the-few-oversized",
-        name: "Camiseta For The Few Heavy",
-        size: "P",
-        fit: "Oversized Fit",
-        quantity: 1,
-        price: 199.90,
-        image: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?q=80&w=600&auto=format&fit=crop"
-      }
-    ]
-  }
-];
-
 export function CmsPedidos() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -170,7 +65,7 @@ export function CmsPedidos() {
   const [exchangeReason, setExchangeReason] = useState('tamanho-boxy-pequeno');
   const [generatingLabel, setGeneratingLabel] = useState(false);
 
-  // 1. Busca os pedidos reais no Firestore (com fallback para MOCK_ORDERS)
+  // 1. Busca os pedidos reais no Firestore
   const fetchOrders = async () => {
     setLoading(true);
     setRefreshing(true);
@@ -182,11 +77,11 @@ export function CmsPedidos() {
         list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         setOrders(list);
       } else {
-        setOrders(MOCK_ORDERS);
+        setOrders([]);
       }
     } catch (err) {
       console.warn("Aviso ao carregar pedidos do Firestore:", err.message);
-      setOrders(MOCK_ORDERS);
+      setOrders([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

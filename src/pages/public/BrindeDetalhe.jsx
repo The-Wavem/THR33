@@ -1,31 +1,84 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Check, ShoppingBag, Gift, ShieldCheck, Mail } from 'lucide-react';
-import { GIFTS_DATA } from '../../data/giftsData';
+import { Check, ShoppingBag, Gift, ShieldCheck, Mail, ArrowLeft, Package } from 'lucide-react';
+import { catalogService } from '../../services/catalogService';
+import { seedService } from '../../services/seedService';
 import { useCart } from '../../context/CartContext';
 import styles from './BrindeDetalhe.module.css';
+
+const DEFAULT_GIFT_VALUES = [150, 300, 500, 1000, 2500, 5000];
 
 export function BrindeDetalhe() {
   const { id } = useParams();
   const { addToCart, setIsCartOpen, openCart } = useCart();
 
-  // Encontra o item pelo ID ou seleciona o padrão
-  const giftItem = GIFTS_DATA.find((g) => g.id === id) || GIFTS_DATA[0];
-
-  const isGiftCard = giftItem.type === 'gift-card';
+  const [giftItem, setGiftItem] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   // Estados específicos para Vale-Presente
-  const [selectedValue, setSelectedValue] = useState(giftItem.values ? giftItem.values[0] : (giftItem.price || 150));
+  const [selectedValue, setSelectedValue] = useState(250);
   const [recipientName, setRecipientName] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
   const [giftMessage, setGiftMessage] = useState('');
   const [added, setAdded] = useState(false);
 
+  useEffect(() => {
+    async function loadGift() {
+      setLoading(true);
+      try {
+        await seedService.seedCatalogIfEmpty();
+        let item = await catalogService.getProductById(id);
+        if (!item) {
+          const all = await catalogService.getAllProducts();
+          item = all.find(p => p.id === id || p.slug === id || p.type === 'brinde') || null;
+        }
+        if (item) {
+          setGiftItem(item);
+          setSelectedValue(item.price ? Number(item.price) : 250);
+        }
+      } catch (err) {
+        console.error("Erro ao carregar brinde:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadGift();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <main className={styles.container}>
+        <div style={{ textAlign: 'center', padding: '6rem 1rem', color: 'var(--text-secondary)' }}>
+          <Package size={32} style={{ animation: 'spin 1.5s linear infinite', margin: '0 auto 1rem' }} />
+          <p>Carregando item no Firestore...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!giftItem) {
+    return (
+      <main className={styles.container}>
+        <div style={{ textAlign: 'center', padding: '6rem 1rem' }}>
+          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', marginBottom: '1rem' }}>ITEM NÃO ENCONTRADO</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>O vale ou brinde que você procura não está mais disponível.</p>
+          <Link to="/brindes" style={{ background: 'var(--text-primary)', color: 'var(--bg-primary)', padding: '0.8rem 1.5rem', fontWeight: 800, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+            <ArrowLeft size={16} />
+            <span>VOLTAR A BRINDES & VALES</span>
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  const isGiftCard = giftItem.category === 'gift-card' || giftItem.id.includes('vale');
+  const values = giftItem.values || DEFAULT_GIFT_VALUES;
+
   const handleAddToCart = () => {
     const customProduct = {
       id: isGiftCard ? `${giftItem.id}-${selectedValue}` : giftItem.id,
       name: isGiftCard ? `${giftItem.name} (R$ ${selectedValue})` : giftItem.name,
-      price: isGiftCard ? selectedValue : giftItem.price,
+      price: isGiftCard ? selectedValue : Number(giftItem.price || 0),
       image: giftItem.image,
       fit: isGiftCard ? `Vale Digital R$ ${selectedValue}` : "Acessório Oficial",
       recipientName: recipientName.trim() || undefined,
@@ -78,11 +131,11 @@ export function BrindeDetalhe() {
           </div>
 
           {/* SELETOR DE VALOR (CASO SEJA VALE-PRESENTE) */}
-          {isGiftCard && giftItem.values && (
+          {isGiftCard && (
             <div className={styles.sectionGroup}>
               <span className={styles.groupLabel}>ESCOLHA O VALOR DO VALE:</span>
               <div className={styles.valuesGrid}>
-                {giftItem.values.map((val) => (
+                {values.map((val) => (
                   <button
                     key={val}
                     type="button"
@@ -99,70 +152,75 @@ export function BrindeDetalhe() {
           {/* DADOS DO PRESENTEAR (SE FOR VALE PRESENTE) */}
           {isGiftCard && (
             <div className={styles.sectionGroup}>
-              <span className={styles.groupLabel}>DADOS DO DESTINATÁRIO (OPCIONAL):</span>
-              <div className={styles.giftForm}>
-                <input 
-                  type="text" 
-                  placeholder="Nome de quem vai receber o presente" 
-                  value={recipientName}
-                  onChange={(e) => setRecipientName(e.target.value)}
-                  className={styles.inputField}
-                />
-                <input 
-                  type="email" 
-                  placeholder="E-mail de quem vai receber" 
-                  value={recipientEmail}
-                  onChange={(e) => setRecipientEmail(e.target.value)}
-                  className={styles.inputField}
-                />
-                <textarea 
-                  rows="3" 
-                  placeholder="Mensagem especial para o presenteado..." 
-                  value={giftMessage}
-                  onChange={(e) => setGiftMessage(e.target.value)}
-                  className={styles.inputField}
-                />
+              <span className={styles.groupLabel}>DADOS DO DESTINATÁRIO:</span>
+              <div className={styles.formFields}>
+                <div className={styles.fieldGroup}>
+                  <label htmlFor="recipientName">Nome de quem vai receber:</label>
+                  <input
+                    id="recipientName"
+                    type="text"
+                    placeholder="Ex: Matheus Ramos"
+                    value={recipientName}
+                    onChange={(e) => setRecipientName(e.target.value)}
+                  />
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <label htmlFor="recipientEmail">E-mail do presenteado:</label>
+                  <input
+                    id="recipientEmail"
+                    type="email"
+                    placeholder="amigo@email.com"
+                    value={recipientEmail}
+                    onChange={(e) => setRecipientEmail(e.target.value)}
+                  />
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <label htmlFor="giftMessage">Mensagem personalizada:</label>
+                  <textarea
+                    id="giftMessage"
+                    rows="3"
+                    placeholder="Escreva uma mensagem especial..."
+                    value={giftMessage}
+                    onChange={(e) => setGiftMessage(e.target.value)}
+                  />
+                </div>
               </div>
             </div>
           )}
 
-          {/* VALOR FINAL E AÇÃO DE COMPRA */}
-          <div className={styles.actionSection}>
-            <div className={styles.totalDisplay}>
+          {/* PREÇO E BOTÃO COMPRAR */}
+          <div className={styles.purchaseBox}>
+            <div className={styles.totalPrice}>
               <span>VALOR FINAL:</span>
-              <strong>R$ {selectedValue?.toFixed(2)}</strong>
+              <strong>
+                R$ {(isGiftCard ? selectedValue : Number(giftItem.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </strong>
             </div>
 
-            <button 
-              type="button" 
-              onClick={handleAddToCart} 
-              className={`${styles.addToCartBtn} ${added ? styles.addedSuccessBtn : ''}`}
+            <button
+              type="button"
+              className={`${styles.buyBtn} ${added ? styles.buyBtnSuccess : ''}`}
+              onClick={handleAddToCart}
             >
               {added ? (
                 <>
-                  <Check size={16} />
-                  <span>ADICIONADO AO CARRINHO!</span>
+                  <Check size={18} />
+                  <span>ADICIONADO À SACOLA!</span>
                 </>
               ) : (
                 <>
-                  <ShoppingBag size={16} />
-                  <span>{isGiftCard ? 'ADICIONAR VALE AO CARRINHO' : 'ADICIONAR BRINDE AO CARRINHO'}</span>
+                  <ShoppingBag size={18} />
+                  <span>{isGiftCard ? 'GERAR E ADICIONAR VALE' : 'ADICIONAR À SACOLA'}</span>
                 </>
               )}
             </button>
           </div>
 
-          {/* REGRAS E TERMOS */}
-          <div className={styles.termsBox}>
-            <div className={styles.termsHeader}>
-              <ShieldCheck size={15} />
-              <h3>COMO FUNCIONA O USO DO VALE:</h3>
-            </div>
-            <ul>
-              <li>Válido por 12 meses a partir da data de compra.</li>
-              <li>Pode ser utilizado em qualquer produto, drop ou frete do site THR33.</li>
-              <li>O código é enviado instantaneamente por e-mail após a aprovação do pagamento.</li>
-            </ul>
+          <div className={styles.guaranteeNotice}>
+            <ShieldCheck size={16} />
+            <span>Vales são entregues instantaneamente via e-mail e não possuem prazo de expiração.</span>
           </div>
         </section>
       </div>

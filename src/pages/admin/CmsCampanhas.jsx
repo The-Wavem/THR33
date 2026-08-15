@@ -18,16 +18,8 @@ import { db } from '../../services/firebaseConfig';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsCampanhas.module.css';
 
-const DEFAULT_CAMPAIGNS = [
-  { source: 'Instagram Ads', medium: 'stories', campaign: 'Drop_Leak_Two', orders: 18, revenue: 3418.20 },
-  { source: 'TikTok Orgânico', medium: 'video', campaign: 'Video_Atelie_Curitiba', orders: 11, revenue: 1980.00 },
-  { source: 'Instagram Bio', medium: 'social_link', campaign: 'Bio_Principal', orders: 9, revenue: 1619.10 },
-  { source: 'WhatsApp VIP', medium: 'chat', campaign: 'Aviso_PreDrop_24h', orders: 7, revenue: 1459.30 },
-  { source: 'Google Search', medium: 'cpc', campaign: 'Marca_Streetwear', orders: 4, revenue: 759.60 }
-];
-
 export function CmsCampanhas() {
-  const [campaignData, setCampaignData] = useState(DEFAULT_CAMPAIGNS);
+  const [campaignData, setCampaignData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -69,18 +61,14 @@ export function CmsCampanhas() {
         });
 
         const list = Object.values(map);
-        if (list.length > 0) {
-          list.sort((a, b) => b.revenue - a.revenue);
-          setCampaignData(list);
-        } else {
-          setCampaignData(DEFAULT_CAMPAIGNS);
-        }
+        list.sort((a, b) => b.revenue - a.revenue);
+        setCampaignData(list);
       } else {
-        setCampaignData(DEFAULT_CAMPAIGNS);
+        setCampaignData([]);
       }
     } catch (err) {
       console.warn("Aviso ao buscar atribuição de UTMs:", err.message);
-      setCampaignData(DEFAULT_CAMPAIGNS);
+      setCampaignData([]);
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -13,51 +13,91 @@ import {
   Sparkles,
   MousePointerClick,
   SlidersHorizontal,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Layers,
+  LayoutGrid,
+  ArrowRight
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import styles from './CmsVitrine.module.css';
 
-// Sugestões de placeholders com alta resolução para testes rápidos
+// Sugestões de imagens em alta resolução para testes rápidos
 const PLACEHOLDER_IMAGES = [
   { label: "Ensaio Urbano PB", url: "https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=1600&auto=format&fit=crop" },
   { label: "Look Streetwear", url: "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?q=80&w=1600&auto=format&fit=crop" },
   { label: "Ateliê & Frio", url: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1600&auto=format&fit=crop" },
-  { label: "Modelo Heavy Boxy", url: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?q=80&w=1600&auto=format&fit=crop" }
+  { label: "Modelo Heavy Boxy", url: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?q=80&w=1600&auto=format&fit=crop" },
+  { label: "Skatista & Street", url: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=1600&auto=format&fit=crop" }
 ];
 
+const DEFAULT_BENTO_CONFIG = {
+  sectionTag: "ENSAIO DE CAMPANHA",
+  sectionTitle: "A RUA COMO NOSSO ATELIÊ",
+  cards: [
+    {
+      id: "bento_1",
+      title: "OVERSIZED FIT",
+      buttonText: "VER MAIS",
+      link: "/catalogo?modelagem=oversized",
+      image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=800&auto=format&fit=crop",
+      size: "large", // 'large' | 'normal'
+      active: true
+    },
+    {
+      id: "bento_2",
+      title: "BOXY TEES",
+      buttonText: "VER MAIS",
+      link: "/catalogo?modelagem=boxy",
+      image: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?q=80&w=600&auto=format&fit=crop",
+      size: "normal",
+      active: true
+    },
+    {
+      id: "bento_3",
+      title: "EDITION FOR THE FEW",
+      buttonText: "VER MAIS",
+      link: "/catalogo?drop=leak-two",
+      image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=600&auto=format&fit=crop",
+      size: "normal",
+      active: true
+    }
+  ]
+};
+
 export function CmsVitrine() {
+  const [activeSection, setActiveSection] = useState('hero'); // 'hero' | 'bento'
+
+  // Estados dos Banners Hero
   const [slides, setSlides] = useState([]);
+  const [selectedSlideIndex, setSelectedSlideIndex] = useState(0);
+
+  // Estados da Grade Bento
+  const [bentoConfig, setBentoConfig] = useState(DEFAULT_BENTO_CONFIG);
+  const [selectedBentoIndex, setSelectedBentoIndex] = useState(0);
+
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [selectedSlideIndex, setSelectedSlideIndex] = useState(0);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // 1. Carrega os banners salvos no Firestore
+  // 1. Carrega os dados do Firestore
   useEffect(() => {
-    async function fetchBanners() {
+    async function fetchData() {
+      setLoading(true);
       try {
-        const docRef = doc(db, 'storefront', 'home_banners');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && docSnap.data().slides?.length > 0) {
-          const rawSlides = docSnap.data().slides;
+        // Carrega Banners Hero
+        const bannerSnap = await getDoc(doc(db, 'storefront', 'home_banners'));
+        if (bannerSnap.exists() && bannerSnap.data().slides?.length > 0) {
+          const rawSlides = bannerSnap.data().slides;
           const normalized = rawSlides.map(s => ({
             ...s,
             buttons: Array.isArray(s.buttons) 
               ? s.buttons 
-              : s.cta 
-                ? [
-                    { id: "btn_1", text: s.cta, link: s.link || "/catalogo", variant: "primary" },
-                    { id: "btn_2", text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
-                  ]
-                : [
-                    { id: "btn_1", text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" },
-                    { id: "btn_2", text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
-                  ]
+              : [
+                  { id: "btn_1", text: s.cta || "VER LANÇAMENTOS", link: s.link || "/catalogo", variant: "primary" }
+                ]
           }));
           setSlides(normalized);
         } else {
-          // Banners iniciais padrão
           setSlides([
             {
               id: "slide_1",
@@ -85,431 +125,727 @@ export function CmsVitrine() {
             }
           ]);
         }
+
+        // Carrega Grade Bento
+        const bentoSnap = await getDoc(doc(db, 'storefront', 'home_bento'));
+        if (bentoSnap.exists() && bentoSnap.data().cards?.length > 0) {
+          setBentoConfig(bentoSnap.data());
+        } else {
+          setBentoConfig(DEFAULT_BENTO_CONFIG);
+        }
       } catch (err) {
         console.warn("Aviso ao buscar vitrine no Firestore:", err.message);
-        setSlides([
-          {
-            id: "slide_1",
-            title: "A RUA COMO NOSSO ATELIÊ",
-            subtitle: "LEAK TWO — DROP EXCLUSIVO",
-            badge: "NOVO DROP",
-            bgImage: PLACEHOLDER_IMAGES[0].url,
-            active: true,
-            buttons: [
-              { id: "btn_1", text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" }
-            ]
-          }
-        ]);
       } finally {
         setLoading(false);
       }
     }
-    fetchBanners();
+    fetchData();
   }, []);
 
-  const currentSlide = slides[selectedSlideIndex] || slides[0] || {};
-  const currentButtons = Array.isArray(currentSlide.buttons) ? currentSlide.buttons : [];
+  // ----------------------------------------------------
+  // MANIPULADORES DOS BANNERS HERO
+  // ----------------------------------------------------
+  const currentSlide = slides[selectedSlideIndex] || slides[0] || {
+    id: "slide_1",
+    title: "",
+    subtitle: "",
+    badge: "",
+    bgImage: "",
+    active: true,
+    buttons: []
+  };
 
-  // Atualiza campo do slide selecionado
-  const handleUpdateCurrentSlide = (field, value) => {
+  const handleUpdateSlide = (field, value) => {
     setSlides(prev => {
-      const updated = [...prev];
-      updated[selectedSlideIndex] = {
-        ...updated[selectedSlideIndex],
+      const copy = [...prev];
+      if (!copy[selectedSlideIndex]) return prev;
+      copy[selectedSlideIndex] = {
+        ...copy[selectedSlideIndex],
         [field]: value
       };
-      return updated;
+      return copy;
     });
-    setSaveSuccess(false);
   };
 
-  // Predefinição rápida de botões (0 botões, 1 botão ou 2 botões)
-  const handleSetButtonsPreset = (count) => {
-    let newButtons = [];
-    if (count === 1) {
-      newButtons = [
-        { id: `btn_${Date.now()}`, text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" }
-      ];
-    } else if (count === 2) {
-      newButtons = [
-        { id: `btn_1_${Date.now()}`, text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" },
-        { id: `btn_2_${Date.now()}`, text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
-      ];
-    }
-    handleUpdateCurrentSlide('buttons', newButtons);
-  };
-
-  // Atualizar campo de um botão específico
-  const handleUpdateButton = (btnIndex, field, value) => {
-    const updatedButtons = currentButtons.map((btn, idx) => {
-      if (idx === btnIndex) {
-        return { ...btn, [field]: value };
-      }
-      return btn;
-    });
-    handleUpdateCurrentSlide('buttons', updatedButtons);
-  };
-
-  // Remover um botão específico
-  const handleRemoveButton = (btnIndex) => {
-    const updatedButtons = currentButtons.filter((_, idx) => idx !== btnIndex);
-    handleUpdateCurrentSlide('buttons', updatedButtons);
-  };
-
-  // Adicionar novo banner
-  const handleAddNewSlide = () => {
+  const handleAddSlide = () => {
     const newSlide = {
       id: `slide_${Date.now()}`,
-      title: "NOVO DROP THR33",
-      subtitle: "EDITION FOR THE FEW",
-      badge: "EXCLUSIVO",
-      bgImage: PLACEHOLDER_IMAGES[2].url,
+      title: "NOVO TÍTULO DE IMPACTO",
+      subtitle: "SUBTÍTULO DO DROP OU PROMOÇÃO",
+      badge: "DESTAQUE",
+      bgImage: PLACEHOLDER_IMAGES[slides.length % PLACEHOLDER_IMAGES.length].url,
       active: true,
       buttons: [
-        { id: `btn_1_${Date.now()}`, text: "VER PEÇAS", link: "/catalogo", variant: "primary" }
+        { id: `btn_1_${Date.now()}`, text: "VER COLEÇÃO", link: "/catalogo", variant: "primary" }
       ]
     };
-    const updated = [...slides, newSlide];
-    setSlides(updated);
-    setSelectedSlideIndex(updated.length - 1);
-    setSaveSuccess(false);
+    setSlides(prev => [...prev, newSlide]);
+    setSelectedSlideIndex(slides.length);
   };
 
-  // Excluir banner
-  const handleDeleteSlide = (index) => {
+  const handleDeleteSlide = (indexToDelete) => {
     if (slides.length <= 1) {
-      alert("A vitrine deve conter ao menos 1 banner.");
+      alert("A vitrine precisa ter pelo menos 1 slide ativo.");
       return;
     }
-    if (!window.confirm("Deseja realmente excluir este banner da vitrine?")) return;
-    const updated = slides.filter((_, idx) => idx !== index);
-    setSlides(updated);
+    if (!window.confirm("Deseja realmente remover este slide?")) return;
+
+    setSlides(prev => prev.filter((_, idx) => idx !== indexToDelete));
     setSelectedSlideIndex(0);
-    setSaveSuccess(false);
   };
 
-  // Salvar no Firestore
-  const handleSaveStorefront = async () => {
+  // Botões do Banner Hero
+  const handleSetButtonsCount = (count) => {
+    const currentBtns = currentSlide.buttons || [];
+    let updated = [];
+    if (count === 0) {
+      updated = [];
+    } else if (count === 1) {
+      updated = currentBtns.length >= 1 
+        ? [currentBtns[0]] 
+        : [{ id: `btn_1_${Date.now()}`, text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" }];
+    } else if (count === 2) {
+      if (currentBtns.length === 0) {
+        updated = [
+          { id: `btn_1_${Date.now()}`, text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" },
+          { id: `btn_2_${Date.now()}`, text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
+        ];
+      } else if (currentBtns.length === 1) {
+        updated = [
+          currentBtns[0],
+          { id: `btn_2_${Date.now()}`, text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
+        ];
+      } else {
+        updated = currentBtns.slice(0, 2);
+      }
+    }
+    handleUpdateSlide('buttons', updated);
+  };
+
+  const handleUpdateButton = (btnIndex, field, value) => {
+    const currentBtns = [...(currentSlide.buttons || [])];
+    if (!currentBtns[btnIndex]) return;
+    currentBtns[btnIndex] = {
+      ...currentBtns[btnIndex],
+      [field]: value
+    };
+    handleUpdateSlide('buttons', currentBtns);
+  };
+
+  // ----------------------------------------------------
+  // MANIPULADORES DA GRADE BENTO
+  // ----------------------------------------------------
+  const currentBentoCard = bentoConfig.cards?.[selectedBentoIndex] || bentoConfig.cards?.[0] || {
+    id: "bento_1",
+    title: "",
+    buttonText: "VER MAIS",
+    link: "/catalogo",
+    image: "",
+    size: "normal",
+    active: true
+  };
+
+  const handleUpdateBentoSection = (field, value) => {
+    setBentoConfig(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleUpdateBentoCard = (field, value) => {
+    setBentoConfig(prev => {
+      const cards = [...(prev.cards || [])];
+      if (!cards[selectedBentoIndex]) return prev;
+      cards[selectedBentoIndex] = {
+        ...cards[selectedBentoIndex],
+        [field]: value
+      };
+      return { ...prev, cards };
+    });
+  };
+
+  const handleAddBentoCard = () => {
+    const newCard = {
+      id: `bento_${Date.now()}`,
+      title: "NOVO DESTAQUE BENTO",
+      buttonText: "VER MAIS",
+      link: "/catalogo",
+      image: PLACEHOLDER_IMAGES[bentoConfig.cards.length % PLACEHOLDER_IMAGES.length].url,
+      size: "normal",
+      active: true
+    };
+    setBentoConfig(prev => ({
+      ...prev,
+      cards: [...prev.cards, newCard]
+    }));
+    setSelectedBentoIndex(bentoConfig.cards.length);
+  };
+
+  const handleDeleteBentoCard = (indexToDelete) => {
+    if (bentoConfig.cards.length <= 1) {
+      alert("A grade Bento precisa ter pelo menos 1 card configurado.");
+      return;
+    }
+    if (!window.confirm("Deseja realmente remover este card da grade Bento?")) return;
+
+    setBentoConfig(prev => ({
+      ...prev,
+      cards: prev.cards.filter((_, idx) => idx !== indexToDelete)
+    }));
+    setSelectedBentoIndex(0);
+  };
+
+  // ----------------------------------------------------
+  // SALVAR NO FIRESTORE
+  // ----------------------------------------------------
+  const handleSaveAll = async () => {
     setSaving(true);
     setSaveSuccess(false);
+
     try {
-      await setDoc(doc(db, 'storefront', 'home_banners'), {
-        slides,
-        updatedAt: new Date().toISOString()
-      });
+      if (activeSection === 'hero') {
+        const docRef = doc(db, 'storefront', 'home_banners');
+        await setDoc(docRef, {
+          slides,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } else {
+        const docRef = doc(db, 'storefront', 'home_bento');
+        await setDoc(docRef, {
+          ...bentoConfig,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+
       setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 4000);
+      setTimeout(() => setSaveSuccess(false), 3000);
     } catch (err) {
-      console.error("Erro ao salvar vitrine:", err);
-      alert("Erro ao gravar banners no Firestore.");
+      console.error("Erro ao salvar vitrine no Firestore:", err);
+      alert("Erro ao salvar vitrine no Firestore.");
     } finally {
       setSaving(false);
     }
   };
 
-  if (loading) {
-    return (
-      <div className={styles.loadingWrapper}>
-        <RotateCw size={24} className={styles.spinningIcon} />
-        <span>Carregando configuração de vitrine...</span>
-      </div>
-    );
-  }
-
   return (
     <div className={styles.vitrineContainer}>
+      {/* HEADER DA PÁGINA */}
       <header className={styles.header}>
         <div>
-          <span className={styles.breadcrumb}>CMS / VITRINE & BANNER HERO</span>
-          <h1 className={styles.title}>GERENCIADOR DE BANNERS DA HOME</h1>
+          <span className={styles.breadcrumb}>CMS // VITRINE & HOME BUILDER</span>
+          <h1 className={styles.title}>GERENCIADOR VISUAL DA HOME</h1>
         </div>
+
         <div className={styles.headerActions}>
-          <button onClick={handleAddNewSlide} className={styles.secondaryBtn}>
-            <Plus size={15} />
-            <span>NOVO SLIDE</span>
-          </button>
-          <button onClick={handleSaveStorefront} disabled={saving} className={styles.primaryBtn}>
+          {activeSection === 'hero' ? (
+            <button onClick={handleAddSlide} className={styles.secondaryBtn}>
+              <Plus size={14} />
+              <span>NOVO SLIDE</span>
+            </button>
+          ) : (
+            <button onClick={handleAddBentoCard} className={styles.secondaryBtn}>
+              <Plus size={14} />
+              <span>NOVO CARD BENTO</span>
+            </button>
+          )}
+
+          <button onClick={handleSaveAll} disabled={saving} className={styles.primaryBtn}>
             {saving ? (
-              <>
-                <RotateCw size={15} className={styles.spinningIcon} />
-                <span>SALVANDO NA NUVEM...</span>
-              </>
+              <RotateCw size={14} className={styles.spinning} />
             ) : saveSuccess ? (
-              <>
-                <Check size={15} />
-                <span>VITRINE SALVA!</span>
-              </>
+              <Check size={14} />
             ) : (
-              <>
-                <Save size={15} />
-                <span>SALVAR VITRINE</span>
-              </>
+              <Save size={14} />
             )}
+            <span>
+              {saving ? 'GRAVANDO...' : saveSuccess ? 'SALVO NA NUVEM!' : activeSection === 'hero' ? 'SALVAR BANNERS' : 'SALVAR GRADE BENTO'}
+            </span>
           </button>
         </div>
       </header>
 
-      <div className={styles.layoutGrid}>
-        {/* LADO ESQUERDO: LISTA DE SLIDES & FORMULÁRIO DE EDIÇÃO */}
-        <div className={styles.editorCol}>
-          {/* SELETOR DE SLIDES (TABS) */}
-          <div className={styles.slidesTabs}>
-            {slides.map((s, idx) => (
-              <button
-                key={s.id || idx}
-                className={`${styles.tabBtn} ${idx === selectedSlideIndex ? styles.activeTab : ''}`}
-                onClick={() => setSelectedSlideIndex(idx)}
-              >
-                <div className={styles.tabTop}>
-                  <ImageIcon size={13} className={styles.tabIcon} />
-                  <span>SLIDE {idx + 1}</span>
-                </div>
-                <small className={s.active ? styles.onlineTag : styles.offlineTag}>
-                  {s.active ? (
-                    <span className={styles.tagFlex}><Eye size={10} /> Ativo</span>
-                  ) : (
-                    <span className={styles.tagFlex}><EyeOff size={10} /> Oculto</span>
-                  )}
-                </small>
-              </button>
-            ))}
-          </div>
+      {/* SELETOR DE SUB-ABAS (HERO vs BENTO) */}
+      <nav className={styles.sectionNav}>
+        <button
+          type="button"
+          className={`${styles.navTabBtn} ${activeSection === 'hero' ? styles.activeNavTab : ''}`}
+          onClick={() => setActiveSection('hero')}
+        >
+          <SlidersHorizontal size={14} />
+          <span>BANNERS HERO (TOPO)</span>
+        </button>
 
-          {/* FORMULÁRIO DO SLIDE SELECIONADO */}
-          <div className={styles.formCard}>
-            <div className={styles.cardTop}>
-              <h3>CONFIGURAÇÕES DO SLIDE {selectedSlideIndex + 1}</h3>
-              <div className={styles.cardTopActions}>
-                <label className={styles.switchLabel}>
-                  <input 
-                    type="checkbox" 
-                    checked={currentSlide.active ?? true}
-                    onChange={(e) => handleUpdateCurrentSlide('active', e.target.checked)}
-                  />
-                  <span>Banner Visível no Site</span>
-                </label>
-                <button onClick={() => handleDeleteSlide(selectedSlideIndex)} className={styles.deleteSlideBtn}>
-                  <Trash2 size={13} />
-                  <span>Excluir</span>
+        <button
+          type="button"
+          className={`${styles.navTabBtn} ${activeSection === 'bento' ? styles.activeNavTab : ''}`}
+          onClick={() => setActiveSection('bento')}
+        >
+          <Layers size={14} />
+          <span>GRADE BENTO (DESTAQUES & CATEGORIAS)</span>
+        </button>
+      </nav>
+
+      {/* -------------------------------------------------------------
+          SUB-ABA 1: BANNERS HERO
+          ------------------------------------------------------------- */}
+      {activeSection === 'hero' && (
+        <div className={styles.layoutGrid}>
+          {/* COLUNA ESQUERDA: EDITOR DO SLIDE */}
+          <div className={styles.editorCol}>
+            {/* TABS DE SLIDES */}
+            <div className={styles.slidesTabs}>
+              {slides.map((s, idx) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className={`${styles.tabBtn} ${idx === selectedSlideIndex ? styles.activeTab : ''}`}
+                  onClick={() => setSelectedSlideIndex(idx)}
+                >
+                  <div className={styles.tabContent}>
+                    <span className={styles.tabName}>SLIDE {idx + 1}</span>
+                    <span className={`${styles.tabStatus} ${s.active ? styles.tabActive : styles.tabInactive}`}>
+                      {s.active ? '● Ativo' : '○ Oculto'}
+                    </span>
+                  </div>
                 </button>
-              </div>
+              ))}
             </div>
 
-            <div className={styles.formGrid}>
-              <div className={styles.inputField}>
-                <label>TAG / BADGE SUPERIOR</label>
-                <input 
-                  type="text" 
-                  value={currentSlide.badge || ''} 
-                  placeholder="Ex: NOVO DROP, LANÇAMENTO, ATELIÊ"
-                  onChange={(e) => handleUpdateCurrentSlide('badge', e.target.value)}
-                />
+            {/* FORMULÁRIO DO SLIDE SELECIONADO */}
+            <div className={styles.formCard}>
+              <div className={styles.formHeader}>
+                <h3>CONFIGURAÇÕES DO SLIDE {selectedSlideIndex + 1}</h3>
+                <div className={styles.slideHeaderActions}>
+                  <label className={styles.checkboxLabel}>
+                    <input 
+                      type="checkbox" 
+                      checked={currentSlide.active} 
+                      onChange={(e) => handleUpdateSlide('active', e.target.checked)} 
+                    />
+                    <span>Banner Visível no Site</span>
+                  </label>
+                  {slides.length > 1 && (
+                    <button 
+                      type="button" 
+                      onClick={() => handleDeleteSlide(selectedSlideIndex)}
+                      className={styles.deleteSlideBtn}
+                      title="Excluir este slide"
+                    >
+                      <Trash2 size={13} />
+                      <span>Excluir</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
-              <div className={styles.inputField}>
-                <label>TÍTULO PRINCIPAL (MANCHETE) *</label>
-                <input 
-                  type="text" 
-                  value={currentSlide.title || ''} 
-                  placeholder="Ex: A RUA COMO NOSSO ATELIÊ"
-                  onChange={(e) => handleUpdateCurrentSlide('title', e.target.value)}
-                  required
-                />
-              </div>
-
-              <div className={styles.inputField}>
-                <label>SUBTÍTULO / SLOGAN</label>
-                <input 
-                  type="text" 
-                  value={currentSlide.subtitle || ''} 
-                  placeholder="Ex: LEAK TWO — DROP EXCLUSIVO"
-                  onChange={(e) => handleUpdateCurrentSlide('subtitle', e.target.value)}
-                />
-              </div>
-
-              {/* CONTROLE DINÂMICO DE BOTÕES (CTAs) */}
-              <div className={styles.buttonsControlSection}>
-                <div className={styles.buttonsControlHeader}>
-                  <div className={styles.buttonsHeaderTitle}>
-                    <MousePointerClick size={15} className={styles.sectionIcon} />
-                    <label>BOTÕES DE AÇÃO (CTAs DO BANNER)</label>
-                  </div>
-                  <div className={styles.presetButtonsGroup}>
-                    <button 
-                      type="button"
-                      className={`${styles.presetBtn} ${currentButtons.length === 0 ? styles.activePreset : ''}`}
-                      onClick={() => handleSetButtonsPreset(0)}
-                    >
-                      Sem Botões
-                    </button>
-                    <button 
-                      type="button"
-                      className={`${styles.presetBtn} ${currentButtons.length === 1 ? styles.activePreset : ''}`}
-                      onClick={() => handleSetButtonsPreset(1)}
-                    >
-                      1 Botão
-                    </button>
-                    <button 
-                      type="button"
-                      className={`${styles.presetBtn} ${currentButtons.length === 2 ? styles.activePreset : ''}`}
-                      onClick={() => handleSetButtonsPreset(2)}
-                    >
-                      2 Botões
-                    </button>
-                  </div>
+              {/* CAMPOS DO SLIDE */}
+              <div className={styles.formBody}>
+                <div className={styles.inputGroup}>
+                  <label>TAG / BADGE SUPERIOR</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: NOVO DROP, COLEÇÃO 2026, FOR THE FEW" 
+                    value={currentSlide.badge || ''} 
+                    onChange={(e) => handleUpdateSlide('badge', e.target.value)} 
+                  />
                 </div>
 
-                {/* LISTA DINÂMICA DE BOTÕES */}
-                {currentButtons.length === 0 ? (
-                  <div className={styles.emptyButtonsNotice}>
-                    <SlidersHorizontal size={14} />
-                    <span>Este slide está configurado sem botões (foco total na imagem e tipografia).</span>
-                  </div>
-                ) : (
-                  <div className={styles.buttonsList}>
-                    {currentButtons.map((btn, btnIdx) => (
-                      <div key={btn.id || btnIdx} className={styles.buttonItemCard}>
-                        <div className={styles.buttonCardHeader}>
-                          <span className={styles.buttonIndexBadge}>BOTÃO {btnIdx + 1}</span>
-                          
-                          <div className={styles.variantSwitcher}>
-                            <button
-                              type="button"
-                              className={`${styles.variantOption} ${btn.variant === 'primary' || !btn.variant ? styles.activeVariant : ''}`}
-                              onClick={() => handleUpdateButton(btnIdx, 'variant', 'primary')}
-                            >
-                              Principal (Sólido)
-                            </button>
-                            <button
-                              type="button"
-                              className={`${styles.variantOption} ${btn.variant === 'secondary' ? styles.activeVariant : ''}`}
-                              onClick={() => handleUpdateButton(btnIdx, 'variant', 'secondary')}
-                            >
-                              Secundário (Contorno)
-                            </button>
-                          </div>
+                <div className={styles.inputGroup}>
+                  <label>TÍTULO PRINCIPAL (MANCHETE) *</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: A RUA COMO NOSSO ATELIÊ" 
+                    value={currentSlide.title || ''} 
+                    onChange={(e) => handleUpdateSlide('title', e.target.value)} 
+                    required 
+                  />
+                </div>
 
-                          <button 
+                <div className={styles.inputGroup}>
+                  <label>SUBTÍTULO / SLOGAN</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: LEAK TWO — DROP EXCLUSIVO" 
+                    value={currentSlide.subtitle || ''} 
+                    onChange={(e) => handleUpdateSlide('subtitle', e.target.value)} 
+                  />
+                </div>
+
+                {/* BOTÕES DE AÇÃO (CTAS) */}
+                <div className={styles.ctasSection}>
+                  <div className={styles.ctasHeader}>
+                    <div className={styles.ctasTitleGroup}>
+                      <MousePointerClick size={14} />
+                      <label>BOTÕES DE AÇÃO (CTAS DO BANNER)</label>
+                    </div>
+                    <div className={styles.ctaCountSelector}>
+                      <button
+                        type="button"
+                        className={`${styles.ctaCountBtn} ${(currentSlide.buttons || []).length === 0 ? styles.activeCtaCount : ''}`}
+                        onClick={() => handleSetButtonsCount(0)}
+                      >
+                        Sem Botões
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.ctaCountBtn} ${(currentSlide.buttons || []).length === 1 ? styles.activeCtaCount : ''}`}
+                        onClick={() => handleSetButtonsCount(1)}
+                      >
+                        1 Botão
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.ctaCountBtn} ${(currentSlide.buttons || []).length === 2 ? styles.activeCtaCount : ''}`}
+                        onClick={() => handleSetButtonsCount(2)}
+                      >
+                        2 Botões
+                      </button>
+                    </div>
+                  </div>
+
+                  {(currentSlide.buttons || []).map((btn, bIdx) => (
+                    <div key={btn.id || bIdx} className={styles.ctaBox}>
+                      <div className={styles.ctaBoxTop}>
+                        <span className={styles.ctaBoxLabel}>BOTÃO {bIdx + 1}</span>
+                        <div className={styles.variantSelector}>
+                          <button
                             type="button"
-                            onClick={() => handleRemoveButton(btnIdx)}
-                            className={styles.removeBtn}
-                            title="Remover este botão"
+                            className={`${styles.variantBtn} ${btn.variant === 'primary' ? styles.activeVariant : ''}`}
+                            onClick={() => handleUpdateButton(bIdx, 'variant', 'primary')}
                           >
-                            <Trash2 size={13} />
+                            Principal (Sólido)
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.variantBtn} ${btn.variant === 'secondary' ? styles.activeVariant : ''}`}
+                            onClick={() => handleUpdateButton(bIdx, 'variant', 'secondary')}
+                          >
+                            Secundário (Contorno)
                           </button>
                         </div>
+                      </div>
 
-                        <div className={styles.buttonInputsRow}>
-                          <div className={styles.buttonInputField}>
-                            <label>TEXTO DO BOTÃO</label>
+                      <div className={styles.gridTwo}>
+                        <div className={styles.inputGroup}>
+                          <label>TEXTO DO BOTÃO</label>
+                          <input 
+                            type="text" 
+                            placeholder="Ex: VER LANÇAMENTOS" 
+                            value={btn.text || ''} 
+                            onChange={(e) => handleUpdateButton(bIdx, 'text', e.target.value)} 
+                          />
+                        </div>
+                        <div className={styles.inputGroup}>
+                          <label>LINK DE DESTINO</label>
+                          <div className={styles.linkFieldWrapper}>
+                            <LinkIcon size={12} className={styles.linkIconInside} />
                             <input 
-                              type="text"
-                              value={btn.text || ''}
-                              placeholder="Ex: VER LANÇAMENTOS"
-                              onChange={(e) => handleUpdateButton(btnIdx, 'text', e.target.value)}
+                              type="text" 
+                              placeholder="/catalogo, /lancamentos ou link externo" 
+                              value={btn.link || ''} 
+                              onChange={(e) => handleUpdateButton(bIdx, 'link', e.target.value)} 
                             />
-                          </div>
-
-                          <div className={styles.buttonInputField}>
-                            <label>LINK DE DESTINO</label>
-                            <div className={styles.linkInputWrapper}>
-                              <LinkIcon size={12} className={styles.linkInputIcon} />
-                              <input 
-                                type="text"
-                                value={btn.link || ''}
-                                placeholder="Ex: /catalogo ou /sobre"
-                                onChange={(e) => handleUpdateButton(btnIdx, 'link', e.target.value)}
-                              />
-                            </div>
                           </div>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* URL DA IMAGEM E PLACEHOLDERS */}
-              <div className={styles.inputField}>
-                <label>URL DA IMAGEM DE FUNDO *</label>
-                <input 
-                  type="url" 
-                  value={currentSlide.bgImage || ''} 
-                  placeholder="https://..."
-                  onChange={(e) => handleUpdateCurrentSlide('bgImage', e.target.value)}
-                  required
-                />
-              </div>
-
-              {/* SELETOR DE IMAGENS PLACEHOLDER PARA FACILITAR */}
-              <div className={styles.placeholderRow}>
-                <div className={styles.placeholderHeader}>
-                  <Sparkles size={12} className={styles.sparkleIcon} />
-                  <small>Usar imagem conceitual rápida:</small>
-                </div>
-                <div className={styles.presetChips}>
-                  {PLACEHOLDER_IMAGES.map((p, pIdx) => (
-                    <button
-                      key={pIdx}
-                      type="button"
-                      className={styles.chipBtn}
-                      onClick={() => handleUpdateCurrentSlide('bgImage', p.url)}
-                    >
-                      {p.label}
-                    </button>
+                    </div>
                   ))}
                 </div>
+
+                {/* IMAGEM DE FUNDO */}
+                <div className={styles.inputGroup}>
+                  <label>URL DA IMAGEM DE FUNDO *</label>
+                  <input 
+                    type="url" 
+                    placeholder="https://images.unsplash.com/photo-..." 
+                    value={currentSlide.bgImage || ''} 
+                    onChange={(e) => handleUpdateSlide('bgImage', e.target.value)} 
+                    required 
+                  />
+                  <div className={styles.presetsBox}>
+                    <span>SUGESTÕES EM ALTA RESOLUÇÃO:</span>
+                    <div className={styles.presetsList}>
+                      {PLACEHOLDER_IMAGES.map((p, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          className={styles.presetBtn}
+                          onClick={() => handleUpdateSlide('bgImage', p.url)}
+                        >
+                          <ImageIcon size={11} />
+                          <span>{p.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
+            </div>
+          </div>
+
+          {/* COLUNA DIREITA: PRÉ-VISUALIZAÇÃO AO VIVO HERO */}
+          <div className={styles.previewCol}>
+            <div className={styles.previewSticky}>
+              <div className={styles.previewHeader}>
+                <Monitor size={14} />
+                <span>PRÉ-VISUALIZAÇÃO AO VIVO (HERO BANNER)</span>
+              </div>
+
+              <div className={styles.previewContainer}>
+                <div 
+                  className={styles.previewSlide} 
+                  style={{ backgroundImage: `url(${currentSlide.bgImage})` }}
+                >
+                  <div className={styles.previewOverlay} />
+                  
+                  <div className={styles.previewContent}>
+                    {currentSlide.badge && (
+                      <span className={styles.previewBadge}>
+                        <span className={styles.badgeDot} />
+                        <span>{currentSlide.badge}</span>
+                      </span>
+                    )}
+
+                    <h2 className={styles.previewTitle}>
+                      {currentSlide.title || 'SEU TÍTULO AQUI'}
+                    </h2>
+
+                    {currentSlide.subtitle && (
+                      <p className={styles.previewSubtitle}>{currentSlide.subtitle}</p>
+                    )}
+
+                    <div className={styles.previewBtnsRow}>
+                      {(currentSlide.buttons || []).map((btn, bIdx) => (
+                        <span 
+                          key={btn.id || bIdx} 
+                          className={`${styles.previewCtaBtn} ${btn.variant === 'secondary' ? styles.previewCtaSecondary : styles.previewCtaPrimary}`}
+                        >
+                          {btn.text || 'BOTÃO'}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <small className={styles.previewNotice}>
+                {(currentSlide.buttons || []).length === 0 
+                  ? 'Slide sem botões interativos.' 
+                  : `Exibindo ${(currentSlide.buttons || []).length} botão(ões) no slide.`}
+              </small>
             </div>
           </div>
         </div>
+      )}
 
-        {/* LADO DIREITO: PRÉ-VISUALIZAÇÃO EM TEMPO REAL */}
-        <aside className={styles.previewCol}>
-          <div className={styles.previewHeader}>
-            <Monitor size={14} className={styles.previewIcon} />
-            <span className={styles.previewTag}>PRÉ-VISUALIZAÇÃO AO VIVO (HERO BANNER)</span>
-          </div>
-
-          <div className={styles.previewHeroWrapper}>
-            <div 
-              className={styles.previewBg} 
-              style={{ backgroundImage: `url(${currentSlide.bgImage || PLACEHOLDER_IMAGES[0].url})` }}
-            >
-              <div className={styles.previewOverlay}></div>
+      {/* -------------------------------------------------------------
+          SUB-ABA 2: GRADE BENTO (DESTAQUES & CATEGORIAS)
+          ------------------------------------------------------------- */}
+      {activeSection === 'bento' && (
+        <div className={styles.layoutGrid}>
+          {/* COLUNA ESQUERDA: EDITOR BENTO */}
+          <div className={styles.editorCol}>
+            {/* CONFIGURAÇÃO GERAL DA SEÇÃO BENTO */}
+            <div className={styles.formCard} style={{ marginBottom: '1.5rem' }}>
+              <div className={styles.formHeader}>
+                <h3>CABEÇALHO DA SEÇÃO BENTO</h3>
+              </div>
+              <div className={styles.formBody}>
+                <div className={styles.gridTwo}>
+                  <div className={styles.inputGroup}>
+                    <label>TAG / IDENTIFICADOR SUPERIOR</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: ENSAIO DE CAMPANHA" 
+                      value={bentoConfig.sectionTag || ''} 
+                      onChange={(e) => handleUpdateBentoSection('sectionTag', e.target.value)} 
+                    />
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label>TÍTULO PRINCIPAL DA SEÇÃO</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: A RUA COMO NOSSO ATELIÊ" 
+                      value={bentoConfig.sectionTitle || ''} 
+                      onChange={(e) => handleUpdateBentoSection('sectionTitle', e.target.value)} 
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className={styles.previewContent}>
-              {currentSlide.badge && (
-                <span className={styles.previewBadge}>
-                  <span className={styles.previewBadgeDot}></span>
-                  <span>{currentSlide.badge}</span>
-                </span>
-              )}
-              <h2 className={styles.previewTitle}>{currentSlide.title || "TÍTULO DO BANNER"}</h2>
-              <p className={styles.previewSubtitle}>{currentSlide.subtitle || "Subtítulo de apoio"}</p>
-              
-              {currentButtons.length > 0 && (
-                <div className={styles.previewButtons}>
-                  {currentButtons.map((btn, idx) => (
-                    <span 
-                      key={btn.id || idx}
-                      className={btn.variant === 'secondary' ? styles.previewSecondaryCta : styles.previewPrimaryCta}
-                    >
-                      {btn.text || `BOTÃO ${idx + 1}`}
+            {/* TABS DE CARDS BENTO */}
+            <div className={styles.slidesTabs}>
+              {(bentoConfig.cards || []).map((c, idx) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`${styles.tabBtn} ${idx === selectedBentoIndex ? styles.activeTab : ''}`}
+                  onClick={() => setSelectedBentoIndex(idx)}
+                >
+                  <div className={styles.tabContent}>
+                    <span className={styles.tabName}>CARD {idx + 1}</span>
+                    <span className={`${styles.tabStatus} ${c.active ? styles.tabActive : styles.tabInactive}`}>
+                      {c.active ? '● Ativo' : '○ Oculto'}
                     </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* FORMULÁRIO DO CARD BENTO SELECIONADO */}
+            <div className={styles.formCard}>
+              <div className={styles.formHeader}>
+                <h3>CONFIGURAÇÃO DO CARD BENTO {selectedBentoIndex + 1}</h3>
+                <div className={styles.slideHeaderActions}>
+                  <label className={styles.checkboxLabel}>
+                    <input 
+                      type="checkbox" 
+                      checked={currentBentoCard.active} 
+                      onChange={(e) => handleUpdateBentoCard('active', e.target.checked)} 
+                    />
+                    <span>Card Visível</span>
+                  </label>
+                  {bentoConfig.cards.length > 1 && (
+                    <button 
+                      type="button" 
+                      onClick={() => handleDeleteBentoCard(selectedBentoIndex)}
+                      className={styles.deleteSlideBtn}
+                      title="Excluir este card"
+                    >
+                      <Trash2 size={13} />
+                      <span>Excluir</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              <div className={styles.formBody}>
+                <div className={styles.gridTwo}>
+                  <div className={styles.inputGroup}>
+                    <label>TÍTULO / LEGENDA DO CARD *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: OVERSIZED FIT, BOXY TEES" 
+                      value={currentBentoCard.title || ''} 
+                      onChange={(e) => handleUpdateBentoCard('title', e.target.value)} 
+                      required
+                    />
+                  </div>
+
+                  <div className={styles.inputGroup}>
+                    <label>TEXTO DO BOTÃO</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: VER MAIS, EXPLORAR" 
+                      value={currentBentoCard.buttonText || ''} 
+                      onChange={(e) => handleUpdateBentoCard('buttonText', e.target.value)} 
+                    />
+                  </div>
+                </div>
+
+                <div className={styles.gridTwo}>
+                  <div className={styles.inputGroup}>
+                    <label>LINK DE REDIRECIONAMENTO</label>
+                    <div className={styles.linkFieldWrapper}>
+                      <LinkIcon size={12} className={styles.linkIconInside} />
+                      <input 
+                        type="text" 
+                        placeholder="/catalogo?modelagem=oversized" 
+                        value={currentBentoCard.link || ''} 
+                        onChange={(e) => handleUpdateBentoCard('link', e.target.value)} 
+                      />
+                    </div>
+                  </div>
+
+                  <div className={styles.inputGroup}>
+                    <label>FORMATO DO BLOCO (TAMANHO)</label>
+                    <div className={styles.variantSelector} style={{ marginTop: '0.2rem' }}>
+                      <button
+                        type="button"
+                        className={`${styles.variantBtn} ${currentBentoCard.size === 'large' ? styles.activeVariant : ''}`}
+                        onClick={() => handleUpdateBentoCard('size', 'large')}
+                      >
+                        Destaque (2 Colunas)
+                      </button>
+                      <button
+                        type="button"
+                        className={`${styles.variantBtn} ${currentBentoCard.size === 'normal' ? styles.activeVariant : ''}`}
+                        onClick={() => handleUpdateBentoCard('size', 'normal')}
+                      >
+                        Padrão (1 Coluna)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* IMAGEM DO CARD */}
+                <div className={styles.inputGroup}>
+                  <label>URL DA IMAGEM DO CARD *</label>
+                  <input 
+                    type="url" 
+                    placeholder="https://images.unsplash.com/photo-..." 
+                    value={currentBentoCard.image || ''} 
+                    onChange={(e) => handleUpdateBentoCard('image', e.target.value)} 
+                    required 
+                  />
+                  <div className={styles.presetsBox}>
+                    <span>SUGESTÕES EM ALTA RESOLUÇÃO:</span>
+                    <div className={styles.presetsList}>
+                      {PLACEHOLDER_IMAGES.map((p, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          className={styles.presetBtn}
+                          onClick={() => handleUpdateBentoCard('image', p.url)}
+                        >
+                          <ImageIcon size={11} />
+                          <span>{p.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* COLUNA DIREITA: PRÉ-VISUALIZAÇÃO AO VIVO BENTO */}
+          <div className={styles.previewCol}>
+            <div className={styles.previewSticky}>
+              <div className={styles.previewHeader}>
+                <Monitor size={14} />
+                <span>PRÉ-VISUALIZAÇÃO AO VIVO (GRADE BENTO)</span>
+              </div>
+
+              <div className={styles.bentoPreviewSection}>
+                <div className={styles.bentoPreviewHead}>
+                  <span className={styles.bentoPreviewTag}>{bentoConfig.sectionTag || 'TAG'}</span>
+                  <h3 className={styles.bentoPreviewTitle}>{bentoConfig.sectionTitle || 'TÍTULO'}</h3>
+                </div>
+
+                <div className={styles.bentoPreviewGrid}>
+                  {bentoConfig.cards.filter(c => c.active).map((c, idx) => (
+                    <div 
+                      key={c.id || idx} 
+                      className={`${styles.bentoPreviewCard} ${c.size === 'large' ? styles.bentoCardLarge : ''}`}
+                    >
+                      <img src={c.image} alt={c.title} className={styles.bentoPreviewImg} />
+                      <div className={styles.bentoPreviewOverlay}>
+                        <span className={styles.bentoPreviewCaption}>{c.title}</span>
+                        <span className={styles.bentoPreviewBtn}>{c.buttonText || 'VER MAIS'}</span>
+                      </div>
+                    </div>
                   ))}
                 </div>
-              )}
+              </div>
+
+              <small className={styles.previewNotice}>
+                {bentoConfig.cards.filter(c => c.active).length} card(s) ativo(s) na grade.
+              </small>
             </div>
           </div>
-          <small className={styles.previewHint}>
-            {currentButtons.length === 0 
-              ? "Modo Minimalista: Banner renderizado sem botões na tela principal."
-              : `Exibindo ${currentButtons.length} ${currentButtons.length === 1 ? 'botão interativo' : 'botões interativos'} no slide.`}
-          </small>
-        </aside>
-      </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,32 +1,45 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowRight, Package } from 'lucide-react';
+import { catalogService } from '../../services/catalogService';
+import { seedService } from '../../services/seedService';
 import styles from './BestSellers.module.css';
 
-const MOCK_BEST_SELLERS = [
-  {
-    id: "1",
-    name: "Camiseta THR33 Boxy Black",
-    fit: "Boxy Fit",
-    price: 189.90,
-    image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop"
-  },
-  {
-    id: "2",
-    name: "Camiseta For The Few Oversized",
-    fit: "Oversized Fit",
-    price: 199.90,
-    image: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?q=80&w=600&auto=format&fit=crop"
-  },
-  {
-    id: "3",
-    name: "Jaqueta Street Ateliê",
-    fit: "Jaqueta Heavy",
-    price: 459.90,
-    image: "https://images.unsplash.com/photo-1551028719-00167b16eac5?q=80&w=600&auto=format&fit=crop"
-  }
-];
-
 export function BestSellers() {
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function loadBestSellers() {
+      setLoading(true);
+      try {
+        await seedService.seedCatalogIfEmpty();
+        const all = await catalogService.getAllProducts();
+        // Filtra os 3-4 primeiros itens ativos do vestuário
+        const vestuario = all.filter(p => p.type !== 'brinde' && p.category !== 'gift-card');
+        setProducts(vestuario.slice(0, 3));
+      } catch (err) {
+        console.error("Erro ao carregar mais vendidos:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadBestSellers();
+  }, []);
+
+  if (loading) {
+    return (
+      <section className={styles.section}>
+        <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary)' }}>
+          <Package size={24} style={{ animation: 'spin 1.5s linear infinite', margin: '0 auto 0.5rem' }} />
+          <p>Carregando destaques do catálogo...</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (products.length === 0) return null;
+
   return (
     <section className={styles.section}>
       <div className={styles.header}>
@@ -35,26 +48,32 @@ export function BestSellers() {
           <h2 className={styles.title}>MAIS VENDIDOS</h2>
         </div>
         <Link className={styles.seeMoreLink} to="/catalogo">
-          VER CATÁLOGO COMPLETO &rarr;
+          <span>VER CATÁLOGO COMPLETO</span>
+          <ArrowRight size={14} style={{ display: 'inline', verticalAlign: 'middle', marginLeft: '4px' }} />
         </Link>
       </div>
 
       <div className={styles.productsGrid}>
-        {MOCK_BEST_SELLERS.map((product) => (
-          <div key={product.id} className={styles.productCard}>
-            <div className={styles.imageWrapper}>
-              <img src={product.image} alt={product.name} />
-              <Link className={styles.quickViewBtn} to={`/produto/${product.id}`}>
-                VER DETALHES
-              </Link>
+        {products.map((product) => {
+          const priceNum = Number(product.price || 0);
+          const imgSrc = product.image || (product.images && product.images[0]) || '';
+
+          return (
+            <div key={product.id} className={styles.productCard}>
+              <div className={styles.imageWrapper}>
+                <img src={imgSrc} alt={product.name} />
+                <Link className={styles.quickViewBtn} to={`/produto/${product.slug || product.id}`}>
+                  VER DETALHES
+                </Link>
+              </div>
+              <div className={styles.productInfo}>
+                <span className={styles.fitTag}>{(product.fit || 'boxy').toUpperCase()} FIT</span>
+                <h3 className={styles.productName}>{product.name}</h3>
+                <p className={styles.productPrice}>R$ {priceNum.toFixed(2)}</p>
+              </div>
             </div>
-            <div className={styles.productInfo}>
-              <span className={styles.fitTag}>{product.fit}</span>
-              <h3 className={styles.productName}>{product.name}</h3>
-              <p className={styles.productPrice}>R$ {product.price.toFixed(2)}</p>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </section>
   );

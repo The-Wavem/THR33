@@ -1,9 +1,11 @@
+/* ============================================================
+   CMS VITRINE & HOME BUILDER: BANNERS HERO + BENTO GRID
+   ============================================================ */
 .vitrineContainer {
   display: flex;
   flex-direction: column;
   gap: 2rem;
   width: 100%;
-  min-width: 0;
   box-sizing: border-box;
 }
 
@@ -52,8 +54,8 @@
   white-space: nowrap;
 }
 
-.primaryBtn:hover:not(:disabled) { 
-  opacity: 0.9; 
+.primaryBtn:hover:not(:disabled) {
+  opacity: 0.9;
 }
 
 .primaryBtn:disabled {
@@ -77,29 +79,80 @@
   white-space: nowrap;
 }
 
-.secondaryBtn:hover { 
-  border-color: var(--text-primary); 
+.secondaryBtn:hover {
+  border-color: var(--text-primary);
   background-color: var(--bg-surface);
 }
 
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+/* ------------------------------------------------------------
+   SUB-ABAS DE NAVEGAÇÃO
+   ------------------------------------------------------------ */
+.sectionNav {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.navTabBtn {
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  padding: 0.75rem 1.25rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all var(--transition-fast);
+}
+
+.navTabBtn:hover {
+  color: var(--text-primary);
+}
+
+.activeNavTab {
+  background-color: var(--bg-card);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  border-bottom-color: var(--bg-card);
+}
+
+/* ------------------------------------------------------------
+   LAYOUT DE DUAS COLUNAS
+   ------------------------------------------------------------ */
 .layoutGrid {
   display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
   gap: 2rem;
   align-items: start;
   width: 100%;
-  min-width: 0;
 }
 
-/* TABS DE SLIDES */
+.editorCol {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ------------------------------------------------------------
+   TABS DE SLIDES / CARDS
+   ------------------------------------------------------------ */
 .slidesTabs {
   display: flex;
   gap: 0.5rem;
   margin-bottom: 1rem;
   overflow-x: auto;
-  padding-bottom: 0.25rem;
-  width: 100%;
-  min-width: 0;
+  padding-bottom: 0.35rem;
 }
 
 .tabBtn {
@@ -107,31 +160,37 @@
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
   padding: 0.65rem 1rem;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.25rem;
   cursor: pointer;
   transition: all var(--transition-fast);
   min-width: 110px;
   flex-shrink: 0;
+  text-align: left;
 }
 
-.tabTop {
+.tabContent {
   display: flex;
-  align-items: center;
-  gap: 0.45rem;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
-.tabIcon {
-  color: var(--text-muted);
-}
-
-.tabBtn span {
+.tabName {
   font-family: var(--font-heading);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 800;
   letter-spacing: 1px;
+}
+
+.tabStatus {
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.tabActive {
+  color: #4ade80;
+}
+
+.tabInactive {
+  color: var(--text-muted);
 }
 
 .activeTab, .tabBtn:hover {
@@ -140,589 +199,502 @@
   background-color: var(--bg-surface);
 }
 
-.activeTab .tabIcon {
-  color: var(--text-primary);
-}
-
-.tagFlex {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-}
-
-.onlineTag { font-size: 0.65rem; color: #4ade80; font-weight: 700; }
-.offlineTag { font-size: 0.65rem; color: var(--text-muted); font-weight: 700; }
-
-/* COLUNA DO EDITOR */
-.editorCol {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  min-width: 0;
-}
-
-/* FORM CARD */
+/* ------------------------------------------------------------
+   FORMULÁRIOS
+   ------------------------------------------------------------ */
 .formCard {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
-  padding: clamp(1.25rem, 2vw, 1.75rem);
+  padding: 1.75rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
+  gap: 1.5rem;
 }
 
-.cardTop {
+.formHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 1rem;
-  gap: 1rem;
   flex-wrap: wrap;
+  gap: 1rem;
 }
 
-.cardTop h3 {
+.formHeader h3 {
   font-family: var(--font-heading);
   font-size: 0.95rem;
+  font-weight: 800;
   letter-spacing: 1px;
 }
 
-.cardTopActions {
+.slideHeaderActions {
   display: flex;
   align-items: center;
   gap: 1rem;
 }
 
-.switchLabel {
-  font-size: 0.75rem;
-  display: flex;
+.checkboxLabel {
+  display: inline-flex;
   align-items: center;
   gap: 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 700;
   color: var(--text-secondary);
   cursor: pointer;
-  user-select: none;
-}
-
-.switchLabel input[type="checkbox"] {
-  accent-color: #4ade80;
-  width: 15px;
-  height: 15px;
 }
 
 .deleteSlideBtn {
-  font-size: 0.75rem;
-  font-weight: 700;
+  background-color: transparent;
+  border: 1px solid rgba(248, 113, 113, 0.3);
   color: #f87171;
-  background: transparent;
-  border: none;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 700;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 0.3rem;
-  transition: opacity var(--transition-fast);
-  padding: 0.2rem 0.4rem;
+  gap: 0.35rem;
+  transition: all var(--transition-fast);
 }
 
 .deleteSlideBtn:hover {
-  opacity: 0.8;
-  text-decoration: underline;
+  background-color: rgba(248, 113, 113, 0.1);
+  border-color: #f87171;
 }
 
-.formGrid {
+.formBody {
   display: flex;
   flex-direction: column;
-  gap: 1.1rem;
-  width: 100%;
-  min-width: 0;
+  gap: 1.25rem;
 }
 
-.inputField {
+.inputGroup {
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  width: 100%;
-  min-width: 0;
+  gap: 0.4rem;
 }
 
-.inputField label {
+.inputGroup label {
   font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--text-secondary);
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
 }
 
-.inputField input {
+.inputGroup input {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 0.75rem 0.9rem;
+  padding: 0.75rem 1rem;
   font-size: 0.85rem;
-  font-family: var(--font-body);
   outline: none;
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
   transition: border-color var(--transition-fast);
+  width: 100%;
+  box-sizing: border-box;
 }
 
-.inputField input:focus {
-  border-color: var(--border-active);
+.inputGroup input:focus {
+  border-color: var(--text-primary);
 }
 
-/* CONTROLE DE BOTÕES DINÂMICOS */
-.buttonsControlSection {
-  background-color: var(--bg-card);
+.gridTwo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+/* ------------------------------------------------------------
+   BOTÕES DE AÇÃO (CTAS DO BANNER)
+   ------------------------------------------------------------ */
+.ctasSection {
   border: 1px solid var(--border-color);
-  padding: 1.1rem;
+  background-color: rgba(255, 255, 255, 0.015);
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 1rem;
-  width: 100%;
-  box-sizing: border-box;
 }
 
-.buttonsControlHeader {
+.ctasHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.75rem;
   flex-wrap: wrap;
-  border-bottom: 1px solid var(--border-color);
-  padding-bottom: 0.75rem;
+  gap: 0.75rem;
 }
 
-.buttonsHeaderTitle {
+.ctasTitleGroup {
   display: flex;
   align-items: center;
   gap: 0.45rem;
 }
 
-.sectionIcon {
-  color: #38bdf8;
-}
-
-.buttonsHeaderTitle label {
-  font-size: 0.7rem;
-  font-weight: 700;
+.ctasTitleGroup label {
+  font-size: 0.72rem;
+  font-weight: 800;
   letter-spacing: 1px;
   color: var(--text-primary);
 }
 
-.presetButtonsGroup {
+.ctaCountSelector {
   display: flex;
-  gap: 0.4rem;
-  align-items: center;
-  flex-wrap: wrap;
+  gap: 0.3rem;
 }
 
-.presetBtn {
-  background-color: var(--bg-primary);
+.ctaCountBtn {
+  background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   color: var(--text-secondary);
+  padding: 0.35rem 0.65rem;
   font-size: 0.68rem;
   font-weight: 700;
-  padding: 0.35rem 0.7rem;
   cursor: pointer;
-  transition: all var(--transition-fast);
 }
 
-.presetBtn:hover, .activePreset {
+.activeCtaCount {
   border-color: var(--text-primary);
   color: var(--text-primary);
   background-color: var(--bg-surface);
 }
 
-.emptyButtonsNotice {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
+.ctaBox {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
   padding: 1rem;
-  background-color: rgba(255, 255, 255, 0.02);
-  border: 1px dashed var(--border-color);
-  font-size: 0.75rem;
-  color: var(--text-muted);
-}
-
-.buttonsList {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
 }
 
-.buttonItemCard {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  padding: 0.85rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.buttonCardHeader {
+.ctaBoxTop {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 0.5rem;
-  flex-wrap: wrap;
 }
 
-.buttonIndexBadge {
-  font-size: 0.68rem;
+.ctaBoxLabel {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.variantSelector {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.variantBtn {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 0.3rem 0.65rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.activeVariant {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+}
+
+.linkFieldWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.linkIconInside {
+  position: absolute;
+  left: 0.8rem;
+  color: var(--text-muted);
+}
+
+.linkFieldWrapper input {
+  padding-left: 2.2rem !important;
+}
+
+/* ------------------------------------------------------------
+   PRESETS DE IMAGEM
+   ------------------------------------------------------------ */
+.presetsBox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.presetsBox span {
+  font-size: 0.62rem;
   font-weight: 800;
   letter-spacing: 1px;
   color: var(--text-muted);
 }
 
-.variantSwitcher {
-  display: flex;
-  gap: 0.25rem;
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  padding: 0.2rem;
-}
-
-.variantOption {
-  background: transparent;
-  border: none;
-  font-size: 0.65rem;
-  font-weight: 700;
-  padding: 0.25rem 0.6rem;
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.activeVariant {
-  background-color: var(--bg-card);
-  color: var(--text-primary);
-  font-weight: 800;
-}
-
-.removeBtn {
-  background: transparent;
-  border: none;
-  color: #f87171;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.3rem;
-  transition: opacity var(--transition-fast);
-}
-
-.removeBtn:hover {
-  opacity: 0.8;
-}
-
-.buttonInputsRow {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 0.75rem;
-}
-
-.buttonInputField {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
-.buttonInputField label {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-  color: var(--text-secondary);
-}
-
-.buttonInputField input {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  padding: 0.6rem 0.75rem;
-  font-size: 0.8rem;
-  font-family: var(--font-body);
-  outline: none;
-  width: 100%;
-  box-sizing: border-box;
-  transition: border-color var(--transition-fast);
-}
-
-.buttonInputField input:focus {
-  border-color: var(--border-active);
-}
-
-.linkInputWrapper {
-  position: relative;
-  display: flex;
-  align-items: center;
-  width: 100%;
-}
-
-.linkInputIcon {
-  position: absolute;
-  left: 0.65rem;
-  color: var(--text-muted);
-  pointer-events: none;
-}
-
-.linkInputWrapper input {
-  padding-left: 1.8rem;
-}
-
-.placeholderRow {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  padding: 0.85rem;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.placeholderHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.sparkleIcon {
-  color: #38bdf8;
-}
-
-.placeholderRow small {
-  color: var(--text-muted);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.5px;
-}
-
-.presetChips {
+.presetsList {
   display: flex;
   flex-wrap: wrap;
   gap: 0.4rem;
 }
 
-.chipBtn {
+.presetBtn {
+  background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  background-color: var(--bg-primary);
   color: var(--text-secondary);
   padding: 0.35rem 0.65rem;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 700;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
   transition: all var(--transition-fast);
-  white-space: nowrap;
 }
 
-.chipBtn:hover {
-  color: var(--text-primary);
+.presetBtn:hover {
   border-color: var(--text-primary);
+  color: var(--text-primary);
 }
 
-/* PREVIEW */
+/* ------------------------------------------------------------
+   COLUNA DE PRÉ-VISUALIZAÇÃO AO VIVO
+   ------------------------------------------------------------ */
 .previewCol {
+  position: sticky;
+  top: 2rem;
+}
+
+.previewSticky {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
-  padding: clamp(1.25rem, 2vw, 1.75rem);
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 1.25rem;
-  width: 100%;
-  min-width: 0;
-  box-sizing: border-box;
-  position: sticky;
-  top: 90px;
+  gap: 1rem;
 }
 
 .previewHeader {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-}
-
-.previewIcon {
-  color: #4ade80;
-}
-
-.previewTag {
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 800;
   letter-spacing: 1.5px;
   color: var(--text-muted);
 }
 
-.previewHeroWrapper {
+.previewContainer {
+  border: 1px solid var(--border-color);
+  background-color: #000;
+  overflow: hidden;
   position: relative;
-  width: 100%;
-  min-width: 0;
   aspect-ratio: 16/9;
-  min-height: 220px;
-  max-height: 380px;
+}
+
+.previewSlide {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
-  border: 1px solid var(--border-color);
+  text-align: center;
+  padding: 1.5rem;
   box-sizing: border-box;
-  background-color: #0d0d0d;
-}
-
-.previewBg {
-  position: absolute;
-  inset: 0;
-  background-size: cover;
-  background-position: center;
-  transition: background-image 0.3s ease;
 }
 
 .previewOverlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(180deg, rgba(10, 10, 10, 0.45) 0%, rgba(10, 10, 10, 0.88) 100%);
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.8) 100%);
 }
 
 .previewContent {
   position: relative;
   z-index: 2;
-  text-align: center;
-  padding: clamp(0.75rem, 2vw, 1.5rem);
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0.5rem;
-  width: 100%;
-  box-sizing: border-box;
-  overflow-wrap: break-word;
-  word-break: break-word;
+  max-width: 90%;
 }
 
 .previewBadge {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  padding: 0.2rem 0.6rem;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(255, 255, 255, 0.12);
+  background-color: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  max-width: 90%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  gap: 0.35rem;
 }
 
-.previewBadgeDot {
+.badgeDot {
   width: 5px;
   height: 5px;
   border-radius: 50%;
   background-color: #4ade80;
-  flex-shrink: 0;
 }
 
 .previewTitle {
   font-family: var(--font-heading);
-  font-size: clamp(1rem, 2vw, 1.5rem);
-  font-weight: 800;
+  font-size: clamp(1rem, 2vw, 1.4rem);
+  font-weight: 900;
+  color: #fff;
   line-height: 1.15;
-  text-transform: uppercase;
   letter-spacing: 0.5px;
-  max-width: 100%;
-  overflow-wrap: break-word;
-  word-break: break-word;
 }
 
 .previewSubtitle {
-  font-size: clamp(0.68rem, 1.1vw, 0.8rem);
-  color: var(--text-secondary);
-  letter-spacing: 0.5px;
-  max-width: 100%;
-  overflow-wrap: break-word;
-  word-break: break-word;
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.8);
+  letter-spacing: 1px;
 }
 
-.previewButtons {
+.previewBtnsRow {
   display: flex;
   gap: 0.5rem;
-  margin-top: 0.4rem;
+  margin-top: 0.5rem;
   flex-wrap: wrap;
   justify-content: center;
-  max-width: 100%;
 }
 
-.previewPrimaryCta {
-  background-color: var(--text-primary);
-  color: var(--bg-primary);
+.previewCtaBtn {
   font-size: 0.62rem;
   font-weight: 800;
   padding: 0.45rem 0.9rem;
   letter-spacing: 1px;
-  white-space: nowrap;
 }
 
-.previewSecondaryCta {
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  font-size: 0.62rem;
-  font-weight: 600;
-  padding: 0.45rem 0.9rem;
-  letter-spacing: 1px;
-  white-space: nowrap;
+.previewCtaPrimary {
+  background-color: #fff;
+  color: #000;
 }
 
-.previewHint {
+.previewCtaSecondary {
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  color: #fff;
+}
+
+.previewNotice {
   color: var(--text-muted);
-  font-size: 0.72rem;
-  line-height: 1.4;
+  font-size: 0.7rem;
 }
 
-.loadingWrapper {
+/* ------------------------------------------------------------
+   PRÉ-VISUALIZAÇÃO AO VIVO DA GRADE BENTO
+   ------------------------------------------------------------ */
+.bentoPreviewSection {
+  border: 1px solid var(--border-color);
+  background-color: #0a0a0a;
+  padding: 1.25rem;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
   gap: 1rem;
-  padding: 5rem;
-  color: var(--text-secondary);
-  font-size: 0.85rem;
 }
 
-.spinningIcon {
-  animation: spin 1s linear infinite;
+.bentoPreviewHead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
 }
 
-@keyframes spin {
-  100% { transform: rotate(360deg); }
+.bentoPreviewTag {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--text-muted);
 }
 
-/* BREAKPOINTS RESPONSIVOS */
-@media (max-width: 1120px) {
+.bentoPreviewTitle {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: var(--text-primary);
+}
+
+.bentoPreviewGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.bentoPreviewCard {
+  position: relative;
+  aspect-ratio: 4/3;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+}
+
+.bentoCardLarge {
+  grid-column: span 2;
+  aspect-ratio: 16/9;
+}
+
+.bentoPreviewImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.bentoPreviewOverlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.85) 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0.75rem;
+}
+
+.bentoPreviewCaption {
+  font-family: var(--font-heading);
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.bentoPreviewBtn {
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-size: 0.58rem;
+  font-weight: 800;
+  padding: 0.25rem 0.55rem;
+  letter-spacing: 1px;
+}
+
+/* ------------------------------------------------------------
+   RESPONSIVIDADE
+   ------------------------------------------------------------ */
+@media (max-width: 1080px) {
   .layoutGrid {
     grid-template-columns: 1fr;
-    gap: 2rem;
   }
   .previewCol {
     position: static;
   }
 }
 
-@media (max-width: 768px) {
-  .buttonInputsRow {
+@media (max-width: 600px) {
+  .gridTwo {
     grid-template-columns: 1fr;
   }
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
+  .bentoPreviewGrid {
+    grid-template-columns: 1fr;
   }
-  .headerActions {
-    width: 100%;
-  }
-  .primaryBtn, .secondaryBtn {
-    flex: 1;
-    justify-content: center;
+  .bentoCardLarge {
+    grid-column: span 1;
   }
 }
