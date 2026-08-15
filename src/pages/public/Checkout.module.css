@@ -623,24 +623,51 @@
 
 .pagBankMethodsList {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 0.75rem;
   margin-top: 0.25rem;
 }
 
-.methodPill {
+.methodPillBtn {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 0.5rem;
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
-  padding: 0.75rem 1rem;
+  padding: 0.85rem 1rem;
   font-size: 0.78rem;
   color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
 }
 
-.methodPill strong {
+.methodPillBtn:hover {
+  background-color: var(--bg-surface);
   color: var(--text-primary);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.activeMethodPill {
+  background-color: rgba(37, 99, 235, 0.12);
+  border-color: #2563eb;
+  color: #60a5fa;
+}
+
+.activeMethodPill strong {
+  color: #ffffff;
+}
+
+.methodContent {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.methodCheck {
+  color: #60a5fa;
+  flex-shrink: 0;
 }
 
 /* BOTÕES DE NAVEGAÇÃO ENTRE ETAPAS */
@@ -1092,6 +1119,53 @@
 .pixTimerText {
   font-size: 0.7rem;
   color: var(--text-muted);
+}
+
+.cardSuccessBox, .boletoSuccessBox {
+  border: 1px solid var(--border-color);
+  background-color: rgba(255, 255, 255, 0.02);
+  padding: 1.5rem;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.cardSuccessHeader, .boletoHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.85rem;
+}
+
+.cardSuccessHeader strong, .boletoHeader strong {
+  display: block;
+  font-size: 0.82rem;
+  letter-spacing: 1px;
+}
+
+.cardSuccessHeader small, .boletoHeader small {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.cardSuccessBody {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.cardSuccessRow {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.cardSuccessRow strong {
+  color: var(--text-primary);
 }
 
 .successActions {

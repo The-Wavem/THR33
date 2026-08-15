@@ -155,6 +155,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   const [selectedShippingMethod, setSelectedShippingMethod] = useState('sedex');
 
   // PROCESSAMENTO FINAL E SUCESSO
+  const [paymentMethod, setPaymentMethod] = useState('PIX');
   const [isProcessing, setIsProcessing] = useState(false);
   const [copiedPix, setCopiedPix] = useState(false);
   const [couponInput, setCouponInput] = useState('');
@@ -510,40 +511,95 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             Obrigado por comprar na THR33. Enviamos os detalhes do pedido e instruções de pagamento para <strong>{clientData.email}</strong>.
           </p>
 
-          {/* PIX / GATEWAY PAGBANK CONFIRMAÇÃO */}
-          <div className={styles.pixBox}>
-            <div className={styles.pixHeader}>
-              <QrCode size={18} />
-              <strong>PAGUE COM PIX OU ABRA O LINK PAGBANK</strong>
+          {/* CONFIRMAÇÃO DINÂMICA DO PAGAMENTO */}
+          {paymentMethod === 'PIX' && (
+            <div className={styles.pixBox}>
+              <div className={styles.pixHeader}>
+                <QrCode size={18} />
+                <strong>PAGUE COM PIX NO PAGBANK</strong>
+              </div>
+              <p className={styles.pixInstruction}>
+                Escaneie o QR Code abaixo no app do seu banco ou use o código Pix Copia e Cola:
+              </p>
+              
+              <div className={styles.qrCodeContainer}>
+                <div className={styles.qrCodeGraphic}>
+                  <div className={styles.qrCornerTopLeft} />
+                  <div className={styles.qrCornerTopRight} />
+                  <div className={styles.qrCornerBottomLeft} />
+                  <span className={styles.qrCodeText}>[ QR CODE PAGBANK ]</span>
+                  <span className={styles.qrCodeValue}>R$ {total.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className={styles.pixCopyArea}>
+                <input 
+                  type="text" 
+                  readOnly 
+                  value="00020126580014br.gov.bcb.pix0136thr33-atelie-pagbank-curitiba@thr33.com..." 
+                  className={styles.pixInput} 
+                />
+                <button type="button" onClick={handleCopyPix} className={styles.copyBtn}>
+                  {copiedPix ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copiedPix ? 'COPIADO!' : 'COPIAR CHAVE'}</span>
+                </button>
+              </div>
+              <span className={styles.pixTimerText}>O código Pix expira em 15 minutos.</span>
             </div>
-            <p className={styles.pixInstruction}>
-              Escaneie o QR Code abaixo no app do seu banco ou use o código Pix Copia e Cola:
-            </p>
-            
-            <div className={styles.qrCodeContainer}>
-              <div className={styles.qrCodeGraphic}>
-                <div className={styles.qrCornerTopLeft} />
-                <div className={styles.qrCornerTopRight} />
-                <div className={styles.qrCornerBottomLeft} />
-                <span className={styles.qrCodeText}>[ QR CODE PAGBANK ]</span>
-                <span className={styles.qrCodeValue}>R$ {total.toFixed(2)}</span>
+          )}
+
+          {paymentMethod === 'Cartão de Crédito' && (
+            <div className={styles.cardSuccessBox}>
+              <div className={styles.cardSuccessHeader}>
+                <CreditCard size={20} color="#4ade80" />
+                <div>
+                  <strong>PAGAMENTO PROCESSADO COM SUCESSO</strong>
+                  <small>Gateway Seguro PagBank 256-Bit</small>
+                </div>
+              </div>
+              <div className={styles.cardSuccessBody}>
+                <div className={styles.cardSuccessRow}>
+                  <span>Total Cobrado:</span>
+                  <strong>R$ {total.toFixed(2)}</strong>
+                </div>
+                <div className={styles.cardSuccessRow}>
+                  <span>Condição:</span>
+                  <span>Até 3x de R$ {(total / 3).toFixed(2)} sem juros</span>
+                </div>
+                <div className={styles.cardSuccessRow}>
+                  <span>Status:</span>
+                  <strong style={{ color: '#4ade80' }}>Transação Aprovada</strong>
+                </div>
               </div>
             </div>
+          )}
 
-            <div className={styles.pixCopyArea}>
-              <input 
-                type="text" 
-                readOnly 
-                value="00020126580014br.gov.bcb.pix0136thr33-atelie-pagbank-curitiba@thr33.com..." 
-                className={styles.pixInput} 
-              />
-              <button type="button" onClick={handleCopyPix} className={styles.copyBtn}>
-                {copiedPix ? <Check size={14} /> : <Copy size={14} />}
-                <span>{copiedPix ? 'COPIADO!' : 'COPIAR CHAVE'}</span>
-              </button>
+          {paymentMethod === 'Boleto Bancário' && (
+            <div className={styles.boletoSuccessBox}>
+              <div className={styles.boletoHeader}>
+                <FileText size={20} />
+                <div>
+                  <strong>BOLETO BANCÁRIO GERADO</strong>
+                  <small>Vencimento em 3 dias úteis</small>
+                </div>
+              </div>
+              <p className={styles.pixInstruction}>
+                Utilize a linha digitável abaixo no aplicativo do seu banco para pagar:
+              </p>
+              <div className={styles.pixCopyArea}>
+                <input 
+                  type="text" 
+                  readOnly 
+                  value="23793.38128 60000.123456 78900.123456 1 98760000035591" 
+                  className={styles.pixInput} 
+                />
+                <button type="button" onClick={handleCopyPix} className={styles.copyBtn}>
+                  {copiedPix ? <Check size={14} /> : <Copy size={14} />}
+                  <span>{copiedPix ? 'COPIADO!' : 'COPIAR CÓDIGO'}</span>
+                </button>
+              </div>
             </div>
-            <span className={styles.pixTimerText}>O código Pix expira em 15 minutos.</span>
-          </div>
+          )}
 
           <div className={styles.successActions}>
             <Link to="/" className={styles.primaryBtn}>
@@ -578,7 +634,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             className={`${styles.stepItem} ${currentStep === 1 ? styles.stepActive : ''} ${currentStep > 1 ? styles.stepCompleted : ''}`}
             onClick={() => setCurrentStep(1)}
           >
-            <span className={styles.stepNum}>{currentStep > 1 ? '✓' : '1'}</span>
+            <span className={styles.stepNum}>{currentStep > 1 ? <Check size={12} /> : '1'}</span>
             <span className={styles.stepName}>IDENTIFICAÇÃO</span>
           </button>
           
@@ -589,7 +645,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             className={`${styles.stepItem} ${currentStep === 2 ? styles.stepActive : ''} ${currentStep > 2 ? styles.stepCompleted : ''}`}
             onClick={() => { if (validateStep1()) setCurrentStep(2); }}
           >
-            <span className={styles.stepNum}>{currentStep > 2 ? '✓' : '2'}</span>
+            <span className={styles.stepNum}>{currentStep > 2 ? <Check size={12} /> : '2'}</span>
             <span className={styles.stepName}>ENTREGA & FRETE</span>
           </button>
 
@@ -998,18 +1054,41 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                   </p>
 
                   <div className={styles.pagBankMethodsList}>
-                    <div className={styles.methodPill}>
-                      <Zap size={14} />
-                      <span><strong>PIX</strong> (Aprovação na hora)</span>
-                    </div>
-                    <div className={styles.methodPill}>
-                      <CreditCard size={14} />
-                      <span><strong>Cartão de Crédito</strong> (em até 3x sem juros)</span>
-                    </div>
-                    <div className={styles.methodPill}>
-                      <FileText size={14} />
-                      <span><strong>Boleto Bancário</strong></span>
-                    </div>
+                    <button 
+                      type="button" 
+                      onClick={() => setPaymentMethod('PIX')}
+                      className={`${styles.methodPillBtn} ${paymentMethod === 'PIX' ? styles.activeMethodPill : ''}`}
+                    >
+                      <div className={styles.methodContent}>
+                        <Zap size={15} />
+                        <span><strong>PIX</strong> (Aprovação imediata)</span>
+                      </div>
+                      {paymentMethod === 'PIX' && <CheckCircle2 size={15} className={styles.methodCheck} />}
+                    </button>
+
+                    <button 
+                      type="button" 
+                      onClick={() => setPaymentMethod('Cartão de Crédito')}
+                      className={`${styles.methodPillBtn} ${paymentMethod === 'Cartão de Crédito' ? styles.activeMethodPill : ''}`}
+                    >
+                      <div className={styles.methodContent}>
+                        <CreditCard size={15} />
+                        <span><strong>Cartão de Crédito</strong> (em até 3x)</span>
+                      </div>
+                      {paymentMethod === 'Cartão de Crédito' && <CheckCircle2 size={15} className={styles.methodCheck} />}
+                    </button>
+
+                    <button 
+                      type="button" 
+                      onClick={() => setPaymentMethod('Boleto Bancário')}
+                      className={`${styles.methodPillBtn} ${paymentMethod === 'Boleto Bancário' ? styles.activeMethodPill : ''}`}
+                    >
+                      <div className={styles.methodContent}>
+                        <FileText size={15} />
+                        <span><strong>Boleto Bancário</strong></span>
+                      </div>
+                      {paymentMethod === 'Boleto Bancário' && <CheckCircle2 size={15} className={styles.methodCheck} />}
+                    </button>
                   </div>
                 </div>
 
@@ -1027,11 +1106,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                     {isProcessing ? (
                       <>
                         <Loader2 size={16} className={styles.spinner} />
-                        <span>CONECTANDO COM PAGBANK...</span>
+                        <span>PROCESSANDO COM {paymentMethod.toUpperCase()}...</span>
                       </>
                     ) : (
                       <>
-                        <span>PAGAR COM PAGBANK (R$ {total.toFixed(2)})</span>
+                        <span>PAGAR COM {paymentMethod.toUpperCase()} (R$ {total.toFixed(2)})</span>
                         <ArrowRight size={15} />
                       </>
                     )}
