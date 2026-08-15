@@ -26,6 +26,17 @@ function shouldTrack(eventKey) {
   return true;
 }
 
+function sanitizePayload(obj) {
+  if (obj === undefined) return null;
+  if (obj === null || typeof obj !== 'object') return obj;
+  if (Array.isArray(obj)) return obj.map(sanitizePayload);
+  const clean = {};
+  for (const [k, v] of Object.entries(obj)) {
+    clean[k] = v === undefined ? null : sanitizePayload(v);
+  }
+  return clean;
+}
+
 export const analyticsService = {
   /**
    * Registra a seleção de um filtro no catálogo (Ex: fit_boxy, cat_camisa)
@@ -91,8 +102,24 @@ export const analyticsService = {
     } catch (err) {
       console.warn("Aviso telemetria (pageView):", err.message);
     }
+  },
+
+  /**
+   * Registra a etapa atual do Checkout para monitoramento de abandono de carrinho
+   */
+  async trackCheckoutSession(sessionId, sessionData) {
+    if (!sessionId) return;
+    try {
+      const sessionRef = doc(db, 'checkout_sessions', sessionId);
+      const cleanData = sanitizePayload(sessionData);
+      await setDoc(sessionRef, {
+        ...cleanData,
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.warn("Aviso telemetria (checkout session):", err.message);
+    }
   }
 };
 
 export default analyticsService;
-

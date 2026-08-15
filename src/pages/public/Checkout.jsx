@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -39,10 +39,8 @@ import { useAuth } from '../../context/AuthContext';
 import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
 import { couponService } from '../../services/couponService';
+import { analyticsService } from '../../services/analyticsService';
 import styles from './Checkout.module.css';
-
-// Lista inicial de endereços limpa
-const INITIAL_SAVED_ADDRESSES = [];
 
 export function Checkout({ user: propUser, onOpenAuthModal }) {
   const navigate = useNavigate();
@@ -66,6 +64,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
   // CONTROLE DE ETAPAS: 1 = Identificação, 2 = Entrega & Frete, 3 = Pagamento, 4 = Sucesso
   const [currentStep, setCurrentStep] = useState(1);
+
+  // ID único da sessão de checkout atual para telemetria e recuperação de carrinho
+  const [sessionId] = useState(() => `chk_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`);
 
   // Redireciona se o usuário não estiver autenticado
   useEffect(() => {
@@ -92,7 +93,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   const [clientErrors, setClientErrors] = useState({});
 
   // ESTADOS DE ENDEREÇO & FRETE (ETAPA 2)
-  const [savedAddresses, setSavedAddresses] = useState(INITIAL_SAVED_ADDRESSES);
+  const [savedAddresses, setSavedAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState('');
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
@@ -109,11 +110,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   });
   const [addressErrors, setAddressErrors] = useState({});
 
-  // Sincroniza e pré-preenche dados pessoais e endereço padrão do usuário
+  // Sincroniza e pré-preenche dados pessoais e endereços do Firestore
   useEffect(() => {
     const active = currentUser || user;
     if (active) {
-      // 1. Dados Pessoais
       setClientData(prev => ({
         name: active.displayName || active.name || prev.name || '',
         email: active.email || prev.email || '',
@@ -121,24 +121,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         phone: active.phone || prev.phone || ''
       }));
 
-      // 2. Busca o endereço padrão no array de endereços do Firestore
       const userAddresses = active.addresses || [];
       if (userAddresses.length > 0) {
         setSavedAddresses(userAddresses);
         const defaultAddr = userAddresses.find(a => a.isDefault) || userAddresses[0];
         setSelectedAddressId(defaultAddr.id);
         setIsAddingNewAddress(false);
-
-        setAddressForm(prev => ({
-          ...prev,
-          cep: defaultAddr.cep || prev.cep || '',
-          street: defaultAddr.street || prev.street || '',
-          number: defaultAddr.number || prev.number || '',
-          complement: defaultAddr.complement || prev.complement || '',
-          neighborhood: defaultAddr.neighborhood || prev.neighborhood || '',
-          city: defaultAddr.city || prev.city || 'Curitiba',
-          state: defaultAddr.state || prev.state || 'PR'
-        }));
       } else {
         setSavedAddresses([]);
         setIsAddingNewAddress(true);
@@ -146,7 +134,32 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     }
   }, [currentUser, user]);
 
-  // OPÇÃO DE FRETE SELECIONADA
+  // TELEMETRIA DE SESSÃO / CARRINHO ATIVO
+  useEffect(() => {
+    if (cartItems.length > 0) {
+      const stepNames = { 1: 'identificacao', 2: 'endereco', 3: 'pagamento', 4: 'concluido' };
+      analyticsService.trackCheckoutSession(sessionId, {
+        userId: user?.uid || 'guest',
+        clientEmail: clientData.email || '',
+        clientName: clientData.name || '',
+        items: cartItems.map(i => ({ 
+          id: i.id || i.slug, 
+          name: i.name, 
+          size: i.size || 'M', 
+          qty: i.quantity || 1, 
+          price: i.price 
+        })),
+        subtotal,
+        discountAmount: discountAmount || 0,
+        shippingCost: shippingCost || 0,
+        total,
+        completed: currentStep === 4,
+        step: stepNames[currentStep] || 'iniciado'
+      });
+    }
+  }, [sessionId, cartItems, subtotal, discountAmount, shippingCost, total, clientData.email, clientData.name, currentStep, user]);
+
+  // OPÇÕES DE FRETE
   const [shippingOptions, setShippingOptions] = useState([
     { id: 'sedex', name: 'SEDEX Expresso', deadline: '1 a 2 dias úteis', price: 14.90 },
     { id: 'pac', name: 'PAC Standard', deadline: '3 a 5 dias úteis', price: 9.90 },
@@ -161,13 +174,29 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   const [couponInput, setCouponInput] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
 
-  // Atualiza o valor do frete no contexto quando a opção de frete muda
+  // Atualiza o valor do frete no contexto quando a opção muda
   useEffect(() => {
     const opt = shippingOptions.find(o => o.id === selectedShippingMethod);
     if (opt) {
       setShippingCost(opt.price);
     }
   }, [selectedShippingMethod, shippingOptions]);
+
+  // Endereço ativo para envio
+  const activeAddress = useMemo(() => {
+    if (!isAddingNewAddress && selectedAddressId) {
+      return savedAddresses.find(a => a.id === selectedAddressId) || savedAddresses[0] || null;
+    }
+    return {
+      cep: addressForm.cep || '',
+      street: addressForm.street || '',
+      number: addressForm.number || '',
+      neighborhood: addressForm.neighborhood || '',
+      city: addressForm.city || 'Curitiba',
+      state: addressForm.state || 'PR',
+      complement: addressForm.complement || ''
+    };
+  }, [isAddingNewAddress, selectedAddressId, savedAddresses, addressForm]);
 
   // Se o carrinho estiver vazio e não foi para a tela de sucesso
   if (cartItems.length === 0 && currentStep !== 4) {
@@ -179,7 +208,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           <p className={styles.emptyText}>Adicione peças do catálogo para prosseguir ao checkout seguro.</p>
           <Link to="/catalogo" className={styles.primaryBtn}>
             <span>VER CATÁLOGO</span>
-            <ArrowRight size={14} />
+            <ArrowRight size={16} />
           </Link>
         </div>
       </main>
@@ -187,12 +216,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   }
 
   // -------------------------------------------------------------
-  // HANDLERS ETAPA 1: IDENTIFICAÇÃO DO CLIENTE
+  // HANDLERS ETAPA 1: DADOS PESSOAIS
   // -------------------------------------------------------------
   const handleClientChange = (e) => {
     const { name, value } = e.target;
     let formatted = value;
-
     if (name === 'cpf') formatted = maskCPF(value);
     if (name === 'phone') formatted = maskPhone(value);
 
@@ -204,49 +232,37 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
   const validateStep1 = () => {
     const errors = {};
-    if (!clientData.name.trim() || clientData.name.trim().length < 3) {
-      errors.name = 'Informe seu nome completo (mínimo 3 caracteres).';
+    if (!clientData.name.trim() || clientData.name.trim().split(' ').length < 2) {
+      errors.name = 'Informe seu nome completo (nome e sobrenome).';
     }
     if (!validateEmail(clientData.email)) {
-      errors.email = 'Informe um e-mail válido para confirmação.';
+      errors.email = 'Informe um e-mail válido.';
     }
     if (!validateCPF(clientData.cpf)) {
-      errors.cpf = 'Informe um CPF válido (11 dígitos).';
+      errors.cpf = 'CPF inválido.';
     }
     if (!validatePhone(clientData.phone)) {
-      errors.phone = 'Telefone inválido com DDD (10 ou 11 dígitos).';
+      errors.phone = 'Telefone celular com DDD inválido.';
     }
 
     setClientErrors(errors);
     return Object.keys(errors).length === 0;
   };
 
-  const handleNextToStep2 = async (e) => {
+  const handleNextToStep2 = (e) => {
     e.preventDefault();
     if (validateStep1()) {
-      setIsEditingAccountData(false);
-
-      // Sincroniza em tempo real com o perfil do usuário no AuthContext e Firestore
-      if (updateUser) {
-        await updateUser({
-          name: clientData.name,
-          cpf: clientData.cpf,
-          phone: clientData.phone
-        });
-      }
-
       setCurrentStep(2);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   };
 
   // -------------------------------------------------------------
-  // HANDLERS ETAPA 2: ENDEREÇO & FRETE COM API VIACEP
+  // HANDLERS ETAPA 2: ENDEREÇO & FRETE
   // -------------------------------------------------------------
   const handleAddressChange = (e) => {
     const { name, value } = e.target;
     let formatted = value;
-
     if (name === 'cep') {
       formatted = maskCEP(value);
       const clean = formatted.replace(/\D/g, '');
@@ -281,7 +297,6 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       }));
       setCepApiMessage({ type: 'success', text: 'Endereço localizado com sucesso via Correios.' });
 
-      // Atualiza estimativa de frete baseado na região
       const isCuritiba = cleanCep.startsWith('80') || cleanCep.startsWith('81') || cleanCep.startsWith('82') || cleanCep.startsWith('83');
       setShippingOptions([
         { id: 'sedex', name: 'SEDEX Expresso', deadline: isCuritiba ? 'Chega amanhã' : '1 a 3 dias úteis', price: isCuritiba ? 14.90 : 28.50 },
@@ -306,20 +321,43 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     return Object.keys(errors).length === 0;
   };
 
-  const handleSaveNewAddress = (e) => {
-    e.preventDefault();
-    if (validateNewAddress()) {
-      const newId = `addr-${Date.now()}`;
-      const newAddr = {
-        id: newId,
-        label: `Novo Endereço (${addressForm.neighborhood})`,
-        ...addressForm
-      };
-      setSavedAddresses(prev => [...prev, newAddr]);
-      setSelectedAddressId(newId);
-      setIsAddingNewAddress(false);
-      setAddressForm({ cep: '', street: '', number: '', neighborhood: '', complement: '', city: '', state: '' });
-      setCepApiMessage(null);
+  const handleSaveAndUseAddress = async (e) => {
+    if (e) e.preventDefault();
+    if (!validateNewAddress()) return;
+
+    const newId = `addr_${Date.now()}`;
+    const newAddrObj = {
+      id: newId,
+      title: addressForm.complement ? `Apto ${addressForm.complement}` : `Endereço ${addressForm.neighborhood || 'Entrega'}`,
+      label: `Endereço (${addressForm.neighborhood || 'Entrega'})`,
+      cep: addressForm.cep,
+      street: addressForm.street,
+      number: addressForm.number,
+      complement: addressForm.complement || '',
+      neighborhood: addressForm.neighborhood,
+      city: addressForm.city,
+      state: addressForm.state,
+      isDefault: savedAddresses.length === 0
+    };
+
+    const updatedList = [...savedAddresses, newAddrObj];
+    setSavedAddresses(updatedList);
+    setSelectedAddressId(newId);
+    setIsAddingNewAddress(false);
+    setAddressForm({ cep: '', street: '', number: '', neighborhood: '', complement: '', city: 'Curitiba', state: 'PR' });
+    setCepApiMessage(null);
+
+    if (user?.uid) {
+      try {
+        await setDoc(doc(db, 'users', user.uid), {
+          addresses: updatedList
+        }, { merge: true });
+        if (updateUser) {
+          updateUser({ addresses: updatedList });
+        }
+      } catch (err) {
+        console.warn("Erro ao salvar endereço no perfil:", err);
+      }
     }
   };
 
@@ -327,7 +365,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     e.preventDefault();
     if (isAddingNewAddress) {
       if (!validateNewAddress()) return;
-      handleSaveNewAddress(e);
+      handleSaveAndUseAddress(e);
+    }
+    if (!activeAddress?.street || !activeAddress?.number) {
+      alert("Por favor, selecione ou cadastre um endereço de entrega.");
+      return;
     }
     setCurrentStep(3);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -353,46 +395,62 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     const trackingCode = `BR${Math.floor(100000000 + Math.random() * 900000000)}PR`;
     const totalItemsCount = cartItems.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
 
+    // Captura UTMs da sessão ou URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const utmSource = urlParams.get('utm_source') || sessionStorage.getItem('thr33_utm_source') || 'Direto / Orgânico';
+    const utmMedium = urlParams.get('utm_medium') || sessionStorage.getItem('thr33_utm_medium') || 'web';
+    const utmCampaign = urlParams.get('utm_campaign') || sessionStorage.getItem('thr33_utm_campaign') || 'Nenhuma';
+
     const orderData = {
       userId: user?.uid || 'guest',
-      clientName: clientData.name,
-      clientEmail: clientData.email,
-      clientCpf: clientData.cpf,
-      clientPhone: clientData.phone,
+      clientName: clientData.name || user?.displayName || user?.name || 'Cliente THR33',
+      clientEmail: clientData.email || user?.email || '',
+      clientCpf: clientData.cpf || user?.cpf || '',
+      clientPhone: clientData.phone || user?.phone || '',
       items: cartItems.map(item => ({
-        id: item.id || item.slug,
-        name: item.name,
+        id: String(item.id || item.slug || `item_${Date.now()}`),
+        name: item.name || 'Produto THR33',
         size: item.size || 'M',
         fit: item.fit || 'boxy',
-        price: item.price,
-        quantity: item.quantity || 1,
-        image: item.image,
+        price: Number(item.price) || 0,
+        quantity: Number(item.quantity) || 1,
+        image: item.image || '',
         evaluated: false
       })),
-      subtotal,
-      discountAmount,
-      couponCode: appliedCoupon ? appliedCoupon.code : null,
-      couponId: appliedCoupon ? (appliedCoupon.id || null) : null,
-      shippingCost,
-      total,
-      paymentMethod,
+      itemsCount: totalItemsCount,
+      subtotal: Number(subtotal) || 0,
+      discountAmount: Number(discountAmount) || 0,
+      couponCode: appliedCoupon?.code || null,
+      couponId: appliedCoupon?.id || null,
+      shippingCost: Number(shippingCost) || 0,
+      shippingMethod: selectedShippingMethod || 'sedex',
+      total: Number(total) || 0,
+      paymentMethod: paymentMethod || 'PIX',
       shippingAddress: {
         cep: addressToSave.cep || '',
         street: addressToSave.street || '',
         number: addressToSave.number || '',
         neighborhood: addressToSave.neighborhood || '',
-        city: addressToSave.city || '',
-        state: addressToSave.state || '',
+        city: addressToSave.city || 'Curitiba',
+        state: addressToSave.state || 'PR',
         complement: addressToSave.complement || ''
       },
       status: 'Aprovado',
       trackingCode,
+      utm_source: utmSource,
+      utm_medium: utmMedium,
+      utm_campaign: utmCampaign,
       createdAt: new Date().toISOString()
     };
 
+    // Sanitizador recursivo para remover qualquer resquício de undefined
+    const cleanPayload = JSON.parse(JSON.stringify(orderData, (key, value) => {
+      return value === undefined ? null : value;
+    }));
+
     try {
-      // 1. Grava o pedido no Firestore na coleção global 'orders'
-      const orderRef = await addDoc(collection(db, 'orders'), orderData);
+      // 1. Grava o pedido completo no Firestore na coleção global 'orders'
+      const orderRef = await addDoc(collection(db, 'orders'), cleanPayload);
       const generatedOrder = `THR-${orderRef.id.slice(0, 6).toUpperCase()}`;
       setOrderNumber(generatedOrder);
 
@@ -418,21 +476,19 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           const userSnap = await getDoc(userRef);
           const currentAddresses = userSnap.exists() ? (userSnap.data().addresses || []) : [];
 
-          // Monta o novo endereço vindo do formulário de Checkout
           const newAddressFromCheckout = {
             id: `addr_${Date.now()}`,
             title: 'Checkout',
-            cep: addressToSave.cep,
-            street: addressToSave.street,
-            number: addressToSave.number,
+            cep: addressToSave.cep || '',
+            street: addressToSave.street || '',
+            number: addressToSave.number || '',
             complement: addressToSave.complement || '',
             neighborhood: addressToSave.neighborhood || '',
-            city: addressToSave.city,
-            state: addressToSave.state,
+            city: addressToSave.city || 'Curitiba',
+            state: addressToSave.state || 'PR',
             isDefault: currentAddresses.length === 0
           };
 
-          // Verifica se esse CEP/Número já existe para não duplicar no array
           const addressExists = currentAddresses.some(
             a => a.cep === addressToSave.cep && a.number === addressToSave.number
           );
@@ -441,25 +497,30 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             ? currentAddresses 
             : [...currentAddresses, newAddressFromCheckout];
 
-          await setDoc(userRef, {
-            name: clientData.name,
-            cpf: clientData.cpf,
-            phone: clientData.phone,
+          const userPayload = JSON.parse(JSON.stringify({
+            name: clientData.name || user?.displayName || user?.name || '',
+            cpf: clientData.cpf || user?.cpf || '',
+            phone: clientData.phone || user?.phone || '',
             addresses: updatedAddresses
-          }, { merge: true });
+          }, (k, v) => v === undefined ? null : v));
+
+          await setDoc(userRef, userPayload, { merge: true });
 
           if (updateUser) {
-            updateUser({
-              name: clientData.name,
-              cpf: clientData.cpf,
-              phone: clientData.phone,
-              addresses: updatedAddresses
-            });
+            updateUser(userPayload);
           }
         } catch (syncErr) {
           console.warn("Aviso ao atualizar perfil no Checkout:", syncErr.message);
         }
       }
+
+      // 4. Marca a sessão de checkout como concluída na telemetria
+      await analyticsService.trackCheckoutSession(sessionId, {
+        completed: true,
+        orderId: orderRef.id,
+        status: 'concluido'
+      });
+
     } catch (err) {
       console.warn("Aviso ao salvar pedido no Firestore:", err.message);
       const fallbackOrder = `THR-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -487,8 +548,6 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       }
     }
   };
-
-  const activeAddress = savedAddresses.find(a => a.id === selectedAddressId) || savedAddresses[0];
 
   // -------------------------------------------------------------
   // ETAPA 4: SUCESSO / PEDIDO CONFIRMADO VIA PAGBANK
@@ -602,8 +661,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           )}
 
           <div className={styles.successActions}>
-            <Link to="/" className={styles.primaryBtn}>
-              VOLTAR PARA A HOME
+            <Link to="/perfil" className={styles.primaryBtn}>
+              ACOMPANHAR PEDIDO NO PERFIL
             </Link>
             <Link to="/catalogo" className={styles.secondaryBtn}>
               EXPLORAR MAIS PEÇAS
@@ -680,72 +739,57 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
               >
                 <div className={styles.stepCardHeader}>
                   <span className={styles.stepCardBadge}>ETAPA 01</span>
-                  <h2 className={styles.stepCardTitle}>DADOS DE IDENTIFICAÇÃO</h2>
+                  <h2 className={styles.stepCardTitle}>DADOS DE CONTATO & NOTA FISCAL</h2>
                 </div>
 
-                {/* DADOS DA CONTA DO CLIENTE (BLOQUEADOS COM OPÇÃO DE EDITAR) */}
-                <div className={styles.accountDataBlock}>
-                  <div className={styles.accountDataHeader}>
-                    <div className={styles.accountDataBadge}>
-                      <UserCheck size={14} />
-                      <span>CONTA VERIFICADA ATELIÊ</span>
+                {user && !isEditingAccountData && (
+                  <div className={styles.prefilledUserBanner}>
+                    <div className={styles.prefilledUserInfo}>
+                      <UserCheck size={18} color="#4ade80" />
+                      <div>
+                        <strong>Conectado como {clientData.name || user.email}</strong>
+                        <small>E-mail: {clientData.email} • CPF: {clientData.cpf || 'Não informado'}</small>
+                      </div>
                     </div>
-
                     <button 
-                      type="button"
-                      onClick={() => setIsEditingAccountData(!isEditingAccountData)}
+                      type="button" 
+                      onClick={() => setIsEditingAccountData(true)} 
                       className={styles.editDataBtn}
                     >
                       <Edit3 size={13} />
-                      <span>{isEditingAccountData ? 'Concluir Edição' : 'Editar Dados'}</span>
+                      <span>Editar</span>
                     </button>
                   </div>
+                )}
 
-                  {!isEditingAccountData ? (
-                    /* VISUAL BLOQUEADO DOS DADOS CADASTRADOS */
-                    <div className={styles.lockedDataGrid}>
-                      <div className={styles.lockedItem}>
-                        <span className={styles.lockedLabel}>NOME</span>
-                        <strong className={styles.lockedValue}>{clientData.name || 'Cliente THR33'}</strong>
-                      </div>
-                      <div className={styles.lockedItem}>
-                        <span className={styles.lockedLabel}>E-MAIL</span>
-                        <strong className={styles.lockedValue}>{clientData.email}</strong>
-                      </div>
-                    </div>
-                  ) : (
-                    /* CAMPOS DESBLOQUEADOS PARA EDIÇÃO */
-                    <div className={styles.fieldsGrid}>
-                      <div className={styles.fieldWrapper}>
-                        <label className={styles.fieldLabel}>Nome Completo *</label>
-                        <input 
-                          type="text" 
-                          name="name" 
-                          value={clientData.name} 
-                          onChange={handleClientChange} 
-                          className={clientErrors.name ? styles.inputError : ''}
-                        />
-                        {clientErrors.name && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.name}</span>}
-                      </div>
+                <div className={styles.fieldsGrid}>
+                  <div className={styles.fieldWrapper}>
+                    <label className={styles.fieldLabel}>NOME COMPLETO *</label>
+                    <input 
+                      type="text" 
+                      name="name" 
+                      placeholder="Ex: Matheus Rocha" 
+                      value={clientData.name} 
+                      onChange={handleClientChange} 
+                      className={clientErrors.name ? styles.inputError : ''}
+                    />
+                    {clientErrors.name && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.name}</span>}
+                  </div>
 
-                      <div className={styles.fieldWrapper}>
-                        <label className={styles.fieldLabel}>E-mail *</label>
-                        <input 
-                          type="email" 
-                          name="email" 
-                          value={clientData.email} 
-                          onChange={handleClientChange} 
-                          className={clientErrors.email ? styles.inputError : ''}
-                        />
-                        {clientErrors.email && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.email}</span>}
-                      </div>
-                    </div>
-                  )}
-                </div>
+                  <div className={styles.fieldWrapper}>
+                    <label className={styles.fieldLabel}>E-MAIL PARA ENVIO DA NOTA FISCAL *</label>
+                    <input 
+                      type="email" 
+                      name="email" 
+                      placeholder="seu@email.com" 
+                      value={clientData.email} 
+                      onChange={handleClientChange} 
+                      className={clientErrors.email ? styles.inputError : ''}
+                    />
+                    {clientErrors.email && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.email}</span>}
+                  </div>
 
-                {/* CPF E TELEFONE/WHATSAPP (SEMPRE ABERTOS PARA PREENCHIMENTO / VALIDAÇÃO DIRETA) */}
-                <div className={styles.cpfEntrySection}>
-                  <div className={styles.identificationFieldsGrid}>
+                  <div className={styles.fieldsRow}>
                     <div className={styles.fieldWrapper}>
                       <div className={styles.labelWithBadge}>
                         <label className={styles.fieldLabel}>CPF DO TITULAR DA COMPRA *</label>
@@ -808,10 +852,21 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                   <h2 className={styles.stepCardTitle}>ENDEREÇO DE ENTREGA & FRETE</h2>
                 </div>
 
-                {/* ENDEREÇOS SALVOS */}
-                {!isAddingNewAddress && (
+                {/* ENDEREÇOS SALVOS EM CARDS */}
+                {!isAddingNewAddress && savedAddresses.length > 0 && (
                   <div className={styles.savedAddressesList}>
-                    <span className={styles.subSectionTitle}>SELECIONE UM ENDEREÇO SALVO:</span>
+                    <div className={styles.savedAddressesHeader}>
+                      <span className={styles.subSectionTitle}>SELECIONE UM ENDEREÇO DE ENTREGA:</span>
+                      <button 
+                        type="button" 
+                        onClick={() => setIsAddingNewAddress(true)} 
+                        className={styles.toggleAddressBtn}
+                      >
+                        <Plus size={13} />
+                        <span>Cadastrar Novo Endereço</span>
+                      </button>
+                    </div>
+
                     <div className={styles.addressCardsGrid}>
                       {savedAddresses.map((addr) => {
                         const isSelected = selectedAddressId === addr.id;
@@ -822,29 +877,25 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                             onClick={() => setSelectedAddressId(addr.id)}
                           >
                             <div className={styles.addressCardHeader}>
+                              <strong>{(addr.title || addr.label || 'ENDEREÇO').toUpperCase()}</strong>
+                              {addr.isDefault && <span className={styles.defaultBadge}>PADRÃO</span>}
+                            </div>
+                            <p className={styles.addrLine1}>
+                              {addr.street}, {addr.number} {addr.complement ? `• ${addr.complement}` : ''}
+                            </p>
+                            <p className={styles.addrLine2}>
+                              {addr.neighborhood} — {addr.city}/{addr.state} | CEP: {addr.cep}
+                            </p>
+                            <div className={styles.cardRadioIndicator}>
                               <div className={styles.radioDot}>
                                 {isSelected && <div className={styles.radioDotInner} />}
                               </div>
-                              <strong>{addr.label}</strong>
+                              <small>{isSelected ? 'Selecionado para Entrega' : 'Entregar neste endereço'}</small>
                             </div>
-                            <p className={styles.addressCardBody}>
-                              {addr.street}, {addr.number} {addr.complement && `• ${addr.complement}`}<br />
-                              {addr.neighborhood} — {addr.city}/{addr.state}<br />
-                              CEP: {addr.cep}
-                            </p>
                           </div>
                         );
                       })}
                     </div>
-
-                    <button 
-                      type="button" 
-                      onClick={() => setIsAddingNewAddress(true)} 
-                      className={styles.addAddressBtn}
-                    >
-                      <Plus size={14} />
-                      <span>ADICIONAR NOVO ENDEREÇO</span>
-                    </button>
                   </div>
                 )}
 
@@ -859,7 +910,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                           onClick={() => setIsAddingNewAddress(false)} 
                           className={styles.cancelLink}
                         >
-                          Cancelar e usar endereço salvo
+                          ← Cancelar e escolher dos salvos
                         </button>
                       )}
                     </div>
@@ -900,70 +951,83 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                         {addressErrors.street && <span className={styles.errorText}><AlertCircle size={12} /> {addressErrors.street}</span>}
                       </div>
 
-                      <div className={styles.fieldWrapper}>
-                        <label className={styles.fieldLabel}>Número *</label>
-                        <input 
-                          type="text" 
-                          name="number" 
-                          placeholder="123"
-                          value={addressForm.number} 
-                          onChange={handleAddressChange} 
-                          className={addressErrors.number ? styles.inputError : ''}
-                        />
-                        {addressErrors.number && <span className={styles.errorText}><AlertCircle size={12} /> {addressErrors.number}</span>}
+                      <div className={styles.fieldsRow}>
+                        <div className={styles.fieldWrapper}>
+                          <label className={styles.fieldLabel}>Número *</label>
+                          <input 
+                            type="text" 
+                            name="number" 
+                            placeholder="123"
+                            value={addressForm.number} 
+                            onChange={handleAddressChange} 
+                            className={addressErrors.number ? styles.inputError : ''}
+                          />
+                          {addressErrors.number && <span className={styles.errorText}><AlertCircle size={12} /> {addressErrors.number}</span>}
+                        </div>
+
+                        <div className={styles.fieldWrapper}>
+                          <label className={styles.fieldLabel}>Complemento</label>
+                          <input 
+                            type="text" 
+                            name="complement" 
+                            placeholder="Apto, Bloco, etc."
+                            value={addressForm.complement} 
+                            onChange={handleAddressChange} 
+                          />
+                        </div>
                       </div>
 
-                      <div className={styles.fieldWrapper}>
-                        <label className={styles.fieldLabel}>Complemento</label>
-                        <input 
-                          type="text" 
-                          name="complement" 
-                          placeholder="Apto, Bloco, etc."
-                          value={addressForm.complement} 
-                          onChange={handleAddressChange} 
-                        />
-                      </div>
+                      <div className={styles.fieldsRow}>
+                        <div className={styles.fieldWrapper}>
+                          <label className={styles.fieldLabel}>Bairro *</label>
+                          <input 
+                            type="text" 
+                            name="neighborhood" 
+                            placeholder="Bairro"
+                            value={addressForm.neighborhood} 
+                            onChange={handleAddressChange} 
+                            className={addressErrors.neighborhood ? styles.inputError : ''}
+                          />
+                          {addressErrors.neighborhood && <span className={styles.errorText}><AlertCircle size={12} /> {addressErrors.neighborhood}</span>}
+                        </div>
 
-                      <div className={styles.fieldWrapper}>
-                        <label className={styles.fieldLabel}>Bairro *</label>
-                        <input 
-                          type="text" 
-                          name="neighborhood" 
-                          placeholder="Bairro"
-                          value={addressForm.neighborhood} 
-                          onChange={handleAddressChange} 
-                          className={addressErrors.neighborhood ? styles.inputError : ''}
-                        />
-                        {addressErrors.neighborhood && <span className={styles.errorText}><AlertCircle size={12} /> {addressErrors.neighborhood}</span>}
-                      </div>
+                        <div className={styles.fieldWrapper}>
+                          <label className={styles.fieldLabel}>Cidade *</label>
+                          <input 
+                            type="text" 
+                            name="city" 
+                            placeholder="Cidade"
+                            value={addressForm.city} 
+                            onChange={handleAddressChange} 
+                            className={addressErrors.city ? styles.inputError : ''}
+                          />
+                          {addressErrors.city && <span className={styles.errorText}><AlertCircle size={12} /> {addressErrors.city}</span>}
+                        </div>
 
-                      <div className={styles.fieldWrapper}>
-                        <label className={styles.fieldLabel}>Cidade *</label>
-                        <input 
-                          type="text" 
-                          name="city" 
-                          placeholder="Cidade"
-                          value={addressForm.city} 
-                          onChange={handleAddressChange} 
-                          className={addressErrors.city ? styles.inputError : ''}
-                        />
-                        {addressErrors.city && <span className={styles.errorText}><AlertCircle size={12} /> {addressErrors.city}</span>}
-                      </div>
-
-                      <div className={styles.fieldWrapper}>
-                        <label className={styles.fieldLabel}>UF (Estado) *</label>
-                        <input 
-                          type="text" 
-                          name="state" 
-                          placeholder="PR"
-                          maxLength={2}
-                          value={addressForm.state} 
-                          onChange={handleAddressChange} 
-                          className={addressErrors.state ? styles.inputError : ''}
-                        />
-                        {addressErrors.state && <span className={styles.errorText}><AlertCircle size={12} /> {addressErrors.state}</span>}
+                        <div className={styles.fieldWrapper}>
+                          <label className={styles.fieldLabel}>UF *</label>
+                          <input 
+                            type="text" 
+                            name="state" 
+                            placeholder="PR"
+                            maxLength={2}
+                            value={addressForm.state} 
+                            onChange={handleAddressChange} 
+                            className={addressErrors.state ? styles.inputError : ''}
+                          />
+                          {addressErrors.state && <span className={styles.errorText}><AlertCircle size={12} /> {addressErrors.state}</span>}
+                        </div>
                       </div>
                     </div>
+
+                    <button 
+                      type="button" 
+                      onClick={handleSaveAndUseAddress} 
+                      className={styles.saveAddressBtn}
+                    >
+                      <Check size={14} />
+                      <span>CONFIRMAR E USAR ESTE ENDEREÇO</span>
+                    </button>
                   </div>
                 )}
 
@@ -983,12 +1047,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                             <div className={styles.radioDot}>
                               {isSelected && <div className={styles.radioDotInner} />}
                             </div>
-                            <div>
+                            <div className={styles.shippingInfo}>
                               <strong>{opt.name}</strong>
-                              <span className={styles.shippingDeadline}>{opt.deadline}</span>
+                              <small>{opt.deadline}</small>
                             </div>
                           </div>
-                          <span className={styles.shippingPriceValue}>
+                          <span className={styles.shippingPrice}>
                             {opt.price === 0 ? 'GRÁTIS' : `R$ ${opt.price.toFixed(2)}`}
                           </span>
                         </div>
@@ -1004,14 +1068,14 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                   </button>
                   <button type="button" onClick={handleNextToStep3} className={styles.primaryBtn}>
                     <span>CONTINUAR PARA PAGAMENTO</span>
-                    <ArrowRight size={14} />
+                    <ArrowRight size={15} />
                   </button>
                 </div>
               </motion.section>
             )}
 
             {/* --------------------------------------------------------
-                ETAPA 3: PORTAL DE PAGAMENTO SEGURO (PAGBANK)
+                ETAPA 3: PAGAMENTO SEGURO PAGBANK
                 -------------------------------------------------------- */}
             {currentStep === 3 && (
               <motion.section 
@@ -1031,7 +1095,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 <div className={styles.shippingReviewBadge}>
                   <MapPin size={15} />
                   <span>
-                    Entrega para: <strong>{clientData.name}</strong> • {activeAddress.street}, {activeAddress.number} ({activeAddress.city}/{activeAddress.state})
+                    Entrega para: <strong>{clientData.name}</strong> • {activeAddress?.street || 'Rua Comendador Araújo'}, {activeAddress?.number || '333'} ({activeAddress?.city || 'Curitiba'}/{activeAddress?.state || 'PR'})
                   </span>
                   <button type="button" onClick={() => setCurrentStep(2)} className={styles.changeLink}>Alterar</button>
                 </div>
@@ -1122,15 +1186,17 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         </div>
 
         {/* COLUNA DIREITA: RESUMO DO PEDIDO */}
-        <aside className={styles.summarySection}>
+        <aside className={styles.orderSummarySection}>
           <div className={styles.summaryHeader}>
             <ShoppingBag size={16} />
-            <h2 className={styles.summaryTitle}>RESUMO DO PEDIDO ({cartItems.length})</h2>
+            <h3 className={styles.summaryTitle}>
+              RESUMO DO PEDIDO ({cartItems.reduce((acc, it) => acc + (it.quantity || 1), 0)})
+            </h3>
           </div>
 
-          <div className={styles.orderItems}>
+          <div className={styles.orderItemsList}>
             {cartItems.map((item) => (
-              <div key={`${item.id}-${item.size}-${item.color?.id || 'default'}`} className={styles.orderCard}>
+              <div key={`${item.id}-${item.size}`} className={styles.orderCard}>
                 <img src={item.image} alt={item.name} />
                 <div className={styles.orderCardInfo}>
                   <strong className={styles.orderCardName}>{item.name}</strong>
@@ -1207,13 +1273,13 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             </div>
 
             <div className={`${styles.summaryRow} ${styles.totalRow}`}>
-              <span>TOTAL</span>
-              <span>R$ {total.toFixed(2)}</span>
+              <strong>TOTAL</strong>
+              <strong>R$ {total.toFixed(2)}</strong>
             </div>
           </div>
 
-          <div className={styles.securityNote}>
-            <ShieldCheck size={14} />
+          <div className={styles.securitySeal}>
+            <Lock size={12} />
             <span>Transação segura e criptografada via PagBank</span>
           </div>
         </aside>
