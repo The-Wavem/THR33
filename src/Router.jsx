@@ -1,31 +1,42 @@
-import React, { lazy, Suspense } from 'react';
+import React, { Suspense } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { PublicLayout } from './layouts/PublicLayout';
 import { PrivateLayout } from './layouts/PrivateLayout';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
+import { AdminRoute } from './components/common/AdminRoute';
 import { LoadingScreen } from './components/ui/LoadingScreen';
 import { ScrollToTop } from './components/common/ScrollToTop';
 import { CartDrawer } from './components/cart/CartDrawer';
 import { useCart } from './context/CartContext';
 import { useAuth } from './context/AuthContext';
+import { lazyWithRetry } from './utils/lazyWithRetry';
 
 // LAZY LOADING DAS PÁGINAS (CODE-SPLITTING EM CHUNKS SOB DEMANDA)
-const Home = lazy(() => import('./pages/public/Home').then(m => ({ default: m.Home || m.default })));
-const Catalogo = lazy(() => import('./pages/public/Catalogo').then(m => ({ default: m.Catalogo || m.default })));
-const ProdutoDetalhe = lazy(() => import('./pages/public/ProdutoDetalhe').then(m => ({ default: m.ProdutoDetalhe || m.default })));
-const Lancamentos = lazy(() => import('./pages/public/Lancamentos').then(m => ({ default: m.Lancamentos || m.default })));
-const Checkout = lazy(() => import('./pages/public/Checkout').then(m => ({ default: m.Checkout || m.default })));
-const Auth = lazy(() => import('./pages/public/Auth').then(m => ({ default: m.Auth || m.default })));
-const Sobre = lazy(() => import('./pages/public/Sobre').then(m => ({ default: m.Sobre || m.default })));
-const Suporte = lazy(() => import('./pages/public/Suporte').then(m => ({ default: m.Suporte || m.default })));
-const Politicas = lazy(() => import('./pages/public/Politicas').then(m => ({ default: m.Politicas || m.default })));
-const GuiaTamanhos = lazy(() => import('./pages/public/GuiaTamanhos').then(m => ({ default: m.GuiaTamanhos || m.default })));
-const Favoritos = lazy(() => import('./pages/public/Favoritos').then(m => ({ default: m.Favoritos || m.default })));
-const Brindes = lazy(() => import('./pages/public/Brindes').then(m => ({ default: m.Brindes || m.default })));
-const BrindeDetalhe = lazy(() => import('./pages/public/BrindeDetalhe').then(m => ({ default: m.BrindeDetalhe || m.default })));
-const NotFound = lazy(() => import('./pages/public/NotFound').then(m => ({ default: m.NotFound || m.default })));
+const Home = lazyWithRetry(() => import('./pages/public/Home').then(m => ({ default: m.Home || m.default })));
+const Catalogo = lazyWithRetry(() => import('./pages/public/Catalogo').then(m => ({ default: m.Catalogo || m.default })));
+const ProdutoDetalhe = lazyWithRetry(() => import('./pages/public/ProdutoDetalhe').then(m => ({ default: m.ProdutoDetalhe || m.default })));
+const Lancamentos = lazyWithRetry(() => import('./pages/public/Lancamentos').then(m => ({ default: m.Lancamentos || m.default })));
+const Checkout = lazyWithRetry(() => import('./pages/public/Checkout').then(m => ({ default: m.Checkout || m.default })));
+const Auth = lazyWithRetry(() => import('./pages/public/Auth').then(m => ({ default: m.Auth || m.default })));
+const Sobre = lazyWithRetry(() => import('./pages/public/Sobre').then(m => ({ default: m.Sobre || m.default })));
+const Suporte = lazyWithRetry(() => import('./pages/public/Suporte').then(m => ({ default: m.Suporte || m.default })));
+const Politicas = lazyWithRetry(() => import('./pages/public/Politicas').then(m => ({ default: m.Politicas || m.default })));
+const GuiaTamanhos = lazyWithRetry(() => import('./pages/public/GuiaTamanhos').then(m => ({ default: m.GuiaTamanhos || m.default })));
+const Favoritos = lazyWithRetry(() => import('./pages/public/Favoritos').then(m => ({ default: m.Favoritos || m.default })));
+const Brindes = lazyWithRetry(() => import('./pages/public/Brindes').then(m => ({ default: m.Brindes || m.default })));
+const BrindeDetalhe = lazyWithRetry(() => import('./pages/public/BrindeDetalhe').then(m => ({ default: m.BrindeDetalhe || m.default })));
+const NotFound = lazyWithRetry(() => import('./pages/public/NotFound').then(m => ({ default: m.NotFound || m.default })));
 
-const Perfil = lazy(() => import('./pages/private/Perfil').then(m => ({ default: m.Perfil || m.default })));
+const Perfil = lazyWithRetry(() => import('./pages/private/Perfil').then(m => ({ default: m.Perfil || m.default })));
+const AdminLayout = lazyWithRetry(() => import('./layouts/AdminLayout').then(m => ({ default: m.AdminLayout || m.default })));
+const CmsDashboard = lazyWithRetry(() => import('./pages/admin/CmsDashboard').then(m => ({ default: m.CmsDashboard || m.default })));
+const CmsAnalytics = lazyWithRetry(() => import('./pages/admin/CmsAnalytics').then(m => ({ default: m.CmsAnalytics || m.default })));
+const CmsCampanhas = lazyWithRetry(() => import('./pages/admin/CmsCampanhas').then(m => ({ default: m.CmsCampanhas || m.default })));
+const CmsCupons = lazyWithRetry(() => import('./pages/admin/CmsCupons').then(m => ({ default: m.CmsCupons || m.default })));
+const CmsProdutos = lazyWithRetry(() => import('./pages/admin/CmsProdutos').then(m => ({ default: m.CmsProdutos || m.default })));
+const CmsDescontos = lazyWithRetry(() => import('./pages/admin/CmsDescontos').then(m => ({ default: m.CmsDescontos || m.default })));
+const CmsVitrine = lazyWithRetry(() => import('./pages/admin/CmsVitrine').then(m => ({ default: m.CmsVitrine || m.default })));
+const CmsPedidos = lazyWithRetry(() => import('./pages/admin/CmsPedidos').then(m => ({ default: m.CmsPedidos || m.default })));
 
 export function AppRoutes() {
   const navigate = useNavigate();
@@ -112,6 +123,44 @@ export function AppRoutes() {
             <Route path="/configuracoes" element={<Perfil defaultTab="dados" />} />
             <Route path="/enderecos" element={<Perfil defaultTab="enderecos" />} />
             <Route path="/seguranca" element={<Perfil defaultTab="seguranca" />} />
+          </Route>
+
+          {/* PAINEL ADMINISTRATIVO CMS ENGINE (TD-93) PROTEGIDO POR ROLE */}
+          <Route 
+            path="/cms" 
+            element={
+              <AdminRoute>
+                <AdminLayout />
+              </AdminRoute>
+            }
+          >
+            <Route index element={<CmsDashboard />} />
+            <Route path="analytics" element={<CmsAnalytics />} />
+            <Route path="campanhas" element={<CmsCampanhas />} />
+            <Route path="cupons" element={<CmsCupons />} />
+            <Route path="produtos" element={<CmsProdutos />} />
+            <Route path="descontos" element={<CmsDescontos />} />
+            <Route path="vitrine" element={<CmsVitrine />} />
+            <Route path="pedidos" element={<CmsPedidos />} />
+          </Route>
+
+          {/* ALIAS DE CONVENIÊNCIA PARA /admin */}
+          <Route 
+            path="/admin" 
+            element={
+              <AdminRoute>
+                <AdminLayout />
+              </AdminRoute>
+            }
+          >
+            <Route index element={<CmsDashboard />} />
+            <Route path="analytics" element={<CmsAnalytics />} />
+            <Route path="campanhas" element={<CmsCampanhas />} />
+            <Route path="cupons" element={<CmsCupons />} />
+            <Route path="produtos" element={<CmsProdutos />} />
+            <Route path="descontos" element={<CmsDescontos />} />
+            <Route path="vitrine" element={<CmsVitrine />} />
+            <Route path="pedidos" element={<CmsPedidos />} />
           </Route>
         </Routes>
       </Suspense>

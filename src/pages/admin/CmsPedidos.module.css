@@ -1,0 +1,767 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1.5rem;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.breadcrumb {
+  font-size: 0.75rem;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+  font-weight: 800;
+  margin-top: 0.3rem;
+}
+
+.headerRightControls {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+/* SELETOR DE PERÍODO & DATAS */
+.dateFilterBox {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 0.35rem 0.5rem;
+  flex-wrap: wrap;
+}
+
+.datePresetsRow {
+  display: flex;
+  gap: 0.25rem;
+}
+
+.presetBtn {
+  background: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.35rem 0.65rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.presetBtn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-card);
+}
+
+.activePreset {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border-color: var(--border-color);
+  font-weight: 800;
+}
+
+.customDateInputs {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  border-left: 1px solid var(--border-color);
+  padding-left: 0.75rem;
+}
+
+.dateInputGroup {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.dateInputIcon {
+  position: absolute;
+  left: 0.5rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.dateInputGroup input[type="date"] {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.3rem 0.4rem 0.3rem 1.6rem;
+  font-size: 0.7rem;
+  font-family: var(--font-body);
+  outline: none;
+  cursor: pointer;
+  transition: border-color var(--transition-fast);
+  color-scheme: dark;
+}
+
+.dateInputGroup input[type="date"]:focus {
+  border-color: var(--border-active);
+}
+
+.dateSeparator {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.clearDateBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  transition: color var(--transition-fast);
+}
+
+.clearDateBtn:hover {
+  color: #f87171;
+}
+
+/* FEEDBACK DO PERÍODO ATIVO */
+.activePeriodBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: rgba(56, 189, 248, 0.08);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: #38bdf8;
+  padding: 0.5rem 1rem;
+  font-size: 0.75rem;
+  margin-top: -0.75rem;
+}
+
+.periodBadgeIcon {
+  color: #38bdf8;
+  flex-shrink: 0;
+}
+
+.refreshBtn {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  padding: 0.65rem 1.2rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.refreshBtn:hover:not(:disabled) {
+  border-color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+.refreshBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+/* KPIS */
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 1.25rem;
+}
+
+.kpiCard {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  transition: border-color var(--transition-fast);
+}
+
+.kpiCard:hover {
+  border-color: var(--border-active);
+}
+
+.alertKpi {
+  border-color: rgba(248, 113, 113, 0.5);
+}
+
+.kpiHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.kpiIconGreen { color: #4ade80; }
+.kpiIconBlue { color: #60a5fa; }
+.kpiIconYellow { color: #facc15; }
+.kpiIconRed { color: #f87171; }
+
+.kpiLabel {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary);
+}
+
+.kpiValue {
+  font-size: 1.8rem;
+  font-weight: 800;
+  line-height: 1.1;
+  margin: 0.2rem 0;
+}
+
+.kpiSub {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+/* CONTROLES */
+.controlBar {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.searchBox {
+  position: relative;
+  max-width: 520px;
+  display: flex;
+  align-items: center;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 1rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.searchBox input {
+  width: 100%;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.75rem 2.5rem 0.75rem 2.5rem;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.searchBox input:focus {
+  border-color: var(--border-active);
+}
+
+.clearSearchBtn {
+  position: absolute;
+  right: 0.75rem;
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+}
+
+.clearSearchBtn:hover {
+  color: var(--text-primary);
+}
+
+.statusFilters {
+  display: flex;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.filterBtn {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-secondary);
+  padding: 0.5rem 0.85rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.filterBtn:hover, .activeFilter {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+/* TABELA */
+.tableCard {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  overflow-x: auto;
+  min-width: 0;
+  width: 100%;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+  text-align: left;
+}
+
+.table th, .table td {
+  padding: 1.1rem 0.9rem;
+  border-bottom: 1px solid var(--border-color);
+  vertical-align: middle;
+}
+
+.table th {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  letter-spacing: 1px;
+  font-weight: 700;
+}
+
+.orderCode {
+  display: block;
+  font-size: 0.88rem;
+  letter-spacing: 0.5px;
+}
+
+.trackingBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+}
+
+.dateText {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.clientInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.clientInfo small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.clientEmailText {
+  word-break: break-all;
+}
+
+.itemsSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-width: 240px;
+}
+
+.itemTag {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.25;
+}
+
+.itemTag small {
+  color: var(--text-muted);
+}
+
+.totalValue {
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.paymentMethod {
+  font-size: 0.7rem;
+  font-weight: 700;
+  background-color: var(--bg-card);
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.statusSelectWrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 0.2rem 0.5rem;
+}
+
+.statusDotSmall {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.statusSelect {
+  background: transparent;
+  color: var(--text-primary);
+  border: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+  font-family: var(--font-body);
+}
+
+.statusSelect option {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+.actionBtn {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  padding: 0.45rem 0.8rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.actionBtn:hover {
+  border-color: var(--border-active);
+  background-color: var(--bg-surface);
+}
+
+.centerText {
+  text-align: center;
+  padding: 3.5rem;
+  color: var(--text-muted);
+}
+
+.loadingWrapper, .emptyWrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+}
+
+/* MODAL DRAWER */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(4px);
+  z-index: 3000;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.drawer {
+  width: 100%;
+  max-width: 550px;
+  height: 100%;
+  background-color: var(--bg-surface);
+  border-left: 1px solid var(--border-color);
+  overflow-y: auto;
+  padding: 2.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  animation: slideLeft 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  box-sizing: border-box;
+}
+
+@keyframes slideLeft {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.drawerHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
+}
+
+.drawerTag {
+  font-size: 0.65rem;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+}
+
+.drawerHeader h2 {
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+  margin-top: 0.2rem;
+}
+
+.closeBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.3rem;
+  transition: color var(--transition-fast);
+}
+
+.closeBtn:hover {
+  color: var(--text-primary);
+}
+
+.drawerContent {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sectionBlock {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.sectionHeaderLine {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.sectionIcon {
+  color: #4ade80;
+}
+
+.sectionHeaderLine h3 {
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+}
+
+.metaGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+}
+
+.metaGrid small {
+  color: var(--text-muted);
+  display: block;
+  font-size: 0.68rem;
+}
+
+.metaGrid strong, .metaGrid span {
+  word-break: break-word;
+}
+
+.addressText {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+}
+
+.itemsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.itemRow {
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 0.65rem;
+}
+
+.itemThumb {
+  width: 45px;
+  height: 60px;
+  object-fit: cover;
+  background-color: #111;
+}
+
+.itemDetails {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-size: 0.82rem;
+}
+
+.itemDetails span {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+}
+
+.itemDetails small {
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+/* LOGÍSTICA REVERSA */
+.exchangeBox {
+  border-color: #2563eb;
+  background-color: rgba(37, 99, 235, 0.04);
+}
+
+.exchangeIcon {
+  color: #60a5fa;
+}
+
+.exchangeDescription {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.exchangeForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 0.3rem;
+}
+
+.exchangeForm label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+.selectInput {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.75rem;
+  font-size: 0.8rem;
+  font-family: var(--font-body);
+  outline: none;
+}
+
+.selectInput:focus {
+  border-color: #2563eb;
+}
+
+.generateLabelBtn {
+  background-color: #2563eb;
+  color: #ffffff;
+  padding: 0.85rem;
+  font-weight: 800;
+  font-size: 0.78rem;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  border: none;
+  transition: opacity var(--transition-fast);
+}
+
+.generateLabelBtn:hover:not(:disabled) {
+  opacity: 0.92;
+}
+
+.generateLabelBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.reverseActiveBox {
+  background-color: var(--bg-primary);
+  border: 1px solid #2563eb;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.3rem;
+}
+
+.reverseHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.reverseCodeLabel {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.reverseCodeValue {
+  color: #60a5fa;
+  font-size: 1.1rem;
+  letter-spacing: 1.5px;
+  font-family: var(--font-heading);
+}
+
+.reverseReason, .reverseDate {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+@media (max-width: 1024px) {
+  .headerRightControls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .dateFilterBox {
+    width: 100%;
+  }
+}
+
+@media (max-width: 850px) {
+  .metaGrid { grid-template-columns: 1fr; }
+  .drawer { max-width: 100%; }
+  .customDateInputs { border-left: none; padding-left: 0; }
+}

@@ -14,10 +14,11 @@ import {
   Grid,
   Zap
 } from 'lucide-react';
-import { carouselSlides } from '../../data/homeData';
 import { catalogService } from '../../services/catalogService';
 import { NewsletterVIP } from '../../components/common/NewsletterVIP';
 import styles from './HomeContent.module.css';
+
+const carouselSlides = [];
 
 export function HomeContent({ onOpenCatalogo, onAddToCart, onOpenCart }) {
   const navigate = useNavigate();

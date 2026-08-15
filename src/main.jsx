@@ -7,6 +7,10 @@ import { WishlistProvider } from './context/WishlistContext'
 import Router from './Router.jsx'
 import './index.css'
 
+window.addEventListener('vite:preloadError', () => {
+  window.location.reload()
+})
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <BrowserRouter>

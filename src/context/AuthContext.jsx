@@ -14,6 +14,15 @@ import { auth, db } from '../services/firebaseConfig';
 
 const AuthContext = createContext();
 
+// Obtém a lista de e-mails de administradores definidos de forma segura no .env
+export const getAdminEmailsFromEnv = () => {
+  const envEmails = import.meta.env.VITE_ADMIN_EMAILS || '';
+  return envEmails
+    .split(',')
+    .map(email => email.trim().toLowerCase())
+    .filter(Boolean);
+};
+
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -23,9 +32,23 @@ export function AuthProvider({ children }) {
   const [authOriginPath, setAuthOriginPath] = useState(null);
   const [initialAuthTab, setInitialAuthTab] = useState('login');
 
+  const checkIsAdmin = (email, dataRole, dataIsAdmin) => {
+    // 1. Prioridade máxima: Definição gravada no banco de dados Firestore
+    if (dataRole === 'admin' || dataIsAdmin === true) return true;
+    
+    // 2. Verificação via variáveis de ambiente seguras (.env)
+    const adminEmails = getAdminEmailsFromEnv();
+    if (email && adminEmails.length > 0 && adminEmails.includes(email.trim().toLowerCase())) {
+      return true;
+    }
+    return false;
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        const isAdminUser = checkIsAdmin(user.email);
+
         // 1. Define imediatamente o usuário autenticado com dados do Auth (RÁPIDO / SEM ESPERAR FIRESTORE)
         const baseUserData = {
           uid: user.uid,
@@ -35,7 +58,9 @@ export function AuthProvider({ children }) {
           displayName: user.displayName || 'Cliente THR33',
           photoURL: user.photoURL || '',
           cpf: '',
-          phone: ''
+          phone: '',
+          role: isAdminUser ? 'admin' : 'customer',
+          isAdmin: isAdminUser
         };
         setCurrentUser(baseUserData);
         setLoading(false);
@@ -47,6 +72,13 @@ export function AuthProvider({ children }) {
           
           if (userDoc.exists()) {
             const data = userDoc.data();
+            const isAdminFinal = checkIsAdmin(user.email, data.role, data.isAdmin);
+
+            // Sincroniza role de admin no Firestore se for email master e ainda não constar
+            if (isAdminFinal && data.role !== 'admin') {
+              setDoc(userDocRef, { role: 'admin', isAdmin: true }, { merge: true }).catch(() => {});
+            }
+
             setCurrentUser((prev) => ({
               ...prev,
               ...data,
@@ -54,8 +86,26 @@ export function AuthProvider({ children }) {
               displayName: user.displayName || data.name,
               photoURL: user.photoURL || data.photoURL || '',
               phone: data.phone || '',
-              cpf: data.cpf || ''
+              cpf: data.cpf || '',
+              role: isAdminFinal ? 'admin' : (data.role || 'customer'),
+              isAdmin: isAdminFinal
             }));
+          } else {
+            // Cria documento inicial no Firestore se não existir
+            const isAdminFinal = checkIsAdmin(user.email);
+            await setDoc(userDocRef, {
+              name: user.displayName || 'Cliente THR33',
+              email: user.email || '',
+              photoURL: user.photoURL || '',
+              cpf: '',
+              phone: '',
+              role: isAdminFinal ? 'admin' : 'customer',
+              isAdmin: isAdminFinal,
+              addresses: [],
+              wishlist: [],
+              createdAt: new Date().toISOString(),
+              provider: user.providerData?.[0]?.providerId || 'firebase'
+            }, { merge: true });
           }
         } catch (error) {
           console.warn("Aviso: Firestore indisponível no momento. Mantendo perfil básico.", error.message);
@@ -85,6 +135,8 @@ export function AuthProvider({ children }) {
       await updateProfile(user, { displayName: name.trim() });
     }
 
+    const isAdminUser = checkIsAdmin(email);
+
     // Salva perfil no Firestore sem travar o fluxo
     try {
       await setDoc(doc(db, 'users', user.uid), {
@@ -92,6 +144,8 @@ export function AuthProvider({ children }) {
         email: email.trim(),
         cpf: cpf ? cpf.trim() : '',
         phone: phone ? phone.trim() : '',
+        role: isAdminUser ? 'admin' : 'customer',
+        isAdmin: isAdminUser,
         addresses: [], // Começa zerado
         wishlist: [],  // Começa zerado
         createdAt: new Date().toISOString(),
@@ -112,6 +166,7 @@ export function AuthProvider({ children }) {
 
     const result = await signInWithPopup(auth, provider);
     const user = result.user;
+    const isAdminUser = checkIsAdmin(user.email);
 
     // Tenta gravar/sincronizar no Firestore sem bloquear o redirecionamento do usuário
     try {
@@ -125,6 +180,8 @@ export function AuthProvider({ children }) {
           photoURL: user.photoURL || '',
           cpf: '',
           phone: user.phoneNumber || '',
+          role: isAdminUser ? 'admin' : 'customer',
+          isAdmin: isAdminUser,
           addresses: [], // Começa zerado
           wishlist: [],  // Começa zerado
           createdAt: new Date().toISOString(),
@@ -132,9 +189,12 @@ export function AuthProvider({ children }) {
         });
       } else {
         const docData = userDoc.data();
+        const isAdminFinal = checkIsAdmin(user.email, docData.role, docData.isAdmin);
         await setDoc(userDocRef, {
           name: user.displayName || docData.name || 'Cliente THR33',
-          photoURL: user.photoURL || docData.photoURL || ''
+          photoURL: user.photoURL || docData.photoURL || '',
+          role: isAdminFinal ? 'admin' : (docData.role || 'customer'),
+          isAdmin: isAdminFinal
         }, { merge: true });
       }
     } catch (err) {
@@ -243,10 +303,18 @@ export function AuthProvider({ children }) {
     setIsAuthModalOpen(false);
   };
 
+  const isUserAdmin = Boolean(
+    currentUser?.isAdmin || 
+    currentUser?.role === 'admin' || 
+    (currentUser?.email && getAdminEmailsFromEnv().includes(currentUser.email.trim().toLowerCase()))
+  );
+
   const value = {
     currentUser,
     user: currentUser,
     isAuthenticated: !!currentUser,
+    isAdmin: isUserAdmin,
+    role: isUserAdmin ? 'admin' : (currentUser?.role || 'customer'),
     login,
     register,
     loginWithGoogle,

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
+import { analyticsService } from '../../services/analyticsService';
 import styles from './ProductCard.module.css';
 
 export function ProductCard({ product }) {
@@ -11,6 +12,14 @@ export function ProductCard({ product }) {
   const productId = product.slug || product.id;
   const isFav = isFavorite(productId);
 
+  const priceNum = Number(product.price || 0);
+  const discountPriceNum = Number(product.discountPrice || 0);
+  const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product.discountActive !== false);
+
+  const handleTrackClick = () => {
+    analyticsService.trackProductView(productId, product.name);
+  };
+
   const handleFavoriteClick = (e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -18,9 +27,13 @@ export function ProductCard({ product }) {
   };
 
   return (
-    <div className={styles.card}>
+    <div className={styles.card} onClick={handleTrackClick}>
       <div className={styles.imageWrapper}>
-        {product.isRelease && <span className={styles.badge}>LANÇAMENTO</span>}
+        {hasDiscount ? (
+          <span className={styles.promoBadge}>PROMOÇÃO</span>
+        ) : product.isRelease ? (
+          <span className={styles.badge}>LANÇAMENTO</span>
+        ) : null}
         
         {/* Placeholder com Shimmer enquanto a imagem carrega */}
         {!imageLoaded && <div className={styles.imagePlaceholderShimmer} />}
@@ -36,7 +49,14 @@ export function ProductCard({ product }) {
 
         {/* BOTÕES DE AÇÃO: VER DETALHES + FAVORITAR */}
         <div className={styles.overlayActions}>
-          <Link className={styles.overlayBtn} to={`/produto/${productId}`}>
+          <Link 
+            className={styles.overlayBtn} 
+            to={`/produto/${productId}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTrackClick();
+            }}
+          >
             VER DETALHES
           </Link>
 
@@ -58,11 +78,28 @@ export function ProductCard({ product }) {
 
       <div className={styles.details}>
         <div className={styles.tagsRow}>
-          <span className={styles.fitTag}>{product.fit?.toUpperCase()} FIT</span>
+          <span className={styles.fitTag}>{(product.fit || 'boxy').toUpperCase()} FIT</span>
           <span className={styles.dropTag}>{product.drop === 'leak-two' ? 'LEAK TWO' : 'DROP ANTERIOR'}</span>
         </div>
+        
         <h3 className={styles.productName}>{product.name}</h3>
-        <p className={styles.price}>R$ {product.price?.toFixed(2)}</p>
+
+        <div className={styles.priceRow}>
+          {hasDiscount ? (
+            <>
+              <span className={styles.oldPrice}>
+                R$ {priceNum.toFixed(2).replace('.', ',')}
+              </span>
+              <span className={styles.promoPrice}>
+                R$ {discountPriceNum.toFixed(2).replace('.', ',')}
+              </span>
+            </>
+          ) : (
+            <span className={styles.regularPrice}>
+              R$ {priceNum.toFixed(2).replace('.', ',')}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   );

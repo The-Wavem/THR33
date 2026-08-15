@@ -1,125 +1,177 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Truck, Star, Plus } from 'lucide-react';
-import { PRODUCTS_DATA } from '../../data/productsData';
+import { Truck, Star, Plus, Heart, ShoppingBag, ArrowLeft, Check, Package } from 'lucide-react';
+import { catalogService } from '../../services/catalogService';
+import { seedService } from '../../services/seedService';
+import { useCart } from '../../context/CartContext';
+import { useWishlist } from '../../context/WishlistContext';
+import { analyticsService } from '../../services/analyticsService';
 import styles from './ProdutoDetalhe.module.css';
 
-// MOCK PADRÃO / FALLBACK COMPLETO DO PRODUTO
-const DEFAULT_PRODUCT = {
-  id: "thr33-boxy-black",
-  name: "Camiseta THR33 Boxy Logo",
-  fit: "Boxy Fit",
-  drop: "LEAK TWO",
-  price: 189.90,
-  installments: 3,
-  description: "Desenvolvida em algodão heavy-weight de 260g/m², a Camiseta THR33 Boxy Logo traz modelagem quadrada exclusiva com ombros caídos e gola anelada de 3cm. Peça inspirada na cultura streetwear curitibana com a assinatura da marca no peito.",
-  images: [
-    "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?q=80&w=800&auto=format&fit=crop",
-    "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=800&auto=format&fit=crop"
-  ],
-  sizes: ["P", "M", "G", "GG"],
-  colors: [
-    { id: "preto", name: "Preto Piano", hex: "#0a0a0a" },
-    { id: "off-white", name: "Off-White", hex: "#f2f0eb" },
-    { id: "grafite", name: "Grafite Mineral", hex: "#262626" }
-  ],
-  sizeChart: [
-    { size: "P", chest: "56 cm", length: "70 cm", sleeve: "22 cm" },
-    { size: "M", chest: "58 cm", length: "72 cm", sleeve: "23 cm" },
-    { size: "G", chest: "60 cm", length: "74 cm", sleeve: "24 cm" },
-    { size: "GG", chest: "62 cm", length: "76 cm", sleeve: "25 cm" }
-  ],
-  careInstructions: [
-    "Lavar à mão ou na máquina em ciclo delicado com água fria.",
-    "Não utilizar alvejantes ou branqueadores ópticos.",
-    "Secar à sombra (não usar secadora).",
-    "Passar do avesso em temperatura média evitando a estampa."
-  ],
-  reviews: [
-    { 
-      id: 1, 
-      author: "Lucas M.", 
-      rating: 5, 
-      date: "02/08/2026", 
-      variant: "Tamanho: M • Cor: Preto Piano",
-      comment: "Caimento impecável! O tecido é realmente pesado (heavyweight) e a gola é bem grossa, não deforma de jeito nenhum." 
-    },
-    { 
-      id: 2, 
-      author: "Gabriel S.", 
-      rating: 5, 
-      date: "28/07/2026", 
-      variant: "Tamanho: G • Cor: Off-White",
-      comment: "Modelagem Boxy autêntica. Ombros bem posicionados e entrega rápida aqui em Curitiba." 
-    },
-    { 
-      id: 3, 
-      author: "Matheus K.", 
-      rating: 5, 
-      date: "15/07/2026", 
-      variant: "Tamanho: M • Cor: Preto Piano",
-      comment: "Qualidade do algodão é absurda, muito superior a outras marcas nacionais. Vale cada centavo do investimento." 
-    }
-  ]
-};
+const DEFAULT_SIZE_CHART = [
+  { size: "P", chest: "56 cm", length: "70 cm", sleeve: "22 cm" },
+  { size: "M", chest: "58 cm", length: "72 cm", sleeve: "23 cm" },
+  { size: "G", chest: "60 cm", length: "74 cm", sleeve: "24 cm" },
+  { size: "GG", chest: "62 cm", length: "76 cm", sleeve: "25 cm" }
+];
+
+const DEFAULT_CARE_INSTRUCTIONS = [
+  "Lavar à mão ou na máquina em ciclo delicado com água fria.",
+  "Não utilizar alvejantes ou branqueadores ópticos.",
+  "Secar à sombra (não usar secadora).",
+  "Passar do avesso em temperatura média evitando a estampa."
+];
+
+const DEFAULT_REVIEWS = [
+  { 
+    id: 1, 
+    author: "Lucas M.", 
+    rating: 5, 
+    date: "02/08/2026", 
+    variant: "Tamanho: M • Cor: Preto Piano",
+    comment: "Caimento impecável! O tecido é realmente pesado (heavyweight) e a gola é bem grossa, não deforma de jeito nenhum." 
+  },
+  { 
+    id: 2, 
+    author: "Gabriel S.", 
+    rating: 5, 
+    date: "28/07/2026", 
+    variant: "Tamanho: G • Cor: Off-White",
+    comment: "Modelagem Boxy autêntica. Ombros bem posicionados e entrega rápida aqui em Curitiba." 
+  },
+  { 
+    id: 3, 
+    author: "Matheus K.", 
+    rating: 5, 
+    date: "15/07/2026", 
+    variant: "Tamanho: M • Cor: Preto Piano",
+    comment: "Qualidade do algodão é absurda, muito superior a outras marcas nacionais. Vale cada centavo do investimento." 
+  }
+];
 
 export function ProdutoDetalhe({ onAddToCart }) {
   const { slug, id } = useParams();
   const currentParam = slug || id;
 
-  // Busca o produto correspondente no banco mock ou usa o padrão
-  const matched = PRODUCTS_DATA.find(p => p.id === currentParam || p.slug === currentParam);
-  
-  const product = matched ? {
-    ...DEFAULT_PRODUCT,
-    ...matched,
-    name: matched.name || matched.title || DEFAULT_PRODUCT.name,
-    fit: matched.fit ? `${matched.fit.toUpperCase()} FIT` : DEFAULT_PRODUCT.fit,
-    drop: matched.drop === 'leak-two' ? 'LEAK TWO' : matched.drop === 'drop-01' ? 'DROP ANTERIOR' : DEFAULT_PRODUCT.drop,
-    price: matched.price || matched.priceNum || DEFAULT_PRODUCT.price,
-    images: matched.images || [matched.image, matched.hoverImage, DEFAULT_PRODUCT.images[2]].filter(Boolean),
-    colors: matched.colors || DEFAULT_PRODUCT.colors,
-    reviews: matched.reviews || DEFAULT_PRODUCT.reviews,
-    description: matched.description || DEFAULT_PRODUCT.description
-  } : DEFAULT_PRODUCT;
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Contextos
+  const { addToCart } = useCart();
+  const { isInWishlist, toggleWishlist } = useWishlist();
 
   // Estados de Interação
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [selectedColor, setSelectedColor] = useState(product.colors?.[0] || DEFAULT_PRODUCT.colors[0]);
-  const [selectedSize, setSelectedSize] = useState(product.sizes[0] || 'M');
+  const [selectedColor, setSelectedColor] = useState({ id: "preto", name: "Preto Piano", hex: "#0a0a0a" });
+  const [selectedSize, setSelectedSize] = useState('M');
   const [quantity, setQuantity] = useState(1);
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [openAccordion, setOpenAccordion] = useState('measures'); // 'description', 'measures', 'care'
+  const [openAccordion, setOpenAccordion] = useState('measures');
   const [isAddedFeedback, setIsAddedFeedback] = useState(false);
 
-  // Cálculo de Frete Compacto
+  // Cálculo de Frete
   const [cepInput, setCepInput] = useState('');
   const [shippingOptions, setShippingOptions] = useState(null);
   const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
   const [shippingError, setShippingError] = useState(null);
 
-  // Sincroniza parâmetros quando o produto muda
   useEffect(() => {
-    setSelectedImageIndex(0);
-    setQuantity(1);
-    setShippingOptions(null);
-    setShippingError(null);
-    if (product.colors && product.colors.length > 0) {
-      setSelectedColor(product.colors[0]);
+    async function loadProduct() {
+      setLoading(true);
+      try {
+        await seedService.seedCatalogIfEmpty();
+        let data = await catalogService.getProductById(currentParam);
+        
+        if (!data) {
+          // Tenta carregar catálogo completo e encontrar por slug/id
+          const all = await catalogService.getAllProducts();
+          data = all.find(p => p.id === currentParam || p.slug === currentParam) || null;
+        }
+
+        if (data) {
+          setProduct(data);
+          // Determina tamanho padrão disponível
+          if (data.stock) {
+            const firstAvailable = Object.entries(data.stock).find(([_, qty]) => Number(qty) > 0);
+            if (firstAvailable) {
+              setSelectedSize(firstAvailable[0]);
+            }
+          }
+          // Telemetria
+          analyticsService.trackProductView(data.id, data.name, data.category || 'camisa', data.fit || 'boxy');
+          analyticsService.trackPageView('produto_detalhe');
+        }
+      } catch (err) {
+        console.error("Erro ao carregar produto:", err);
+      } finally {
+        setLoading(false);
+      }
     }
-    if (product.sizes && product.sizes.length > 0) {
-      setSelectedSize(product.sizes[0]);
-    }
+    loadProduct();
   }, [currentParam]);
 
+  if (loading) {
+    return (
+      <main className={styles.container}>
+        <div style={{ textAlign: 'center', padding: '6rem 1rem', color: 'var(--text-secondary)' }}>
+          <Package size={32} style={{ animation: 'spin 1.5s linear infinite', margin: '0 auto 1rem' }} />
+          <p>Carregando detalhes da peça no Firestore...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!product) {
+    return (
+      <main className={styles.container}>
+        <div style={{ textAlign: 'center', padding: '6rem 1rem' }}>
+          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', marginBottom: '1rem' }}>PEÇA NÃO ENCONTRADA</h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>O produto que você procura não está disponível no estoque ou foi descontinuado.</p>
+          <Link to="/catalogo" style={{ background: 'var(--text-primary)', color: 'var(--bg-primary)', padding: '0.8rem 1.5rem', fontWeight: 800, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+            <ArrowLeft size={16} />
+            <span>VOLTAR AO CATÁLOGO</span>
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  // Dados consolidados do produto
+  const images = product.images && product.images.length > 0 
+    ? product.images 
+    : [product.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=800'];
+  
+  const colors = product.colors || [
+    { id: "preto", name: "Preto Piano", hex: "#0a0a0a" },
+    { id: "off-white", name: "Off-White", hex: "#f2f0eb" },
+    { id: "grafite", name: "Grafite Mineral", hex: "#262626" }
+  ];
+
+  const sizeChart = product.sizeChart || DEFAULT_SIZE_CHART;
+  const careInstructions = product.careInstructions || DEFAULT_CARE_INSTRUCTIONS;
+  const reviews = product.reviews || DEFAULT_REVIEWS;
+
+  const priceNum = Number(product.price || 0);
+  const discountPriceNum = Number(product.discountPrice || 0);
+  const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product.discountActive !== false);
+  const effectivePrice = hasDiscount ? discountPriceNum : priceNum;
+  const discountPercentage = hasDiscount ? Math.round(((priceNum - discountPriceNum) / priceNum) * 100) : 0;
+
+  const installmentsCount = product.installments || 3;
+  const installmentValue = (effectivePrice / installmentsCount).toFixed(2).replace('.', ',');
+
+  const availableStock = product.stock 
+    ? Number(product.stock[selectedSize] || 0) 
+    : (Number(product.totalStock) || 10);
+
+  const isFavorite = isInWishlist(product.id);
+
   const handlePrevImage = () => {
-    setSelectedImageIndex((prev) => (prev === 0 ? product.images.length - 1 : prev - 1));
+    setSelectedImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
   };
 
   const handleNextImage = () => {
-    setSelectedImageIndex((prev) => (prev === product.images.length - 1 ? 0 : prev + 1));
+    setSelectedImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
   };
 
   const handleCepChange = (e) => {
@@ -169,19 +221,27 @@ export function ProdutoDetalhe({ onAddToCart }) {
   };
 
   const handleAddToCart = () => {
+    if (availableStock <= 0) return;
+    
+    const cartProduct = {
+      ...product,
+      price: effectivePrice,
+      originalPrice: priceNum
+    };
+
     if (onAddToCart) {
-      onAddToCart(product, selectedSize, quantity, selectedColor);
+      onAddToCart(cartProduct, selectedSize, quantity, selectedColor);
+    } else {
+      addToCart(cartProduct, selectedSize, quantity, selectedColor);
     }
+
     setIsAddedFeedback(true);
     setTimeout(() => setIsAddedFeedback(false), 2500);
   };
 
-  const installmentsCount = product.installments || 3;
-  const installmentValue = (product.price / installmentsCount).toFixed(2);
-
   return (
     <main className={styles.container}>
-      {/* NAVEGAÇÃO BREADCRUMB FUNCIONAL E VISÍVEL */}
+      {/* NAVEGAÇÃO BREADCRUMB */}
       <nav aria-label="Breadcrumb" className={styles.breadcrumb}>
         <Link to="/" className={styles.breadcrumbLink}>HOME</Link>
         <span className={styles.breadcrumbSeparator}>/</span>
@@ -192,15 +252,15 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
       {/* GRADE PRINCIPAL: GALERIA + INFOS DE COMPRA */}
       <div className={styles.productGrid}>
-        {/* GALERIA DE IMAGENS COM CARROSSEL E SETAS */}
+        {/* GALERIA DE IMAGENS */}
         <section className={styles.gallerySection} aria-label="Galeria de fotos do produto">
           <div className={styles.mainImageWrapper}>
             <button onClick={handlePrevImage} className={`${styles.navArrow} ${styles.prevArrow}`} aria-label="Imagem anterior">
               &#10094;
             </button>
             <img 
-              src={product.images[selectedImageIndex]} 
-              alt={`${product.name} - Imagem ${selectedImageIndex + 1}`} 
+              src={images[selectedImageIndex] || images[0]} 
+              alt={`${product.name} - Foto ${selectedImageIndex + 1}`} 
               className={styles.mainImage}
             />
             <button onClick={handleNextImage} className={`${styles.navArrow} ${styles.nextArrow}`} aria-label="Próxima imagem">
@@ -209,7 +269,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
           </div>
 
           <div className={styles.thumbnailsList}>
-            {product.images.map((img, idx) => (
+            {images.map((img, idx) => (
               <button
                 key={idx}
                 className={`${styles.thumbBtn} ${idx === selectedImageIndex ? styles.activeThumb : ''}`}
@@ -226,112 +286,139 @@ export function ProdutoDetalhe({ onAddToCart }) {
         <section className={styles.infoSection}>
           <div className={styles.headerInfo}>
             <div className={styles.badgeRow}>
-              <span className={styles.fitBadge}>{product.fit}</span>
-              <span className={styles.dropBadge}>{product.drop}</span>
+              <span className={styles.fitBadge}>{(product.fit || 'boxy').toUpperCase()} FIT</span>
+              <span className={styles.dropBadge}>{product.drop === 'leak-two' ? 'LEAK TWO' : (product.drop?.toUpperCase() || 'DROP EXCLUSIVO')}</span>
             </div>
             <h1 className={styles.title}>{product.name}</h1>
+            
+            {/* Bloco de Preços */}
             <div className={styles.priceContainer}>
-              <span className={styles.price}>R$ {product.price.toFixed(2)}</span>
+              {hasDiscount ? (
+                <div className={styles.discountPriceWrapper}>
+                  <span className={styles.originalPriceStriked}>
+                    R$ {priceNum.toFixed(2).replace('.', ',')}
+                  </span>
+                  <span className={styles.currentPriceHighlight}>
+                    R$ {discountPriceNum.toFixed(2).replace('.', ',')}
+                  </span>
+                  <span className={styles.discountBadge}>
+                    -{discountPercentage}% OFF
+                  </span>
+                </div>
+              ) : (
+                <span className={styles.currentPrice}>
+                  R$ {priceNum.toFixed(2).replace('.', ',')}
+                </span>
+              )}
               <span className={styles.installments}>
                 ou {installmentsCount}x de R$ {installmentValue} sem juros
               </span>
             </div>
           </div>
 
-          {/* SELEÇÃO DE COR (PALETA STREETWEAR) */}
-          <div className={styles.selectorGroup}>
-            <div className={styles.labelRow}>
-              <span className={styles.groupLabel}>
-                COR: <strong className={styles.highlightedValue}>{selectedColor?.name?.toUpperCase()}</strong>
-              </span>
+          {/* SELETOR DE COR */}
+          <div className={styles.colorSelector}>
+            <div className={styles.selectorHeader}>
+              <span className={styles.selectorLabel}>COR:</span>
+              <span className={styles.selectedValue}>{selectedColor.name}</span>
             </div>
-            <div className={styles.colorsGrid}>
-              {product.colors?.map((col) => {
-                const isSelected = selectedColor?.id === col.id;
-                return (
-                  <button
-                    key={col.id}
-                    type="button"
-                    className={`${styles.colorSwatchBtn} ${isSelected ? styles.activeColorSwatch : ''}`}
-                    onClick={() => setSelectedColor(col)}
-                    aria-label={`Selecionar cor ${col.name}`}
-                    title={col.name}
-                  >
-                    <span 
-                      className={styles.colorDot} 
-                      style={{ backgroundColor: col.hex }} 
-                    />
-                    <span className={styles.colorBtnText}>{col.name}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* SELEÇÃO DE TAMANHO */}
-          <div className={styles.selectorGroup}>
-            <div className={styles.labelRow}>
-              <span className={styles.groupLabel}>
-                TAMANHO: <strong className={styles.highlightedValue}>{selectedSize}</strong>
-              </span>
-              <button 
-                type="button"
-                className={styles.textLink} 
-                onClick={() => setOpenAccordion('measures')}
-              >
-                Guia de Medidas
-              </button>
-            </div>
-            <div className={styles.sizesGrid}>
-              {product.sizes.map((size) => (
+            <div className={styles.colorSwatches}>
+              {colors.map((c) => (
                 <button
-                  key={size}
+                  key={c.id}
                   type="button"
-                  className={`${styles.sizeBtn} ${selectedSize === size ? styles.activeSize : ''}`}
-                  onClick={() => setSelectedSize(size)}
-                >
-                  {size}
-                </button>
+                  className={`${styles.colorBtn} ${selectedColor.id === c.id ? styles.activeColor : ''}`}
+                  onClick={() => setSelectedColor(c)}
+                  style={{ backgroundColor: c.hex }}
+                  title={c.name}
+                  aria-label={`Cor ${c.name}`}
+                />
               ))}
             </div>
           </div>
 
-          {/* SELEÇÃO DE QUANTIDADE E AÇÕES DE COMPRA */}
-          <div className={styles.actionGroup}>
-            <div className={styles.quantityPicker}>
-              <button type="button" onClick={() => setQuantity(q => Math.max(1, q - 1))} aria-label="Diminuir quantidade">-</button>
-              <span>{String(quantity).padStart(2, '0')}</span>
-              <button type="button" onClick={() => setQuantity(q => q + 1)} aria-label="Aumentar quantidade">+</button>
+          {/* SELETOR DE TAMANHO */}
+          <div className={styles.sizeSelector}>
+            <div className={styles.selectorHeader}>
+              <span className={styles.selectorLabel}>TAMANHO:</span>
+              <span className={styles.selectedValue}>TAM {selectedSize}</span>
+            </div>
+            <div className={styles.sizeOptions}>
+              {['PP', 'P', 'M', 'G', 'GG'].map((size) => {
+                const stockQty = product.stock ? Number(product.stock[size] || 0) : 10;
+                const isOutOfStock = stockQty === 0;
+
+                return (
+                  <button
+                    key={size}
+                    type="button"
+                    disabled={isOutOfStock}
+                    className={`${styles.sizeBtn} ${selectedSize === size ? styles.activeSize : ''} ${isOutOfStock ? styles.disabledSize : ''}`}
+                    onClick={() => setSelectedSize(size)}
+                  >
+                    {size}
+                  </button>
+                );
+              })}
+            </div>
+            <small className={styles.stockNotice}>
+              {availableStock > 0 ? `${availableStock} unidades disponíveis no tamanho ${selectedSize}` : `Tamanho ${selectedSize} esgotado no momento`}
+            </small>
+          </div>
+
+          {/* Bloco de Ações e Quantidade */}
+          <div className={styles.actionsRow}>
+            <div className={styles.quantityControl}>
+              <button 
+                type="button" 
+                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                disabled={quantity <= 1 || availableStock === 0}
+                aria-label="Diminuir quantidade"
+              >
+                -
+              </button>
+              <span className={styles.quantityValue}>{quantity}</span>
+              <button 
+                type="button" 
+                onClick={() => setQuantity(Math.min(availableStock, quantity + 1))}
+                disabled={quantity >= availableStock || availableStock === 0}
+                aria-label="Aumentar quantidade"
+              >
+                +
+              </button>
             </div>
 
             <button 
               type="button"
+              className={`${styles.addToBagButton} ${isAddedFeedback ? styles.addedSuccess : ''}`}
               onClick={handleAddToCart}
-              className={`${styles.addToCartBtn} ${isAddedFeedback ? styles.addToCartAdded : ''}`}
+              disabled={availableStock === 0}
             >
-              {isAddedFeedback 
-                ? `✓ ADICIONADO (${quantity}x ${selectedSize} • ${selectedColor?.name})` 
-                : `ADICIONAR AO CARRINHO (${quantity}x ${selectedSize})`}
+              <ShoppingBag size={18} />
+              <span>
+                {isAddedFeedback 
+                  ? 'ADICIONADO À SACOLA!' 
+                  : availableStock > 0 ? 'ADICIONAR À SACOLA' : 'ESGOTADO'}
+              </span>
             </button>
 
             <button 
               type="button"
-              className={`${styles.favoriteBtn} ${isFavorite ? styles.activeFavorite : ''}`}
-              onClick={() => setIsFavorite(!isFavorite)}
-              aria-label="Adicionar aos favoritos"
+              className={`${styles.wishlistButton} ${isFavorite ? styles.favorited : ''}`}
+              onClick={() => toggleWishlist(product)}
+              title={isFavorite ? "Remover dos favoritos" : "Salvar nos favoritos"}
+              aria-label="Favoritar produto"
             >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill={isFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth="2">
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l8.72-8.72 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-              </svg>
+              <Heart size={18} fill={isFavorite ? "#ef4444" : "none"} stroke={isFavorite ? "#ef4444" : "currentColor"} />
             </button>
           </div>
 
           {/* CÁLCULO DE FRETE COMPACTO */}
-          <div className={styles.shippingCompactSection}>
-            <div className={styles.shippingHeaderRow}>
-              <div className={styles.shippingHeaderTitle}>
-                <Truck size={14} className={styles.toolIcon} />
-                <span className={styles.groupLabel}>CALCULAR FRETE</span>
+          <div className={styles.shippingCalculator}>
+            <div className={styles.shippingHeader}>
+              <div className={styles.shippingTitleGroup}>
+                <Truck size={16} />
+                <span className={styles.shippingTitle}>SIMULAR FRETE E PRAZO</span>
               </div>
               <a 
                 href="https://buscacepinter.correios.com.br/app/endereco/index.php" 
@@ -376,7 +463,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
             )}
           </div>
 
-          {/* ACCORDIONS DE INFORMAÇÕES TÉCNICAS (COM ANIMAÇÃO SUAVE E SEM QUEBRA DE LAYOUT) */}
+          {/* ACCORDIONS DE INFORMAÇÕES TÉCNICAS */}
           <div className={styles.accordions}>
             {/* Descrição */}
             <div className={styles.accordionItem}>
@@ -407,7 +494,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
                     className={styles.accordionBodyWrapper}
                   >
                     <div className={styles.accordionBody}>
-                      <p>{product.description}</p>
+                      <p>{product.description || "Modelagem exclusiva THR33 com acabamento premium e alta densidade."}</p>
                     </div>
                   </motion.div>
                 )}
@@ -453,7 +540,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
                           </tr>
                         </thead>
                         <tbody>
-                          {product.sizeChart.map((row) => (
+                          {sizeChart.map((row) => (
                             <tr key={row.size}>
                               <td><strong>{row.size}</strong></td>
                               <td>{row.chest}</td>
@@ -499,7 +586,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
                   >
                     <div className={styles.accordionBody}>
                       <ul className={styles.careList}>
-                        {product.careInstructions.map((instruction, idx) => (
+                        {careInstructions.map((instruction, idx) => (
                           <li key={idx}>{instruction}</li>
                         ))}
                       </ul>
@@ -512,7 +599,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
         </section>
       </div>
 
-      {/* SEÇÃO DEDICADA DE AVALIAÇÕES / SOCIAL PROOF DA COMUNIDADE */}
+      {/* SEÇÃO DEDICADA DE AVALIAÇÕES */}
       <section className={styles.reviewsSection} aria-label="Avaliações dos clientes">
         <header className={styles.reviewsHeader}>
           <div className={styles.reviewsTitleGroup}>
@@ -535,7 +622,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
         {/* GRADE DE COMENTÁRIOS DOS CLIENTES */}
         <div className={styles.reviewsGrid}>
-          {product.reviews.map((rev) => (
+          {reviews.map((rev) => (
             <article key={rev.id} className={styles.reviewCardItem}>
               <div className={styles.reviewCardTop}>
                 <strong className={styles.reviewAuthor}>{rev.author}</strong>

@@ -1,0 +1,236 @@
+.adminContainer {
+  display: flex;
+  min-height: 100vh;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.sidebar {
+  width: 260px;
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+
+.brandHeader {
+  padding: 1.75rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.logoMain {
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+}
+
+.logoBadge {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  font-size: 0.6rem;
+  font-weight: 800;
+  padding: 0.2rem 0.4rem;
+  letter-spacing: 1px;
+}
+
+.navMenu {
+  flex: 1;
+  padding: 1.25rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  overflow-y: auto;
+}
+
+.navMenu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.navMenu::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+}
+
+.navSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.sectionTitle {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  padding: 0.25rem 0.75rem 0.4rem;
+  user-select: none;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.75rem 0.85rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+}
+
+.navIcon {
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.navItem:hover, .activeItem {
+  color: var(--text-primary);
+  background-color: var(--bg-card);
+  border-left: 3px solid var(--text-primary);
+}
+
+.navItem:hover .navIcon, .activeItem .navIcon {
+  color: var(--text-primary);
+}
+
+.sidebarFooter {
+  padding: 1.25rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.backToStoreBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  transition: color var(--transition-fast);
+}
+
+.backToStoreBtn:hover {
+  color: var(--text-primary);
+}
+
+.mainContent {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+}
+
+.topBar {
+  height: 70px;
+  background-color: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+  padding: 0 clamp(1rem, 2.5vw, 2rem);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.systemStatus {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.statusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #4ade80;
+  box-shadow: 0 0 10px rgba(74, 222, 128, 0.6);
+  animation: pulseDot 2s infinite ease-in-out;
+}
+
+@keyframes pulseDot {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.85);
+  }
+}
+
+.statusText {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #4ade80;
+}
+
+.topBarRight {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.adminUserBadge {
+  font-size: 0.8rem;
+  font-weight: 700;
+  border: 1px solid var(--border-color);
+  padding: 0.4rem 0.8rem;
+  background-color: var(--bg-card);
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.adminBadgeIcon {
+  color: #4ade80;
+}
+
+.adminEmailBadge {
+  color: var(--text-muted);
+  font-weight: 500;
+  font-size: 0.72rem;
+}
+
+.logoutBtn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: #f87171;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.4rem 0.8rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: all var(--transition-fast);
+}
+
+.logoutBtn:hover {
+  background-color: rgba(248, 113, 113, 0.1);
+  border-color: #f87171;
+}
+
+.contentBody {
+  padding: clamp(1.25rem, 2.5vw, 2.5rem);
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+@media (max-width: 900px) {
+  .adminContainer { flex-direction: column; }
+  .sidebar { width: 100%; height: auto; position: static; }
+}

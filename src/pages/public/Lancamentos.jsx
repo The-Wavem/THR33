@@ -12,9 +12,12 @@ import {
   MapPin,
   Disc,
   Zap,
-  Tag
+  Tag,
+  Package
 } from 'lucide-react';
 import { currentDropConfig } from '../../data/dropConfig';
+import { catalogService } from '../../services/catalogService';
+import { seedService } from '../../services/seedService';
 import { buttonTactile } from '../../utils/motionVariants';
 import { SocialCommunityGrid } from '../../components/common/SocialCommunityGrid';
 import { DropFaq } from '../../components/common/DropFaq';
@@ -27,6 +30,7 @@ export function Lancamentos() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+  const [releaseProducts, setReleaseProducts] = useState([]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -42,7 +46,25 @@ export function Lancamentos() {
     return () => clearInterval(interval);
   }, []);
 
-  const { theme, title, subTitle, loaderLogoText, products, manifestoImage, manifestoHeading, manifestoText, coordinates } = currentDropConfig;
+  useEffect(() => {
+    async function loadReleases() {
+      try {
+        await seedService.seedCatalogIfEmpty();
+        const releases = await catalogService.getReleases();
+        if (releases.length > 0) {
+          setReleaseProducts(releases);
+        } else {
+          const all = await catalogService.getAllProducts();
+          setReleaseProducts(all.slice(0, 3));
+        }
+      } catch (err) {
+        console.error("Erro ao carregar lançamentos do Firestore:", err);
+      }
+    }
+    loadReleases();
+  }, []);
+
+  const { theme, title, subTitle, loaderLogoText, manifestoImage, manifestoHeading, manifestoText, coordinates } = currentDropConfig;
 
   if (isLoading) {
     return (
@@ -87,7 +109,6 @@ export function Lancamentos() {
         <div className={styles.heroContent}>
           <span className={styles.subTitleTag} style={{ color: theme.accentAcid }}>{subTitle}</span>
           <h1 className={styles.heroHeading}>{title}</h1>
-         
         </div>
       </section>
 
@@ -118,7 +139,7 @@ export function Lancamentos() {
         </div>
       </section>
 
-      {/* 3. SHOWCASE EDITORIAL 50/50 */}
+      {/* 3. SHOWCASE EDITORIAL 50/50 COM PRODUTOS REAIS DO FIRESTORE */}
       <section id="showcase" className={styles.editorialShowcaseSection}>
         <div className={styles.showcaseHeader}>
           <h2>PEÇAS EXCLUSIVAS</h2>
@@ -126,8 +147,10 @@ export function Lancamentos() {
         </div>
 
         <div className={styles.editorialList}>
-          {products.map((item, index) => {
+          {releaseProducts.map((item, index) => {
             const isEven = index % 2 === 1;
+            const priceNum = Number(item.price || 0);
+            const imgSrc = item.image || (item.images && item.images[0]) || '';
 
             return (
               <motion.div 
@@ -143,45 +166,43 @@ export function Lancamentos() {
                 <div className={styles.editorialTextCol}>
                   <div className={styles.itemMetaHeader}>
                     <span className={styles.serialBadge} style={{ backgroundColor: theme.accentAcid, color: '#000' }}>
-                      {item.serialCount}
+                      {item.customBadge || 'VIP LOTE 01'}
                     </span>
-                    <span className={styles.priceTag}>{item.price}</span>
+                    <span className={styles.priceTag}>R$ {priceNum.toFixed(2)}</span>
                   </div>
 
                   <div className={styles.itemTitleGroup}>
-                    <h3 className={styles.itemTitle}>{item.title}</h3>
+                    <h3 className={styles.itemTitle}>{item.name || item.title}</h3>
                     <h4 className={styles.itemSubtitle} style={{ color: theme.accentAcid }}>
-                      {item.subtitle}
+                      {(item.fit || 'BOXY').toUpperCase()} FIT
                     </h4>
                   </div>
 
                   <p className={styles.itemStoryParagraph}>
-                    {item.conceptStory}
+                    {item.description || "Desenvolvida com modelagem exclusiva e algodão de alta densidade."}
                   </p>
 
-                  {item.specs && (
-                    <div className={styles.itemSpecsBox}>
-                      <div className={styles.specLine}>
-                        <span>TECIDO:</span>
-                        <strong>{item.specs.fabric}</strong>
-                      </div>
-                      <div className={styles.specLine}>
-                        <span>CORTE:</span>
-                        <strong>{item.specs.fit}</strong>
-                      </div>
-                      <div className={styles.specLine}>
-                        <span>ESTAMPA:</span>
-                        <strong>{item.specs.print}</strong>
-                      </div>
+                  <div className={styles.itemSpecsBox}>
+                    <div className={styles.specLine}>
+                      <span>MODELAGEM:</span>
+                      <strong>{(item.fit || 'boxy').toUpperCase()}</strong>
                     </div>
-                  )}
+                    <div className={styles.specLine}>
+                      <span>DROP:</span>
+                      <strong>{(item.drop || 'LEAK TWO').toUpperCase()}</strong>
+                    </div>
+                    <div className={styles.specLine}>
+                      <span>STATUS:</span>
+                      <strong>{item.totalStock > 0 ? `${item.totalStock} UNIDADES` : 'DISPONÍVEL'}</strong>
+                    </div>
+                  </div>
 
                   <motion.button 
                     variants={buttonTactile}
                     initial="rest"
                     whileHover="hover"
                     whileTap="tap"
-                    onClick={() => navigate(`/produto/${item.slug}`)}
+                    onClick={() => navigate(`/produto/${item.slug || item.id}`)}
                     className={styles.btnViewDetails}
                     style={{ backgroundColor: theme.accentAcid, color: '#000' }}
                   >
@@ -194,10 +215,10 @@ export function Lancamentos() {
 
                 {/* LADO B: FOTOGRAFIA FULL-BLEED */}
                 <div className={styles.editorialImageCol}>
-                  <img src={item.image} alt={item.title} className={styles.editorialModelImg} />
+                  <img src={imgSrc} alt={item.name} className={styles.editorialModelImg} />
                   <div className={styles.imageOverlayTag}>
                     <Tag size={12} />
-                    <span>{item.tag || 'VIP ITEM'}</span>
+                    <span>{item.customBadge || 'DROP OFICIAL'}</span>
                   </div>
                 </div>
               </motion.div>
@@ -217,7 +238,6 @@ export function Lancamentos() {
 
       {/* 7. BANNER STATEMENT BRANDING FINAL */}
       <BrandStatementBanner />
-
     </div>
   );
 }

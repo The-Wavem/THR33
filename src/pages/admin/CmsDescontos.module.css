@@ -1,0 +1,668 @@
+/* ============================================================
+   CMS DESCONTOS & PROMOÇÕES: ESTÉTICA BLACK PIANO THR33
+   ============================================================ */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1.5rem;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.breadcrumb {
+  font-size: 0.75rem;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+  font-weight: 800;
+  margin-top: 0.3rem;
+}
+
+.headerActions {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.refreshBtn {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  padding: 0.75rem 1.2rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: all var(--transition-fast);
+}
+
+.refreshBtn:hover {
+  border-color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+.toastSuccess {
+  background-color: rgba(34, 197, 94, 0.15);
+  border: 1px solid #22c55e;
+  color: #4ade80;
+  padding: 0.85rem 1.25rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+/* CARDS DE MÉTRICAS */
+.metricsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1.25rem;
+}
+
+.metricCard {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.metricHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.metricLabel {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+
+.metricIcon {
+  color: var(--text-secondary);
+}
+
+.metricValue {
+  font-family: var(--font-heading);
+  font-size: 2.2rem;
+  font-weight: 900;
+}
+
+.metricHint {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+/* SMART PRICING */
+.smartPricingSection {
+  background-color: rgba(250, 204, 21, 0.03);
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.smartHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.smartTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.smartTitleGroup h3 {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.smartGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1rem;
+}
+
+.smartCard {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.smartCardImageWrapper {
+  position: relative;
+  height: 140px;
+  background-color: #000;
+}
+
+.smartCardImageWrapper img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.stagnantTag {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  background: rgba(0, 0, 0, 0.85);
+  border: 1px solid rgba(248, 113, 113, 0.5);
+  color: #f87171;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 0.2rem 0.5rem;
+  letter-spacing: 0.5px;
+}
+
+.smartCardBody {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  flex: 1;
+}
+
+.smartCardBody h4 {
+  font-size: 0.88rem;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.smartPrices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.origPrice {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.suggestedPromo {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #facc15;
+}
+
+.smartActions {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 0.4rem;
+  margin-top: auto;
+}
+
+.btnApplyQuick {
+  background-color: #facc15;
+  color: #000;
+  border: none;
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 0.5rem;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.btnApplyQuick:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btnCustomize {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.5rem;
+  cursor: pointer;
+}
+
+.btnCustomize:hover {
+  border-color: var(--text-primary);
+}
+
+/* FILTROS E BUSCA */
+.filterBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.searchBox {
+  position: relative;
+  flex: 1;
+  min-width: 280px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-muted);
+}
+
+.searchBox input {
+  width: 100%;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.75rem 1rem 0.75rem 2.5rem;
+  font-size: 0.85rem;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.searchBox input:focus {
+  border-color: var(--text-primary);
+}
+
+.filterModes {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.modeBtn {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 0.55rem 0.85rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+}
+
+.activeMode {
+  border-color: var(--text-primary);
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+}
+
+/* TABELA */
+.tableWrapper {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  overflow-x: auto;
+}
+
+.promoTable {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.82rem;
+}
+
+.promoTable th {
+  padding: 1rem 1.25rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+}
+
+.promoTable td {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  vertical-align: middle;
+}
+
+.productCell {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.productThumb {
+  width: 42px;
+  height: 52px;
+  object-fit: cover;
+  background-color: #000;
+  border: 1px solid var(--border-color);
+}
+
+.productMeta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.slug {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: monospace;
+}
+
+.tagBadge {
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-secondary);
+}
+
+.priceNormal {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.priceCrossed {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
+.promoHighlight {
+  color: #ff0055;
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+.discountPill {
+  background-color: rgba(255, 0, 85, 0.15);
+  border: 1px solid rgba(255, 0, 85, 0.3);
+  color: #ff0055;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.2rem 0.5rem;
+}
+
+.statusActive {
+  color: #4ade80;
+  font-weight: 700;
+  font-size: 0.75rem;
+}
+
+.statusInactive {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.mutedDash {
+  color: var(--text-muted);
+}
+
+.actionsCell {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.4rem;
+}
+
+.btnEditPromo {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.7rem;
+  font-weight: 800;
+  padding: 0.45rem 0.75rem;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btnEditPromo:hover {
+  border-color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+.btnRemovePromo {
+  background-color: transparent;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: #f87171;
+  padding: 0.45rem 0.6rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.btnRemovePromo:hover {
+  background-color: rgba(248, 113, 113, 0.1);
+  border-color: #f87171;
+}
+
+/* MODAL DE PROMOÇÃO */
+.modalBackdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+  padding: 1.5rem;
+}
+
+.modalContainer {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+}
+
+.modalHeader {
+  padding: 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modalPreTitle {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+
+.modalHeader h3 {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  font-weight: 800;
+  margin-top: 0.2rem;
+}
+
+.modalCloseBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.modalCloseBtn:hover {
+  color: var(--text-primary);
+}
+
+.modalForm {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.pricingSummaryRow {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 0.5rem;
+  text-align: center;
+}
+
+.summaryItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.summaryItem span {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.summaryItem strong {
+  font-size: 0.95rem;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.inputGroup label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.inputGroup input {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.75rem 1rem;
+  font-size: 0.9rem;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.inputGroup input:focus {
+  border-color: var(--text-primary);
+}
+
+.quickChipsRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.quickChipsRow span {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.quickChip {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 0.3rem 0.6rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.quickChip:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.gridTwo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.checkboxGroup {
+  margin-top: 0.25rem;
+}
+
+.checkboxLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.btnCancel {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 0.75rem 1.25rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.btnSave {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border: none;
+  padding: 0.75rem 1.4rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.btnSave:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btnSave:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

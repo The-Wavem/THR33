@@ -1,0 +1,700 @@
+/* ============================================================
+   CMS VITRINE & HOME BUILDER: BANNERS HERO + BENTO GRID
+   ============================================================ */
+.vitrineContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1.5rem;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.breadcrumb {
+  font-size: 0.75rem;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+}
+
+.title {
+  font-family: var(--font-heading);
+  font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+  font-weight: 800;
+  margin-top: 0.3rem;
+}
+
+.headerActions {
+  display: flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.primaryBtn {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  padding: 0.75rem 1.4rem;
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: opacity var(--transition-fast);
+  border: none;
+  white-space: nowrap;
+}
+
+.primaryBtn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.primaryBtn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.secondaryBtn {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  padding: 0.75rem 1.2rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.secondaryBtn:hover {
+  border-color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+/* ------------------------------------------------------------
+   SUB-ABAS DE NAVEGAÇÃO
+   ------------------------------------------------------------ */
+.sectionNav {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+
+.navTabBtn {
+  background-color: transparent;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+  padding: 0.75rem 1.25rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all var(--transition-fast);
+}
+
+.navTabBtn:hover {
+  color: var(--text-primary);
+}
+
+.activeNavTab {
+  background-color: var(--bg-card);
+  border-color: var(--border-color);
+  color: var(--text-primary);
+  border-bottom-color: var(--bg-card);
+}
+
+/* ------------------------------------------------------------
+   LAYOUT DE DUAS COLUNAS
+   ------------------------------------------------------------ */
+.layoutGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 2rem;
+  align-items: start;
+  width: 100%;
+}
+
+.editorCol {
+  display: flex;
+  flex-direction: column;
+}
+
+/* ------------------------------------------------------------
+   TABS DE SLIDES / CARDS
+   ------------------------------------------------------------ */
+.slidesTabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  padding-bottom: 0.35rem;
+}
+
+.tabBtn {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  min-width: 110px;
+  flex-shrink: 0;
+  text-align: left;
+}
+
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.tabName {
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.tabStatus {
+  font-size: 0.65rem;
+  font-weight: 700;
+}
+
+.tabActive {
+  color: #4ade80;
+}
+
+.tabInactive {
+  color: var(--text-muted);
+}
+
+.activeTab, .tabBtn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+/* ------------------------------------------------------------
+   FORMULÁRIOS
+   ------------------------------------------------------------ */
+.formCard {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.formHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.formHeader h3 {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.slideHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.checkboxLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.deleteSlideBtn {
+  background-color: transparent;
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: #f87171;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all var(--transition-fast);
+}
+
+.deleteSlideBtn:hover {
+  background-color: rgba(248, 113, 113, 0.1);
+  border-color: #f87171;
+}
+
+.formBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.inputGroup label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+
+.inputGroup input {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color var(--transition-fast);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.inputGroup input:focus {
+  border-color: var(--text-primary);
+}
+
+.gridTwo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+/* ------------------------------------------------------------
+   BOTÕES DE AÇÃO (CTAS DO BANNER)
+   ------------------------------------------------------------ */
+.ctasSection {
+  border: 1px solid var(--border-color);
+  background-color: rgba(255, 255, 255, 0.015);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ctasHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.ctasTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.ctasTitleGroup label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-primary);
+}
+
+.ctaCountSelector {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.ctaCountBtn {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.activeCtaCount {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+}
+
+.ctaBox {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.ctaBoxTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.ctaBoxLabel {
+  font-size: 0.7rem;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.variantSelector {
+  display: flex;
+  gap: 0.3rem;
+}
+
+.variantBtn {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 0.3rem 0.65rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.activeVariant {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+}
+
+.linkFieldWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.linkIconInside {
+  position: absolute;
+  left: 0.8rem;
+  color: var(--text-muted);
+}
+
+.linkFieldWrapper input {
+  padding-left: 2.2rem !important;
+}
+
+/* ------------------------------------------------------------
+   PRESETS DE IMAGEM
+   ------------------------------------------------------------ */
+.presetsBox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.presetsBox span {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.presetsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.presetBtn {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all var(--transition-fast);
+}
+
+.presetBtn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+/* ------------------------------------------------------------
+   COLUNA DE PRÉ-VISUALIZAÇÃO AO VIVO
+   ------------------------------------------------------------ */
+.previewCol {
+  position: sticky;
+  top: 2rem;
+}
+
+.previewSticky {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.previewHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+
+.previewContainer {
+  border: 1px solid var(--border-color);
+  background-color: #000;
+  overflow: hidden;
+  position: relative;
+  aspect-ratio: 16/9;
+}
+
+.previewSlide {
+  width: 100%;
+  height: 100%;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 1.5rem;
+  box-sizing: border-box;
+}
+
+.previewOverlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.4) 0%, rgba(0, 0, 0, 0.8) 100%);
+}
+
+.previewContent {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  max-width: 90%;
+}
+
+.previewBadge {
+  background-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+  padding: 0.2rem 0.55rem;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.badgeDot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background-color: #4ade80;
+}
+
+.previewTitle {
+  font-family: var(--font-heading);
+  font-size: clamp(1rem, 2vw, 1.4rem);
+  font-weight: 900;
+  color: #fff;
+  line-height: 1.15;
+  letter-spacing: 0.5px;
+}
+
+.previewSubtitle {
+  font-size: 0.72rem;
+  color: rgba(255, 255, 255, 0.8);
+  letter-spacing: 1px;
+}
+
+.previewBtnsRow {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.previewCtaBtn {
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0.45rem 0.9rem;
+  letter-spacing: 1px;
+}
+
+.previewCtaPrimary {
+  background-color: #fff;
+  color: #000;
+}
+
+.previewCtaSecondary {
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  color: #fff;
+}
+
+.previewNotice {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+}
+
+/* ------------------------------------------------------------
+   PRÉ-VISUALIZAÇÃO AO VIVO DA GRADE BENTO
+   ------------------------------------------------------------ */
+.bentoPreviewSection {
+  border: 1px solid var(--border-color);
+  background-color: #0a0a0a;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.bentoPreviewHead {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.bentoPreviewTag {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+}
+
+.bentoPreviewTitle {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 900;
+  color: var(--text-primary);
+}
+
+.bentoPreviewGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.65rem;
+}
+
+.bentoPreviewCard {
+  position: relative;
+  aspect-ratio: 4/3;
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+}
+
+.bentoCardLarge {
+  grid-column: span 2;
+  aspect-ratio: 16/9;
+}
+
+.bentoPreviewImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.bentoPreviewOverlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, transparent 40%, rgba(0, 0, 0, 0.85) 100%);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  padding: 0.75rem;
+}
+
+.bentoPreviewCaption {
+  font-family: var(--font-heading);
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.5px;
+}
+
+.bentoPreviewBtn {
+  background-color: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: #fff;
+  font-size: 0.58rem;
+  font-weight: 800;
+  padding: 0.25rem 0.55rem;
+  letter-spacing: 1px;
+}
+
+/* ------------------------------------------------------------
+   RESPONSIVIDADE
+   ------------------------------------------------------------ */
+@media (max-width: 1080px) {
+  .layoutGrid {
+    grid-template-columns: 1fr;
+  }
+  .previewCol {
+    position: static;
+  }
+}
+
+@media (max-width: 600px) {
+  .gridTwo {
+    grid-template-columns: 1fr;
+  }
+  .bentoPreviewGrid {
+    grid-template-columns: 1fr;
+  }
+  .bentoCardLarge {
+    grid-column: span 1;
+  }
+}
