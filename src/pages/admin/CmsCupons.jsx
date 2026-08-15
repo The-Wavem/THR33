@@ -184,7 +184,9 @@ export function CmsCupons() {
     e.preventDefault();
     if (!statementCoupon) return;
 
-    const amountNum = parseFloat(payoutAmount);
+    // Normaliza input (suporta ponto ou vírgula)
+    const cleanAmountStr = String(payoutAmount).replace(/\s+/g, '').replace(',', '.');
+    const amountNum = parseFloat(cleanAmountStr);
     const pendingNum = Number(statementCoupon.commissionPending || 0);
 
     if (isNaN(amountNum) || amountNum <= 0) {
@@ -192,8 +194,12 @@ export function CmsCupons() {
       return;
     }
 
-    if (amountNum > pendingNum) {
-      alert(`O valor informado (R$ ${amountNum.toFixed(2)}) é maior que o saldo pendente (R$ ${pendingNum.toFixed(2)}).`);
+    // Comparação precisa em centavos para evitar discrepâncias de ponto flutuante do JavaScript
+    const amountCents = Math.round(amountNum * 100);
+    const pendingCents = Math.round(pendingNum * 100);
+
+    if (amountCents > pendingCents) {
+      alert(`O valor informado (R$ ${amountNum.toFixed(2)}) é maior que o saldo pendente (R$ ${(pendingCents / 100).toFixed(2)}).`);
       return;
     }
 
@@ -232,8 +238,9 @@ export function CmsCupons() {
       pdfUrl: savedProofType === 'pdf' ? savedProofUrl : ''
     };
 
-    const newPending = Math.max(0, pendingNum - amountNum);
-    const newPaid = (Number(statementCoupon.commissionPaid || 0)) + amountNum;
+    const newPending = Math.max(0, (pendingCents - amountCents) / 100);
+    const paidCents = Math.round((Number(statementCoupon.commissionPaid || 0)) * 100);
+    const newPaid = (paidCents + amountCents) / 100;
     const updatedHistory = [newPayoutRecord, ...(statementCoupon.payoutHistory || [])];
 
     try {
@@ -826,10 +833,19 @@ export function CmsCupons() {
                 
                 <div className={styles.payoutFormGrid}>
                   <div className={styles.inputGroup}>
-                    <label>VALOR REPASSADO (R$) *</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                      <label style={{ margin: 0 }}>VALOR REPASSADO (R$) *</label>
+                      <button 
+                        type="button" 
+                        onClick={() => setPayoutAmount((Math.round(Number(statementCoupon.commissionPending || 0) * 100) / 100).toFixed(2))}
+                        style={{ background: 'transparent', border: 'none', color: '#60a5fa', fontSize: '0.68rem', fontWeight: '700', cursor: 'pointer', textDecoration: 'underline', padding: 0 }}
+                      >
+                        Quitar Saldo Total
+                      </button>
+                    </div>
                     <input 
-                      type="number" 
-                      step="0.01"
+                      type="text" 
+                      placeholder="0.00"
                       value={payoutAmount} 
                       onChange={(e) => setPayoutAmount(e.target.value)} 
                       required 

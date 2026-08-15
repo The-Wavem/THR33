@@ -521,6 +521,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         status: 'concluido'
       });
 
+      // 5. Registra a conversão de compra por produto no analytics
+      await analyticsService.trackPurchase(cartItems);
+
     } catch (err) {
       console.warn("Aviso ao salvar pedido no Firestore:", err.message);
       const fallbackOrder = `THR-${Math.floor(1000 + Math.random() * 9000)}`;

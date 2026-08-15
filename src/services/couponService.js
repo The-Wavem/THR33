@@ -86,7 +86,7 @@ export const couponService = {
 
       const netOrderForCommission = Math.max(0, (Number(orderSubtotal) || 0) - (Number(discountGiven) || 0));
       const commissionGenerated = isAffiliate 
-        ? (netOrderForCommission * newCommissionRate) / 100 
+        ? Math.round(((netOrderForCommission * newCommissionRate) / 100) * 100) / 100 
         : 0;
 
       await setDoc(couponRef, {

@@ -3,7 +3,7 @@ import { db } from './firebaseConfig';
 
 const SUMMARY_DOC_REF = doc(db, 'analytics', 'summary');
 
-// Cache em memória para evitar registros duplicados em curto intervalo (StrictMode do React, double-clicks, bubbling)
+// Cache em memória para evitar registros duplicados em curto intervalo
 const recentEvents = new Map();
 const DEDUPLICATION_WINDOW_MS = 1000;
 
@@ -15,7 +15,6 @@ function shouldTrack(eventKey) {
   }
   recentEvents.set(eventKey, now);
 
-  // Limpeza de cache antigo periodicamente para não acumular memória
   if (recentEvents.size > 100) {
     for (const [key, timestamp] of recentEvents.entries()) {
       if (now - timestamp > DEDUPLICATION_WINDOW_MS * 5) {
@@ -39,7 +38,7 @@ function sanitizePayload(obj) {
 
 export const analyticsService = {
   /**
-   * Registra a seleção de um filtro no catálogo (Ex: fit_boxy, cat_camisa)
+   * Rastreia uso de filtros no catálogo (Ex: fit_boxy, cat_camisa)
    */
   async trackFilterUse(filterGroup, value) {
     if (!value) return;
@@ -61,30 +60,95 @@ export const analyticsService = {
   },
 
   /**
-   * Registra a visualização/clique em um produto
+   * Rastreia visualização detalhada da peça na PDP
    */
-  async trackProductView(productId, productName) {
+  async trackProductView(productId, productName, category = '', fit = '') {
     if (!productId) return;
     const cleanId = String(productId).replace(/[./#$\[\]]/g, '_');
-    const eventKey = `product:${cleanId}`;
+    const eventKey = `productView:${cleanId}`;
 
     if (!shouldTrack(eventKey)) return;
 
-    const countKey = `products.${cleanId}.views`;
-    const nameKey = `products.${cleanId}.name`;
     try {
       await setDoc(SUMMARY_DOC_REF, {
-        [countKey]: increment(1),
-        [nameKey]: productName || productId,
+        [`products.${cleanId}.views`]: increment(1),
+        [`products.${cleanId}.name`]: productName || cleanId,
+        [`products.${cleanId}.category`]: category || 'camisa',
+        [`products.${cleanId}.fit`]: fit || 'boxy',
+        'funnel.pdpViews': increment(1),
         lastUpdated: new Date().toISOString()
       }, { merge: true });
     } catch (err) {
-      console.warn("Aviso telemetria (produto):", err.message);
+      console.warn("Aviso telemetria (view produto):", err.message);
     }
   },
 
   /**
-   * Registra visualização de uma página específica
+   * Rastreia adição de item ao carrinho
+   */
+  async trackAddToCart(item) {
+    if (!item?.id && !item?.slug) return;
+    const cleanId = String(item.id || item.slug).replace(/[./#$\[\]]/g, '_');
+    const qty = Number(item.quantity) || 1;
+
+    try {
+      await setDoc(SUMMARY_DOC_REF, {
+        [`products.${cleanId}.addedToCart`]: increment(qty),
+        [`products.${cleanId}.name`]: item.name || cleanId,
+        [`products.${cleanId}.fit`]: item.fit || 'boxy',
+        [`sizes.${item.size || 'M'}`]: increment(qty),
+        'funnel.cartAdds': increment(qty),
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.warn("Aviso telemetria (add carrinho):", err.message);
+    }
+  },
+
+  /**
+   * Rastreia remoção/desistência de item do carrinho
+   */
+  async trackRemoveFromCart(item) {
+    if (!item?.id && !item?.slug) return;
+    const cleanId = String(item.id || item.slug).replace(/[./#$\[\]]/g, '_');
+    const qty = Number(item.quantity) || 1;
+
+    try {
+      await setDoc(SUMMARY_DOC_REF, {
+        [`products.${cleanId}.removedFromCart`]: increment(qty),
+        'funnel.cartRemoves': increment(qty),
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.warn("Aviso telemetria (remove carrinho):", err.message);
+    }
+  },
+
+  /**
+   * Rastreia conversão final da compra por produto
+   */
+  async trackPurchase(items = []) {
+    if (!items || items.length === 0) return;
+    const updates = {
+      'funnel.purchases': increment(1),
+      lastUpdated: new Date().toISOString()
+    };
+
+    items.forEach(item => {
+      const cleanId = String(item.id || item.slug || 'item').replace(/[./#$\[\]]/g, '_');
+      const qty = Number(item.quantity) || 1;
+      updates[`products.${cleanId}.purchases`] = increment(qty);
+    });
+
+    try {
+      await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
+    } catch (err) {
+      console.warn("Aviso telemetria (compra concluída):", err.message);
+    }
+  },
+
+  /**
+   * Rastreia visualização de páginas gerais
    */
   async trackPageView(pageName) {
     if (!pageName) return;
@@ -105,7 +169,7 @@ export const analyticsService = {
   },
 
   /**
-   * Registra a etapa atual do Checkout para monitoramento de abandono de carrinho
+   * Rastreia sessões ativas no Checkout
    */
   async trackCheckoutSession(sessionId, sessionData) {
     if (!sessionId) return;

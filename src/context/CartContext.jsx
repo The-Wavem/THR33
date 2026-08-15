@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
 import { couponService } from '../services/couponService';
+import { analyticsService } from '../services/analyticsService';
 
 const CartContext = createContext();
 
@@ -142,6 +143,17 @@ export function CartProvider({ children }) {
     const sizeStr = size || (product.sizes && product.sizes[0]) || 'M';
     const cleanPrice = parsePriceNumber(product.price || product.priceNum);
 
+    const itemToAdd = {
+      id: product.id,
+      name: product.name || product.title,
+      size: sizeStr,
+      color: colorObj,
+      fit: product.fit || "Boxy Fit",
+      price: cleanPrice,
+      quantity: qty,
+      image: product.image || (product.images && product.images[0])
+    };
+
     setCartItems((prevItems) => {
       const existingIndex = prevItems.findIndex(
         (item) => item.id === product.id && item.size === sizeStr && item.color?.id === colorObj?.id
@@ -153,25 +165,27 @@ export function CartProvider({ children }) {
         return updated;
       }
 
-      return [
-        ...prevItems,
-        {
-          id: product.id,
-          name: product.name || product.title,
-          size: sizeStr,
-          color: colorObj,
-          fit: product.fit || "Standard Fit",
-          price: cleanPrice,
-          quantity: qty,
-          image: product.image || (product.images && product.images[0])
-        }
-      ];
+      return [...prevItems, itemToAdd];
     });
+
+    // Telemetria de adição à sacola
+    analyticsService.trackAddToCart(itemToAdd);
     openCart();
   };
 
   // Remover item
   const removeFromCart = (id, size, colorId = null) => {
+    const itemToRemove = cartItems.find((item) => {
+      if (colorId && item.color) {
+        return item.id === id && item.size === size && item.color.id === colorId;
+      }
+      return item.id === id && item.size === size;
+    });
+
+    if (itemToRemove) {
+      analyticsService.trackRemoveFromCart(itemToRemove);
+    }
+
     setCartItems((prev) => 
       prev.filter((item) => {
         if (colorId && item.color) {

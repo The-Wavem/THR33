@@ -115,10 +115,15 @@ export function ProdutoDetalhe({ onAddToCart }) {
     }
 
     if (product.id || currentParam) {
-      analyticsService.trackProductView(product.id || currentParam, product.name);
+      analyticsService.trackProductView(
+        product.id || currentParam, 
+        product.name, 
+        product.category || 'camisa', 
+        product.fit || 'boxy'
+      );
       analyticsService.trackPageView('produto_detalhe');
     }
-  }, [currentParam, product.id, product.name]);
+  }, [currentParam, product.id, product.name, product.category, product.fit]);
 
   const handlePrevImage = () => {
     setSelectedImageIndex((prev) => (prev === 0 ? product.images.length - 1 : prev - 1));
