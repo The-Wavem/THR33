@@ -2,30 +2,32 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '../../services/firebaseConfig';
 import styles from './Hero.module.css';
 
-const HERO_SLIDES = [
+const DEFAULT_HERO_SLIDES = [
   {
     id: "slide_1",
     title: "A RUA COMO NOSSO ATELIÊ",
     subtitle: "LEAK TWO — DROP EXCLUSIVO",
     badge: "NOVO DROP",
-    cta: "VER LANÇAMENTOS",
-    link: "/catalogo",
     bgImage: "https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=1600&auto=format&fit=crop",
-    active: true
+    active: true,
+    buttons: [
+      { id: "btn_1", text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" },
+      { id: "btn_2", text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
+    ]
   },
   {
     id: "slide_2",
     title: "FOR THE FEW.",
     subtitle: "STREETWEAR URBANO & CURITIBANO",
     badge: "COLEÇÃO 2026",
-    cta: "EXPLORAR COPOS & VESTUÁRIO",
-    link: "/catalogo",
     bgImage: "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?q=80&w=1600&auto=format&fit=crop",
-    active: true
+    active: true,
+    buttons: [
+      { id: "btn_1", text: "EXPLORAR CATÁLOGO", link: "/catalogo", variant: "primary" },
+      { id: "btn_2", text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
+    ]
   }
 ];
 
@@ -78,38 +80,46 @@ const textVariants = {
   }
 };
 
-export function Hero() {
-  const [slides, setSlides] = useState(HERO_SLIDES);
+export function Hero({ bannerData }) {
+  const [slides, setSlides] = useState(DEFAULT_HERO_SLIDES);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [direction, setDirection] = useState(1);
   const [isHovered, setIsHovered] = useState(false);
 
-  // Busca banners dinâmicos do Firestore
+  // Sincroniza dados da prop bannerData recebida do Firestore
   useEffect(() => {
-    async function loadDynamicBanners() {
-      try {
-        const docRef = doc(db, 'storefront', 'home_banners');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const allSlides = docSnap.data().slides || [];
-          const activeSlides = allSlides.filter(s => s.active !== false);
-          if (activeSlides.length > 0) {
-            setSlides(activeSlides);
-          }
-        }
-      } catch (err) {
-        console.warn("Aviso: Carregando banners padrão da Home.", err.message);
-      }
+    if (!bannerData) return;
+
+    if (Array.isArray(bannerData.slides) && bannerData.slides.length > 0) {
+      const active = bannerData.slides.filter(s => s.active !== false);
+      if (active.length > 0) setSlides(active);
+    } else if (Array.isArray(bannerData) && bannerData.length > 0) {
+      const active = bannerData.filter(s => s.active !== false);
+      if (active.length > 0) setSlides(active);
+    } else if (bannerData.title || bannerData.mediaUrl || bannerData.bgImage) {
+      setSlides([{
+        id: bannerData.id || "hero_banner_1",
+        title: bannerData.title || "THR33 STREETWEAR",
+        subtitle: bannerData.subtitle || "A RUA COMO NOSSO ATELIÊ",
+        badge: bannerData.badge || "DESTAQUE",
+        bgImage: bannerData.mediaUrl || bannerData.bgImage || DEFAULT_HERO_SLIDES[0].bgImage,
+        type: bannerData.type || "image",
+        mediaUrl: bannerData.mediaUrl,
+        active: true,
+        buttons: bannerData.buttons || [
+          { id: "btn_1", text: "VER CATÁLOGO", link: "/catalogo", variant: "primary" }
+        ]
+      }]);
     }
-    loadDynamicBanners();
-  }, []);
+  }, [bannerData]);
 
   // Pré-carrega imagens para transição instantânea
   useEffect(() => {
     slides.forEach(s => {
-      if (s.bgImage) {
+      const url = s.bgImage || s.mediaUrl;
+      if (url && !s.type?.includes('video')) {
         const img = new Image();
-        img.src = s.bgImage;
+        img.src = url;
       }
     });
   }, [slides]);
@@ -153,6 +163,7 @@ export function Hero() {
   };
 
   const slide = slides[currentSlide] || slides[0];
+  const isVideo = slide.type === 'video' || (slide.mediaUrl && slide.mediaUrl.match(/\.(mp4|webm|ogg)$/i));
 
   return (
     <section 
@@ -181,8 +192,18 @@ export function Hero() {
               animate="animate"
               exit="exit"
               className={styles.slideBackground}
-              style={{ backgroundImage: `url(${slide.bgImage})` }}
+              style={{ backgroundImage: !isVideo ? `url(${slide.bgImage || slide.mediaUrl})` : 'none' }}
             >
+              {isVideo && (
+                <video 
+                  src={slide.mediaUrl || slide.bgImage} 
+                  autoPlay 
+                  loop 
+                  muted 
+                  playsInline 
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              )}
               <div className={styles.overlay} />
             </motion.div>
 
@@ -202,39 +223,34 @@ export function Hero() {
               )}
 
               <h1 className={styles.mainTitle}>{slide.title}</h1>
-              <p className={styles.subtitle}>{slide.subtitle}</p>
+              {slide.subtitle && <p className={styles.subtitle}>{slide.subtitle}</p>}
 
-              {/* Botões de Ação do Slide (Dinâmico: 0, 1, 2 ou N botões) */}
-              {Array.isArray(slide.buttons) ? (
-                slide.buttons.length > 0 && (
-                  <div className={styles.actions}>
-                    {slide.buttons.map((btn, bIdx) => (
-                      <Link 
-                        key={btn.id || bIdx}
-                        className={btn.variant === 'secondary' ? styles.secondaryCta : styles.primaryCta}
-                        to={btn.link || "/catalogo"}
-                      >
-                        {btn.text || "VER MAIS"}
-                      </Link>
-                    ))}
-                  </div>
-                )
-              ) : (
+              {/* Botões de Ação do Slide */}
+              {Array.isArray(slide.buttons) && slide.buttons.length > 0 ? (
+                <div className={styles.actions}>
+                  {slide.buttons.map((btn, bIdx) => (
+                    <Link 
+                      key={btn.id || bIdx}
+                      className={btn.variant === 'secondary' ? styles.secondaryCta : styles.primaryCta}
+                      to={btn.link || "/catalogo"}
+                    >
+                      {btn.text || "VER MAIS"}
+                    </Link>
+                  ))}
+                </div>
+              ) : slide.cta || slide.link ? (
                 <div className={styles.actions}>
                   <Link className={styles.primaryCta} to={slide.link || "/catalogo"}>
                     {slide.cta || "VER LANÇAMENTOS"}
                   </Link>
-                  <Link className={styles.secondaryCta} to="/sobre">
-                    CONHEÇA A MARCA
-                  </Link>
                 </div>
-              )}
+              ) : null}
             </motion.div>
           </motion.div>
         </AnimatePresence>
       </motion.div>
 
-      {/* Botões de Navegação Lateral (Prev / Next) */}
+      {/* Botões de Navegação Lateral */}
       {slides.length > 1 && (
         <>
           <button 
@@ -253,7 +269,7 @@ export function Hero() {
             <ChevronRight size={22} />
           </button>
 
-          {/* Indicadores / Linhas de Progresso do Carrossel */}
+          {/* Indicadores do Carrossel */}
           <div className={styles.dotsContainer}>
             {slides.map((_, index) => (
               <button

@@ -5,19 +5,24 @@ import { catalogService } from '../../services/catalogService';
 import { seedService } from '../../services/seedService';
 import styles from './BestSellers.module.css';
 
-export function BestSellers() {
-  const [products, setProducts] = useState([]);
-  const [loading, setLoading] = useState(true);
+export function BestSellers({ products: initialProducts }) {
+  const [products, setProducts] = useState(initialProducts || []);
+  const [loading, setLoading] = useState(!initialProducts || initialProducts.length === 0);
 
   useEffect(() => {
+    if (Array.isArray(initialProducts) && initialProducts.length > 0) {
+      setProducts(initialProducts);
+      setLoading(false);
+      return;
+    }
+
     async function loadBestSellers() {
       setLoading(true);
       try {
         await seedService.seedCatalogIfEmpty();
-        const all = await catalogService.getAllProducts();
-        // Filtra os 3-4 primeiros itens ativos do vestuário
+        const all = await catalogService.getFeaturedProducts(4);
         const vestuario = all.filter(p => p.type !== 'brinde' && p.category !== 'gift-card');
-        setProducts(vestuario.slice(0, 3));
+        setProducts(vestuario.slice(0, 4));
       } catch (err) {
         console.error("Erro ao carregar mais vendidos:", err);
       } finally {
@@ -25,9 +30,9 @@ export function BestSellers() {
       }
     }
     loadBestSellers();
-  }, []);
+  }, [initialProducts]);
 
-  if (loading) {
+  if (loading && (!products || products.length === 0)) {
     return (
       <section className={styles.section}>
         <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary)' }}>
@@ -38,7 +43,7 @@ export function BestSellers() {
     );
   }
 
-  if (products.length === 0) return null;
+  if (!products || products.length === 0) return null;
 
   return (
     <section className={styles.section}>

@@ -1,5 +1,3 @@
-import React, { useState, useEffect } from 'react';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { 
   Plus, 
   Save, 
@@ -18,7 +16,7 @@ import {
   LayoutGrid,
   ArrowRight
 } from 'lucide-react';
-import { db } from '../../services/firebaseConfig';
+import { getVitrineSettings, saveVitrineSettings } from '../../services/catalogService';
 import styles from './CmsVitrine.module.css';
 
 // Sugestões de imagens em alta resolução para testes rápidos
@@ -84,19 +82,45 @@ export function CmsVitrine() {
     async function fetchData() {
       setLoading(true);
       try {
-        // Carrega Banners Hero
-        const bannerSnap = await getDoc(doc(db, 'storefront', 'home_banners'));
-        if (bannerSnap.exists() && bannerSnap.data().slides?.length > 0) {
-          const rawSlides = bannerSnap.data().slides;
-          const normalized = rawSlides.map(s => ({
-            ...s,
-            buttons: Array.isArray(s.buttons) 
-              ? s.buttons 
-              : [
-                  { id: "btn_1", text: s.cta || "VER LANÇAMENTOS", link: s.link || "/catalogo", variant: "primary" }
+        const settings = await getVitrineSettings();
+        if (settings) {
+          if (settings.hero?.slides?.length > 0) {
+            const rawSlides = settings.hero.slides;
+            const normalized = rawSlides.map(s => ({
+              ...s,
+              buttons: Array.isArray(s.buttons) 
+                ? s.buttons 
+                : [
+                    { id: "btn_1", text: s.cta || "VER LANÇAMENTOS", link: s.link || "/catalogo", variant: "primary" }
+                  ]
+            }));
+            setSlides(normalized);
+          } else {
+            setSlides([
+              {
+                id: "slide_1",
+                title: "A RUA COMO NOSSO ATELIÊ",
+                subtitle: "LEAK TWO — DROP EXCLUSIVO",
+                badge: "NOVO DROP",
+                bgImage: PLACEHOLDER_IMAGES[0].url,
+                active: true,
+                buttons: [
+                  { id: "btn_1", text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" },
+                  { id: "btn_2", text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
                 ]
-          }));
-          setSlides(normalized);
+              }
+            ]);
+          }
+
+          if (settings.bentoGrid?.length > 0) {
+            setBentoConfig({
+              sectionTag: settings.sectionTag || "ENSAIO DE CAMPANHA",
+              sectionTitle: settings.sectionTitle || "A RUA COMO NOSSO ATELIÊ",
+              cards: settings.bentoGrid
+            });
+          } else {
+            setBentoConfig(DEFAULT_BENTO_CONFIG);
+          }
         } else {
           setSlides([
             {
@@ -110,27 +134,8 @@ export function CmsVitrine() {
                 { id: "btn_1", text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" },
                 { id: "btn_2", text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
               ]
-            },
-            {
-              id: "slide_2",
-              title: "FOR THE FEW.",
-              subtitle: "STREETWEAR URBANO & CURITIBANO",
-              badge: "COLEÇÃO 2026",
-              bgImage: PLACEHOLDER_IMAGES[1].url,
-              active: true,
-              buttons: [
-                { id: "btn_1", text: "EXPLORAR CATÁLOGO", link: "/catalogo", variant: "primary" },
-                { id: "btn_2", text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
-              ]
             }
           ]);
-        }
-
-        // Carrega Grade Bento
-        const bentoSnap = await getDoc(doc(db, 'storefront', 'home_bento'));
-        if (bentoSnap.exists() && bentoSnap.data().cards?.length > 0) {
-          setBentoConfig(bentoSnap.data());
-        } else {
           setBentoConfig(DEFAULT_BENTO_CONFIG);
         }
       } catch (err) {
@@ -303,19 +308,14 @@ export function CmsVitrine() {
     setSaveSuccess(false);
 
     try {
-      if (activeSection === 'hero') {
-        const docRef = doc(db, 'storefront', 'home_banners');
-        await setDoc(docRef, {
-          slides,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      } else {
-        const docRef = doc(db, 'storefront', 'home_bento');
-        await setDoc(docRef, {
-          ...bentoConfig,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
-      }
+      await saveVitrineSettings({
+        hero: {
+          slides
+        },
+        bentoGrid: bentoConfig.cards || [],
+        sectionTag: bentoConfig.sectionTag || "ENSAIO DE CAMPANHA",
+        sectionTitle: bentoConfig.sectionTitle || "A RUA COMO NOSSO ATELIÊ"
+      });
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 3000);
