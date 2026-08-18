@@ -255,7 +255,9 @@ export function ProdutoDetalhe({ onAddToCart }) {
     const cartProduct = {
       ...product,
       price: effectivePrice,
-      originalPrice: priceNum
+      originalPrice: priceNum,
+      color: selectedColor || product.color || 'Preto Piano',
+      category: product.category || 'camisa'
     };
 
     if (onAddToCart) {

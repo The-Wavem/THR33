@@ -102,13 +102,19 @@ export const analyticsService = {
     const cleanId = String(item.id || item.slug).replace(/[./#$\[\]]/g, '_');
     const cleanSlug = item.slug ? String(item.slug).replace(/[./#$\[\]]/g, '_') : '';
     const qty = Number(item.quantity) || 1;
+    const rawColor = typeof item.color === 'object' ? (item.color?.name || item.color?.id) : item.color;
+    const colorKey = rawColor ? `colors.${String(rawColor).toLowerCase().replace(/\s+/g, '_')}` : 'colors.preto_piano';
+    const sizeKey = item.size ? `sizes.${item.size}` : 'sizes.M';
+    const catKey = item.category ? `categories.${item.category}` : 'categories.camisa';
 
     try {
       const updates = {
         [`products.${cleanId}.addedToCart`]: increment(qty),
         [`products.${cleanId}.name`]: item.name || cleanId,
         [`products.${cleanId}.fit`]: item.fit || 'boxy',
-        [`sizes.${item.size || 'M'}`]: increment(qty),
+        [colorKey]: increment(qty),
+        [sizeKey]: increment(qty),
+        [catKey]: increment(qty),
         'funnel.cartAdds': increment(qty),
         lastUpdated: new Date().toISOString()
       };
@@ -150,7 +156,7 @@ export const analyticsService = {
   },
 
   /**
-   * Rastreia conversão final da compra por produto e por tamanho na telemetria consolidada
+   * Rastreia conversão final da compra por produto, tamanho, cor e categoria
    */
   async trackPurchase(items = []) {
     if (!items || items.length === 0) return;
@@ -161,11 +167,21 @@ export const analyticsService = {
 
     items.forEach(item => {
       const cleanId = String(item.id || item.slug || 'item').replace(/[./#$\[\]]/g, '_');
+      const cleanSlug = item.slug ? String(item.slug).replace(/[./#$\[\]]/g, '_') : '';
       const qty = Number(item.quantity) || 1;
       const sz = String(item.size || 'M').toUpperCase();
+      const rawColor = typeof item.color === 'object' ? (item.color?.name || item.color?.id) : item.color;
+      const col = rawColor ? String(rawColor).toLowerCase().replace(/\s+/g, '_') : 'preto_piano';
+      const cat = String(item.category || 'camisa').toLowerCase();
 
       updates[`products.${cleanId}.purchases`] = increment(qty);
+      if (cleanSlug && cleanSlug !== cleanId) {
+        updates[`products.${cleanSlug}.purchases`] = increment(qty);
+      }
       updates[`sizes.${sz}`] = increment(qty);
+      updates[`sales_sizes.${sz}`] = increment(qty);
+      updates[`sales_colors.${col}`] = increment(qty);
+      updates[`sales_categories.${cat}`] = increment(qty);
     });
 
     try {

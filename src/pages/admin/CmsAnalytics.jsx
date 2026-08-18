@@ -28,6 +28,20 @@ import { db } from '../../services/firebaseConfig';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsAnalytics.module.css';
 
+const COLOR_CONFIG = {
+  'preto_piano': { name: 'Preto Piano', hex: '#000000' },
+  'off_white': { name: 'Off-White', hex: '#f5f5f0' },
+  'grafite': { name: 'Grafite / Chumbo', hex: '#383838' },
+  'cinza_mescla': { name: 'Cinza Mescla', hex: '#7a7a7a' }
+};
+
+const CATEGORY_LABELS = {
+  'camisa': 'Camisetas / Camisas',
+  'jaqueta': 'Jaquetas & Casacos',
+  'calca': 'Calças & Bermudas',
+  'brinde': 'Vales & Brindes'
+};
+
 // Avaliador dos 7 Estados de Saúde e Performance do Produto
 export const getProductStatusDetails = (prod, totalStock, daysIdle, purchases, views, adds, conversion) => {
   // 1. Oculto / Desativado pelo lojista
@@ -102,7 +116,7 @@ export function CmsAnalytics() {
   const [refreshing, setRefreshing] = useState(false);
 
   // Controle de Tabs e Modal de Raio-X
-  const [activeTab, setActiveTab] = useState('products'); // 'products' | 'deadstock' | 'sizes' | 'funnel'
+  const [activeTab, setActiveTab] = useState('attributes'); // 'attributes' | 'products' | 'deadstock' | 'funnel'
   const [selectedSkuDetail, setSelectedSkuDetail] = useState(null);
   const [editableStock, setEditableStock] = useState({ PP: 0, P: 0, M: 0, G: 0, GG: 0 });
   const [isAvailableInCatalog, setIsAvailableInCatalog] = useState(true);
@@ -399,6 +413,139 @@ export function CmsAnalytics() {
     return { views, adds, removes, purchases };
   }, [selectedSkuDetail, summaryData]);
 
+  // 1. AGREGAÇÃO DINÂMICA DE CORES DIRETAMENTE DOS PEDIDOS & TELEMETRIA
+  const colorMetrics = useMemo(() => {
+    const counts = { preto_piano: 0, off_white: 0, grafite: 0, cinza_mescla: 0 };
+    const cartCounts = summaryData.colors || {};
+
+    // Computa a partir dos itens de todos os pedidos
+    orders.forEach(order => {
+      order.items?.forEach(item => {
+        const rawColor = (typeof item.color === 'object' ? (item.color?.name || item.color?.id) : item.color) || 'Preto Piano';
+        const cleanColor = String(rawColor).toLowerCase().replace(/\s+/g, '_');
+        const key = counts.hasOwnProperty(cleanColor) ? cleanColor : 'preto_piano';
+        counts[key] += (Number(item.quantity) || 1);
+      });
+    });
+
+    // Se houver dados atômicos em summary.sales_colors, consolida
+    if (summaryData.sales_colors) {
+      Object.entries(summaryData.sales_colors).forEach(([k, v]) => {
+        if (counts.hasOwnProperty(k)) counts[k] = Math.max(counts[k], Number(v) || 0);
+      });
+    }
+
+    const maxSales = Math.max(...Object.values(counts), 1);
+
+    return Object.entries(counts).map(([key, sales]) => ({
+      key,
+      name: COLOR_CONFIG[key]?.name || key,
+      hex: COLOR_CONFIG[key]?.hex || '#ffffff',
+      sales,
+      cartAdds: Number(cartCounts[key] || 0),
+      percent: sales > 0 ? Math.round((sales / maxSales) * 100) : 0
+    })).sort((a, b) => b.sales - a.sales);
+  }, [orders, summaryData]);
+
+  // 2. AGREGAÇÃO DINÂMICA DE TAMANHOS DIRETAMENTE DOS PEDIDOS
+  const sizeMetrics = useMemo(() => {
+    const sizesCount = { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
+
+    orders.forEach(order => {
+      order.items?.forEach(item => {
+        const sz = String(item.size || 'M').toUpperCase();
+        if (sizesCount.hasOwnProperty(sz)) {
+          sizesCount[sz] += (Number(item.quantity) || 1);
+        }
+      });
+    });
+
+    if (summaryData.sales_sizes) {
+      Object.entries(summaryData.sales_sizes).forEach(([sz, v]) => {
+        const key = sz.toUpperCase();
+        if (sizesCount.hasOwnProperty(key)) sizesCount[key] = Math.max(sizesCount[key], Number(v) || 0);
+      });
+    } else if (summaryData.sizes) {
+      Object.entries(summaryData.sizes).forEach(([sz, v]) => {
+        const key = sz.toUpperCase();
+        if (sizesCount.hasOwnProperty(key)) sizesCount[key] = Math.max(sizesCount[key], Number(v) || 0);
+      });
+    }
+
+    const maxVal = Math.max(...Object.values(sizesCount), 1);
+
+    return Object.entries(sizesCount).map(([size, sales]) => ({
+      size,
+      sales,
+      percent: sales > 0 ? Math.round((sales / maxVal) * 100) : 0
+    }));
+  }, [orders, summaryData]);
+
+  // 3. AGREGAÇÃO DINÂMICA DE CATEGORIAS E FATURAMENTO
+  const categoryMetrics = useMemo(() => {
+    const catStats = {
+      camisa: { sales: 0, revenue: 0 },
+      jaqueta: { sales: 0, revenue: 0 },
+      calca: { sales: 0, revenue: 0 },
+      brinde: { sales: 0, revenue: 0 }
+    };
+
+    orders.forEach(order => {
+      order.items?.forEach(item => {
+        const rawCat = String(item.category || 'camisa').toLowerCase();
+        const key = catStats.hasOwnProperty(rawCat) ? rawCat : 'camisa';
+        const qty = Number(item.quantity) || 1;
+        const itemTotal = (Number(item.price) || 0) * qty;
+
+        catStats[key].sales += qty;
+        catStats[key].revenue += itemTotal;
+      });
+    });
+
+    if (summaryData.sales_categories) {
+      Object.entries(summaryData.sales_categories).forEach(([k, v]) => {
+        if (catStats.hasOwnProperty(k)) {
+          catStats[k].sales = Math.max(catStats[k].sales, Number(v) || 0);
+        }
+      });
+    }
+
+    const maxSales = Math.max(...Object.values(catStats).map(c => c.sales), 1);
+
+    return Object.entries(catStats).map(([key, stat]) => ({
+      key,
+      label: CATEGORY_LABELS[key] || key,
+      sales: stat.sales,
+      revenue: stat.revenue,
+      percent: stat.sales > 0 ? Math.round((stat.sales / maxSales) * 100) : 0
+    })).sort((a, b) => b.revenue - a.revenue);
+  }, [orders, summaryData]);
+
+  // 4. GERAÇÃO DINÂMICA DAS DIRETRIZES DE PRODUÇÃO E CORTE
+  const dynamicInsights = useMemo(() => {
+    const totalPiecesSold = sizeMetrics.reduce((acc, s) => acc + s.sales, 0);
+
+    // Cor Líder
+    const topColor = colorMetrics[0] || { name: 'Preto Piano', sales: 0 };
+    const topColorPct = totalPiecesSold > 0 ? Math.round((topColor.sales / totalPiecesSold) * 100) : 0;
+
+    // Participação M + G
+    const mSales = sizeMetrics.find(s => s.size === 'M')?.sales || 0;
+    const gSales = sizeMetrics.find(s => s.size === 'G')?.sales || 0;
+    const mgPct = totalPiecesSold > 0 ? Math.round(((mSales + gSales) / totalPiecesSold) * 100) : 0;
+
+    // Categoria Líder
+    const topCategory = categoryMetrics[0] || { label: 'Camisetas / Camisas', revenue: 0 };
+
+    return {
+      topColorName: topColor.name,
+      topColorPct,
+      mgPct,
+      topCategoryLabel: topCategory.label,
+      topCategoryRevenue: topCategory.revenue
+    };
+  }, [colorMetrics, sizeMetrics, categoryMetrics]);
+
   // Distribuição Real de Vendas por Tamanho
   const sizeDistribution = useMemo(() => {
     const rawSizes = summaryData.sizes || {};
@@ -473,11 +620,18 @@ export function CmsAnalytics() {
       {/* HEADER */}
       <header className={styles.header}>
         <div>
-          <span className={styles.breadcrumb}>CMS // ANÁLISE DE PRODUTO & INVENTÁRIO</span>
-          <h1 className={styles.title}>SAÚDE DO ESTOQUE & PERFORMANCE POR SKU</h1>
+          <span className={styles.breadcrumb}>CMS // INTELIGÊNCIA DE PRODUTO & VENDAS</span>
+          <h1 className={styles.title}>MÉTRICAS DE ATRIBUTOS, SKUS & ATIVIDADES</h1>
         </div>
         <div className={styles.headerActions}>
           <div className={styles.headerNav}>
+            <button 
+              className={`${styles.tabBtn} ${activeTab === 'attributes' ? styles.activeTab : ''}`}
+              onClick={() => setActiveTab('attributes')}
+            >
+              <BarChart3 size={13} />
+              <span>Cores, Tamanhos & Tipos</span>
+            </button>
             <button 
               className={`${styles.tabBtn} ${activeTab === 'products' ? styles.activeTab : ''}`}
               onClick={() => setActiveTab('products')}
@@ -493,17 +647,10 @@ export function CmsAnalytics() {
               <span>Alerta Dead Stock ({deadStockItems.length})</span>
             </button>
             <button 
-              className={`${styles.tabBtn} ${activeTab === 'sizes' ? styles.activeTab : ''}`}
-              onClick={() => setActiveTab('sizes')}
-            >
-              <Ruler size={13} />
-              <span>Grade & Modelagens</span>
-            </button>
-            <button 
               className={`${styles.tabBtn} ${activeTab === 'funnel' ? styles.activeTab : ''}`}
               onClick={() => setActiveTab('funnel')}
             >
-              <BarChart3 size={13} />
+              <TrendingUp size={13} />
               <span>Funil de Conversão</span>
             </button>
           </div>
@@ -520,7 +667,138 @@ export function CmsAnalytics() {
         </div>
       </header>
 
-      {/* TAB 1: RAIO-X COMPLETO POR PRODUTO */}
+      {/* TAB 1: GRÁFICOS DE CORES, TAMANHOS, CATEGORIAS E INSIGHTS DE PRODUÇÃO */}
+      {activeTab === 'attributes' && (
+        <div className={styles.attributesLayout}>
+          {/* GRID 3 COLUNAS DE GRÁFICOS */}
+          <div className={styles.threeColsGrid}>
+            {/* 1. VENDAS POR COR */}
+            <div className={styles.graphCard}>
+              <div className={styles.cardHeader}>
+                <h3>
+                  <span>CORES MAIS VENDIDAS</span>
+                  <InfoTooltip 
+                    text="Mapeamento de faturamento por paleta de cor para guiar o tingimento dos tecidos." 
+                    title="Distribuição por Cor"
+                    position="bottom"
+                    width="280px"
+                  />
+                </h3>
+              </div>
+              <div className={styles.barsList}>
+                {colorMetrics.map(c => (
+                  <div key={c.key} className={styles.barItem}>
+                    <div className={styles.barMeta}>
+                      <span className={styles.colorLabel}>
+                        <span className={styles.colorDot} style={{ backgroundColor: c.hex, border: c.hex === '#000000' ? '1px solid #444' : 'none' }}></span>
+                        {c.name}
+                      </span>
+                      <strong>{c.sales} peças</strong>
+                    </div>
+                    <div className={styles.barTrack}>
+                      <div className={styles.barFill} style={{ width: `${c.percent}%` }}></div>
+                    </div>
+                    <small className={styles.cartHint}>{c.cartAdds} adições à sacola</small>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 2. DEMANDA POR GRADE DE TAMANHO */}
+            <div className={styles.graphCard}>
+              <div className={styles.cardHeader}>
+                <h3>
+                  <span>GRADE DE TAMANHOS</span>
+                  <InfoTooltip 
+                    text="Indica a curva de grade ideal para evitar que tamanhos populares fiquem esgotados." 
+                    title="Demanda de Tamanhos"
+                    position="bottom"
+                    width="280px"
+                  />
+                </h3>
+              </div>
+              <div className={styles.barsList}>
+                {sizeMetrics.map(s => (
+                  <div key={s.size} className={styles.barItem}>
+                    <div className={styles.barMeta}>
+                      <span>TAMANHO {s.size}</span>
+                      <strong>{s.sales} vendas</strong>
+                    </div>
+                    <div className={styles.barTrack}>
+                      <div className={`${styles.barFill} ${styles.blueFill}`} style={{ width: `${s.percent}%` }}></div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 3. VENDAS POR CATEGORIA */}
+            <div className={styles.graphCard}>
+              <div className={styles.cardHeader}>
+                <h3>
+                  <span>CATEGORIAS & TIPOS</span>
+                  <InfoTooltip 
+                    text="Divisão de faturamento e saída entre vestuário pesado, camisetas e brindes digitais." 
+                    title="Performance por Categoria"
+                    position="bottom"
+                    width="280px"
+                  />
+                </h3>
+              </div>
+              <div className={styles.barsList}>
+                {categoryMetrics.map(cat => (
+                  <div key={cat.key} className={styles.barItem}>
+                    <div className={styles.barMeta}>
+                      <span>{cat.label}</span>
+                      <strong>{cat.sales} un.</strong>
+                    </div>
+                    <div className={styles.barTrack}>
+                      <div className={`${styles.barFill} ${styles.greenFill}`} style={{ width: `${cat.percent}%` }}></div>
+                    </div>
+                    <small className={styles.cartHint}>R$ {cat.revenue.toFixed(2)} faturados</small>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* PAINEL DE DIRETRIZES DE PRODUÇÃO DINÂMICAS */}
+          <div className={styles.productionInsightsBox}>
+            <div className={styles.insightsHeader}>
+              <Zap size={18} color="#facc15" />
+              <h3>DIRETRIZES DE CORTE & ANÚNCIOS (INTELIGÊNCIA THR33)</h3>
+            </div>
+            <div className={styles.insightsGrid}>
+              <div className={styles.insightCard}>
+                <strong>Dominância de {dynamicInsights.topColorName}</strong>
+                <p>
+                  {dynamicInsights.topColorPct > 0 
+                    ? `A cor ${dynamicInsights.topColorName} representa ${dynamicInsights.topColorPct}% das vendas totais da marca. Priorize estoque abundante nessa paleta.`
+                    : 'Aguardando primeiros pedidos para computar a cor líder.'}
+                </p>
+              </div>
+              <div className={styles.insightCard}>
+                <strong>Concentração na Grade M e G</strong>
+                <p>
+                  {dynamicInsights.mgPct > 0
+                    ? `Juntos, os tamanhos M e G somam ${dynamicInsights.mgPct}% de toda a saída de vestuário streetwear da THR33.`
+                    : 'Aguardando pedidos para consolidar a curva de tamanhos.'}
+                </p>
+              </div>
+              <div className={styles.insightCard}>
+                <strong>{dynamicInsights.topCategoryLabel} lidera a receita</strong>
+                <p>
+                  {dynamicInsights.topCategoryRevenue > 0
+                    ? `Categoria responsável por R$ ${dynamicInsights.topCategoryRevenue.toFixed(2)} em vendas brutas no e-commerce.`
+                    : 'Aguardando fechamento de pedidos no catálogo.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 2: RAIO-X COMPLETO POR PRODUTO */}
       {activeTab === 'products' && (
         <section className={styles.sectionCard}>
           <div className={styles.tableCard}>
@@ -693,72 +971,7 @@ export function CmsAnalytics() {
         </section>
       )}
 
-      {/* TAB 3: DEMANDA POR GRADE DE TAMANHO & MODELAGEM */}
-      {activeTab === 'sizes' && (
-        <section className={styles.twoCols}>
-          <div className={styles.panel}>
-            <div className={styles.panelTitleRow}>
-              <Ruler size={17} />
-              <h2>DEMANDA POR GRADE DE TAMANHOS (POPULARIDADE)</h2>
-            </div>
-            <p>Mapeamento de quais tamanhos têm maior giro para orientar novos cortes na confecção.</p>
-            
-            <div className={styles.sizeBars}>
-              {sizeDistribution.map(s => (
-                <div key={s.size} className={styles.sizeRow}>
-                  <div className={styles.sizeMeta}>
-                    <strong>TAMANHO {s.size}</strong>
-                    <span>{s.count} peças vendidas</span>
-                  </div>
-                  <div className={styles.sizeTrack}>
-                    <div className={styles.sizeFill} style={{ width: `${s.percent}%` }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
 
-          <div className={styles.panel}>
-            <div className={styles.panelTitleRow}>
-              <Filter size={17} />
-              <h2>INSIGHTS DE MODELAGEM STREETWEAR</h2>
-            </div>
-            <p>Diretrizes para equilibrar o mix de produtos.</p>
-            
-            <ul className={styles.insightList}>
-              <li>
-                <strong>Tamanhos M e G</strong> concentram mais de <strong>65%</strong> do volume total de pedidos da THR33.
-              </li>
-              <li>
-                A modelagem <strong>Boxy Fit</strong> possui menor taxa de devolução e maior velocidade de recompra.
-              </li>
-              <li>
-                Tamanhos <strong>PP</strong> demandam campanhas específicas ou menor volume de corte para evitar estoque parado.
-              </li>
-            </ul>
-
-            <div className={styles.fitMiniSection}>
-              <span className={styles.fitMiniTitle}>BUSCAS POR CORTE / MODELAGEM:</span>
-              <div className={styles.fitBarsList}>
-                {fitDistribution.map(fit => {
-                  const pct = Math.round((fit.count / maxFitCount) * 100);
-                  return (
-                    <div key={fit.label} className={styles.fitBarItem}>
-                      <div className={styles.fitBarMeta}>
-                        <span>{fit.label.toUpperCase()}</span>
-                        <strong>{fit.count} buscas</strong>
-                      </div>
-                      <div className={styles.fitBarTrack}>
-                        <div className={styles.fitBarFill} style={{ width: `${pct}%` }} />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
 
       {/* TAB 4: FUNIL DE CONVERSÃO */}
       {activeTab === 'funnel' && (

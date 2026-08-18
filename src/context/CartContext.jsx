@@ -137,6 +137,7 @@ export function CartProvider({ children }) {
       name: product.name || product.title,
       size: sizeStr,
       color: colorObj,
+      category: product.category || 'camisa',
       fit: product.fit || "Boxy Fit",
       price: cleanPrice,
       quantity: qty,
