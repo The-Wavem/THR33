@@ -83,6 +83,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     }
   }, [user, navigate]);
 
+  // Telemetria do Funil: Início de Checkout (Etapa 3)
+  useEffect(() => {
+    analyticsService.trackCheckoutStart();
+    analyticsService.trackPageView('checkout');
+  }, []);
+
   const [clientData, setClientData] = useState({
     name: user?.name || user?.displayName || '',
     email: user?.email || '',

@@ -574,33 +574,55 @@ export function CmsAnalytics() {
     }));
   }, [summaryData, orders]);
 
-  // Dados Reais do Funil em 4 Níveis
+  // 1. CONSOLIDAÇÃO DO FUNIL COM PROTEÇÃO MATEMÁTICA
   const funnel = useMemo(() => {
     const rawFunnel = summaryData.funnel || {};
-    const views = Number(rawFunnel.pdpViews || summaryData.pageViews?.produto_detalhe || 0);
-    const cartAdds = Number(rawFunnel.cartAdds || 0);
-    const cartRemoves = Number(rawFunnel.cartRemoves || 0);
-    const checkoutStarts = checkoutSessions.length || Number(rawFunnel.checkoutStarts || 0);
-    const purchases = orders.length || Number(rawFunnel.purchases || 0);
+    const rawProducts = summaryData.products || {};
 
-    const cartAbandonmentRate = cartAdds > 0 
-      ? (((Math.max(0, cartAdds - purchases)) / cartAdds) * 100).toFixed(1) 
-      : '0.0';
+    // Soma das views individuais dos produtos como fallback se pdpViews for 0
+    const sumProductsViews = Object.values(rawProducts).reduce((acc, p) => acc + (Number(p.views) || 0), 0);
+    const sumProductsAdds = Object.values(rawProducts).reduce((acc, p) => acc + (Number(p.addedToCart) || 0), 0);
+    const sumProductsRemoves = Object.values(rawProducts).reduce((acc, p) => acc + (Number(p.removedFromCart) || 0), 0);
 
+    const views = Math.max(Number(rawFunnel.pdpViews) || 0, sumProductsViews);
+    const cartAdds = Math.max(Number(rawFunnel.cartAdds) || 0, sumProductsAdds);
+    const cartRemoves = Math.max(Number(rawFunnel.cartRemoves) || 0, sumProductsRemoves);
+    const purchases = Math.max(orders.length, Number(rawFunnel.purchases) || 0);
+
+    // Início de checkout não pode ser menor que o total de pedidos pagos
+    const rawCheckoutStarts = Number(rawFunnel.checkoutStarts) || 0;
+    const checkoutStarts = Math.max(rawCheckoutStarts, purchases);
+
+    // Taxa de Conversão Geral (Views -> Compras)
     const overallConversionRate = views > 0 
       ? ((purchases / views) * 100).toFixed(1) 
-      : '0.0';
+      : (purchases > 0 ? '100.0' : '0.0');
 
-    return { 
-      views, 
-      cartAdds, 
-      cartRemoves, 
-      checkoutStarts, 
-      purchases, 
-      cartAbandonmentRate, 
-      overallConversionRate 
+    // Taxa de Abandono de Sacola
+    let cartAbandonmentRate = '0.0';
+    if (cartAdds > 0) {
+      const abandoned = Math.max(0, cartAdds - purchases);
+      cartAbandonmentRate = ((abandoned / cartAdds) * 100).toFixed(1);
+    }
+
+    // Porcentagens entre etapas do funil (sem ultrapassar 100% ou gerar divisões inválidas)
+    const stage2Percent = views > 0 ? Math.min(100, (cartAdds / views) * 100).toFixed(1) : (cartAdds > 0 ? '100.0' : '0.0');
+    const stage3Percent = cartAdds > 0 ? Math.min(100, (checkoutStarts / cartAdds) * 100).toFixed(1) : (checkoutStarts > 0 ? '100.0' : '0.0');
+    const stage4Percent = checkoutStarts > 0 ? Math.min(100, (purchases / checkoutStarts) * 100).toFixed(1) : (purchases > 0 ? '100.0' : '0.0');
+
+    return {
+      views,
+      cartAdds,
+      cartRemoves,
+      checkoutStarts,
+      purchases,
+      overallConversionRate,
+      cartAbandonmentRate,
+      stage2Percent,
+      stage3Percent,
+      stage4Percent
     };
-  }, [summaryData, orders, checkoutSessions]);
+  }, [summaryData, orders]);
 
   // Modelagens mais buscadas pelos clientes
   const fitDistribution = useMemo(() => {
@@ -1047,9 +1069,9 @@ export function CmsAnalytics() {
 
             <div className={styles.funnelStage}>
               <span className={styles.stageTag}>ETAPA 2</span>
-              <strong>{funnel.cartAdds}</strong>
+              <strong className={styles.blueStageVal}>{funnel.cartAdds}</strong>
               <span>Adições à Sacola</span>
-              <small>{((funnel.cartAdds / Math.max(funnel.views, 1)) * 100).toFixed(1)}% das visitas</small>
+              <small>{funnel.stage2Percent}% das visitas</small>
             </div>
 
             <div className={styles.stageDivider}>
@@ -1058,9 +1080,9 @@ export function CmsAnalytics() {
 
             <div className={styles.funnelStage}>
               <span className={styles.stageTag}>ETAPA 3</span>
-              <strong>{funnel.checkoutStarts}</strong>
+              <strong className={styles.yellowStageVal}>{funnel.checkoutStarts}</strong>
               <span>Inícios de Checkout</span>
-              <small>{((funnel.checkoutStarts / Math.max(funnel.cartAdds, 1)) * 100).toFixed(1)}% da sacola</small>
+              <small>{funnel.stage3Percent}% da sacola</small>
             </div>
 
             <div className={styles.stageDivider}>
@@ -1069,9 +1091,9 @@ export function CmsAnalytics() {
 
             <div className={`${styles.funnelStage} ${styles.stageSuccess}`}>
               <span className={styles.stageTag}>ETAPA 4 (FINAL)</span>
-              <strong>{funnel.purchases}</strong>
+              <strong className={styles.greenStageVal}>{funnel.purchases}</strong>
               <span>Pedidos Pagos</span>
-              <small>{((funnel.purchases / Math.max(funnel.checkoutStarts, 1)) * 100).toFixed(1)}% do checkout</small>
+              <small>{funnel.stage4Percent}% do checkout</small>
             </div>
           </div>
         </section>

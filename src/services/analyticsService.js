@@ -156,6 +156,20 @@ export const analyticsService = {
   },
 
   /**
+   * Rastreia início da sessão de checkout (Etapa 3 do Funil)
+   */
+  async trackCheckoutStart() {
+    try {
+      await setDoc(SUMMARY_DOC_REF, {
+        'funnel.checkoutStarts': increment(1),
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.warn("Aviso telemetria (inicio checkout):", err.message);
+    }
+  },
+
+  /**
    * Rastreia conversão final da compra por produto, tamanho, cor e categoria
    */
   async trackPurchase(items = []) {
