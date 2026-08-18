@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Truck, Star, Plus, Heart, ShoppingBag, ArrowLeft, Check, Package } from 'lucide-react';
@@ -91,14 +91,14 @@ export function ProdutoDetalhe({ onAddToCart }) {
         if (data) {
           setProduct(data);
           // Determina tamanho padrão disponível
-          if (data.stock) {
-            const firstAvailable = Object.entries(data.stock).find(([_, qty]) => Number(qty) > 0);
-            if (firstAvailable) {
-              setSelectedSize(firstAvailable[0]);
-            }
+          let defaultSize = 'M';
+          if (data.stock && typeof data.stock === 'object') {
+            const firstAvail = ['PP', 'P', 'M', 'G', 'GG'].find(sz => Number(data.stock[sz] ?? 0) > 0);
+            if (firstAvail) defaultSize = firstAvail;
           }
-          // Telemetria
-          analyticsService.trackProductView(data.id, data.name, data.category || 'camisa', data.fit || 'boxy');
+          setSelectedSize(defaultSize);
+          // Telemetria detalhada da peça
+          analyticsService.trackProductView(data.id, data.name, data.category || 'camisa', data.fit || 'boxy', data.slug);
           analyticsService.trackPageView('produto_detalhe');
         }
       } catch (err) {
@@ -109,6 +109,39 @@ export function ProdutoDetalhe({ onAddToCart }) {
     }
     loadProduct();
   }, [currentParam]);
+
+  // Consolidação da grade de estoque
+  const parsedStock = useMemo(() => {
+    if (product?.stock && typeof product.stock === 'object') {
+      return {
+        PP: Number(product.stock.PP ?? 0),
+        P: Number(product.stock.P ?? 0),
+        M: Number(product.stock.M ?? 0),
+        G: Number(product.stock.G ?? 0),
+        GG: Number(product.stock.GG ?? 0)
+      };
+    }
+    if (Array.isArray(product?.variants) && product.variants.length > 0) {
+      const s = { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
+      product.variants.forEach(v => {
+        const sz = String(v.size || '').toUpperCase();
+        if (s[sz] !== undefined) s[sz] = Number(v.stock ?? v.inventory ?? 0);
+      });
+      return s;
+    }
+    if (Array.isArray(product?.sizes) && product.sizes.length > 0) {
+      const s = { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
+      product.sizes.forEach(sz => {
+        const upper = String(sz).toUpperCase();
+        if (s[upper] !== undefined) s[upper] = 10;
+      });
+      return s;
+    }
+    return { PP: 2, P: 8, M: 12, G: 8, GG: 4 };
+  }, [product]);
+
+  const availableStock = parsedStock[selectedSize] ?? 0;
+  const isAllOutOfStock = Object.values(parsedStock).every(q => q <= 0);
 
   if (loading) {
     return (
@@ -159,10 +192,6 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
   const installmentsCount = product.installments || 3;
   const installmentValue = (effectivePrice / installmentsCount).toFixed(2).replace('.', ',');
-
-  const availableStock = product.stock 
-    ? Number(product.stock[selectedSize] || 0) 
-    : (Number(product.totalStock) || 10);
 
   const isFavorite = isInWishlist(product.id);
 
@@ -341,12 +370,14 @@ export function ProdutoDetalhe({ onAddToCart }) {
           <div className={styles.sizeSelector}>
             <div className={styles.selectorHeader}>
               <span className={styles.selectorLabel}>TAMANHO:</span>
-              <span className={styles.selectedValue}>TAM {selectedSize}</span>
+              <span className={styles.selectedValue}>
+                TAM {selectedSize} {availableStock <= 0 ? '(ESGOTADO)' : ''}
+              </span>
             </div>
             <div className={styles.sizeOptions}>
               {['PP', 'P', 'M', 'G', 'GG'].map((size) => {
-                const stockQty = product.stock ? Number(product.stock[size] || 0) : 10;
-                const isOutOfStock = stockQty === 0;
+                const stockQty = parsedStock[size] ?? 0;
+                const isOutOfStock = stockQty <= 0;
 
                 return (
                   <button
@@ -354,15 +385,22 @@ export function ProdutoDetalhe({ onAddToCart }) {
                     type="button"
                     disabled={isOutOfStock}
                     className={`${styles.sizeBtn} ${selectedSize === size ? styles.activeSize : ''} ${isOutOfStock ? styles.disabledSize : ''}`}
-                    onClick={() => setSelectedSize(size)}
+                    onClick={() => !isOutOfStock && setSelectedSize(size)}
+                    title={isOutOfStock ? `Tamanho ${size} ESGOTADO` : `Tamanho ${size} (${stockQty} un. em estoque)`}
+                    aria-label={`Tamanho ${size} ${isOutOfStock ? 'Esgotado' : ''}`}
                   >
-                    {size}
+                    <span>{size}</span>
+                    {isOutOfStock && <span className={styles.outOfStockLine} />}
                   </button>
                 );
               })}
             </div>
-            <small className={styles.stockNotice}>
-              {availableStock > 0 ? `${availableStock} unidades disponíveis no tamanho ${selectedSize}` : `Tamanho ${selectedSize} esgotado no momento`}
+            <small className={`${styles.stockNotice} ${availableStock <= 0 ? styles.stockNoticeAlert : ''}`}>
+              {availableStock > 0 
+                ? `${availableStock} unidades disponíveis no tamanho ${selectedSize}` 
+                : isAllOutOfStock
+                  ? 'Todos os tamanhos estão esgotados no momento.'
+                  : `Tamanho ${selectedSize} esgotado no estoque.`}
             </small>
           </div>
 
@@ -390,15 +428,17 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
             <button 
               type="button"
-              className={`${styles.addToBagButton} ${isAddedFeedback ? styles.addedSuccess : ''}`}
+              className={`${styles.addToBagButton} ${isAddedFeedback ? styles.addedSuccess : ''} ${availableStock <= 0 ? styles.disabledBagBtn : ''}`}
               onClick={handleAddToCart}
-              disabled={availableStock === 0}
+              disabled={availableStock <= 0}
             >
               <ShoppingBag size={18} />
               <span>
                 {isAddedFeedback 
                   ? 'ADICIONADO À SACOLA!' 
-                  : availableStock > 0 ? 'ADICIONAR À SACOLA' : 'ESGOTADO'}
+                  : availableStock > 0 
+                    ? 'ADICIONAR À SACOLA' 
+                    : 'TAMANHO ESGOTADO'}
               </span>
             </button>
 

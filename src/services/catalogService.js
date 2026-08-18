@@ -230,6 +230,46 @@ export const getDynamicMetadata = () => {
   };
 };
 
+/**
+ * Decrementa o estoque físico por tamanho no Firestore após compra concluída
+ */
+export const decrementProductStock = async (items = []) => {
+  if (!items || items.length === 0) return;
+
+  for (const item of items) {
+    const productId = item.id || item.slug;
+    const size = String(item.size || 'M').toUpperCase();
+    const qtyToDeduct = Number(item.quantity || 1);
+
+    if (!productId) continue;
+
+    try {
+      const prodRef = doc(db, 'products', productId);
+      const prodSnap = await getDoc(prodRef);
+
+      if (prodSnap.exists()) {
+        const prodData = prodSnap.data() || {};
+        const currentStock = prodData.stock ? { ...prodData.stock } : { PP: 5, P: 10, M: 15, G: 10, GG: 5 };
+        
+        const currentSizeQty = Number(currentStock[size] ?? 0);
+        const newSizeQty = Math.max(0, currentSizeQty - qtyToDeduct);
+        currentStock[size] = newSizeQty;
+
+        const totalStock = Object.values(currentStock).reduce((a, b) => Number(a) + Number(b), 0);
+
+        await setDoc(prodRef, {
+          stock: currentStock,
+          totalStock,
+          lastSoldAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      }
+    } catch (err) {
+      console.warn(`Erro ao decrementar estoque de ${productId}:`, err.message);
+    }
+  }
+};
+
 export const catalogService = {
   getVitrineSettings,
   saveVitrineSettings,
@@ -240,7 +280,8 @@ export const catalogService = {
   getGifts,
   getGiftById,
   getProductsByCategory,
-  getDynamicMetadata
+  getDynamicMetadata,
+  decrementProductStock
 };
 
 export default catalogService;

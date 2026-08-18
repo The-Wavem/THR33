@@ -60,24 +60,35 @@ export const analyticsService = {
   },
 
   /**
-   * Rastreia visualização detalhada da peça na PDP
+   * Rastreia visualização detalhada da peça na PDP e Vitrine
    */
-  async trackProductView(productId, productName, category = '', fit = '') {
+  async trackProductView(productId, productName = '', category = '', fit = '', slug = '') {
     if (!productId) return;
     const cleanId = String(productId).replace(/[./#$\[\]]/g, '_');
+    const cleanSlug = slug ? String(slug).replace(/[./#$\[\]]/g, '_') : '';
     const eventKey = `productView:${cleanId}`;
 
     if (!shouldTrack(eventKey)) return;
 
     try {
-      await setDoc(SUMMARY_DOC_REF, {
+      const updates = {
         [`products.${cleanId}.views`]: increment(1),
         [`products.${cleanId}.name`]: productName || cleanId,
         [`products.${cleanId}.category`]: category || 'camisa',
         [`products.${cleanId}.fit`]: fit || 'boxy',
         'funnel.pdpViews': increment(1),
         lastUpdated: new Date().toISOString()
-      }, { merge: true });
+      };
+
+      // Se houver slug distinto do id, vincula também para sincronia total
+      if (cleanSlug && cleanSlug !== cleanId) {
+        updates[`products.${cleanSlug}.views`] = increment(1);
+        updates[`products.${cleanSlug}.name`] = productName || cleanSlug;
+        updates[`products.${cleanSlug}.category`] = category || 'camisa';
+        updates[`products.${cleanSlug}.fit`] = fit || 'boxy';
+      }
+
+      await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
     } catch (err) {
       console.warn("Aviso telemetria (view produto):", err.message);
     }
@@ -89,17 +100,24 @@ export const analyticsService = {
   async trackAddToCart(item) {
     if (!item?.id && !item?.slug) return;
     const cleanId = String(item.id || item.slug).replace(/[./#$\[\]]/g, '_');
+    const cleanSlug = item.slug ? String(item.slug).replace(/[./#$\[\]]/g, '_') : '';
     const qty = Number(item.quantity) || 1;
 
     try {
-      await setDoc(SUMMARY_DOC_REF, {
+      const updates = {
         [`products.${cleanId}.addedToCart`]: increment(qty),
         [`products.${cleanId}.name`]: item.name || cleanId,
         [`products.${cleanId}.fit`]: item.fit || 'boxy',
         [`sizes.${item.size || 'M'}`]: increment(qty),
         'funnel.cartAdds': increment(qty),
         lastUpdated: new Date().toISOString()
-      }, { merge: true });
+      };
+
+      if (cleanSlug && cleanSlug !== cleanId) {
+        updates[`products.${cleanSlug}.addedToCart`] = increment(qty);
+      }
+
+      await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
     } catch (err) {
       console.warn("Aviso telemetria (add carrinho):", err.message);
     }
@@ -111,21 +129,28 @@ export const analyticsService = {
   async trackRemoveFromCart(item) {
     if (!item?.id && !item?.slug) return;
     const cleanId = String(item.id || item.slug).replace(/[./#$\[\]]/g, '_');
+    const cleanSlug = item.slug ? String(item.slug).replace(/[./#$\[\]]/g, '_') : '';
     const qty = Number(item.quantity) || 1;
 
     try {
-      await setDoc(SUMMARY_DOC_REF, {
+      const updates = {
         [`products.${cleanId}.removedFromCart`]: increment(qty),
         'funnel.cartRemoves': increment(qty),
         lastUpdated: new Date().toISOString()
-      }, { merge: true });
+      };
+
+      if (cleanSlug && cleanSlug !== cleanId) {
+        updates[`products.${cleanSlug}.removedFromCart`] = increment(qty);
+      }
+
+      await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
     } catch (err) {
       console.warn("Aviso telemetria (remove carrinho):", err.message);
     }
   },
 
   /**
-   * Rastreia conversão final da compra por produto
+   * Rastreia conversão final da compra por produto e por tamanho na telemetria consolidada
    */
   async trackPurchase(items = []) {
     if (!items || items.length === 0) return;
@@ -137,7 +162,10 @@ export const analyticsService = {
     items.forEach(item => {
       const cleanId = String(item.id || item.slug || 'item').replace(/[./#$\[\]]/g, '_');
       const qty = Number(item.quantity) || 1;
+      const sz = String(item.size || 'M').toUpperCase();
+
       updates[`products.${cleanId}.purchases`] = increment(qty);
+      updates[`sizes.${sz}`] = increment(qty);
     });
 
     try {

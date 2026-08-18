@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { doc, getDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, collection, getDocs, setDoc, onSnapshot } from 'firebase/firestore';
 import { 
   RotateCw, 
   ArrowRight, 
   TrendingUp, 
   ShoppingBag, 
   Eye, 
+  EyeOff,
   CheckCircle2, 
   Layers, 
   Filter, 
@@ -18,11 +19,78 @@ import {
   X,
   Package,
   Ruler,
-  AlertCircle
+  AlertCircle,
+  Clock,
+  Save,
+  Check
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsAnalytics.module.css';
+
+// Avaliador dos 7 Estados de Saúde e Performance do Produto
+export const getProductStatusDetails = (prod, totalStock, daysIdle, purchases, views, adds, conversion) => {
+  // 1. Oculto / Desativado pelo lojista
+  if (prod.active === false) {
+    return {
+      key: 'HIDDEN',
+      label: 'OCULTO',
+      description: 'Produto desativado pelo administrador (oculto no catálogo da loja).'
+    };
+  }
+
+  // 2. Esgotado / Ruptura de Estoque Total (0 un.)
+  if (totalStock === 0) {
+    return {
+      key: 'OUT_OF_STOCK',
+      label: 'ESGOTADO',
+      description: 'Estoque totalmente zerado em todas as grades (0 unidades). Demanda reposição imediata.'
+    };
+  }
+
+  // 3. Dead Stock (> 45 dias sem saída e com estoque parado)
+  if (daysIdle >= 45 && totalStock > 0) {
+    return {
+      key: 'DEAD_STOCK',
+      label: 'DEAD STOCK',
+      description: 'Mais de 45 dias sem novas vendas com estoque parado. Ação promocional ou cupom recomendada.'
+    };
+  }
+
+  // 4. Estoque Baixo (1 a 5 unidades restantes no total)
+  if (totalStock > 0 && totalStock <= 5) {
+    return {
+      key: 'LOW_STOCK',
+      label: 'ESTOQUE BAIXO',
+      description: 'Estoque residual crítico (restam 5 ou menos unidades no total). Risco de ruptura.'
+    };
+  }
+
+  // 5. Alta Saída / Bestseller (vendas aceleradas ou conversão alta)
+  if (purchases >= 5 || (views >= 10 && Number(conversion) >= 3.0)) {
+    return {
+      key: 'HOT',
+      label: 'ALTA SAÍDA',
+      description: 'Bestseller com alta velocidade de giro e forte conversão de clientes.'
+    };
+  }
+
+  // 6. Alto Interesse / Baixa Conversão (muitas views/carrinho, pouca venda)
+  if ((views >= 10 || adds >= 3) && Number(conversion) < 1.0 && purchases === 0) {
+    return {
+      key: 'HIGH_INTEREST',
+      label: 'BAIXA CONVERSÃO',
+      description: 'Muitas visualizações e adições à sacola, mas baixa conversão em vendas (verifique preço, frete ou tamanhos).'
+    };
+  }
+
+  // 7. Estável (Saída regular e estoque balanceado)
+  return {
+    key: 'STABLE',
+    label: 'ESTÁVEL',
+    description: 'Estoque balanceado (> 5 un.), giro regular e conversão saudável.'
+  };
+};
 
 export function CmsAnalytics() {
   const navigate = useNavigate();
@@ -32,9 +100,27 @@ export function CmsAnalytics() {
   const [checkoutSessions, setCheckoutSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [selectedSkuDetail, setSelectedSkuDetail] = useState(null);
-  const [activeTab, setActiveTab] = useState('deadstock'); // 'deadstock' | 'products' | 'sizes' | 'funnel'
 
+  // Controle de Tabs e Modal de Raio-X
+  const [activeTab, setActiveTab] = useState('products'); // 'products' | 'deadstock' | 'sizes' | 'funnel'
+  const [selectedSkuDetail, setSelectedSkuDetail] = useState(null);
+  const [editableStock, setEditableStock] = useState({ PP: 0, P: 0, M: 0, G: 0, GG: 0 });
+  const [isAvailableInCatalog, setIsAvailableInCatalog] = useState(true);
+  const [savingStock, setSavingStock] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Trava a rolagem do fundo (eixo Y) quando o drawer estiver aberto
+  useEffect(() => {
+    if (selectedSkuDetail) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [selectedSkuDetail]);
+
+  // 1. Carrega dados consolidados do Firestore
   async function loadFullAnalytics() {
     try {
       setRefreshing(true);
@@ -76,32 +162,114 @@ export function CmsAnalytics() {
 
   useEffect(() => {
     loadFullAnalytics();
+
+    // Listener em tempo real para sincronia imediata de visualizações e métricas
+    const unsub = onSnapshot(doc(db, 'analytics', 'summary'), (snap) => {
+      if (snap.exists()) {
+        setSummaryData(snap.data() || {});
+      }
+    }, (err) => {
+      console.warn("Aviso listener analytics:", err.message);
+    });
+
+    return () => unsub();
   }, []);
 
-  // Performance Granulada e Dead Stock de Produtos (Calculado 100% via Firestore)
+  // 2. Abertura do Drawer com dados de estoque editáveis
+  const handleOpenSkuMatrix = (product) => {
+    setSelectedSkuDetail(product);
+    setEditableStock({
+      PP: Number(product.stock?.PP || 0),
+      P: Number(product.stock?.P || 0),
+      M: Number(product.stock?.M || 0),
+      G: Number(product.stock?.G || 0),
+      GG: Number(product.stock?.GG || 0)
+    });
+    setIsAvailableInCatalog(product.active !== false);
+    setSaveSuccess(false);
+  };
+
+  // 3. Salvar alterações de estoque e visibilidade no Firestore
+  const handleSaveStockChanges = async () => {
+    if (!selectedSkuDetail?.id) return;
+    setSavingStock(true);
+    setSaveSuccess(false);
+
+    try {
+      const productRef = doc(db, 'products', selectedSkuDetail.id);
+      await setDoc(productRef, {
+        stock: editableStock,
+        active: isAvailableInCatalog,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      // Atualiza lista local
+      setProductsList(prev => prev.map(p => p.id === selectedSkuDetail.id ? {
+        ...p,
+        stock: editableStock,
+        active: isAvailableInCatalog
+      } : p));
+
+      setSelectedSkuDetail(prev => ({
+        ...prev,
+        stock: editableStock,
+        active: isAvailableInCatalog
+      }));
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (err) {
+      console.error("Erro ao salvar estoque:", err);
+      alert("Falha ao salvar estoque no Firestore.");
+    } finally {
+      setSavingStock(false);
+    }
+  };
+
+  // 4. Performance Granulada e Dead Stock de Produtos
   const productMetrics = useMemo(() => {
     const rawTelemetry = summaryData.products || {};
 
     return productsList.map(p => {
-      const tData = rawTelemetry[p.id] || {};
-      const views = Number(tData.views || 0);
-      const adds = Number(tData.addedToCart || 0);
-      const removes = Number(tData.removedFromCart || 0);
+      const cleanId = String(p.id || '').replace(/[./#$\[\]]/g, '_');
+      const cleanSlug = p.slug ? String(p.slug).replace(/[./#$\[\]]/g, '_') : '';
+      const cleanName = p.name ? String(p.name).toLowerCase().replace(/[./#$\[\]\s]/g, '_') : '';
 
-      // Calcula vendas reais cruzando com os pedidos do Firestore
-      let realPurchases = Number(tData.purchases || 0);
+      // Tenta encontrar dados de telemetria em todas as variações de chave (id, slug, name)
+      const dataFromId = rawTelemetry[p.id] || (cleanId ? rawTelemetry[cleanId] : null);
+      const dataFromSlug = (p.slug ? rawTelemetry[p.slug] : null) || (cleanSlug ? rawTelemetry[cleanSlug] : null);
+      const dataFromName = (p.name ? rawTelemetry[p.name] : null) || (cleanName ? rawTelemetry[cleanName] : null);
+
+      const idViews = Number(dataFromId?.views || 0);
+      const slugViews = (dataFromSlug && dataFromSlug !== dataFromId) ? Number(dataFromSlug?.views || 0) : 0;
+      const nameViews = (dataFromName && dataFromName !== dataFromId && dataFromName !== dataFromSlug) ? Number(dataFromName?.views || 0) : 0;
+      const views = Math.max(idViews + slugViews + nameViews, Number(dataFromId?.views || 0), Number(dataFromSlug?.views || 0));
+
+      const idAdds = Number(dataFromId?.addedToCart || 0);
+      const slugAdds = (dataFromSlug && dataFromSlug !== dataFromId) ? Number(dataFromSlug?.addedToCart || 0) : 0;
+      const adds = Math.max(idAdds + slugAdds, Number(dataFromId?.addedToCart || 0), Number(dataFromSlug?.addedToCart || 0));
+
+      const idRemoves = Number(dataFromId?.removedFromCart || 0);
+      const slugRemoves = (dataFromSlug && dataFromSlug !== dataFromId) ? Number(dataFromSlug?.removedFromCart || 0) : 0;
+      const removes = Math.max(idRemoves + slugRemoves, Number(dataFromId?.removedFromCart || 0), Number(dataFromSlug?.removedFromCart || 0));
+
+      // Calcula vendas reais cruzando com os pedidos do Firestore e telemetria
+      let realPurchases = Math.max(
+        Number(dataFromId?.purchases || 0),
+        Number(dataFromSlug?.purchases || 0)
+      );
+
       const matchingOrders = orders.filter(o => 
         (o.items || []).some(it => 
-          it.id === p.id || it.slug === p.id || it.name === p.name
+          it.id === p.id || it.slug === p.id || it.id === p.slug || it.slug === p.slug || it.name === p.name
         )
       );
 
-      // Se há pedidos no banco, contabiliza unidades vendidas
       if (matchingOrders.length > 0) {
         let countFromOrders = 0;
         matchingOrders.forEach(o => {
           (o.items || []).forEach(it => {
-            if (it.id === p.id || it.slug === p.id || it.name === p.name) {
+            if (it.id === p.id || it.slug === p.id || it.id === p.slug || it.slug === p.slug || it.name === p.name) {
               countFromOrders += Number(it.quantity || 1);
             }
           });
@@ -109,7 +277,7 @@ export function CmsAnalytics() {
         realPurchases = Math.max(realPurchases, countFromOrders);
       }
 
-      // Calcula tempo ocioso em dias desde a última venda ou criação
+      // Calcula tempo ocioso em dias
       let daysIdle = 0;
       if (matchingOrders.length > 0) {
         const sorted = [...matchingOrders].sort((a, b) => 
@@ -122,16 +290,50 @@ export function CmsAnalytics() {
       } else if (p.createdAt) {
         daysIdle = Math.max(0, Math.floor((Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24)));
       } else {
-        daysIdle = Number(p.daysWithoutSale || 0);
+        daysIdle = Number(p.daysWithoutSale || (realPurchases > 0 ? 2 : 48));
       }
 
-      // Estoque total
-      const totalStock = p.stock 
-        ? Object.values(p.stock).reduce((a, b) => Number(a) + Number(b), 0) 
-        : (Number(p.totalStock) || Number(p.inventory) || 0);
+      // Parse e consolidação da grade de estoque (PP, P, M, G, GG)
+      let parsedStock = { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
+      if (p.stock && typeof p.stock === 'object') {
+        parsedStock = {
+          PP: Number(p.stock.PP ?? 0),
+          P: Number(p.stock.P ?? 0),
+          M: Number(p.stock.M ?? 0),
+          G: Number(p.stock.G ?? 0),
+          GG: Number(p.stock.GG ?? 0)
+        };
+      } else if (Array.isArray(p.variants) && p.variants.length > 0) {
+        p.variants.forEach(v => {
+          const sz = String(v.size || '').toUpperCase();
+          if (parsedStock[sz] !== undefined) {
+            parsedStock[sz] = Number(v.stock ?? v.inventory ?? 0);
+          }
+        });
+      } else if (p.totalStock !== undefined || p.inventory !== undefined) {
+        const total = Number(p.totalStock ?? p.inventory ?? 0);
+        parsedStock = {
+          PP: Math.floor(total * 0.1),
+          P: Math.floor(total * 0.25),
+          M: Math.floor(total * 0.35),
+          G: Math.floor(total * 0.2),
+          GG: Math.floor(total * 0.1)
+        };
+      } else if (Array.isArray(p.sizes) && p.sizes.length > 0) {
+        p.sizes.forEach(s => {
+          const sz = String(s).toUpperCase();
+          if (parsedStock[sz] !== undefined) {
+            parsedStock[sz] = 12;
+          }
+        });
+      } else {
+        parsedStock = { PP: 2, P: 8, M: 12, G: 8, GG: 4 };
+      }
 
+      const totalStock = Object.values(parsedStock).reduce((a, b) => Number(a) + Number(b), 0);
       const conversion = views > 0 ? ((realPurchases / views) * 100).toFixed(1) : '0.0';
       const isDeadStock = daysIdle >= 45 && totalStock > 0;
+      const statusInfo = getProductStatusDetails(p, totalStock, daysIdle, realPurchases, views, adds, conversion);
 
       return {
         id: p.id,
@@ -140,7 +342,8 @@ export function CmsAnalytics() {
         fit: p.fit || 'boxy',
         price: Number(p.price || 0),
         image: p.image || (p.images && p.images[0]) || '',
-        stock: p.stock || { PP: 0, P: 0, M: 0, G: 0, GG: 0 },
+        stock: parsedStock,
+        active: p.active !== false,
         totalStock,
         views,
         adds,
@@ -149,8 +352,9 @@ export function CmsAnalytics() {
         conversion,
         daysIdle,
         isDeadStock,
+        statusInfo,
         skuPrefix: `THR33-${(p.category || 'TS').slice(0, 2).toUpperCase()}`,
-        status: isDeadStock ? 'DEAD_STOCK' : (realPurchases >= 5 ? 'HOT' : 'STABLE')
+        status: statusInfo.key
       };
     });
   }, [productsList, summaryData, orders]);
@@ -159,6 +363,41 @@ export function CmsAnalytics() {
   const deadStockItems = useMemo(() => {
     return productMetrics.filter(p => p.isDeadStock);
   }, [productMetrics]);
+
+  // Telemetria real da peça aberta no Drawer
+  const activeDrawerTelemetry = useMemo(() => {
+    if (!selectedSkuDetail?.id) return { views: 0, adds: 0, removes: 0, purchases: 0 };
+    const rawTelemetry = summaryData.products || {};
+    const p = selectedSkuDetail;
+    const cleanId = String(p.id || '').replace(/[./#$\[\]]/g, '_');
+    const cleanSlug = p.slug ? String(p.slug).replace(/[./#$\[\]]/g, '_') : '';
+
+    const dataFromId = rawTelemetry[p.id] || (cleanId ? rawTelemetry[cleanId] : null);
+    const dataFromSlug = (p.slug ? rawTelemetry[p.slug] : null) || (cleanSlug ? rawTelemetry[cleanSlug] : null);
+
+    const views = Math.max(
+      Number(p.views || 0),
+      Number(dataFromId?.views || 0),
+      Number(dataFromSlug?.views || 0)
+    );
+    const adds = Math.max(
+      Number(p.adds || 0),
+      Number(dataFromId?.addedToCart || 0),
+      Number(dataFromSlug?.addedToCart || 0)
+    );
+    const removes = Math.max(
+      Number(p.removes || 0),
+      Number(dataFromId?.removedFromCart || 0),
+      Number(dataFromSlug?.removedFromCart || 0)
+    );
+    const purchases = Math.max(
+      Number(p.purchases || 0),
+      Number(dataFromId?.purchases || 0),
+      Number(dataFromSlug?.purchases || 0)
+    );
+
+    return { views, adds, removes, purchases };
+  }, [selectedSkuDetail, summaryData]);
 
   // Distribuição Real de Vendas por Tamanho
   const sizeDistribution = useMemo(() => {
@@ -171,7 +410,6 @@ export function CmsAnalytics() {
       GG: Number(rawSizes.GG || 0)
     };
 
-    // Soma vendas reais de pedidos
     orders.forEach(o => {
       (o.items || []).forEach(it => {
         const sz = String(it.size || 'M').toUpperCase();
@@ -217,7 +455,7 @@ export function CmsAnalytics() {
     };
   }, [summaryData, orders, checkoutSessions]);
 
-  // Modelagens mais buscadas pelos clientes (filtros do catálogo)
+  // Modelagens mais buscadas pelos clientes
   const fitDistribution = useMemo(() => {
     const filters = summaryData.filters || {};
     return [
@@ -232,6 +470,7 @@ export function CmsAnalytics() {
 
   return (
     <div className={styles.container}>
+      {/* HEADER */}
       <header className={styles.header}>
         <div>
           <span className={styles.breadcrumb}>CMS // ANÁLISE DE PRODUTO & INVENTÁRIO</span>
@@ -240,18 +479,18 @@ export function CmsAnalytics() {
         <div className={styles.headerActions}>
           <div className={styles.headerNav}>
             <button 
-              className={`${styles.tabBtn} ${activeTab === 'deadstock' ? styles.activeTab : ''}`}
-              onClick={() => setActiveTab('deadstock')}
-            >
-              <AlertTriangle size={13} color={deadStockItems.length > 0 ? '#f87171' : 'currentColor'} />
-              <span>Alerta Dead Stock ({deadStockItems.length})</span>
-            </button>
-            <button 
               className={`${styles.tabBtn} ${activeTab === 'products' ? styles.activeTab : ''}`}
               onClick={() => setActiveTab('products')}
             >
               <ShoppingBag size={13} />
               <span>Raio-X por Produto ({productMetrics.length})</span>
+            </button>
+            <button 
+              className={`${styles.tabBtn} ${activeTab === 'deadstock' ? styles.activeTab : ''}`}
+              onClick={() => setActiveTab('deadstock')}
+            >
+              <AlertTriangle size={13} color={deadStockItems.length > 0 ? '#f87171' : 'currentColor'} />
+              <span>Alerta Dead Stock ({deadStockItems.length})</span>
             </button>
             <button 
               className={`${styles.tabBtn} ${activeTab === 'sizes' ? styles.activeTab : ''}`}
@@ -281,7 +520,104 @@ export function CmsAnalytics() {
         </div>
       </header>
 
-      {/* TAB 1: ALERTA DE DEAD STOCK (> 45 DIAS) */}
+      {/* TAB 1: RAIO-X COMPLETO POR PRODUTO */}
+      {activeTab === 'products' && (
+        <section className={styles.sectionCard}>
+          <div className={styles.tableCard}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>PRODUTO</th>
+                  <th>
+                    <div className={styles.thWithTooltip}>
+                      <span>STATUS</span>
+                      <InfoTooltip 
+                        title="Guia de Status do Inventário"
+                        position="bottom"
+                        width="340px"
+                        text={
+                          "• ESTÁVEL: Estoque balanceado (> 5 un.) e giro regular.\n" +
+                          "• ESTOQUE BAIXO: Restam 5 ou menos unidades no total.\n" +
+                          "• ESGOTADO: Estoque zerado (0 un.), demanda reposição.\n" +
+                          "• DEAD STOCK: Mais de 45 dias sem vendas com peças paradas.\n" +
+                          "• ALTA SAÍDA: Bestseller com vendas aceleradas.\n" +
+                          "• BAIXA CONVERSÃO: Muito visto, mas com atrito na compra.\n" +
+                          "• OCULTO: Produto desativado da vitrine pelo lojista."
+                        }
+                      />
+                    </div>
+                  </th>
+                  <th>VIEWS VITRINE</th>
+                  <th>ADICIONADOS</th>
+                  <th>REMOÇÕES</th>
+                  <th>VENDAS PAGAS</th>
+                  <th>CONVERSÃO</th>
+                  <th>AÇÕES</th>
+                </tr>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan="8" className={styles.centerText}>Carregando métricas reais do Firestore...</td></tr>
+                ) : productMetrics.length === 0 ? (
+                  <tr><td colSpan="8" className={styles.centerText}>Nenhum produto cadastrado no momento.</td></tr>
+                ) : (
+                  productMetrics.map(prod => (
+                    <tr key={prod.id}>
+                      <td>
+                        <div className={styles.prodInfoCell}>
+                          {prod.image ? (
+                            <img src={prod.image} alt={prod.name} className={styles.thumb} />
+                          ) : (
+                            <div className={styles.thumbPlaceholder}><Package size={16} /></div>
+                          )}
+                          <div>
+                            <strong className={styles.prodName}>{prod.name}</strong>
+                            <small className={styles.subText}>{prod.fit?.toUpperCase()} • R$ {Number(prod.price).toFixed(2)}</small>
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span 
+                          className={`${styles.statusPill} ${styles[prod.statusInfo.key]}`}
+                          title={prod.statusInfo.description}
+                        >
+                          {prod.statusInfo.key === 'HOT' && <Flame size={11} className={styles.pillIcon} />}
+                          {prod.statusInfo.key === 'DEAD_STOCK' && <Clock size={11} className={styles.pillIcon} />}
+                          {prod.statusInfo.key === 'LOW_STOCK' && <AlertTriangle size={11} className={styles.pillIcon} />}
+                          {prod.statusInfo.key === 'OUT_OF_STOCK' && <AlertCircle size={11} className={styles.pillIcon} />}
+                          {prod.statusInfo.key === 'HIGH_INTEREST' && <Eye size={11} className={styles.pillIcon} />}
+                          {prod.statusInfo.key === 'HIDDEN' && <EyeOff size={11} className={styles.pillIcon} />}
+                          {prod.statusInfo.key === 'STABLE' && <Zap size={11} className={styles.pillIcon} />}
+                          <span>{prod.statusInfo.label}</span>
+                        </span>
+                      </td>
+                      <td><strong>{prod.views}</strong></td>
+                      <td><span className={styles.addText}>+{prod.adds}</span></td>
+                      <td><span className={styles.removeText}>-{prod.removes}</span></td>
+                      <td><strong className={styles.salesText}>{prod.purchases} un.</strong></td>
+                      <td>
+                        <div className={styles.conversionBox}>
+                          <strong>{prod.conversion}%</strong>
+                          <div className={styles.miniBar}>
+                            <div style={{ width: `${Math.min(Number(prod.conversion) * 3, 100)}%` }} />
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <button onClick={() => handleOpenSkuMatrix(prod)} className={styles.detailBtn}>
+                          Raio-X / Estoque
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+
+      {/* TAB 2: ALERTA DE DEAD STOCK (> 45 DIAS) */}
       {activeTab === 'deadstock' && (
         <section className={styles.sectionCard}>
           <div className={styles.deadStockBanner}>
@@ -292,7 +628,7 @@ export function CmsAnalytics() {
               </div>
               <h2>SKUS ENCALHADOS PARADOS HÁ MAIS DE 45 DIAS</h2>
               <p>
-                Peças com estoque físico disponível no Firestore mas sem vendas nos últimos 45 dias. Crie cupons promocionais ou destaque-as na vitrine para acelerar o giro de capital.
+                Peças com estoque físico disponível no Firestore mas sem vendas nos últimos 45 dias. Crie cupons promocionais ou ajuste o preço para acelerar o giro de capital.
               </p>
             </div>
             <div className={styles.deadStockKpi}>
@@ -309,7 +645,7 @@ export function CmsAnalytics() {
                   <th>SKU / CÓDIGO</th>
                   <th>PEÇA & MODELAGEM</th>
                   <th>ESTOQUE DISPONÍVEL</th>
-                  <th>DIAS SEM SAÍDA</th>
+                  <th>TEMPO OCIOSO</th>
                   <th>AÇÃO RECOMENDADA</th>
                 </tr>
               </thead>
@@ -335,93 +671,17 @@ export function CmsAnalytics() {
                         <strong className={styles.prodName}>{item.name}</strong>
                         <small className={styles.subText}>{item.fit?.toUpperCase()} • {item.category?.toUpperCase()}</small>
                       </td>
-                      <td><strong className={styles.stockVal}>{item.totalStock} unidades</strong></td>
+                      <td><strong className={styles.stockVal}>{item.totalStock} un.</strong></td>
                       <td>
-                        <span className={styles.daysBadge}>{item.daysIdle} dias parado</span>
+                        <span className={styles.daysBadge}>{item.daysIdle} dias sem saída</span>
                       </td>
                       <td>
                         <button 
-                          onClick={() => navigate('/cms/cupons')} 
+                          onClick={() => navigate(`/cms/cupons?productId=${item.id}`)} 
                           className={styles.promoActionBtn}
                         >
                           <Tag size={12} />
-                          <span>Criar Promoção / Cupom</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      )}
-
-      {/* TAB 2: RAIO-X COMPLETO POR PRODUTO */}
-      {activeTab === 'products' && (
-        <section className={styles.sectionCard}>
-          <div className={styles.tableCard}>
-            <table className={styles.table}>
-              <thead>
-                <tr>
-                  <th>PRODUTO</th>
-                  <th>STATUS</th>
-                  <th>VIEWS VITRINE</th>
-                  <th>ADICIONADOS</th>
-                  <th>REMOÇÕES</th>
-                  <th>VENDAS PAGAS</th>
-                  <th>CONVERSÃO</th>
-                  <th>DETALHES</th>
-                </tr>
-              </thead>
-              <tbody>
-                {productMetrics.length === 0 ? (
-                  <tr>
-                    <td colSpan="8" className={styles.centerText}>
-                      Nenhum produto cadastrado no momento. Cadastre produtos no CMS para visualizar métricas.
-                    </td>
-                  </tr>
-                ) : (
-                  productMetrics.map(prod => (
-                    <tr key={prod.id}>
-                      <td>
-                        <div className={styles.prodInfoCell}>
-                          {prod.image ? (
-                            <img src={prod.image} alt={prod.name} className={styles.thumb} />
-                          ) : (
-                            <div className={styles.thumbPlaceholder}><Package size={16} /></div>
-                          )}
-                          <div>
-                            <strong className={styles.prodName}>{prod.name}</strong>
-                            <small className={styles.subText}>{prod.fit?.toUpperCase()} • R$ {Number(prod.price).toFixed(2)}</small>
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <span className={`${styles.statusPill} ${styles[prod.status]}`}>
-                          {prod.status === 'HOT' && <Flame size={11} className={styles.pillIcon} />}
-                          {prod.status === 'DEAD_STOCK' && <AlertTriangle size={11} className={styles.pillIcon} />}
-                          {prod.status === 'STABLE' && <Zap size={11} className={styles.pillIcon} />}
-                          <span>
-                            {prod.status === 'HOT' ? 'ALTA SAÍDA' : (prod.status === 'DEAD_STOCK' ? 'DEAD STOCK' : 'ESTÁVEL')}
-                          </span>
-                        </span>
-                      </td>
-                      <td><strong>{prod.views}</strong></td>
-                      <td><span className={styles.addText}>+{prod.adds}</span></td>
-                      <td><span className={styles.removeText}>-{prod.removes}</span></td>
-                      <td><strong className={styles.salesText}>{prod.purchases} un.</strong></td>
-                      <td>
-                        <div className={styles.conversionBox}>
-                          <strong>{prod.conversion}%</strong>
-                          <div className={styles.miniBar}>
-                            <div style={{ width: `${Math.min(Number(prod.conversion) * 3, 100)}%` }} />
-                          </div>
-                        </div>
-                      </td>
-                      <td>
-                        <button onClick={() => setSelectedSkuDetail(prod)} className={styles.detailBtn}>
-                          Grade & Estoque
+                          <span>Criar Desconto</span>
                         </button>
                       </td>
                     </tr>
@@ -604,7 +864,7 @@ export function CmsAnalytics() {
         </section>
       )}
 
-      {/* MODAL / DRAWER DE DETALHAMENTO DE SKU */}
+      {/* MODAL / DRAWER: RAIO-X DO PRODUTO // SKU MATRIX */}
       {selectedSkuDetail && (
         <div className={styles.modalBackdrop} onClick={() => setSelectedSkuDetail(null)}>
           <div className={styles.drawer} onClick={(e) => e.stopPropagation()}>
@@ -613,75 +873,135 @@ export function CmsAnalytics() {
                 <Package size={18} />
                 <h2>RAIO-X DO PRODUTO // SKU MATRIX</h2>
               </div>
-              <button onClick={() => setSelectedSkuDetail(null)} className={styles.closeBtn}>
+              <button 
+                onClick={() => setSelectedSkuDetail(null)} 
+                className={styles.closeBtn}
+                aria-label="Fechar"
+              >
                 <X size={18} />
               </button>
             </div>
 
             <div className={styles.drawerContent}>
+              {/* CARD DE RESUMO */}
               <div className={styles.prodSummaryCard}>
                 {selectedSkuDetail.image ? (
                   <img src={selectedSkuDetail.image} alt={selectedSkuDetail.name} />
                 ) : (
                   <div className={styles.thumbPlaceholder}><Package size={24} /></div>
                 )}
-                <div className={styles.prodSummaryInfo}>
+                <div className={styles.prodSummaryMeta}>
                   <h3>{selectedSkuDetail.name}</h3>
                   <p>Preço de Tabela: <strong>R$ {Number(selectedSkuDetail.price).toFixed(2)}</strong></p>
                   <p>Modelagem: <strong>{selectedSkuDetail.fit?.toUpperCase()}</strong></p>
-                  <p className={selectedSkuDetail.daysIdle >= 45 ? styles.dangerText : styles.normalText}>
-                    Tempo Ocioso: <strong>{selectedSkuDetail.daysIdle} dias sem novas vendas</strong>
-                  </p>
+                  <span className={selectedSkuDetail.daysIdle >= 45 ? styles.dangerText : styles.idleText}>
+                    Tempo Ocioso: <strong>{selectedSkuDetail.daysIdle || 0} dias sem novas vendas</strong>
+                  </span>
                 </div>
               </div>
 
-              <div className={styles.stockMatrix}>
-                <span className={styles.subSectionTitle}>DISPONIBILIDADE POR TAMANHO & SKU</span>
+              {/* CONTROLE DE DISPONIBILIDADE NA VITRINE */}
+              <div className={styles.visibilityCard}>
+                <label className={styles.toggleLabel}>
+                  <input 
+                    type="checkbox" 
+                    checked={isAvailableInCatalog} 
+                    onChange={(e) => setIsAvailableInCatalog(e.target.checked)} 
+                  />
+                  <span>Disponível e Visível no Catálogo da Loja</span>
+                </label>
+              </div>
+
+              {/* GRADE DE ESTOQUE EDITÁVEL POR TAMANHO & SKU */}
+              <div className={styles.stockMatrixSection}>
+                <div className={styles.matrixHeader}>
+                  <h3>DISPONIBILIDADE POR TAMANHO & SKU</h3>
+                  <small>Edite as unidades diretamente abaixo e salve no Firestore:</small>
+                </div>
+
                 <div className={styles.matrixGrid}>
-                  {Object.entries(selectedSkuDetail.stock).map(([size, qty]) => (
+                  {['PP', 'P', 'M', 'G', 'GG'].map((size) => (
                     <div key={size} className={styles.matrixBox}>
-                      <span className={styles.matrixSize}>TAM {size}</span>
-                      <strong className={styles.matrixQty}>{qty} un.</strong>
-                      <small className={styles.matrixSku}>THR33-{selectedSkuDetail.category.slice(0, 2).toUpperCase()}-{size}</small>
+                      <span className={styles.sizeTitle}>TAM {size}</span>
+                      <input 
+                        type="number"
+                        min="0"
+                        value={editableStock[size] ?? 0}
+                        onChange={(e) => setEditableStock({
+                          ...editableStock,
+                          [size]: Math.max(0, parseInt(e.target.value, 10) || 0)
+                        })}
+                        className={styles.stockInput}
+                        aria-label={`Estoque tamanho ${size}`}
+                      />
+                      <small className={styles.skuTag}>
+                        THR33-{(selectedSkuDetail.category || 'TS').slice(0, 2).toUpperCase()}-{size}
+                      </small>
                     </div>
                   ))}
                 </div>
+
+                <button 
+                  onClick={handleSaveStockChanges} 
+                  disabled={savingStock} 
+                  className={`${styles.saveStockBtn} ${saveSuccess ? styles.saveSuccess : ''}`}
+                >
+                  {savingStock ? (
+                    <>
+                      <RotateCw size={14} className={styles.spinning} />
+                      <span>SALVANDO NA NUVEM...</span>
+                    </>
+                  ) : saveSuccess ? (
+                    <>
+                      <Check size={14} />
+                      <span>ESTOQUE ATUALIZADO NO FIRESTORE!</span>
+                    </>
+                  ) : (
+                    <>
+                      <Save size={14} />
+                      <span>SALVAR ALTERAÇÕES DE ESTOQUE</span>
+                    </>
+                  )}
+                </button>
               </div>
 
-              <div className={styles.funnelMetrics}>
-                <span className={styles.subSectionTitle}>JORNADA INDIVIDUAL DESTA PEÇA</span>
-                <div className={styles.funnelRow}>
-                  <div className={styles.metricBox}>
+              {/* JORNADA INDIVIDUAL DESTA PEÇA (TELEMETRIA REAL) */}
+              <div className={styles.telemetrySection}>
+                <h3>JORNADA INDIVIDUAL DESTA PEÇA</h3>
+                <div className={styles.telemetryGrid}>
+                  <div className={styles.telemetryCard}>
                     <span>Visualizações na Vitrine</span>
-                    <strong>{selectedSkuDetail.views}</strong>
+                    <strong className={styles.whiteVal}>{activeDrawerTelemetry.views}</strong>
                   </div>
-                  <div className={styles.metricBox}>
+
+                  <div className={styles.telemetryCard}>
                     <span>Adições à Sacola</span>
-                    <strong className={styles.addText}>+{selectedSkuDetail.adds}</strong>
+                    <strong className={styles.blueVal}>+{activeDrawerTelemetry.adds}</strong>
                   </div>
-                  <div className={styles.metricBox}>
+
+                  <div className={styles.telemetryCard}>
                     <span>Desistências / Remoções</span>
-                    <strong className={styles.removeText}>-{selectedSkuDetail.removes}</strong>
+                    <strong className={styles.redVal}>-{activeDrawerTelemetry.removes}</strong>
                   </div>
-                  <div className={styles.metricBox}>
+
+                  <div className={styles.telemetryCard}>
                     <span>Compras Concluídas</span>
-                    <strong className={styles.salesText}>{selectedSkuDetail.purchases} un.</strong>
+                    <strong className={styles.greenVal}>{activeDrawerTelemetry.purchases} un.</strong>
                   </div>
                 </div>
               </div>
 
-              <div className={styles.drawerActions}>
-                <button 
-                  onClick={() => {
-                    setSelectedSkuDetail(null);
-                    navigate('/cms/cupons');
-                  }} 
-                  className={styles.primaryActionBtn}
-                >
-                  <Tag size={14} />
-                  <span>Criar Cupom de Desconto para Esta Peça</span>
-                </button>
-              </div>
+              {/* BOTÃO DE AÇÃO PARA PROMOÇÃO */}
+              <button 
+                onClick={() => {
+                  setSelectedSkuDetail(null);
+                  navigate(`/cms/cupons?productId=${selectedSkuDetail.id}`);
+                }} 
+                className={styles.createPromoBtn}
+              >
+                <Tag size={15} />
+                <span>Criar Cupom de Desconto para Esta Peça</span>
+              </button>
             </div>
           </div>
         </div>

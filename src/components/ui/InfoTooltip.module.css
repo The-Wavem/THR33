@@ -32,21 +32,20 @@
   background-color: var(--bg-surface);
 }
 
-/* CAIXA FLUTUANTE */
 .tooltipBox {
   position: absolute;
-  width: 240px;
-  background-color: #121212;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.85);
-  padding: 0.8rem 1rem;
+  width: 260px;
+  background-color: #0f0f0f;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.95);
+  padding: 0.9rem 1.1rem;
   border-radius: 2px;
-  z-index: 10000;
+  z-index: 99999;
   pointer-events: none;
-  animation: fadeIn 0.2s ease-out;
+  animation: fadeIn 0.18s ease-out;
   display: flex;
   flex-direction: column;
-  gap: 0.3rem;
+  gap: 0.35rem;
   text-align: left;
 }
 
@@ -58,15 +57,19 @@
 .tooltipTitle {
   font-family: var(--font-heading);
   font-size: 0.75rem;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.8px;
   color: var(--text-primary);
   text-transform: uppercase;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.3rem;
+  margin-bottom: 0.15rem;
 }
 
 .tooltipText {
-  font-size: 0.75rem;
-  line-height: 1.4;
+  font-size: 0.73rem;
+  line-height: 1.5;
   color: var(--text-secondary);
+  white-space: pre-line;
 }
 
 /* POSICIONAMENTO */
@@ -78,8 +81,8 @@
 
 .bottom {
   top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  transform: none;
 }
 
 .right {

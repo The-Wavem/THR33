@@ -40,6 +40,7 @@ import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
 import { couponService } from '../../services/couponService';
 import { analyticsService } from '../../services/analyticsService';
+import { catalogService } from '../../services/catalogService';
 import styles from './Checkout.module.css';
 
 export function Checkout({ user: propUser, onOpenAuthModal }) {
@@ -521,8 +522,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         status: 'concluido'
       });
 
-      // 5. Registra a conversão de compra por produto no analytics
+      // 5. Registra a conversão de compra por produto e distribuição de tamanhos no analytics
       await analyticsService.trackPurchase(cartItems);
+
+      // 6. Decrementa o estoque físico por tamanho no Firestore de forma automatizada
+      await catalogService.decrementProductStock(cartItems);
 
     } catch (err) {
       console.warn("Aviso ao salvar pedido no Firestore:", err.message);
