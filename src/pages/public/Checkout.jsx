@@ -83,7 +83,6 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     }
   }, [user, navigate]);
 
-  // ESTADOS DO CLIENTE (ETAPA 1)
   const [clientData, setClientData] = useState({
     name: user?.name || user?.displayName || '',
     email: user?.email || '',
@@ -91,6 +90,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     phone: user?.phone || ''
   });
   const [isEditingAccountData, setIsEditingAccountData] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
+  const [saveProfileSuccess, setSaveProfileSuccess] = useState(false);
   const [clientErrors, setClientErrors] = useState({});
 
   // ESTADOS DE ENDEREÇO & FRETE (ETAPA 2)
@@ -250,8 +251,50 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     return Object.keys(errors).length === 0;
   };
 
+  const handleToggleEditAccountData = async () => {
+    if (isEditingAccountData) {
+      if (!validateStep1()) return;
+
+      setSavingProfile(true);
+      try {
+        const userPayload = {
+          name: clientData.name.trim(),
+          displayName: clientData.name.trim(),
+          email: clientData.email.trim(),
+          cpf: clientData.cpf.trim(),
+          phone: clientData.phone.trim(),
+          updatedAt: new Date().toISOString()
+        };
+
+        const activeUid = user?.uid || authUser?.uid || currentUser?.uid;
+
+        if (activeUid) {
+          const userRef = doc(db, 'users', activeUid);
+          await setDoc(userRef, userPayload, { merge: true });
+        }
+
+        if (updateUser) {
+          await updateUser(userPayload);
+        }
+
+        setIsEditingAccountData(false);
+        setSaveProfileSuccess(true);
+        setTimeout(() => setSaveProfileSuccess(false), 4000);
+      } catch (err) {
+        console.error("Erro ao salvar dados do perfil no Firestore:", err);
+        alert("Erro ao salvar dados cadastrais: " + (err.message || 'Tente novamente.'));
+      } finally {
+        setSavingProfile(false);
+      }
+    } else {
+      setIsEditingAccountData(true);
+      setSaveProfileSuccess(false);
+    }
+  };
+
   const handleNextToStep2 = (e) => {
     e.preventDefault();
+    if (isEditingAccountData) return;
     if (validateStep1()) {
       setCurrentStep(2);
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -749,23 +792,45 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                   <h2 className={styles.stepCardTitle}>DADOS DE CONTATO & NOTA FISCAL</h2>
                 </div>
 
-                {user && !isEditingAccountData && (
-                  <div className={styles.prefilledUserBanner}>
+                {user && (
+                  <div className={`${styles.prefilledUserBanner} ${isEditingAccountData ? styles.editingBanner : ''}`}>
                     <div className={styles.prefilledUserInfo}>
-                      <UserCheck size={18} color="#4ade80" />
+                      <UserCheck size={18} color={isEditingAccountData ? "#facc15" : "#4ade80"} />
                       <div>
-                        <strong>Conectado como {clientData.name || user.email}</strong>
-                        <small>E-mail: {clientData.email} • CPF: {clientData.cpf || 'Não informado'}</small>
+                        <strong>
+                          {isEditingAccountData 
+                            ? 'Modo de Edição Ativo' 
+                            : `Conectado como ${clientData.name || user.email}`}
+                        </strong>
+                        <small>
+                          {isEditingAccountData 
+                            ? 'Altere os campos abaixo e clique em Salvar Dados para bloquear novamente.' 
+                            : `E-mail: ${clientData.email} • CPF: ${clientData.cpf || 'Não informado'}`}
+                        </small>
                       </div>
                     </div>
                     <button 
                       type="button" 
-                      onClick={() => setIsEditingAccountData(true)} 
-                      className={styles.editDataBtn}
+                      onClick={handleToggleEditAccountData} 
+                      disabled={savingProfile}
+                      className={`${styles.editDataBtn} ${isEditingAccountData ? styles.saveDataBtn : ''}`}
                     >
-                      <Edit3 size={13} />
-                      <span>Editar</span>
+                      {savingProfile ? (
+                        <Loader2 size={13} className={styles.spinning} />
+                      ) : isEditingAccountData ? (
+                        <Check size={13} />
+                      ) : (
+                        <Edit3 size={13} />
+                      )}
+                      <span>{savingProfile ? 'Salvando...' : isEditingAccountData ? 'Salvar Dados' : 'Editar'}</span>
                     </button>
+                  </div>
+                )}
+
+                {saveProfileSuccess && (
+                  <div className={styles.saveSuccessNotice}>
+                    <Check size={14} color="#4ade80" />
+                    <span>Dados cadastrais atualizados e bloqueados com sucesso!</span>
                   </div>
                 )}
 
@@ -778,7 +843,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                       placeholder="Ex: Matheus Rocha" 
                       value={clientData.name} 
                       onChange={handleClientChange} 
-                      className={clientErrors.name ? styles.inputError : ''}
+                      disabled={Boolean(user && !isEditingAccountData)}
+                      className={`${clientErrors.name ? styles.inputError : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
                     />
                     {clientErrors.name && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.name}</span>}
                   </div>
@@ -791,7 +857,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                       placeholder="seu@email.com" 
                       value={clientData.email} 
                       onChange={handleClientChange} 
-                      className={clientErrors.email ? styles.inputError : ''}
+                      disabled={Boolean(user && !isEditingAccountData)}
+                      className={`${clientErrors.email ? styles.inputError : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
                     />
                     {clientErrors.email && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.email}</span>}
                   </div>
@@ -809,7 +876,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                         maxLength={14}
                         value={clientData.cpf} 
                         onChange={handleClientChange} 
-                        className={clientErrors.cpf ? styles.inputError : ''}
+                        disabled={Boolean(user && !isEditingAccountData)}
+                        className={`${clientErrors.cpf ? styles.inputError : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
                       />
                       {clientErrors.cpf && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.cpf}</span>}
                     </div>
@@ -826,7 +894,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                         maxLength={15}
                         value={clientData.phone} 
                         onChange={handleClientChange} 
-                        className={clientErrors.phone ? styles.inputError : ''}
+                        disabled={Boolean(user && !isEditingAccountData)}
+                        className={`${clientErrors.phone ? styles.inputError : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
                       />
                       {clientErrors.phone && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.phone}</span>}
                     </div>
@@ -834,10 +903,22 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 </div>
 
                 <div className={styles.stepActions}>
-                  <button type="button" onClick={handleNextToStep2} className={styles.primaryBtn}>
+                  <button 
+                    type="button" 
+                    onClick={handleNextToStep2} 
+                    disabled={isEditingAccountData || savingProfile}
+                    className={`${styles.primaryBtn} ${isEditingAccountData ? styles.disabledStepBtn : ''}`}
+                    title={isEditingAccountData ? "Salve as alterações no botão 'Salvar Dados' acima antes de prosseguir." : ""}
+                  >
                     <span>CONTINUAR PARA ENTREGA</span>
                     <ArrowRight size={15} />
                   </button>
+                  {isEditingAccountData && (
+                    <small className={styles.editingModeWarning}>
+                      <AlertCircle size={13} color="#facc15" />
+                      <span>Salve os dados no botão "Salvar Dados" acima para liberar o avanço.</span>
+                    </small>
+                  )}
                 </div>
               </motion.section>
             )}
