@@ -17,7 +17,7 @@ export function ProductCard({ product }) {
   const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product.discountActive !== false);
 
   const handleTrackClick = () => {
-    analyticsService.trackProductView(productId, product.name);
+    analyticsService.trackProductView(product.id || productId, product.name, product.category, product.fit, product.slug);
   };
 
   const handleFavoriteClick = (e) => {
