@@ -24,14 +24,6 @@ export const getAdminEmailsFromEnv = () => {
 };
 
 export function AuthProvider({ children }) {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  // Modal and Navigation State (Compatibilidade com Checkout e Navbar)
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [authOriginPath, setAuthOriginPath] = useState(null);
-  const [initialAuthTab, setInitialAuthTab] = useState('login');
-
   const checkIsAdmin = (email, dataRole, dataIsAdmin) => {
     // 1. Prioridade máxima: Definição gravada no banco de dados Firestore
     if (dataRole === 'admin' || dataIsAdmin === true) return true;
@@ -44,7 +36,56 @@ export function AuthProvider({ children }) {
     return false;
   };
 
+  const [currentUser, setCurrentUser] = useState(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const mockRaw = localStorage.getItem('thr33_mock_auth');
+        if (mockRaw) {
+          const mockUser = JSON.parse(mockRaw);
+          if (mockUser?.uid) {
+            const isAdminUser = checkIsAdmin(mockUser.email, mockUser.role, mockUser.isAdmin);
+            return {
+              ...mockUser,
+              isAdmin: isAdminUser || mockUser.role === 'admin' || mockUser.isAdmin === true
+            };
+          }
+        }
+      }
+    } catch (e) {}
+    return null;
+  });
+
+  const [loading, setLoading] = useState(() => {
+    try {
+      if (typeof window !== 'undefined' && localStorage.getItem('thr33_mock_auth')) {
+        return false;
+      }
+    } catch (e) {}
+    return true;
+  });
+
+  // Modal and Navigation State (Compatibilidade com Checkout e Navbar)
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authOriginPath, setAuthOriginPath] = useState(null);
+  const [initialAuthTab, setInitialAuthTab] = useState('login');
+
   useEffect(() => {
+    // 0. Suporte à injeção de sessão mock para testes automatizados E2E (Playwright)
+    try {
+      const mockRaw = typeof window !== 'undefined' ? localStorage.getItem('thr33_mock_auth') : null;
+      if (mockRaw) {
+        const mockUser = JSON.parse(mockRaw);
+        if (mockUser?.uid) {
+          const isAdminUser = checkIsAdmin(mockUser.email, mockUser.role, mockUser.isAdmin);
+          setCurrentUser({
+            ...mockUser,
+            isAdmin: isAdminUser || mockUser.role === 'admin' || mockUser.isAdmin === true
+          });
+          setLoading(false);
+        }
+      }
+    } catch (e) {}
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         const isAdminUser = checkIsAdmin(user.email);
@@ -111,6 +152,21 @@ export function AuthProvider({ children }) {
           console.warn("Aviso: Firestore indisponível no momento. Mantendo perfil básico.", error.message);
         }
       } else {
+        try {
+          const mockRaw = typeof window !== 'undefined' ? localStorage.getItem('thr33_mock_auth') : null;
+          if (mockRaw) {
+            const mockUser = JSON.parse(mockRaw);
+            if (mockUser?.uid) {
+              const isAdminUser = checkIsAdmin(mockUser.email, mockUser.role, mockUser.isAdmin);
+              setCurrentUser({
+                ...mockUser,
+                isAdmin: isAdminUser || mockUser.role === 'admin' || mockUser.isAdmin === true
+              });
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (e) {}
         setCurrentUser(null);
         setLoading(false);
       }

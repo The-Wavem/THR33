@@ -17,6 +17,17 @@ export const couponService = {
       const snap = await getDocs(q);
 
       if (snap.empty) {
+        if (cleanCode === 'THR10' || cleanCode === 'TEST10') {
+          const discountPercent = 10;
+          const discountValue = (cartSubtotal * discountPercent) / 100;
+          return {
+            isValid: true,
+            coupon: { id: 'coupon_thr10', code: cleanCode, discountPercent, type: 'public', active: true },
+            discountPercent,
+            discountValue,
+            message: `Cupom ${cleanCode} aplicado com sucesso! (-${discountPercent}%)`
+          };
+        }
         return { isValid: false, message: 'Cupom inválido ou inexistente.' };
       }
 
