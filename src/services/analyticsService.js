@@ -324,4 +324,161 @@ export const analyticsService = {
   }
 };
 
+const DEFAULT_COLOR_HEX = {
+  'preto_piano': '#000000',
+  'preto': '#000000',
+  'off_white': '#f5f5f0',
+  'off-white': '#f5f5f0',
+  'grafite': '#383838',
+  'grafite_/_chumbo': '#383838',
+  'cinza_mescla': '#7a7a7a',
+  'cinza': '#7a7a7a'
+};
+
+const CATEGORY_NAMES = {
+  'camisa': 'Camisetas / Camisas',
+  'jaqueta': 'Jaquetas & Casacos',
+  'calca': 'Calças & Bermudas',
+  'brinde': 'Vales & Brindes'
+};
+
+/**
+ * Agregação 100% Dinâmica baseada no catálogo ativo e histórico de pedidos aprovados
+ */
+export function calculateDynamicMetrics(activeProducts = [], completedOrders = []) {
+  // 1. Dicionários baseados exclusivamente nos produtos do catálogo ativo
+  const categoriesMap = {};
+  const sizesMap = {};
+  const colorsMap = {};
+
+  // Inicializa a estrutura a partir do catálogo
+  activeProducts.forEach((product) => {
+    // Categorias ativas
+    const rawCat = product.category || 'camisa';
+    const catLabel = CATEGORY_NAMES[String(rawCat).toLowerCase()] || product.category || 'Outros';
+    const catKey = String(rawCat).toLowerCase();
+    if (!categoriesMap[catKey]) {
+      categoriesMap[catKey] = { key: catKey, label: catLabel, units: 0, revenue: 0 };
+    }
+
+    // Grades de tamanhos cadastradas no produto
+    if (Array.isArray(product.sizes)) {
+      product.sizes.forEach((size) => {
+        const sz = String(size).toUpperCase();
+        if (!sizesMap[sz]) sizesMap[sz] = 0;
+      });
+    } else if (product.stock && typeof product.stock === 'object') {
+      Object.keys(product.stock).forEach((size) => {
+        const sz = String(size).toUpperCase();
+        if (!sizesMap[sz]) sizesMap[sz] = 0;
+      });
+    } else {
+      ['PP', 'P', 'M', 'G', 'GG'].forEach(sz => {
+        if (!sizesMap[sz]) sizesMap[sz] = 0;
+      });
+    }
+
+    // Cores cadastradas no produto
+    if (Array.isArray(product.colors)) {
+      product.colors.forEach((color) => {
+        const colorName = typeof color === 'string' ? color : (color?.name || color?.id);
+        const cleanKey = String(colorName).toLowerCase().replace(/\s+/g, '_');
+        const colorHex = typeof color === 'object' ? (color?.hex || DEFAULT_COLOR_HEX[cleanKey] || '#ffffff') : (DEFAULT_COLOR_HEX[cleanKey] || '#ffffff');
+        if (colorName && !colorsMap[colorName]) {
+          colorsMap[colorName] = { key: cleanKey, name: colorName, units: 0, hex: colorHex };
+        }
+      });
+    } else if (product.color) {
+      const colorName = typeof product.color === 'string' ? product.color : (product.color?.name || product.color?.id);
+      const cleanKey = String(colorName).toLowerCase().replace(/\s+/g, '_');
+      const colorHex = typeof product.color === 'object' ? (product.color?.hex || DEFAULT_COLOR_HEX[cleanKey] || '#ffffff') : (DEFAULT_COLOR_HEX[cleanKey] || '#ffffff');
+      if (colorName && !colorsMap[colorName]) {
+        colorsMap[colorName] = { key: cleanKey, name: colorName, units: 0, hex: colorHex };
+      }
+    }
+  });
+
+  if (Object.keys(sizesMap).length === 0) {
+    ['PP', 'P', 'M', 'G', 'GG'].forEach(sz => { sizesMap[sz] = 0; });
+  }
+
+  // 2. Itera sobre pedidos e sessões completas
+  completedOrders.forEach((order) => {
+    if (!Array.isArray(order.items)) return;
+
+    order.items.forEach((item) => {
+      const itemId = String(item.id || item.slug || '');
+      const itemName = item.name ? String(item.name).trim().toLowerCase() : '';
+
+      const currentProduct = activeProducts.find((p) => 
+        String(p.id) === itemId || 
+        String(p.slug) === itemId || 
+        (p.name && String(p.name).trim().toLowerCase() === itemName)
+      );
+
+      const qty = Number(item.quantity || item.qty || 1);
+      const price = Number(item.price || currentProduct?.price || 0);
+
+      // Soma na Categoria
+      const rawCat = String(currentProduct?.category || item.category || 'camisa').toLowerCase();
+      if (categoriesMap[rawCat]) {
+        categoriesMap[rawCat].units += qty;
+        categoriesMap[rawCat].revenue += price * qty;
+      } else {
+        const catLabel = CATEGORY_NAMES[rawCat] || rawCat;
+        categoriesMap[rawCat] = { key: rawCat, label: catLabel, units: qty, revenue: price * qty };
+      }
+
+      // Soma no Tamanho
+      const rawSize = String(item.size || 'M').toUpperCase();
+      if (sizesMap[rawSize] !== undefined) {
+        sizesMap[rawSize] += qty;
+      } else {
+        sizesMap[rawSize] = qty;
+      }
+
+      // Soma na Cor
+      let rawColorName = typeof item.color === 'object' ? (item.color?.name || item.color?.id) : item.color;
+      if (!rawColorName && currentProduct) {
+        rawColorName = typeof currentProduct.color === 'object' ? (currentProduct.color?.name || currentProduct.color?.id) : currentProduct.color;
+      }
+      if (!rawColorName && currentProduct?.colors && currentProduct.colors[0]) {
+        rawColorName = typeof currentProduct.colors[0] === 'object' ? (currentProduct.colors[0]?.name || currentProduct.colors[0]?.id) : currentProduct.colors[0];
+      }
+      if (!rawColorName) rawColorName = 'Preto Piano';
+
+      const colorMatchKey = Object.keys(colorsMap).find(k => k.toLowerCase() === String(rawColorName).toLowerCase());
+      if (colorMatchKey && colorsMap[colorMatchKey]) {
+        colorsMap[colorMatchKey].units += qty;
+      } else {
+        const cleanKey = String(rawColorName).toLowerCase().replace(/\s+/g, '_');
+        const hex = DEFAULT_COLOR_HEX[cleanKey] || '#000000';
+        colorsMap[rawColorName] = { key: cleanKey, name: rawColorName, units: qty, hex };
+      }
+    });
+  });
+
+  // 3. Converte em arrays ordenados
+  const categoriesList = Object.values(categoriesMap).sort((a, b) => b.revenue - a.revenue || b.units - a.units);
+  
+  const standardSizeOrder = ['PP', 'P', 'M', 'G', 'GG'];
+  const sizesList = Object.entries(sizesMap).map(([size, sales]) => ({
+    size,
+    sales
+  })).sort((a, b) => {
+    const idxA = standardSizeOrder.indexOf(a.size);
+    const idxB = standardSizeOrder.indexOf(b.size);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    return b.sales - a.sales;
+  });
+
+  const colorsList = Object.values(colorsMap).sort((a, b) => b.units - a.units);
+
+  return {
+    categories: categoriesList,
+    sizes: sizesList,
+    colors: colorsList
+  };
+}
+
 export default analyticsService;

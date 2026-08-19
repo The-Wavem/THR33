@@ -22,10 +22,12 @@ import {
   AlertCircle,
   Clock,
   Save,
-  Check
+  Check,
+  Sparkles
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
+import { calculateDynamicMetrics } from '../../services/analyticsService';
 import styles from './CmsAnalytics.module.css';
 
 const COLOR_CONFIG = {
@@ -243,16 +245,25 @@ export function CmsAnalytics() {
   // 4. Performance Granulada e Dead Stock de Produtos
   const productMetrics = useMemo(() => {
     const rawTelemetry = summaryData.products || {};
+    const telemetryKeys = Object.keys(rawTelemetry);
 
     return productsList.map(p => {
       const cleanId = String(p.id || '').replace(/[./#$\[\]]/g, '_');
       const cleanSlug = p.slug ? String(p.slug).replace(/[./#$\[\]]/g, '_') : '';
       const cleanName = p.name ? String(p.name).toLowerCase().replace(/[./#$\[\]\s]/g, '_') : '';
 
-      // Tenta encontrar dados de telemetria em todas as variações de chave (id, slug, name)
+      // Tenta encontrar dados de telemetria em todas as variações de chave (id, slug, name, fuzzy)
       const dataFromId = rawTelemetry[p.id] || (cleanId ? rawTelemetry[cleanId] : null);
       const dataFromSlug = (p.slug ? rawTelemetry[p.slug] : null) || (cleanSlug ? rawTelemetry[cleanSlug] : null);
       const dataFromName = (p.name ? rawTelemetry[p.name] : null) || (cleanName ? rawTelemetry[cleanName] : null);
+
+      const matchedKey = telemetryKeys.find(k => 
+        k === String(p.id) ||
+        (p.slug && k === String(p.slug)) ||
+        (p.slug && k.replace(/_/g, '-') === String(p.slug).replace(/_/g, '-')) ||
+        (p.name && k.toLowerCase().replace(/[\s_-]/g, '') === String(p.name).toLowerCase().replace(/[\s_-]/g, ''))
+      );
+      const dataFromMatch = matchedKey ? rawTelemetry[matchedKey] : null;
 
       const idViews = Number(dataFromId?.views || 0);
       const slugViews = (dataFromSlug && dataFromSlug !== dataFromId) ? Number(dataFromSlug?.views || 0) : 0;
@@ -260,11 +271,25 @@ export function CmsAnalytics() {
 
       const idAdds = Number(dataFromId?.addedToCart || 0);
       const slugAdds = (dataFromSlug && dataFromSlug !== dataFromId) ? Number(dataFromSlug?.addedToCart || 0) : 0;
-      const adds = Math.max(Number(p.addedToCart || 0), idAdds + slugAdds, Number(dataFromId?.addedToCart || 0), Number(dataFromSlug?.addedToCart || 0));
+      const nameAdds = (dataFromName && dataFromName !== dataFromId && dataFromName !== dataFromSlug) ? Number(dataFromName?.addedToCart || 0) : 0;
+      const adds = Math.max(
+        Number(p.addedToCart || 0), 
+        idAdds + slugAdds + nameAdds, 
+        Number(dataFromId?.addedToCart || 0), 
+        Number(dataFromSlug?.addedToCart || 0),
+        Number(dataFromMatch?.addedToCart || 0)
+      );
 
       const idRemoves = Number(dataFromId?.removedFromCart || 0);
       const slugRemoves = (dataFromSlug && dataFromSlug !== dataFromId) ? Number(dataFromSlug?.removedFromCart || 0) : 0;
-      const removes = Math.max(Number(p.removedFromCart || 0), idRemoves + slugRemoves, Number(dataFromId?.removedFromCart || 0), Number(dataFromSlug?.removedFromCart || 0));
+      const nameRemoves = (dataFromName && dataFromName !== dataFromId && dataFromName !== dataFromSlug) ? Number(dataFromName?.removedFromCart || 0) : 0;
+      const removes = Math.max(
+        Number(p.removedFromCart || 0), 
+        idRemoves + slugRemoves + nameRemoves, 
+        Number(dataFromId?.removedFromCart || 0), 
+        Number(dataFromSlug?.removedFromCart || 0),
+        Number(dataFromMatch?.removedFromCart || 0)
+      );
 
       // 1. Contagem exata de unidades vendidas e pedidos únicos por item (sem duplicação)
       let unitsFromOrders = 0;
@@ -420,12 +445,23 @@ export function CmsAnalytics() {
   const activeDrawerTelemetry = useMemo(() => {
     if (!selectedSkuDetail?.id) return { views: 0, adds: 0, removes: 0, purchases: 0, uniqueOrders: 0, addToCartRate: '0.0', conversion: '0.0', abandonmentRate: '0.0' };
     const rawTelemetry = summaryData.products || {};
+    const telemetryKeys = Object.keys(rawTelemetry);
     const p = selectedSkuDetail;
     const cleanId = String(p.id || '').replace(/[./#$\[\]]/g, '_');
     const cleanSlug = p.slug ? String(p.slug).replace(/[./#$\[\]]/g, '_') : '';
+    const cleanName = p.name ? String(p.name).toLowerCase().replace(/[./#$\[\]\s]/g, '_') : '';
+
+    const matchedKey = telemetryKeys.find(k => 
+      k === String(p.id) ||
+      (p.slug && k === String(p.slug)) ||
+      (p.slug && k.replace(/_/g, '-') === String(p.slug).replace(/_/g, '-')) ||
+      (p.name && k.toLowerCase().replace(/[\s_-]/g, '') === String(p.name).toLowerCase().replace(/[\s_-]/g, ''))
+    );
+    const dataFromMatch = matchedKey ? rawTelemetry[matchedKey] : null;
 
     const dataFromId = rawTelemetry[p.id] || (cleanId ? rawTelemetry[cleanId] : null);
     const dataFromSlug = (p.slug ? rawTelemetry[p.slug] : null) || (cleanSlug ? rawTelemetry[cleanSlug] : null);
+    const dataFromName = (p.name ? rawTelemetry[p.name] : null) || (cleanName ? rawTelemetry[cleanName] : null);
 
     const purchases = Number(p.purchases || 0);
     const uniqueOrders = Number(p.uniqueOrders || (purchases > 0 ? 1 : 0));
@@ -433,7 +469,9 @@ export function CmsAnalytics() {
     const rawViews = Math.max(
       Number(p.views || 0),
       Number(dataFromId?.views || 0),
-      Number(dataFromSlug?.views || 0)
+      Number(dataFromSlug?.views || 0),
+      Number(dataFromName?.views || 0),
+      Number(dataFromMatch?.views || 0)
     );
     const views = Math.max(rawViews, uniqueOrders);
 
@@ -441,13 +479,17 @@ export function CmsAnalytics() {
       Number(p.addedToCart || 0),
       Number(p.adds || 0),
       Number(dataFromId?.addedToCart || 0),
-      Number(dataFromSlug?.addedToCart || 0)
+      Number(dataFromSlug?.addedToCart || 0),
+      Number(dataFromName?.addedToCart || 0),
+      Number(dataFromMatch?.addedToCart || 0)
     );
     const removes = Math.max(
       Number(p.removedFromCart || 0),
       Number(p.removes || 0),
       Number(dataFromId?.removedFromCart || 0),
-      Number(dataFromSlug?.removedFromCart || 0)
+      Number(dataFromSlug?.removedFromCart || 0),
+      Number(dataFromName?.removedFromCart || 0),
+      Number(dataFromMatch?.removedFromCart || 0)
     );
 
     const addToCartRate = views > 0 ? Math.min(100, (adds / views) * 100).toFixed(1) : '0.0';
@@ -457,121 +499,47 @@ export function CmsAnalytics() {
     return { views, adds, removes, purchases, uniqueOrders, addToCartRate, conversion, abandonmentRate };
   }, [selectedSkuDetail, summaryData]);
 
-  // 1. AGREGAÇÃO DINÂMICA DE CORES DIRETAMENTE DOS PEDIDOS & TELEMETRIA
-  const colorMetrics = useMemo(() => {
-    const counts = { preto_piano: 0, off_white: 0, grafite: 0, cinza_mescla: 0 };
-    const cartCounts = summaryData.colors || {};
+  // Filtra e unifica apenas pedidos/sessões finalizadas com sucesso
+  const completedOrders = useMemo(() => {
+    const combined = [];
+    const seenIds = new Set();
 
-    // Computa a partir dos itens de todos os pedidos
-    orders.forEach(order => {
-      order.items?.forEach(item => {
-        const rawColor = (typeof item.color === 'object' ? (item.color?.name || item.color?.id) : item.color) || 'Preto Piano';
-        const cleanColor = String(rawColor).toLowerCase().replace(/\s+/g, '_');
-        const key = counts.hasOwnProperty(cleanColor) ? cleanColor : 'preto_piano';
-        counts[key] += (Number(item.quantity) || 1);
-      });
+    // Pedidos da coleção 'orders'
+    (orders || []).forEach(ord => {
+      if (ord.id && !seenIds.has(ord.id)) {
+        seenIds.add(ord.id);
+        combined.push(ord);
+      }
     });
 
-    // Se houver dados atômicos em summary.sales_colors, consolida
-    if (summaryData.sales_colors) {
-      Object.entries(summaryData.sales_colors).forEach(([k, v]) => {
-        if (counts.hasOwnProperty(k)) counts[k] = Math.max(counts[k], Number(v) || 0);
-      });
-    }
-
-    const maxSales = Math.max(...Object.values(counts), 1);
-
-    return Object.entries(counts).map(([key, sales]) => ({
-      key,
-      name: COLOR_CONFIG[key]?.name || key,
-      hex: COLOR_CONFIG[key]?.hex || '#ffffff',
-      sales,
-      cartAdds: Number(cartCounts[key] || 0),
-      percent: sales > 0 ? Math.round((sales / maxSales) * 100) : 0
-    })).sort((a, b) => b.sales - a.sales);
-  }, [orders, summaryData]);
-
-  // 2. AGREGAÇÃO DINÂMICA DE TAMANHOS DIRETAMENTE DOS PEDIDOS
-  const sizeMetrics = useMemo(() => {
-    const sizesCount = { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
-
-    orders.forEach(order => {
-      order.items?.forEach(item => {
-        const sz = String(item.size || 'M').toUpperCase();
-        if (sizesCount.hasOwnProperty(sz)) {
-          sizesCount[sz] += (Number(item.quantity) || 1);
-        }
-      });
+    // Sessões finalizadas com completed === true da coleção 'checkout_sessions'
+    (checkoutSessions || []).forEach(session => {
+      if (session.completed === true && session.id && !seenIds.has(session.id)) {
+        seenIds.add(session.id);
+        combined.push(session);
+      }
     });
 
-    if (summaryData.sales_sizes) {
-      Object.entries(summaryData.sales_sizes).forEach(([sz, v]) => {
-        const key = sz.toUpperCase();
-        if (sizesCount.hasOwnProperty(key)) sizesCount[key] = Math.max(sizesCount[key], Number(v) || 0);
-      });
-    } else if (summaryData.sizes) {
-      Object.entries(summaryData.sizes).forEach(([sz, v]) => {
-        const key = sz.toUpperCase();
-        if (sizesCount.hasOwnProperty(key)) sizesCount[key] = Math.max(sizesCount[key], Number(v) || 0);
-      });
-    }
+    return combined;
+  }, [orders, checkoutSessions]);
 
-    const maxVal = Math.max(...Object.values(sizesCount), 1);
+  // 1. AGREGAÇÃO DINÂMICA DE CORES, TAMANHOS E CATEGORIAS (BASEADA NO CATÁLOGO ATIVO E VENDAS REAIS)
+  const { categories: categoryMetrics, sizes: sizeMetrics, colors: colorMetrics } = useMemo(() => {
+    return calculateDynamicMetrics(productsList, completedOrders);
+  }, [productsList, completedOrders]);
 
-    return Object.entries(sizesCount).map(([size, sales]) => ({
-      size,
-      sales,
-      percent: sales > 0 ? Math.round((sales / maxVal) * 100) : 0
-    }));
-  }, [orders, summaryData]);
+  const maxColorSales = useMemo(() => Math.max(...colorMetrics.map(c => c.units), 1), [colorMetrics]);
+  const maxSizeSales = useMemo(() => Math.max(...sizeMetrics.map(s => s.sales), 1), [sizeMetrics]);
+  const maxCatUnits = useMemo(() => Math.max(...categoryMetrics.map(c => c.units), 1), [categoryMetrics]);
 
-  // 3. AGREGAÇÃO DINÂMICA DE CATEGORIAS E FATURAMENTO
-  const categoryMetrics = useMemo(() => {
-    const catStats = {
-      camisa: { sales: 0, revenue: 0 },
-      jaqueta: { sales: 0, revenue: 0 },
-      calca: { sales: 0, revenue: 0 },
-      brinde: { sales: 0, revenue: 0 }
-    };
-
-    orders.forEach(order => {
-      order.items?.forEach(item => {
-        const rawCat = String(item.category || 'camisa').toLowerCase();
-        const key = catStats.hasOwnProperty(rawCat) ? rawCat : 'camisa';
-        const qty = Number(item.quantity) || 1;
-        const itemTotal = (Number(item.price) || 0) * qty;
-
-        catStats[key].sales += qty;
-        catStats[key].revenue += itemTotal;
-      });
-    });
-
-    if (summaryData.sales_categories) {
-      Object.entries(summaryData.sales_categories).forEach(([k, v]) => {
-        if (catStats.hasOwnProperty(k)) {
-          catStats[k].sales = Math.max(catStats[k].sales, Number(v) || 0);
-        }
-      });
-    }
-
-    const maxSales = Math.max(...Object.values(catStats).map(c => c.sales), 1);
-
-    return Object.entries(catStats).map(([key, stat]) => ({
-      key,
-      label: CATEGORY_LABELS[key] || key,
-      sales: stat.sales,
-      revenue: stat.revenue,
-      percent: stat.sales > 0 ? Math.round((stat.sales / maxSales) * 100) : 0
-    })).sort((a, b) => b.revenue - a.revenue);
-  }, [orders, summaryData]);
-
-  // 4. GERAÇÃO DINÂMICA DAS DIRETRIZES DE PRODUÇÃO E CORTE
+  // 2. GERAÇÃO DINÂMICA DAS DIRETRIZES DE PRODUÇÃO E CORTE
   const dynamicInsights = useMemo(() => {
     const totalPiecesSold = sizeMetrics.reduce((acc, s) => acc + s.sales, 0);
 
     // Cor Líder
-    const topColor = colorMetrics[0] || { name: 'Preto Piano', sales: 0 };
-    const topColorPct = totalPiecesSold > 0 ? Math.round((topColor.sales / totalPiecesSold) * 100) : 0;
+    const topColor = colorMetrics[0] || { name: 'Preto Piano', units: 0 };
+    const topColorUnits = Number(topColor.units || 0);
+    const topColorPct = totalPiecesSold > 0 ? Math.round((topColorUnits / totalPiecesSold) * 100) : 0;
 
     // Participação M + G
     const mSales = sizeMetrics.find(s => s.size === 'M')?.sales || 0;
@@ -586,7 +554,7 @@ export function CmsAnalytics() {
       topColorPct,
       mgPct,
       topCategoryLabel: topCategory.label,
-      topCategoryRevenue: topCategory.revenue
+      topCategoryRevenue: Number(topCategory.revenue || 0)
     };
   }, [colorMetrics, sizeMetrics, categoryMetrics]);
 
@@ -601,11 +569,11 @@ export function CmsAnalytics() {
       GG: Number(rawSizes.GG || 0)
     };
 
-    orders.forEach(o => {
-      (o.items || []).forEach(it => {
-        const sz = String(it.size || 'M').toUpperCase();
-        if (sizesCount[sz] !== undefined) {
-          sizesCount[sz] += Number(it.quantity || 1);
+    orders.forEach(order => {
+      order.items?.forEach(item => {
+        const sz = String(item.size || 'M').toUpperCase();
+        if (sizesCount.hasOwnProperty(sz)) {
+          sizesCount[sz] += (Number(item.quantity) || 1);
         }
       });
     });
@@ -618,44 +586,73 @@ export function CmsAnalytics() {
     }));
   }, [summaryData, orders]);
 
-  // 1. CONSOLIDAÇÃO DO FUNIL COM PROTEÇÃO MATEMÁTICA
+  // 1. CONSOLIDAÇÃO DO FUNIL COM RECONCILIAÇÃO REAL & IDENTIFICAÇÃO DE GARGALO
   const funnel = useMemo(() => {
     const rawFunnel = summaryData.funnel || {};
     const rawProducts = summaryData.products || {};
+    const rawPageViews = summaryData.pageViews || {};
 
-    // Soma das views individuais dos produtos como fallback se pdpViews for 0
-    const sumTelemetryViews = Object.values(rawProducts).reduce((acc, p) => acc + (Number(p.views) || 0), 0);
-    const sumProductsListViews = productsList.reduce((acc, p) => acc + (Number(p.views) || 0), 0);
-    const sumProductsViews = Math.max(sumTelemetryViews, sumProductsListViews);
+    // 1. Visualizações PDP (Etapa 1)
+    const sumTelemetryViews = Object.values(rawProducts).reduce((acc, p) => acc + (Number(p?.views) || 0), 0);
+    const sumProductsViews = productsList.reduce((acc, p) => acc + (Number(p?.views) || 0), 0);
+    const pdpPageViews = Number(rawPageViews.produto_detalhe || 0);
+    const funnelPdpViews = Number(rawFunnel.pdpViews || 0);
+    const rawViews = Math.max(funnelPdpViews, pdpPageViews, sumTelemetryViews, sumProductsViews);
 
-    const sumProductsAdds = Object.values(rawProducts).reduce((acc, p) => acc + (Number(p.addedToCart) || 0), 0);
-    const sumProductsRemoves = Object.values(rawProducts).reduce((acc, p) => acc + (Number(p.removedFromCart) || 0), 0);
+    // 2. Adições à Sacola (Etapa 2)
+    const sumTelemetryAdds = Object.values(rawProducts).reduce((acc, p) => acc + (Number(p?.addedToCart) || 0), 0);
+    const sumProductsAdds = productsList.reduce((acc, p) => acc + (Number(p?.addedToCart) || 0), 0);
+    const sumColorsAdds = Object.values(summaryData.colors || {}).reduce((acc, v) => acc + (Number(v) || 0), 0);
+    const funnelCartAdds = Number(rawFunnel.cartAdds || 0);
+    const rawCartAdds = Math.max(funnelCartAdds, sumTelemetryAdds, sumProductsAdds, sumColorsAdds);
 
-    const views = Math.max(Number(rawFunnel.pdpViews) || 0, sumProductsViews);
-    const cartAdds = Math.max(Number(rawFunnel.cartAdds) || 0, sumProductsAdds);
-    const cartRemoves = Math.max(Number(rawFunnel.cartRemoves) || 0, sumProductsRemoves);
-    const purchases = Math.max(orders.length, Number(rawFunnel.purchases) || 0);
+    // 3. Remoções / Desistências da Sacola
+    const sumTelemetryRemoves = Object.values(rawProducts).reduce((acc, p) => acc + (Number(p?.removedFromCart) || 0), 0);
+    const sumProductsRemoves = productsList.reduce((acc, p) => acc + (Number(p?.removedFromCart) || 0), 0);
+    const funnelCartRemoves = Number(rawFunnel.cartRemoves || 0);
+    const cartRemoves = Math.max(funnelCartRemoves, sumTelemetryRemoves, sumProductsRemoves);
 
-    // Início de checkout não pode ser menor que o total de pedidos pagos
-    const rawCheckoutStarts = Number(rawFunnel.checkoutStarts) || 0;
+    // 4. Inícios de Checkout (Etapa 3)
+    const funnelCheckoutStarts = Number(rawFunnel.checkoutStarts || 0);
+    const checkoutPageViews = Number(rawPageViews.checkout || 0);
+    const totalSessions = (checkoutSessions || []).length;
+    const rawCheckoutStarts = Math.max(funnelCheckoutStarts, checkoutPageViews, totalSessions);
+
+    // 5. Pedidos Pagos (Etapa 4)
+    const funnelPurchases = Number(rawFunnel.purchases || 0);
+    const totalOrders = (orders || []).length;
+    const completedSessions = (completedOrders || []).length;
+    const purchases = Math.max(totalOrders, completedSessions, funnelPurchases);
+
+    // Reconciliação coerente
     const checkoutStarts = Math.max(rawCheckoutStarts, purchases);
+    const cartAdds = Math.max(rawCartAdds, purchases > 0 && rawCartAdds === 0 ? checkoutStarts : rawCartAdds);
+    const views = Math.max(rawViews, cartAdds);
 
-    // Taxa de Conversão Geral (Views -> Compras)
-    const overallConversionRate = views > 0 
-      ? ((purchases / views) * 100).toFixed(1) 
-      : (purchases > 0 ? '100.0' : '0.0');
+    // Taxa Geral (Views PDP -> Pedidos Pagos)
+    const overallConversionRate = views > 0 ? Math.min(100, (purchases / views) * 100).toFixed(1) : '0.0';
 
-    // Taxa de Abandono de Sacola
+    // Abandono de Sacola
     let cartAbandonmentRate = '0.0';
     if (cartAdds > 0) {
       const abandoned = Math.max(0, cartAdds - purchases);
-      cartAbandonmentRate = ((abandoned / cartAdds) * 100).toFixed(1);
+      cartAbandonmentRate = Math.min(100, (abandoned / cartAdds) * 100).toFixed(1);
     }
 
-    // Porcentagens entre etapas do funil (sem ultrapassar 100% ou gerar divisões inválidas)
-    const stage2Percent = views > 0 ? Math.min(100, (cartAdds / views) * 100).toFixed(1) : (cartAdds > 0 ? '100.0' : '0.0');
-    const stage3Percent = cartAdds > 0 ? Math.min(100, (checkoutStarts / cartAdds) * 100).toFixed(1) : (checkoutStarts > 0 ? '100.0' : '0.0');
-    const stage4Percent = checkoutStarts > 0 ? Math.min(100, (purchases / checkoutStarts) * 100).toFixed(1) : (purchases > 0 ? '100.0' : '0.0');
+    // Taxas de passagem (Step-to-step)
+    const step2Rate = views > 0 ? Math.min(100, (cartAdds / views) * 100).toFixed(1) : '0.0';
+    const step3Rate = cartAdds > 0 ? Math.min(100, (checkoutStarts / cartAdds) * 100).toFixed(1) : '0.0';
+    const step4Rate = checkoutStarts > 0 ? Math.min(100, (purchases / checkoutStarts) * 100).toFixed(1) : '0.0';
+
+    // Perdas em cada transição para identificar o gargalo (Ponto de Fuga)
+    const drop1to2 = views > 0 ? (100 - Number(step2Rate)) : 0;
+    const drop2to3 = cartAdds > 0 ? (100 - Number(step3Rate)) : 0;
+    const drop3to4 = checkoutStarts > 0 ? (100 - Number(step4Rate)) : 0;
+
+    let bottleneck = 'none';
+    if (drop1to2 >= drop2to3 && drop1to2 >= drop3to4 && drop1to2 > 0) bottleneck = 'step2';
+    else if (drop2to3 >= drop1to2 && drop2to3 >= drop3to4 && drop2to3 > 0) bottleneck = 'step3';
+    else if (drop3to4 > 0) bottleneck = 'step4';
 
     return {
       views,
@@ -665,11 +662,12 @@ export function CmsAnalytics() {
       purchases,
       overallConversionRate,
       cartAbandonmentRate,
-      stage2Percent,
-      stage3Percent,
-      stage4Percent
+      step2Rate,
+      step3Rate,
+      step4Rate,
+      bottleneck
     };
-  }, [summaryData, orders, productsList]);
+  }, [summaryData, productsList, orders, checkoutSessions, completedOrders]);
 
   // Modelagens mais buscadas pelos clientes
   const fitDistribution = useMemo(() => {
@@ -741,92 +739,126 @@ export function CmsAnalytics() {
         <div className={styles.attributesLayout}>
           {/* GRID 3 COLUNAS DE GRÁFICOS */}
           <div className={styles.threeColsGrid}>
-            {/* 1. VENDAS POR COR */}
+            {/* 1. CORES CADASTRADAS */}
             <div className={styles.graphCard}>
               <div className={styles.cardHeader}>
-                <h3>
-                  <span>CORES MAIS VENDIDAS</span>
+                <div className={styles.thWithTooltip}>
+                  <Sparkles size={16} />
+                  <h3>CORES CADASTRADAS ({colorMetrics.length})</h3>
                   <InfoTooltip 
-                    text="Mapeamento de faturamento por paleta de cor para guiar o tingimento dos tecidos." 
+                    text="Mapeamento de saída real gerado exclusivamente a partir das cores ativas no catálogo." 
                     title="Distribuição por Cor"
                     position="bottom"
+                    align="left"
                     width="280px"
                   />
-                </h3>
+                </div>
               </div>
               <div className={styles.barsList}>
-                {colorMetrics.map(c => (
-                  <div key={c.key} className={styles.barItem}>
-                    <div className={styles.barMeta}>
-                      <span className={styles.colorLabel}>
-                        <span className={styles.colorDot} style={{ backgroundColor: c.hex, border: c.hex === '#000000' ? '1px solid #444' : 'none' }}></span>
-                        {c.name}
-                      </span>
-                      <strong>{c.sales} peças</strong>
-                    </div>
-                    <div className={styles.barTrack}>
-                      <div className={styles.barFill} style={{ width: `${c.percent}%` }}></div>
-                    </div>
-                    <small className={styles.cartHint}>{c.cartAdds} adições à sacola</small>
-                  </div>
-                ))}
+                {colorMetrics.length === 0 ? (
+                  <p className={styles.emptyAttributeState}>Nenhuma cor ativa no catálogo.</p>
+                ) : (
+                  colorMetrics.map(c => {
+                    const pct = c.units > 0 ? Math.round((c.units / maxColorSales) * 100) : 0;
+                    return (
+                      <div key={c.name} className={styles.barItem}>
+                        <div className={styles.barMeta}>
+                          <span className={styles.colorLabel}>
+                            <span 
+                              className={styles.colorDot} 
+                              style={{ 
+                                backgroundColor: c.hex, 
+                                border: (c.hex === '#000000' || c.hex === '#0a0a0a' || c.hex === '#0f0f0f') ? '1px solid #444' : 'none' 
+                              }}
+                            />
+                            {c.name}
+                          </span>
+                          <strong>{c.units} peças</strong>
+                        </div>
+                        <div className={styles.barTrack}>
+                          <div className={styles.barFill} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 
             {/* 2. DEMANDA POR GRADE DE TAMANHO */}
             <div className={styles.graphCard}>
               <div className={styles.cardHeader}>
-                <h3>
-                  <span>GRADE DE TAMANHOS</span>
+                <div className={styles.thWithTooltip}>
+                  <Layers size={16} />
+                  <h3>GRADE DE TAMANHOS ({sizeMetrics.length})</h3>
                   <InfoTooltip 
-                    text="Indica a curva de grade ideal para evitar que tamanhos populares fiquem esgotados." 
+                    text="Curva de tamanhos cadastrados no vestuário da marca cruzada com os pedidos aprovados." 
                     title="Demanda de Tamanhos"
                     position="bottom"
+                    align="center"
                     width="280px"
                   />
-                </h3>
+                </div>
               </div>
               <div className={styles.barsList}>
-                {sizeMetrics.map(s => (
-                  <div key={s.size} className={styles.barItem}>
-                    <div className={styles.barMeta}>
-                      <span>TAMANHO {s.size}</span>
-                      <strong>{s.sales} vendas</strong>
-                    </div>
-                    <div className={styles.barTrack}>
-                      <div className={`${styles.barFill} ${styles.blueFill}`} style={{ width: `${s.percent}%` }}></div>
-                    </div>
-                  </div>
-                ))}
+                {sizeMetrics.length === 0 ? (
+                  <p className={styles.emptyAttributeState}>Nenhum tamanho configurado.</p>
+                ) : (
+                  sizeMetrics.map(s => {
+                    const pct = s.sales > 0 ? Math.round((s.sales / maxSizeSales) * 100) : 0;
+                    return (
+                      <div key={s.size} className={styles.barItem}>
+                        <div className={styles.barMeta}>
+                          <span>TAMANHO {s.size}</span>
+                          <strong>{s.sales} vendas</strong>
+                        </div>
+                        <div className={styles.barTrack}>
+                          <div className={`${styles.barFill} ${styles.blueFill}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
 
             {/* 3. VENDAS POR CATEGORIA */}
             <div className={styles.graphCard}>
               <div className={styles.cardHeader}>
-                <h3>
-                  <span>CATEGORIAS & TIPOS</span>
+                <div className={styles.thWithTooltip}>
+                  <Tag size={16} />
+                  <h3>CATEGORIAS & TIPOS ({categoryMetrics.length})</h3>
                   <InfoTooltip 
-                    text="Divisão de faturamento e saída entre vestuário pesado, camisetas e brindes digitais." 
+                    text="Divisão de faturamento e volume entre as categorias cadastradas no catálogo ativo." 
                     title="Performance por Categoria"
                     position="bottom"
+                    align="right"
                     width="280px"
                   />
-                </h3>
+                </div>
               </div>
               <div className={styles.barsList}>
-                {categoryMetrics.map(cat => (
-                  <div key={cat.key} className={styles.barItem}>
-                    <div className={styles.barMeta}>
-                      <span>{cat.label}</span>
-                      <strong>{cat.sales} un.</strong>
-                    </div>
-                    <div className={styles.barTrack}>
-                      <div className={`${styles.barFill} ${styles.greenFill}`} style={{ width: `${cat.percent}%` }}></div>
-                    </div>
-                    <small className={styles.cartHint}>R$ {cat.revenue.toFixed(2)} faturados</small>
-                  </div>
-                ))}
+                {categoryMetrics.length === 0 ? (
+                  <p className={styles.emptyAttributeState}>Nenhuma categoria encontrada.</p>
+                ) : (
+                  categoryMetrics.map(cat => {
+                    const pct = cat.units > 0 ? Math.round((cat.units / maxCatUnits) * 100) : 0;
+                    return (
+                      <div key={cat.key || cat.label} className={styles.barItem}>
+                        <div className={styles.barMeta}>
+                          <span>{cat.label}</span>
+                          <strong>{cat.units} un.</strong>
+                        </div>
+                        <div className={styles.barTrack}>
+                          <div className={`${styles.barFill} ${styles.greenFill}`} style={{ width: `${pct}%` }} />
+                        </div>
+                        <small className={styles.cartHint}>
+                          {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cat.revenue)} faturados
+                        </small>
+                      </div>
+                    );
+                  })
+                )}
               </div>
             </div>
           </div>
@@ -1143,44 +1175,67 @@ export function CmsAnalytics() {
             </div>
           </div>
 
-          <div className={styles.funnelFlow}>
-            <div className={styles.funnelStage}>
-              <span className={styles.stageTag}>ETAPA 1</span>
+          <div className={styles.funnelFlowWrapper}>
+            {/* ETAPA 1 */}
+            <div className={styles.funnelStageCard}>
+              <span className={styles.stageNumber}>ETAPA 1</span>
               <strong>{funnel.views}</strong>
               <span>Visualizações de Produto</span>
+              <span className={styles.baselineTag}>100% da base</span>
             </div>
 
-            <div className={styles.stageDivider}>
+            <div className={styles.flowArrow}>
               <ArrowRight size={18} />
             </div>
 
-            <div className={styles.funnelStage}>
-              <span className={styles.stageTag}>ETAPA 2</span>
+            {/* ETAPA 2 */}
+            <div className={`${styles.funnelStageCard} ${funnel.bottleneck === 'step2' ? styles.bottleneckCard : ''}`}>
+              {funnel.bottleneck === 'step2' && (
+                <span className={styles.bottleneckBadge}>
+                  <AlertTriangle size={10} />
+                  <span>MAIOR PONTO DE FUGA</span>
+                </span>
+              )}
+              <span className={styles.stageNumber}>ETAPA 2</span>
               <strong className={styles.blueStageVal}>{funnel.cartAdds}</strong>
               <span>Adições à Sacola</span>
-              <small>{funnel.stage2Percent}% das visitas</small>
+              <small>{funnel.step2Rate}% das visitas</small>
             </div>
 
-            <div className={styles.stageDivider}>
+            <div className={styles.flowArrow}>
               <ArrowRight size={18} />
             </div>
 
-            <div className={styles.funnelStage}>
-              <span className={styles.stageTag}>ETAPA 3</span>
+            {/* ETAPA 3 */}
+            <div className={`${styles.funnelStageCard} ${funnel.bottleneck === 'step3' ? styles.bottleneckCard : ''}`}>
+              {funnel.bottleneck === 'step3' && (
+                <span className={styles.bottleneckBadge}>
+                  <AlertTriangle size={10} />
+                  <span>MAIOR PONTO DE FUGA</span>
+                </span>
+              )}
+              <span className={styles.stageNumber}>ETAPA 3</span>
               <strong className={styles.yellowStageVal}>{funnel.checkoutStarts}</strong>
               <span>Inícios de Checkout</span>
-              <small>{funnel.stage3Percent}% da sacola</small>
+              <small>{funnel.step3Rate}% da sacola</small>
             </div>
 
-            <div className={styles.stageDivider}>
+            <div className={styles.flowArrow}>
               <ArrowRight size={18} />
             </div>
 
-            <div className={`${styles.funnelStage} ${styles.stageSuccess}`}>
-              <span className={styles.stageTag}>ETAPA 4 (FINAL)</span>
+            {/* ETAPA 4 */}
+            <div className={`${styles.funnelStageCard} ${styles.stageSuccessCard} ${funnel.bottleneck === 'step4' ? styles.bottleneckCard : ''}`}>
+              {funnel.bottleneck === 'step4' && (
+                <span className={styles.bottleneckBadge}>
+                  <AlertTriangle size={10} />
+                  <span>MAIOR PONTO DE FUGA</span>
+                </span>
+              )}
+              <span className={styles.stageNumber}>ETAPA 4 (FINAL)</span>
               <strong className={styles.greenStageVal}>{funnel.purchases}</strong>
               <span>Pedidos Pagos</span>
-              <small>{funnel.stage4Percent}% do checkout</small>
+              <small>{funnel.step4Rate}% do checkout</small>
             </div>
           </div>
         </section>
