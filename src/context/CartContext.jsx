@@ -173,7 +173,7 @@ export function CartProvider({ children }) {
     });
 
     if (itemToRemove) {
-      analyticsService.trackRemoveFromCart(itemToRemove);
+      analyticsService.trackRemoveFromCart(itemToRemove, itemToRemove.quantity || 1);
     }
 
     setCartItems((prev) => 
@@ -188,6 +188,20 @@ export function CartProvider({ children }) {
 
   // Alterar quantidade
   const updateQuantity = (id, size, delta, colorId = null) => {
+    const currentItem = cartItems.find((item) => {
+      const matchColor = colorId && item.color ? item.color.id === colorId : true;
+      return item.id === id && item.size === size && matchColor;
+    });
+
+    if (!currentItem) return;
+
+    if (delta > 0) {
+      analyticsService.trackAddToCart({ ...currentItem, quantity: delta });
+    } else if (delta < 0) {
+      const removeQty = Math.min(currentItem.quantity, Math.abs(delta));
+      analyticsService.trackRemoveFromCart(currentItem, removeQty);
+    }
+
     setCartItems((prev) =>
       prev
         .map((item) => {
@@ -199,7 +213,7 @@ export function CartProvider({ children }) {
           return item;
         })
         .filter(Boolean)
-      );
+    );
   };
 
   // Limpar carrinho

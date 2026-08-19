@@ -257,50 +257,72 @@ export function CmsAnalytics() {
       const idViews = Number(dataFromId?.views || 0);
       const slugViews = (dataFromSlug && dataFromSlug !== dataFromId) ? Number(dataFromSlug?.views || 0) : 0;
       const nameViews = (dataFromName && dataFromName !== dataFromId && dataFromName !== dataFromSlug) ? Number(dataFromName?.views || 0) : 0;
-      const views = Math.max(idViews + slugViews + nameViews, Number(dataFromId?.views || 0), Number(dataFromSlug?.views || 0));
+      const views = Math.max(Number(p.views || 0), idViews + slugViews + nameViews, Number(dataFromId?.views || 0), Number(dataFromSlug?.views || 0));
 
       const idAdds = Number(dataFromId?.addedToCart || 0);
       const slugAdds = (dataFromSlug && dataFromSlug !== dataFromId) ? Number(dataFromSlug?.addedToCart || 0) : 0;
-      const adds = Math.max(idAdds + slugAdds, Number(dataFromId?.addedToCart || 0), Number(dataFromSlug?.addedToCart || 0));
+      const adds = Math.max(Number(p.addedToCart || 0), idAdds + slugAdds, Number(dataFromId?.addedToCart || 0), Number(dataFromSlug?.addedToCart || 0));
 
       const idRemoves = Number(dataFromId?.removedFromCart || 0);
       const slugRemoves = (dataFromSlug && dataFromSlug !== dataFromId) ? Number(dataFromSlug?.removedFromCart || 0) : 0;
-      const removes = Math.max(idRemoves + slugRemoves, Number(dataFromId?.removedFromCart || 0), Number(dataFromSlug?.removedFromCart || 0));
+      const removes = Math.max(Number(p.removedFromCart || 0), idRemoves + slugRemoves, Number(dataFromId?.removedFromCart || 0), Number(dataFromSlug?.removedFromCart || 0));
 
-      // Calcula vendas reais cruzando com os pedidos do Firestore e telemetria
-      let realPurchases = Math.max(
-        Number(dataFromId?.purchases || 0),
-        Number(dataFromSlug?.purchases || 0)
-      );
+      // 1. Contagem exata de unidades vendidas e pedidos únicos por item (sem duplicação)
+      let unitsFromOrders = 0;
+      let uniqueOrdersCount = 0;
+      let lastSaleTimestamp = 0;
 
-      const matchingOrders = orders.filter(o => 
-        (o.items || []).some(it => 
-          it.id === p.id || it.slug === p.id || it.id === p.slug || it.slug === p.slug || it.name === p.name
-        )
-      );
+      orders.forEach(order => {
+        let orderMatched = false;
+        (order.items || []).forEach(it => {
+          const itId = String(it?.id || '');
+          const itSlug = String(it?.slug || '');
+          const itName = it?.name ? String(it.name).trim().toLowerCase() : '';
+          const pName = p.name ? String(p.name).trim().toLowerCase() : '';
 
-      if (matchingOrders.length > 0) {
-        let countFromOrders = 0;
-        matchingOrders.forEach(o => {
-          (o.items || []).forEach(it => {
-            if (it.id === p.id || it.slug === p.id || it.id === p.slug || it.slug === p.slug || it.name === p.name) {
-              countFromOrders += Number(it.quantity || 1);
-            }
-          });
+          const isMatch = (
+            (itId && (itId === String(p.id) || itId === String(p.slug) || itId === cleanId)) ||
+            (itSlug && (itSlug === String(p.id) || itSlug === String(p.slug) || itSlug === cleanSlug)) ||
+            (itName && pName && itName === pName)
+          );
+
+          if (isMatch) {
+            unitsFromOrders += (Number(it.quantity) || 1);
+            orderMatched = true;
+          }
         });
-        realPurchases = Math.max(realPurchases, countFromOrders);
+
+        if (orderMatched) {
+          uniqueOrdersCount += 1;
+          const orderDate = order.createdAt ? new Date(order.createdAt).getTime() : 0;
+          if (orderDate > lastSaleTimestamp) {
+            lastSaleTimestamp = orderDate;
+          }
+        }
+      });
+
+      // Volume total de peças vendidas (se houver pedidos reais na coleção 'orders', usa a contagem exata)
+      const realPurchases = orders.length > 0 
+        ? unitsFromOrders 
+        : Math.max(Number(p.purchases || 0), Number(dataFromId?.purchases || 0), Number(dataFromSlug?.purchases || 0));
+
+      const uniqueOrders = orders.length > 0 
+        ? uniqueOrdersCount 
+        : (realPurchases > 0 ? 1 : 0);
+
+      // Taxa de Conversão: (Pedidos Únicos / Views) * 100 limitado a 100%
+      let conversion = '0.0';
+      if (views > 0) {
+        const rate = (uniqueOrders / views) * 100;
+        conversion = Math.min(100, rate).toFixed(1);
+      } else if (uniqueOrders > 0) {
+        conversion = '100.0';
       }
 
       // Calcula tempo ocioso em dias
       let daysIdle = 0;
-      if (matchingOrders.length > 0) {
-        const sorted = [...matchingOrders].sort((a, b) => 
-          new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-        );
-        const lastSaleDate = sorted[0]?.createdAt;
-        if (lastSaleDate) {
-          daysIdle = Math.max(0, Math.floor((Date.now() - new Date(lastSaleDate).getTime()) / (1000 * 60 * 60 * 24)));
-        }
+      if (lastSaleTimestamp > 0) {
+        daysIdle = Math.max(0, Math.floor((Date.now() - lastSaleTimestamp) / (1000 * 60 * 60 * 24)));
       } else if (p.createdAt) {
         daysIdle = Math.max(0, Math.floor((Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24)));
       } else {
@@ -345,7 +367,6 @@ export function CmsAnalytics() {
       }
 
       const totalStock = Object.values(parsedStock).reduce((a, b) => Number(a) + Number(b), 0);
-      const conversion = views > 0 ? ((realPurchases / views) * 100).toFixed(1) : '0.0';
       const isDeadStock = daysIdle >= 45 && totalStock > 0;
       const statusInfo = getProductStatusDetails(p, totalStock, daysIdle, realPurchases, views, adds, conversion);
 
@@ -363,6 +384,7 @@ export function CmsAnalytics() {
         adds,
         removes,
         purchases: realPurchases,
+        uniqueOrders,
         conversion,
         daysIdle,
         isDeadStock,
@@ -395,11 +417,13 @@ export function CmsAnalytics() {
       Number(dataFromSlug?.views || 0)
     );
     const adds = Math.max(
+      Number(p.addedToCart || 0),
       Number(p.adds || 0),
       Number(dataFromId?.addedToCart || 0),
       Number(dataFromSlug?.addedToCart || 0)
     );
     const removes = Math.max(
+      Number(p.removedFromCart || 0),
       Number(p.removes || 0),
       Number(dataFromId?.removedFromCart || 0),
       Number(dataFromSlug?.removedFromCart || 0)
@@ -580,7 +604,10 @@ export function CmsAnalytics() {
     const rawProducts = summaryData.products || {};
 
     // Soma das views individuais dos produtos como fallback se pdpViews for 0
-    const sumProductsViews = Object.values(rawProducts).reduce((acc, p) => acc + (Number(p.views) || 0), 0);
+    const sumTelemetryViews = Object.values(rawProducts).reduce((acc, p) => acc + (Number(p.views) || 0), 0);
+    const sumProductsListViews = productsList.reduce((acc, p) => acc + (Number(p.views) || 0), 0);
+    const sumProductsViews = Math.max(sumTelemetryViews, sumProductsListViews);
+
     const sumProductsAdds = Object.values(rawProducts).reduce((acc, p) => acc + (Number(p.addedToCart) || 0), 0);
     const sumProductsRemoves = Object.values(rawProducts).reduce((acc, p) => acc + (Number(p.removedFromCart) || 0), 0);
 
@@ -622,7 +649,7 @@ export function CmsAnalytics() {
       stage3Percent,
       stage4Percent
     };
-  }, [summaryData, orders]);
+  }, [summaryData, orders, productsList]);
 
   // Modelagens mais buscadas pelos clientes
   const fitDistribution = useMemo(() => {
@@ -851,7 +878,17 @@ export function CmsAnalytics() {
                   <th>ADICIONADOS</th>
                   <th>REMOÇÕES</th>
                   <th>VENDAS PAGAS</th>
-                  <th>CONVERSÃO</th>
+                  <th>
+                    <div className={styles.thWithTooltip}>
+                      <span>CONVERSÃO</span>
+                      <InfoTooltip 
+                        title="Taxa de Conversão por SKU"
+                        position="bottom"
+                        width="300px"
+                        text="Mede a porcentagem de visitantes que compraram esta peça (Pedidos Únicos com o SKU / Views Vitrine)."
+                      />
+                    </div>
+                  </th>
                   <th>AÇÕES</th>
                 </tr>
               </thead>
@@ -899,7 +936,7 @@ export function CmsAnalytics() {
                         <div className={styles.conversionBox}>
                           <strong>{prod.conversion}%</strong>
                           <div className={styles.miniBar}>
-                            <div style={{ width: `${Math.min(Number(prod.conversion) * 3, 100)}%` }} />
+                            <div style={{ width: `${Math.min(Number(prod.conversion), 100)}%` }} />
                           </div>
                         </div>
                       </td>

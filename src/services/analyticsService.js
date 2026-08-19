@@ -61,6 +61,7 @@ export const analyticsService = {
 
   /**
    * Rastreia visualização detalhada da peça na PDP e Vitrine
+   * Registra a visualização na coleção products/{productId} e no analytics/summary
    */
   async trackProductView(productId, productName = '', category = '', fit = '', slug = '') {
     if (!productId) return;
@@ -71,16 +72,35 @@ export const analyticsService = {
     if (!shouldTrack(eventKey)) return;
 
     try {
+      const now = new Date().toISOString();
+      const productDocRef = doc(db, 'products', cleanId);
+
+      // 1. Incrementa o contador diretamente no documento do produto
+      await setDoc(productDocRef, {
+        views: increment(1),
+        lastViewedAt: now
+      }, { merge: true });
+
+      if (cleanSlug && cleanSlug !== cleanId) {
+        try {
+          const slugDocRef = doc(db, 'products', cleanSlug);
+          await setDoc(slugDocRef, {
+            views: increment(1),
+            lastViewedAt: now
+          }, { merge: true });
+        } catch (_) {}
+      }
+
+      // 2. Incrementa o sumário global de analytics e funil
       const updates = {
         [`products.${cleanId}.views`]: increment(1),
         [`products.${cleanId}.name`]: productName || cleanId,
         [`products.${cleanId}.category`]: category || 'camisa',
         [`products.${cleanId}.fit`]: fit || 'boxy',
         'funnel.pdpViews': increment(1),
-        lastUpdated: new Date().toISOString()
+        lastUpdated: now
       };
 
-      // Se houver slug distinto do id, vincula também para sincronia total
       if (cleanSlug && cleanSlug !== cleanId) {
         updates[`products.${cleanSlug}.views`] = increment(1);
         updates[`products.${cleanSlug}.name`] = productName || cleanSlug;
@@ -90,7 +110,7 @@ export const analyticsService = {
 
       await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
     } catch (err) {
-      console.warn("Aviso telemetria (view produto):", err.message);
+      console.warn("Aviso ao registrar view do produto:", err.message);
     }
   },
 
@@ -108,6 +128,26 @@ export const analyticsService = {
     const catKey = item.category ? `categories.${item.category}` : 'categories.camisa';
 
     try {
+      const now = new Date().toISOString();
+      const productRef = doc(db, 'products', cleanId);
+
+      // 1. Grava diretamente no documento do produto
+      await setDoc(productRef, {
+        addedToCart: increment(qty),
+        lastAddedToCartAt: now
+      }, { merge: true });
+
+      if (cleanSlug && cleanSlug !== cleanId) {
+        try {
+          const slugRef = doc(db, 'products', cleanSlug);
+          await setDoc(slugRef, {
+            addedToCart: increment(qty),
+            lastAddedToCartAt: now
+          }, { merge: true });
+        } catch (_) {}
+      }
+
+      // 2. Grava no sumário global
       const updates = {
         [`products.${cleanId}.addedToCart`]: increment(qty),
         [`products.${cleanId}.name`]: item.name || cleanId,
@@ -116,7 +156,7 @@ export const analyticsService = {
         [sizeKey]: increment(qty),
         [catKey]: increment(qty),
         'funnel.cartAdds': increment(qty),
-        lastUpdated: new Date().toISOString()
+        lastUpdated: now
       };
 
       if (cleanSlug && cleanSlug !== cleanId) {
@@ -132,21 +172,41 @@ export const analyticsService = {
   /**
    * Rastreia remoção/desistência de item do carrinho
    */
-  async trackRemoveFromCart(item) {
+  async trackRemoveFromCart(item, qty = 1) {
     if (!item?.id && !item?.slug) return;
     const cleanId = String(item.id || item.slug).replace(/[./#$\[\]]/g, '_');
     const cleanSlug = item.slug ? String(item.slug).replace(/[./#$\[\]]/g, '_') : '';
-    const qty = Number(item.quantity) || 1;
+    const removeQty = Number(qty) || Number(item.quantity) || 1;
 
     try {
+      const now = new Date().toISOString();
+      const productRef = doc(db, 'products', cleanId);
+
+      // 1. Grava diretamente no documento do produto
+      await setDoc(productRef, {
+        removedFromCart: increment(removeQty),
+        lastRemovedFromCartAt: now
+      }, { merge: true });
+
+      if (cleanSlug && cleanSlug !== cleanId) {
+        try {
+          const slugRef = doc(db, 'products', cleanSlug);
+          await setDoc(slugRef, {
+            removedFromCart: increment(removeQty),
+            lastRemovedFromCartAt: now
+          }, { merge: true });
+        } catch (_) {}
+      }
+
+      // 2. Grava no sumário global
       const updates = {
-        [`products.${cleanId}.removedFromCart`]: increment(qty),
-        'funnel.cartRemoves': increment(qty),
-        lastUpdated: new Date().toISOString()
+        [`products.${cleanId}.removedFromCart`]: increment(removeQty),
+        'funnel.cartRemoves': increment(removeQty),
+        lastUpdated: now
       };
 
       if (cleanSlug && cleanSlug !== cleanId) {
-        updates[`products.${cleanSlug}.removedFromCart`] = increment(qty);
+        updates[`products.${cleanSlug}.removedFromCart`] = increment(removeQty);
       }
 
       await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
@@ -174,12 +234,13 @@ export const analyticsService = {
    */
   async trackPurchase(items = []) {
     if (!items || items.length === 0) return;
+    const now = new Date().toISOString();
     const updates = {
       'funnel.purchases': increment(1),
-      lastUpdated: new Date().toISOString()
+      lastUpdated: now
     };
 
-    items.forEach(item => {
+    for (const item of items) {
       const cleanId = String(item.id || item.slug || 'item').replace(/[./#$\[\]]/g, '_');
       const cleanSlug = item.slug ? String(item.slug).replace(/[./#$\[\]]/g, '_') : '';
       const qty = Number(item.quantity) || 1;
@@ -196,7 +257,26 @@ export const analyticsService = {
       updates[`sales_sizes.${sz}`] = increment(qty);
       updates[`sales_colors.${col}`] = increment(qty);
       updates[`sales_categories.${cat}`] = increment(qty);
-    });
+
+      // Atualiza vendas no documento do produto
+      try {
+        const productRef = doc(db, 'products', cleanId);
+        await setDoc(productRef, {
+          purchases: increment(qty),
+          lastSoldAt: now
+        }, { merge: true });
+
+        if (cleanSlug && cleanSlug !== cleanId) {
+          const slugRef = doc(db, 'products', cleanSlug);
+          await setDoc(slugRef, {
+            purchases: increment(qty),
+            lastSoldAt: now
+          }, { merge: true });
+        }
+      } catch (e) {
+        console.warn("Erro ao atualizar compra no produto:", e.message);
+      }
+    }
 
     try {
       await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
