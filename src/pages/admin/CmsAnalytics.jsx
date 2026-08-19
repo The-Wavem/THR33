@@ -257,7 +257,6 @@ export function CmsAnalytics() {
       const idViews = Number(dataFromId?.views || 0);
       const slugViews = (dataFromSlug && dataFromSlug !== dataFromId) ? Number(dataFromSlug?.views || 0) : 0;
       const nameViews = (dataFromName && dataFromName !== dataFromId && dataFromName !== dataFromSlug) ? Number(dataFromName?.views || 0) : 0;
-      const views = Math.max(Number(p.views || 0), idViews + slugViews + nameViews, Number(dataFromId?.views || 0), Number(dataFromSlug?.views || 0));
 
       const idAdds = Number(dataFromId?.addedToCart || 0);
       const slugAdds = (dataFromSlug && dataFromSlug !== dataFromId) ? Number(dataFromSlug?.addedToCart || 0) : 0;
@@ -310,13 +309,28 @@ export function CmsAnalytics() {
         ? uniqueOrdersCount 
         : (realPurchases > 0 ? 1 : 0);
 
-      // Taxa de Conversão: (Pedidos Únicos / Views) * 100 limitado a 100%
-      let conversion = '0.0';
+      // Views não podem ser menores que os pedidos únicos registrados
+      const rawViews = Math.max(Number(p.views || 0), idViews + slugViews + nameViews, Number(dataFromId?.views || 0), Number(dataFromSlug?.views || 0));
+      const views = Math.max(rawViews, uniqueOrders);
+
+      // Taxa de Adição à Sacola (Add-to-cart rate)
+      let addToCartRate = '0.0';
       if (views > 0) {
-        const rate = (uniqueOrders / views) * 100;
-        conversion = Math.min(100, rate).toFixed(1);
+        addToCartRate = Math.min(100, (adds / views) * 100).toFixed(1);
+      }
+
+      // Taxa de Conversão Real (Pedidos Únicos / Views)
+      let conversionRate = '0.0';
+      if (views > 0) {
+        conversionRate = Math.min(100, (uniqueOrders / views) * 100).toFixed(1);
       } else if (uniqueOrders > 0) {
-        conversion = '100.0';
+        conversionRate = '100.0';
+      }
+
+      // Taxa de Abandono de Item (Remoções / Adições)
+      let abandonmentRate = '0.0';
+      if (adds > 0) {
+        abandonmentRate = Math.min(100, (removes / adds) * 100).toFixed(1);
       }
 
       // Calcula tempo ocioso em dias
@@ -368,7 +382,7 @@ export function CmsAnalytics() {
 
       const totalStock = Object.values(parsedStock).reduce((a, b) => Number(a) + Number(b), 0);
       const isDeadStock = daysIdle >= 45 && totalStock > 0;
-      const statusInfo = getProductStatusDetails(p, totalStock, daysIdle, realPurchases, views, adds, conversion);
+      const statusInfo = getProductStatusDetails(p, totalStock, daysIdle, realPurchases, views, adds, conversionRate);
 
       return {
         id: p.id,
@@ -385,7 +399,9 @@ export function CmsAnalytics() {
         removes,
         purchases: realPurchases,
         uniqueOrders,
-        conversion,
+        addToCartRate,
+        conversion: conversionRate,
+        abandonmentRate,
         daysIdle,
         isDeadStock,
         statusInfo,
@@ -402,7 +418,7 @@ export function CmsAnalytics() {
 
   // Telemetria real da peça aberta no Drawer
   const activeDrawerTelemetry = useMemo(() => {
-    if (!selectedSkuDetail?.id) return { views: 0, adds: 0, removes: 0, purchases: 0 };
+    if (!selectedSkuDetail?.id) return { views: 0, adds: 0, removes: 0, purchases: 0, uniqueOrders: 0, addToCartRate: '0.0', conversion: '0.0', abandonmentRate: '0.0' };
     const rawTelemetry = summaryData.products || {};
     const p = selectedSkuDetail;
     const cleanId = String(p.id || '').replace(/[./#$\[\]]/g, '_');
@@ -411,11 +427,16 @@ export function CmsAnalytics() {
     const dataFromId = rawTelemetry[p.id] || (cleanId ? rawTelemetry[cleanId] : null);
     const dataFromSlug = (p.slug ? rawTelemetry[p.slug] : null) || (cleanSlug ? rawTelemetry[cleanSlug] : null);
 
-    const views = Math.max(
+    const purchases = Number(p.purchases || 0);
+    const uniqueOrders = Number(p.uniqueOrders || (purchases > 0 ? 1 : 0));
+
+    const rawViews = Math.max(
       Number(p.views || 0),
       Number(dataFromId?.views || 0),
       Number(dataFromSlug?.views || 0)
     );
+    const views = Math.max(rawViews, uniqueOrders);
+
     const adds = Math.max(
       Number(p.addedToCart || 0),
       Number(p.adds || 0),
@@ -428,13 +449,12 @@ export function CmsAnalytics() {
       Number(dataFromId?.removedFromCart || 0),
       Number(dataFromSlug?.removedFromCart || 0)
     );
-    const purchases = Math.max(
-      Number(p.purchases || 0),
-      Number(dataFromId?.purchases || 0),
-      Number(dataFromSlug?.purchases || 0)
-    );
 
-    return { views, adds, removes, purchases };
+    const addToCartRate = views > 0 ? Math.min(100, (adds / views) * 100).toFixed(1) : '0.0';
+    const conversion = views > 0 ? Math.min(100, (uniqueOrders / views) * 100).toFixed(1) : (uniqueOrders > 0 ? '100.0' : '0.0');
+    const abandonmentRate = adds > 0 ? Math.min(100, (removes / adds) * 100).toFixed(1) : '0.0';
+
+    return { views, adds, removes, purchases, uniqueOrders, addToCartRate, conversion, abandonmentRate };
   }, [selectedSkuDetail, summaryData]);
 
   // 1. AGREGAÇÃO DINÂMICA DE CORES DIRETAMENTE DOS PEDIDOS & TELEMETRIA
@@ -861,6 +881,7 @@ export function CmsAnalytics() {
                       <InfoTooltip 
                         title="Guia de Status do Inventário"
                         position="bottom"
+                        align="left"
                         width="340px"
                         text={
                           "• ESTÁVEL: Estoque balanceado (> 5 un.) e giro regular.\n" +
@@ -874,18 +895,39 @@ export function CmsAnalytics() {
                       />
                     </div>
                   </th>
-                  <th>VIEWS VITRINE</th>
-                  <th>ADICIONADOS</th>
-                  <th>REMOÇÕES</th>
-                  <th>VENDAS PAGAS</th>
                   <th>
                     <div className={styles.thWithTooltip}>
-                      <span>CONVERSÃO</span>
+                      <span>VIEWS PDP</span>
+                      <InfoTooltip text="Total de acessos e visualizações na página individual desta peça." title="Visualizações" position="bottom" align="left" width="260px" />
+                    </div>
+                  </th>
+                  <th>
+                    <div className={styles.thWithTooltip}>
+                      <span>ADICIONADOS</span>
+                      <InfoTooltip text="Total de unidades colocadas na sacola pelos clientes." title="Adições à Sacola" position="bottom" align="left" width="260px" />
+                    </div>
+                  </th>
+                  <th>
+                    <div className={styles.thWithTooltip}>
+                      <span>REMOÇÕES</span>
+                      <InfoTooltip text="Total de unidades excluídas da sacola antes da compra." title="Desistências" position="bottom" align="right" width="260px" />
+                    </div>
+                  </th>
+                  <th>
+                    <div className={styles.thWithTooltip}>
+                      <span>VENDAS PAGAS</span>
+                      <InfoTooltip text="Total de peças vendidas e quantidade de pedidos únicos correspondentes." title="Vendas Concluídas" position="bottom" align="right" width="280px" />
+                    </div>
+                  </th>
+                  <th>
+                    <div className={styles.thWithTooltip}>
+                      <span>CONVERSÃO REAL</span>
                       <InfoTooltip 
-                        title="Taxa de Conversão por SKU"
+                        title="Conversão Real"
                         position="bottom"
-                        width="300px"
-                        text="Mede a porcentagem de visitantes que compraram esta peça (Pedidos Únicos com o SKU / Views Vitrine)."
+                        align="right"
+                        width="290px"
+                        text="Taxa de visitantes que compraram esta peça (Pedidos Únicos / Views PDP)."
                       />
                     </div>
                   </th>
@@ -931,10 +973,18 @@ export function CmsAnalytics() {
                       <td><strong>{prod.views}</strong></td>
                       <td><span className={styles.addText}>+{prod.adds}</span></td>
                       <td><span className={styles.removeText}>-{prod.removes}</span></td>
-                      <td><strong className={styles.salesText}>{prod.purchases} un.</strong></td>
+                      <td>
+                        <div className={styles.salesMetricCell}>
+                          <strong className={styles.salesText}>{prod.purchases} un.</strong>
+                          <small className={styles.ordersCountText}>({prod.uniqueOrders} ped.)</small>
+                        </div>
+                      </td>
                       <td>
                         <div className={styles.conversionBox}>
-                          <strong>{prod.conversion}%</strong>
+                          <div className={styles.conversionHeader}>
+                            <strong>{prod.conversion}%</strong>
+                            <small className={styles.intentHint}>Add: {prod.addToCartRate}%</small>
+                          </div>
                           <div className={styles.miniBar}>
                             <div style={{ width: `${Math.min(Number(prod.conversion), 100)}%` }} />
                           </div>
@@ -1242,23 +1292,27 @@ export function CmsAnalytics() {
                 <h3>JORNADA INDIVIDUAL DESTA PEÇA</h3>
                 <div className={styles.telemetryGrid}>
                   <div className={styles.telemetryCard}>
-                    <span>Visualizações na Vitrine</span>
+                    <span>Visualizações PDP</span>
                     <strong className={styles.whiteVal}>{activeDrawerTelemetry.views}</strong>
+                    <small className={styles.telemetryCardSub}>Sessões únicas</small>
                   </div>
 
                   <div className={styles.telemetryCard}>
-                    <span>Adições à Sacola</span>
+                    <span>Taxa de Adição</span>
                     <strong className={styles.blueVal}>+{activeDrawerTelemetry.adds}</strong>
+                    <small className={styles.telemetryCardSub}>{activeDrawerTelemetry.addToCartRate}% das views</small>
                   </div>
 
                   <div className={styles.telemetryCard}>
-                    <span>Desistências / Remoções</span>
+                    <span>Desistências</span>
                     <strong className={styles.redVal}>-{activeDrawerTelemetry.removes}</strong>
+                    <small className={styles.telemetryCardSub}>{activeDrawerTelemetry.abandonmentRate}% das adições</small>
                   </div>
 
                   <div className={styles.telemetryCard}>
-                    <span>Compras Concluídas</span>
+                    <span>Vendas Aprovadas</span>
                     <strong className={styles.greenVal}>{activeDrawerTelemetry.purchases} un.</strong>
+                    <small className={styles.telemetryCardSub}>{activeDrawerTelemetry.uniqueOrders || 0} pedidos únicos ({activeDrawerTelemetry.conversion}%)</small>
                   </div>
                 </div>
               </div>

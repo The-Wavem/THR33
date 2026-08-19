@@ -318,23 +318,61 @@
 .removeText { color: #f87171; font-weight: 700; }
 .salesText { color: #4ade80; font-weight: 800; }
 
+.salesMetricCell {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.ordersCountText {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-weight: 500;
+  white-space: nowrap;
+}
+
 .conversionBox {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  min-width: 80px;
+  min-width: 95px;
+}
+
+.conversionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.3rem;
+}
+
+.conversionHeader strong {
+  font-size: 0.85rem;
+  color: #4ade80;
+}
+
+.intentHint {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .miniBar {
-  height: 4px;
-  background-color: var(--bg-card);
+  height: 5px;
+  background-color: var(--bg-primary);
   border: 1px solid var(--border-color);
   overflow: hidden;
 }
 
 .miniBar div {
   height: 100%;
-  background-color: #4ade80;
+  background: linear-gradient(90deg, #2563eb, #4ade80);
+}
+
+.telemetryCardSub {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+  display: block;
 }
 
 .detailBtn {
