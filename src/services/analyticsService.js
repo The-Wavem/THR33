@@ -1,4 +1,12 @@
-import { doc, setDoc, increment } from 'firebase/firestore';
+import { 
+  doc, 
+  setDoc, 
+  increment, 
+  collection, 
+  getDocs, 
+  query, 
+  where 
+} from 'firebase/firestore';
 import { db } from './firebaseConfig';
 
 const SUMMARY_DOC_REF = doc(db, 'analytics', 'summary');
@@ -37,6 +45,125 @@ function sanitizePayload(obj) {
 }
 
 export const analyticsService = {
+  /**
+   * Retorna o UTM ativo da sessão com validação de janela temporal de atribuição
+   * Expira ao fechar o navegador/aba ou após 24 horas
+   */
+  getActiveUtm() {
+    if (typeof window === 'undefined') return null;
+    try {
+      // 1. Tenta sessionStorage (limpo automaticamente ao fechar a aba/navegador)
+      let raw = sessionStorage.getItem('thr33_active_utm');
+      
+      // 2. Fallback de localStorage caso tenha mudado de aba/contexto
+      if (!raw) {
+        raw = localStorage.getItem('thr33_active_utm');
+      }
+
+      if (!raw) return null;
+
+      const data = JSON.parse(raw);
+      if (!data || (!data.utm_campaign && !data.utm_source)) return null;
+
+      // Janela de atribuição máxima: 24 horas
+      const MAX_UTM_AGE_MS = 24 * 60 * 60 * 1000;
+      const age = Date.now() - Number(data.timestamp || 0);
+      if (age > MAX_UTM_AGE_MS) {
+        this.clearActiveUtm();
+        return null;
+      }
+
+      return data;
+    } catch (_) {
+      return null;
+    }
+  },
+
+  /**
+   * Limpa a atribuição UTM ativa
+   */
+  clearActiveUtm() {
+    if (typeof window === 'undefined') return;
+    try {
+      sessionStorage.removeItem('thr33_active_utm');
+      sessionStorage.removeItem('thr33_utm_source');
+      sessionStorage.removeItem('thr33_utm_medium');
+      sessionStorage.removeItem('thr33_utm_campaign');
+      localStorage.removeItem('thr33_active_utm');
+    } catch (_) {}
+  },
+
+  /**
+   * Captura, congela e atribui clique de UTM na URL atual
+   * Salva no sessionStorage (expira ao fechar) e incrementa cliques no Firestore
+   */
+  async checkAndTrackUtm() {
+    if (typeof window === 'undefined') return;
+
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const utm_campaign = urlParams.get('utm_campaign');
+      const utm_source = urlParams.get('utm_source');
+      const utm_medium = urlParams.get('utm_medium');
+
+      // Se não há novos parâmetros UTM na rota atual, preserva o UTM ativo na sessão
+      if (!utm_campaign && !utm_source) return;
+
+      const cleanUtm = utm_campaign 
+        ? String(utm_campaign).toLowerCase().trim().replace(/[./#$\[\]\s]/g, '_')
+        : '';
+      const cleanSource = utm_source 
+        ? String(utm_source).toLowerCase().trim().replace(/[./#$\[\]\s]/g, '_')
+        : 'instagram';
+      const cleanMedium = utm_medium 
+        ? String(utm_medium).toLowerCase().trim().replace(/[./#$\[\]\s]/g, '_')
+        : 'stories';
+
+      // Salva o UTM ativo congelado na sessão
+      const utmData = { 
+        utm_campaign: cleanUtm, 
+        utm_source: cleanSource, 
+        utm_medium: cleanMedium, 
+        timestamp: Date.now() 
+      };
+
+      sessionStorage.setItem('thr33_active_utm', JSON.stringify(utmData));
+      if (cleanSource) sessionStorage.setItem('thr33_utm_source', cleanSource);
+      if (cleanMedium) sessionStorage.setItem('thr33_utm_medium', cleanMedium);
+      if (cleanUtm) sessionStorage.setItem('thr33_utm_campaign', cleanUtm);
+      localStorage.setItem('thr33_active_utm', JSON.stringify(utmData));
+
+      if (cleanUtm) {
+        const sessionKey = `tracked_utm_${cleanUtm}`;
+        const alreadyTracked = sessionStorage.getItem(sessionKey);
+
+        if (!alreadyTracked) {
+          sessionStorage.setItem(sessionKey, 'true');
+
+          // Incrementa clique na campanha correspondente
+          const q = query(collection(db, 'campaigns'), where('utm_campaign', '==', cleanUtm));
+          const snap = await getDocs(q);
+
+          if (!snap.empty) {
+            const campDoc = snap.docs[0];
+            await setDoc(doc(db, 'campaigns', campDoc.id), {
+              clicks: increment(1),
+              lastClickAt: new Date().toISOString()
+            }, { merge: true });
+          }
+
+          // Registra no sumário global
+          await setDoc(SUMMARY_DOC_REF, {
+            [`utm_clicks.${cleanUtm}`]: increment(1),
+            lastUpdated: new Date().toISOString()
+          }, { merge: true });
+        }
+      }
+    } catch (err) {
+      console.warn("Aviso ao registrar clique UTM:", err.message);
+    }
+  },
+
   /**
    * Rastreia uso de filtros no catálogo (Ex: fit_boxy, cat_camisa)
    */
@@ -115,7 +242,7 @@ export const analyticsService = {
   },
 
   /**
-   * Rastreia adição de item ao carrinho
+   * Rastreia adição de item ao carrinho com atribuição de campanha UTM
    */
   async trackAddToCart(item) {
     if (!item?.id && !item?.slug) return;
@@ -164,6 +291,19 @@ export const analyticsService = {
       }
 
       await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
+
+      // 3. Atribuição UTM na Sacola com validação de expiração
+      const activeUtm = this.getActiveUtm();
+      if (activeUtm?.utm_campaign) {
+        const q = query(collection(db, 'campaigns'), where('utm_campaign', '==', activeUtm.utm_campaign));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          await setDoc(doc(db, 'campaigns', snap.docs[0].id), {
+            cartAdds: increment(qty),
+            lastCartAddAt: now
+          }, { merge: true });
+        }
+      }
     } catch (err) {
       console.warn("Aviso telemetria (add carrinho):", err.message);
     }
@@ -230,9 +370,9 @@ export const analyticsService = {
   },
 
   /**
-   * Rastreia conversão final da compra por produto, tamanho, cor e categoria
+   * Rastreia conversão final da compra por produto, tamanho, cor, categoria e atribuição UTM
    */
-  async trackPurchase(items = []) {
+  async trackPurchase(items = [], totalAmount = 0) {
     if (!items || items.length === 0) return;
     const now = new Date().toISOString();
     const updates = {
@@ -280,18 +420,42 @@ export const analyticsService = {
 
     try {
       await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
+
+      // Atribuição UTM na Compra & Faturamento
+      const activeUtm = this.getActiveUtm();
+      if (activeUtm?.utm_campaign) {
+        const q = query(collection(db, 'campaigns'), where('utm_campaign', '==', activeUtm.utm_campaign));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          await setDoc(doc(db, 'campaigns', snap.docs[0].id), {
+            purchases: increment(1),
+            revenue: increment(Number(totalAmount) || 0),
+            lastPurchaseAt: now
+          }, { merge: true });
+        }
+
+        // Incrementa faturamento no sumário global por UTM
+        await setDoc(SUMMARY_DOC_REF, {
+          [`utm_purchases.${activeUtm.utm_campaign}`]: increment(1),
+          [`utm_revenue.${activeUtm.utm_campaign}`]: increment(Number(totalAmount) || 0),
+          lastUpdated: now
+        }, { merge: true });
+      }
     } catch (err) {
       console.warn("Aviso telemetria (compra concluída):", err.message);
     }
   },
 
   /**
-   * Rastreia visualização de páginas gerais
+   * Rastreia visualização de páginas gerais e checa parâmetros UTM
    */
   async trackPageView(pageName) {
     if (!pageName) return;
     const cleanName = String(pageName).replace(/[./#$\[\]]/g, '_');
     const eventKey = `page:${cleanName}`;
+
+    // Dispara captura de UTM se presente na query string
+    this.checkAndTrackUtm();
 
     if (!shouldTrack(eventKey)) return;
 

@@ -445,11 +445,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     const trackingCode = `BR${Math.floor(100000000 + Math.random() * 900000000)}PR`;
     const totalItemsCount = cartItems.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
 
-    // Captura UTMs da sessão ou URL
+    // Captura UTMs congeladas da sessão/campanha ou URL
     const urlParams = new URLSearchParams(window.location.search);
-    const utmSource = urlParams.get('utm_source') || sessionStorage.getItem('thr33_utm_source') || 'Direto / Orgânico';
-    const utmMedium = urlParams.get('utm_medium') || sessionStorage.getItem('thr33_utm_medium') || 'web';
-    const utmCampaign = urlParams.get('utm_campaign') || sessionStorage.getItem('thr33_utm_campaign') || 'Nenhuma';
+    const activeUtm = analyticsService.getActiveUtm();
+    const utmSource = urlParams.get('utm_source') || activeUtm?.utm_source || sessionStorage.getItem('thr33_utm_source') || 'Direto / Orgânico';
+    const utmMedium = urlParams.get('utm_medium') || activeUtm?.utm_medium || sessionStorage.getItem('thr33_utm_medium') || 'web';
+    const utmCampaign = urlParams.get('utm_campaign') || activeUtm?.utm_campaign || sessionStorage.getItem('thr33_utm_campaign') || null;
 
     const orderData = {
       userId: user?.uid || 'guest',
@@ -571,8 +572,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         status: 'concluido'
       });
 
-      // 5. Registra a conversão de compra por produto e distribuição de tamanhos no analytics
-      await analyticsService.trackPurchase(cartItems);
+      // 5. Registra a conversão de compra por produto, atribuição UTM e distribuição de tamanhos no analytics
+      await analyticsService.trackPurchase(cartItems, total);
 
       // 6. Decrementa o estoque físico por tamanho no Firestore de forma automatizada
       await catalogService.decrementProductStock(cartItems);

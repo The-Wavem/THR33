@@ -1,4 +1,4 @@
-import React, { Suspense } from 'react';
+import React, { Suspense, useEffect } from 'react';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { PublicLayout } from './layouts/PublicLayout';
 import { PrivateLayout } from './layouts/PrivateLayout';
@@ -10,6 +10,7 @@ import { CartDrawer } from './components/cart/CartDrawer';
 import { useCart } from './context/CartContext';
 import { useAuth } from './context/AuthContext';
 import { lazyWithRetry } from './utils/lazyWithRetry';
+import { analyticsService } from './services/analyticsService';
 
 // LAZY LOADING DAS PÁGINAS (CODE-SPLITTING EM CHUNKS SOB DEMANDA)
 const Home = lazyWithRetry(() => import('./pages/public/Home').then(m => ({ default: m.Home || m.default })));
@@ -43,6 +44,11 @@ export function AppRoutes() {
   const location = useLocation();
   const { totalItemsCount, setIsCartOpen, addToCart } = useCart();
   const { user, logout, loading } = useAuth();
+
+  // Captura automática de UTM em qualquer mudança de rota/URL
+  useEffect(() => {
+    analyticsService.checkAndTrackUtm();
+  }, [location]);
 
   const handleOpenAuth = (originPath = null, tab = 'login') => {
     const from = originPath || location.pathname;
