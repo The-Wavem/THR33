@@ -20,18 +20,78 @@ import {
   Loader2, 
   ShoppingBag,
   Image as ImageIcon,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Calendar,
+  Layers,
+  Filter,
+  RotateCw,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
+import { 
+  useCmsPeriodFilter, 
+  parseOrderDate, 
+  getTodayStr, 
+  formatShortDate 
+} from '../../hooks/useCmsPeriodFilter';
 import styles from './CmsCupons.module.css';
+
+// Helper para verificar se a data está no intervalo selecionado
+const isIsoInPeriod = (dateIso, period, customStart, customEnd) => {
+  if (!dateIso) return false;
+  if (period === 'all') return true;
+  
+  const parsed = parseOrderDate(dateIso);
+  if (!parsed || isNaN(parsed.getTime())) return false;
+  
+  const orderTime = parsed.getTime();
+  const now = new Date();
+  
+  if (period === 'today') {
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
+    return orderTime >= startOfToday;
+  }
+  if (period === '7days') {
+    const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0).getTime();
+    return orderTime >= sevenDaysAgo;
+  }
+  if (period === '30days') {
+    const thirtyDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0).getTime();
+    return orderTime >= thirtyDaysAgo;
+  }
+  if (period === 'custom' && customStart && customEnd) {
+    const start = new Date(`${customStart}T00:00:00`).getTime();
+    const end = new Date(`${customEnd}T23:59:59.999`).getTime();
+    return orderTime >= start && orderTime <= end;
+  }
+  return true;
+};
 
 export function CmsCupons() {
   const [coupons, setCoupons] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'none' });
+
+  // Hook global sincronizado de filtro de datas
+  const {
+    periodFilter,
+    setPeriodFilter,
+    customStartDate,
+    customEndDate,
+    showCustomPicker,
+    setShowCustomPicker,
+    handleStartDateChange,
+    handleEndDateChange,
+    handleApplyCustomDate,
+    periodLabel
+  } = useCmsPeriodFilter();
 
   // Modais de Criação e Edição
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -67,14 +127,18 @@ export function CmsCupons() {
     active: true
   });
 
-  // 1. Busca cupons exclusivamente do Firestore
+  // 1. Busca cupons e pedidos exclusivamente do Firestore
   const fetchCoupons = async () => {
     setLoading(true);
     try {
-      const snap = await getDocs(collection(db, 'coupons'));
-      if (!snap.empty) {
+      const [couponsSnap, ordersSnap] = await Promise.all([
+        getDocs(collection(db, 'coupons')),
+        getDocs(collection(db, 'orders'))
+      ]);
+
+      if (!couponsSnap.empty) {
         const list = [];
-        snap.forEach(d => {
+        couponsSnap.forEach(d => {
           const data = d.data() || {};
           list.push({ 
             id: d.id, 
@@ -90,9 +154,20 @@ export function CmsCupons() {
       } else {
         setCoupons([]);
       }
+
+      if (!ordersSnap.empty) {
+        const oList = [];
+        ordersSnap.forEach(d => {
+          oList.push({ id: d.id, ...d.data() });
+        });
+        setOrders(oList);
+      } else {
+        setOrders([]);
+      }
     } catch (err) {
-      console.warn("Aviso ao carregar cupons do Firestore:", err.message);
+      console.warn("Aviso ao carregar cupons e pedidos do Firestore:", err.message);
       setCoupons([]);
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -530,6 +605,74 @@ export function CmsCupons() {
     }
   };
 
+  // Filtra pedidos pelo período selecionado
+  const filteredOrders = useMemo(() => {
+    if (periodFilter === 'all') return orders;
+    return orders.filter(o => isIsoInPeriod(o.createdAt, periodFilter, customStartDate, customEndDate));
+  }, [orders, periodFilter, customStartDate, customEndDate]);
+
+  // Cupons processados com reconciliação de vendas no período
+  const processedCoupons = useMemo(() => {
+    return (coupons || []).map(coupon => {
+      const cleanCode = String(coupon.code || coupon.id || '').toUpperCase().trim();
+      
+      const matchingOrders = filteredOrders.filter(o => {
+        const orderCouponCode = String(o.couponCode || o.coupon || '').toUpperCase().trim();
+        const orderCouponId = o.couponId;
+        return (orderCouponCode && (orderCouponCode === cleanCode)) || (orderCouponId && orderCouponId === coupon.id);
+      });
+
+      const periodUses = matchingOrders.length;
+      const periodGross = matchingOrders.reduce((sum, o) => sum + (Number(o.total || o.subtotal) || 0), 0);
+      const periodItems = matchingOrders.reduce((sum, o) => {
+        const items = Array.isArray(o.items) ? o.items : [];
+        return sum + items.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0);
+      }, 0);
+
+      const firestoreUses = Number(coupon.usageCount || 0);
+      const firestoreGross = Number(coupon.grossRevenue || 0);
+      const firestoreItems = Number(coupon.itemsSold || 0);
+      const firestoreDiscount = Number(coupon.discountGiven || 0);
+      const firestorePending = Number(coupon.commissionPending || 0);
+      const firestorePaid = Number(coupon.commissionPaid || 0);
+
+      let usageCount = 0;
+      let grossRevenue = 0;
+      let itemsCount = 0;
+      let discountGiven = 0;
+      let commissionPending = firestorePending;
+      let commissionPaid = firestorePaid;
+
+      if (periodFilter === 'all') {
+        usageCount = Math.max(periodUses, firestoreUses);
+        grossRevenue = periodGross > 0 ? periodGross : firestoreGross;
+        itemsCount = periodItems > 0 ? periodItems : firestoreItems;
+        discountGiven = firestoreDiscount;
+      } else {
+        usageCount = periodUses;
+        grossRevenue = periodGross;
+        itemsCount = periodItems;
+        discountGiven = (grossRevenue * (Number(coupon.discountPercent) || 10)) / 100;
+      }
+
+      const isBrand = coupon.type === 'brand';
+      const rate = Number(coupon.commissionRate || 8);
+      const periodCommission = isBrand ? 0 : (grossRevenue * rate) / 100;
+      const netProfit = grossRevenue - discountGiven - (periodFilter === 'all' ? (commissionPending + commissionPaid) : periodCommission);
+
+      return {
+        ...coupon,
+        usageCount,
+        grossRevenue,
+        itemsSold: itemsCount,
+        discountGiven,
+        commissionPending,
+        commissionPaid,
+        netProfit: Math.max(0, netProfit)
+      };
+    });
+  }, [coupons, filteredOrders, periodFilter]);
+
   const metrics = useMemo(() => {
     let gross = 0;
     let discounts = 0;
@@ -537,34 +680,127 @@ export function CmsCupons() {
     let paid = 0;
     let totalUses = 0;
 
-    (coupons || []).forEach(c => {
-      if (!c) return;
-      gross += (Number(c.grossRevenue) || 0);
-      discounts += (Number(c.discountGiven) || 0);
-      pending += (Number(c.commissionPending) || 0);
-      paid += (Number(c.commissionPaid) || 0);
-      totalUses += (Number(c.usageCount) || 0);
+    processedCoupons.forEach(c => {
+      gross += Number(c.grossRevenue || 0);
+      discounts += Number(c.discountGiven || 0);
+      pending += Number(c.commissionPending || 0);
+      paid += Number(c.commissionPaid || 0);
+      totalUses += Number(c.usageCount || 0);
     });
 
-    const netProfit = gross - discounts - pending - paid;
+    const netProfit = Math.max(0, gross - discounts - pending - paid);
     return { gross, discounts, pending, paid, totalUses, netProfit };
-  }, [coupons]);
+  }, [processedCoupons]);
 
-  const filteredCoupons = (coupons || []).filter(c => {
-    if (!c) return false;
-    const search = (searchTerm || '').trim().toLowerCase();
-    const code = String(c.code || c.id || '').toLowerCase();
-    const partner = String(c.partnerName || '').toLowerCase();
-    const matchesSearch = !search || code.includes(search) || partner.includes(search);
-    const matchesType = typeFilter === 'all' || (c.type || 'affiliate') === typeFilter;
-    
-    let matchesStatus = true;
-    if (statusFilter === 'active') matchesStatus = !!c.active;
-    if (statusFilter === 'paused') matchesStatus = !c.active;
-    if (statusFilter === 'pending_payout') matchesStatus = (Number(c.commissionPending) || 0) > 0;
+  const handleSort = (key) => {
+    setSortConfig(prev => {
+      if (prev.key !== key || prev.direction === 'none') {
+        const initialDir = (key === 'code' || key === 'partner' || key === 'status') ? 'asc' : 'desc';
+        return { key, direction: initialDir };
+      }
+      const isText = key === 'code' || key === 'partner' || key === 'status';
+      if (isText) {
+        if (prev.direction === 'asc') return { key, direction: 'desc' };
+        if (prev.direction === 'desc') return { key: null, direction: 'none' };
+      } else {
+        if (prev.direction === 'desc') return { key, direction: 'asc' };
+        if (prev.direction === 'asc') return { key: null, direction: 'none' };
+      }
+      return { key: null, direction: 'none' };
+    });
+  };
 
-    return matchesSearch && matchesType && matchesStatus;
-  });
+  const renderSortIcon = (key) => {
+    if (sortConfig.key !== key || sortConfig.direction === 'none') {
+      return <ArrowUpDown size={12} className={styles.sortIconInactive} />;
+    }
+    if (sortConfig.direction === 'asc') {
+      return <ArrowUp size={12} className={styles.sortIconActive} />;
+    }
+    return <ArrowDown size={12} className={styles.sortIconActive} />;
+  };
+
+  const handleClearAllFilters = () => {
+    setSearchTerm('');
+    setTypeFilter('all');
+    setStatusFilter('all');
+    setSortConfig({ key: null, direction: 'none' });
+  };
+
+  const displayedCoupons = useMemo(() => {
+    let list = [...processedCoupons];
+
+    // 1. Tipo
+    if (typeFilter !== 'all') {
+      list = list.filter(c => (c.type || 'affiliate') === typeFilter);
+    }
+
+    // 2. Status
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'active') list = list.filter(c => !!c.active);
+      if (statusFilter === 'paused') list = list.filter(c => !c.active);
+      if (statusFilter === 'pending_payout') list = list.filter(c => (Number(c.commissionPending) || 0) > 0);
+    }
+
+    // 3. Busca por texto
+    if (searchTerm && searchTerm.trim()) {
+      const q = searchTerm.toLowerCase().trim();
+      list = list.filter(c => {
+        const code = String(c.code || c.id || '').toLowerCase();
+        const partner = String(c.partnerName || '').toLowerCase();
+        const pix = String(c.partnerPix || '').toLowerCase();
+        return code.includes(q) || partner.includes(q) || pix.includes(q);
+      });
+    }
+
+    // 4. Ordenação Interativa
+    if (sortConfig.key && sortConfig.direction !== 'none') {
+      const { key, direction } = sortConfig;
+      list.sort((a, b) => {
+        if (key === 'code') {
+          const comp = String(a.code || '').localeCompare(String(b.code || ''), 'pt-BR', { sensitivity: 'base' });
+          return direction === 'asc' ? comp : -comp;
+        }
+        if (key === 'partner') {
+          const comp = String(a.partnerName || '').localeCompare(String(b.partnerName || ''), 'pt-BR', { sensitivity: 'base' });
+          return direction === 'asc' ? comp : -comp;
+        }
+        if (key === 'discount') {
+          const valA = Number(a.discountPercent || 0);
+          const valB = Number(b.discountPercent || 0);
+          return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        if (key === 'sales') {
+          const valA = Number(a.grossRevenue || 0);
+          const valB = Number(b.grossRevenue || 0);
+          return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        if (key === 'pending') {
+          const valA = Number(a.commissionPending || 0);
+          const valB = Number(b.commissionPending || 0);
+          return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        if (key === 'paid') {
+          const valA = Number(a.commissionPaid || 0);
+          const valB = Number(b.commissionPaid || 0);
+          return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        if (key === 'profit') {
+          const valA = Number(a.netProfit || 0);
+          const valB = Number(b.netProfit || 0);
+          return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        if (key === 'status') {
+          const valA = a.active ? 1 : 0;
+          const valB = b.active ? 1 : 0;
+          return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        return 0;
+      });
+    }
+
+    return list;
+  }, [processedCoupons, typeFilter, statusFilter, searchTerm, sortConfig]);
 
   const handleCopyPix = (pixText) => {
     if (!pixText) return;
@@ -581,10 +817,100 @@ export function CmsCupons() {
           <h1 className={styles.title}>CUPONS, MARCA & REPASSES PIX</h1>
         </div>
         <div className={styles.headerActions}>
-          <button onClick={fetchCoupons} className={styles.refreshBtn} title="Sincronizar cupons do Firestore">
-            <RefreshCw size={13} className={loading ? styles.spinning : ''} />
-            <span>Sincronizar</span>
-          </button>
+          {/* FILTRO DE PERÍODO COM SELETOR DE DATAS */}
+          <div className={styles.periodControlWrapper}>
+            <div className={styles.periodFilterGroup}>
+              <button 
+                className={`${styles.filterBtn} ${periodFilter === 'today' ? styles.activeFilter : ''}`}
+                onClick={() => { setPeriodFilter('today'); setShowCustomPicker(false); }}
+              >
+                Hoje
+              </button>
+              <button 
+                className={`${styles.filterBtn} ${periodFilter === '7days' ? styles.activeFilter : ''}`}
+                onClick={() => { setPeriodFilter('7days'); setShowCustomPicker(false); }}
+              >
+                7 Dias
+              </button>
+              <button 
+                className={`${styles.filterBtn} ${periodFilter === '30days' ? styles.activeFilter : ''}`}
+                onClick={() => { setPeriodFilter('30days'); setShowCustomPicker(false); }}
+              >
+                30 Dias
+              </button>
+              <button 
+                className={`${styles.filterBtn} ${periodFilter === 'all' ? styles.activeFilter : ''}`}
+                onClick={() => { setPeriodFilter('all'); setShowCustomPicker(false); }}
+              >
+                Todo o Período
+              </button>
+              <button 
+                className={`${styles.filterBtn} ${styles.customPeriodBtn} ${periodFilter === 'custom' ? styles.activeFilter : ''}`}
+                onClick={() => setShowCustomPicker(prev => !prev)}
+                title="Filtrar por intervalo de datas personalizado"
+              >
+                <Calendar size={13} />
+                <span>
+                  {periodFilter === 'custom' && customStartDate && customEndDate
+                    ? `${formatShortDate(customStartDate)} - ${formatShortDate(customEndDate)}`
+                    : 'Datas'}
+                </span>
+              </button>
+              <button 
+                onClick={fetchCoupons} 
+                disabled={loading} 
+                className={styles.refreshBtn}
+                title="Sincronizar cupons e pedidos"
+                aria-label="Atualizar dados"
+              >
+                <RefreshCw size={13} className={loading ? styles.spinning : ''} />
+              </button>
+            </div>
+
+            {/* PAINEL FLUTUANTE DE SELEÇÃO DE DATA */}
+            {showCustomPicker && (
+              <div className={styles.customDateBar}>
+                <div className={styles.dateField}>
+                  <label>DE</label>
+                  <input 
+                    type="date" 
+                    value={customStartDate} 
+                    max={customEndDate || getTodayStr()}
+                    onChange={handleStartDateChange}
+                    className={styles.dateInput}
+                  />
+                </div>
+                <span className={styles.dateDivider}>—</span>
+                <div className={styles.dateField}>
+                  <label>ATÉ</label>
+                  <input 
+                    type="date" 
+                    value={customEndDate} 
+                    min={customStartDate}
+                    max={getTodayStr()}
+                    onChange={handleEndDateChange}
+                    className={styles.dateInput}
+                  />
+                </div>
+                <button 
+                  onClick={handleApplyCustomDate}
+                  className={styles.applyDateBtn}
+                  title="Aplicar intervalo"
+                >
+                  <Check size={13} />
+                  <span>APLICAR</span>
+                </button>
+                <button 
+                  onClick={() => setShowCustomPicker(false)}
+                  className={styles.cancelDateBtn}
+                  title="Fechar"
+                >
+                  <X size={13} />
+                </button>
+              </div>
+            )}
+          </div>
+
           <button onClick={handleOpenCreate} className={styles.createBtn}>
             <Plus size={14} />
             <span>NOVO CUPOM</span>
@@ -597,16 +923,16 @@ export function CmsCupons() {
         <div className={styles.kpiCard}>
           <span className={styles.kpiLabel}>
             FATURAMENTO VIA CUPONS
-            <InfoTooltip text="Total de vendas brutas originadas e creditadas a cupons da marca e de parceiros." title="Receita por Cupons" />
+            <InfoTooltip text="Total de vendas brutas originadas e creditadas a cupons no período selecionado." title="Receita por Cupons" />
           </span>
           <strong className={styles.kpiValue}>R$ {metrics.gross.toFixed(2)}</strong>
-          <small className={styles.kpiSub}>{metrics.totalUses} pedidos realizados</small>
+          <small className={styles.kpiSub}>{metrics.totalUses} pedidos no período</small>
         </div>
 
         <div className={`${styles.profitCard} ${styles.kpiCard}`}>
           <span className={styles.kpiLabel}>
             LUCRO LÍQUIDO THR33
-            <InfoTooltip text="Receita bruta total subtraída dos descontos concedidos aos compradores e das comissões pagas/pendentes aos parceiros." title="Caixa Real da Marca" />
+            <InfoTooltip text="Receita bruta total subtraída dos descontos concedidos e das comissões aos parceiros no período." title="Caixa Real da Marca" />
           </span>
           <strong className={styles.kpiValue}>R$ {metrics.netProfit.toFixed(2)}</strong>
           <small className={styles.kpiSub}>Caixa real da marca</small>
@@ -633,29 +959,62 @@ export function CmsCupons() {
 
       {/* CONTROLES */}
       <div className={styles.controlBar}>
-        <div className={styles.searchBox}>
-          <Search size={14} className={styles.searchIcon} />
-          <input 
-            type="text" 
-            placeholder="Buscar por código ou nome do parceiro..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+        <div className={styles.controlBarTop}>
+          <div className={styles.searchBox}>
+            <Search size={14} className={styles.searchIcon} />
+            <input 
+              type="text" 
+              placeholder="Buscar por código, nome do parceiro ou chave Pix..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm('')} className={styles.clearSearchBtn} title="Limpar busca">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className={styles.filtersGroup}>
+            <div className={styles.filterSelectWrapper}>
+              <Layers size={13} className={styles.filterSelectIcon} />
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={styles.filterSelect}>
+                <option value="all">TODOS OS TIPOS ({coupons.length})</option>
+                <option value="affiliate">AFILIADOS / PARCEIROS ({coupons.filter(c => c.type !== 'brand').length})</option>
+                <option value="brand">CUPOM DA MARCA ({coupons.filter(c => c.type === 'brand').length})</option>
+              </select>
+            </div>
+
+            <div className={styles.filterSelectWrapper}>
+              <Filter size={13} className={styles.filterSelectIcon} />
+              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={styles.filterSelect}>
+                <option value="all">TODOS OS STATUS</option>
+                <option value="pending_payout">COM REPASSE PENDENTE</option>
+                <option value="active">APENAS ATIVOS</option>
+                <option value="paused">APENAS PAUSADOS</option>
+              </select>
+            </div>
+          </div>
         </div>
 
-        <div className={styles.filtersGroup}>
-          <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className={styles.filterSelect}>
-            <option value="all">TODOS OS TIPOS</option>
-            <option value="affiliate">AFILIADOS / PARCEIROS</option>
-            <option value="brand">CUPOM PRÓPRIO DA MARCA</option>
-          </select>
-
-          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className={styles.filterSelect}>
-            <option value="all">TODOS OS STATUS</option>
-            <option value="pending_payout">COM REPASSE PENDENTE</option>
-            <option value="active">APENAS ATIVOS</option>
-            <option value="paused">APENAS PAUSADOS</option>
-          </select>
+        <div className={styles.controlBarBottom}>
+          <div className={styles.tableMetaInfo}>
+            <span className={styles.tableMetaCount}>
+              {displayedCoupons.length} {displayedCoupons.length === 1 ? 'cupom listado' : 'cupons listados'}
+              {(searchTerm || typeFilter !== 'all' || statusFilter !== 'all') && ` (de ${coupons.length})`}
+            </span>
+            {(searchTerm || typeFilter !== 'all' || statusFilter !== 'all' || (sortConfig.key && sortConfig.direction !== 'none')) && (
+              <button 
+                type="button" 
+                onClick={handleClearAllFilters}
+                className={styles.resetSortBtn}
+                title="Limpar todos os filtros e ordenações"
+              >
+                <RotateCw size={11} />
+                <span>Limpar Filtros</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -664,31 +1023,105 @@ export function CmsCupons() {
         <table className={styles.table}>
           <thead>
             <tr>
-              <th>CÓDIGO</th>
-              <th>BENEFICIÁRIO & PIX</th>
-              <th>DESCONTO</th>
-              <th>VENDAS (QTD/R$)</th>
-              <th>COMISSÃO PENDENTE</th>
-              <th>TOTAL JÁ PAGO</th>
-              <th>LUCRO MARCA</th>
-              <th>STATUS</th>
+              <th
+                onClick={() => handleSort('code')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Código"
+              >
+                <div className={styles.thSortContent}>
+                  <span>CÓDIGO</span>
+                  {renderSortIcon('code')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('partner')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Beneficiário"
+              >
+                <div className={styles.thSortContent}>
+                  <span>BENEFICIÁRIO & PIX</span>
+                  {renderSortIcon('partner')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('discount')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Desconto"
+              >
+                <div className={styles.thSortContent}>
+                  <span>DESCONTO</span>
+                  {renderSortIcon('discount')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('sales')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Vendas (R$)"
+              >
+                <div className={styles.thSortContent}>
+                  <span>VENDAS (QTD/R$)</span>
+                  {renderSortIcon('sales')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('pending')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Comissão Pendente"
+              >
+                <div className={styles.thSortContent}>
+                  <span>COMISSÃO PENDENTE</span>
+                  {renderSortIcon('pending')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('paid')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Total Já Pago"
+              >
+                <div className={styles.thSortContent}>
+                  <span>TOTAL JÁ PAGO</span>
+                  {renderSortIcon('paid')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('profit')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Lucro da Marca"
+              >
+                <div className={styles.thSortContent}>
+                  <span>LUCRO MARCA</span>
+                  {renderSortIcon('profit')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('status')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Status"
+              >
+                <div className={styles.thSortContent}>
+                  <span>STATUS</span>
+                  {renderSortIcon('status')}
+                </div>
+              </th>
               <th>EXTRATO & AÇÕES</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr><td colSpan="9" className={styles.centerText}>Carregando dados do Firestore...</td></tr>
-            ) : filteredCoupons.length === 0 ? (
+            ) : displayedCoupons.length === 0 ? (
               <tr>
                 <td colSpan="9" className={styles.centerText}>
-                  Nenhum cupom cadastrado no Firestore. Clique em "+ NOVO CUPOM" para criar o primeiro.
+                  {searchTerm || typeFilter !== 'all' || statusFilter !== 'all'
+                    ? 'Nenhum cupom encontrado com os filtros selecionados.'
+                    : 'Nenhum cupom cadastrado no Firestore. Clique em "+ NOVO CUPOM" para criar o primeiro.'}
                 </td>
               </tr>
             ) : (
-              filteredCoupons.map(c => {
+              displayedCoupons.map(c => {
                 const isBrand = c.type === 'brand';
                 const pending = Number(c.commissionPending || 0);
-                const brandProfit = (Number(c.grossRevenue || 0)) - (Number(c.discountGiven || 0)) - pending - (Number(c.commissionPaid || 0));
+                const brandProfit = Number(c.netProfit || 0);
 
                 return (
                   <tr key={c.id}>

@@ -16,7 +16,12 @@ import {
   Eye, 
   ShoppingBag,
   SlidersHorizontal,
-  ArrowUpRight
+  ArrowUpRight,
+  Layers,
+  Filter,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
@@ -31,6 +36,10 @@ export function CmsDescontos() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterMode, setFilterMode] = useState('all'); // 'all' | 'active_promo' | 'suggested' | 'full_price'
+  const [categoryFilter, setCategoryFilter] = useState('all'); // 'all' | 'camisa' | 'jaqueta' | 'calca' | 'brinde'
+  const [fitFilter, setFitFilter] = useState('all');
+  const [stockFilter, setStockFilter] = useState('all'); // 'all' | 'in_stock' | 'low_stock' | 'out_of_stock'
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'none' });
 
   // Modal de Edição de Promoção Individual
   const [editingProduct, setEditingProduct] = useState(null);
@@ -67,7 +76,7 @@ export function CmsDescontos() {
   const suggestedProducts = useMemo(() => {
     return products.filter(p => {
       const daysIdle = Number(p.daysWithoutSale || 0);
-      const stock = Number(p.totalStock || 0);
+      const stock = Number(p.totalStock || (p.stock ? Object.values(p.stock).reduce((a, b) => a + (Number(b) || 0), 0) : 0));
       const views = Number(p.views || 0);
       const purchases = Number(p.purchases || 0);
       const isPromo = Boolean(p.discountPrice && p.discountPrice < p.price && p.discountActive !== false);
@@ -82,25 +91,215 @@ export function CmsDescontos() {
     });
   }, [products]);
 
-  // Filtro da Tabela
-  const filteredProducts = useMemo(() => {
-    return products.filter(p => {
-      const name = (p.name || '').toLowerCase();
-      const slug = (p.slug || p.id || '').toLowerCase();
-      const query = searchTerm.toLowerCase();
-      const matchesSearch = name.includes(query) || slug.includes(query);
-
-      if (!matchesSearch) return false;
-
-      const isPromo = Boolean(p.discountPrice && p.discountPrice < p.price && p.discountActive !== false);
-
-      if (filterMode === 'active_promo') return isPromo;
-      if (filterMode === 'suggested') return suggestedProducts.some(s => s.id === p.id);
-      if (filterMode === 'full_price') return !isPromo;
-
-      return true;
+  // Contagem dinâmica de categorias disponíveis
+  const categoryCounts = useMemo(() => {
+    const counts = { all: products.length, camisa: 0, jaqueta: 0, calca: 0, brinde: 0 };
+    products.forEach(p => {
+      const cat = (p.category || p.type || 'camisa').toLowerCase();
+      if (counts[cat] !== undefined) counts[cat] += 1;
+      else counts[cat] = 1;
     });
-  }, [products, searchTerm, filterMode, suggestedProducts]);
+    return counts;
+  }, [products]);
+
+  // Modelagens (Fits) dinâmicas mapeadas exclusivamente dos produtos cadastrados no sistema
+  const fitOptions = useMemo(() => {
+    const counts = {};
+    products.forEach(p => {
+      if (p.type === 'brinde' || p.category === 'brinde') return;
+      const fit = String(p.fit || '').trim().toLowerCase();
+      if (!fit || fit === 'único' || fit === 'unico' || fit === 'padrão' || fit === 'padrao') return;
+      counts[fit] = (counts[fit] || 0) + 1;
+    });
+
+    const FIT_LABELS = {
+      'boxy': 'Boxy Fit',
+      'oversized': 'Oversized Fit',
+      'normal': 'Normal / Regular Fit',
+      'regular': 'Normal / Regular Fit',
+      'regata': 'Regata',
+      'slim': 'Slim Fit',
+      'wide_leg': 'Wide Leg',
+      'wide-leg': 'Wide Leg',
+      'cargo': 'Cargo Fit',
+      'cropped': 'Cropped Fit',
+      'drop_shoulder': 'Drop Shoulder Fit',
+      'drop-shoulder': 'Drop Shoulder Fit',
+      'street': 'Street Fit'
+    };
+
+    return Object.keys(counts).sort().map(fitKey => {
+      const formattedLabel = FIT_LABELS[fitKey] || (
+        fitKey.charAt(0).toUpperCase() + fitKey.slice(1).replace(/[-_]/g, ' ') + ' Fit'
+      );
+      return {
+        key: fitKey,
+        label: formattedLabel,
+        count: counts[fitKey]
+      };
+    });
+  }, [products]);
+
+  // Manipulador de ordenação com 3 estados (Maior/A-Z -> Menor/Z-A -> Padrão)
+  const handleSort = (key) => {
+    setSortConfig(prev => {
+      if (prev.key !== key || prev.direction === 'none') {
+        const initialDir = (key === 'name' || key === 'fit' || key === 'status') ? 'asc' : 'desc';
+        return { key, direction: initialDir };
+      }
+      const isText = key === 'name' || key === 'fit' || key === 'status';
+      if (isText) {
+        if (prev.direction === 'asc') return { key, direction: 'desc' };
+        if (prev.direction === 'desc') return { key: null, direction: 'none' };
+      } else {
+        if (prev.direction === 'desc') return { key, direction: 'asc' };
+        if (prev.direction === 'asc') return { key: null, direction: 'none' };
+      }
+      return { key: null, direction: 'none' };
+    });
+  };
+
+  const renderSortIcon = (key) => {
+    if (sortConfig.key !== key || sortConfig.direction === 'none') {
+      return <ArrowUpDown size={12} className={styles.sortIconInactive} />;
+    }
+    if (sortConfig.direction === 'asc') {
+      return <ArrowUp size={12} className={styles.sortIconActive} />;
+    }
+    return <ArrowDown size={12} className={styles.sortIconActive} />;
+  };
+
+  const getSortLabel = (key) => {
+    switch (key) {
+      case 'name': return 'Produto';
+      case 'fit': return 'Modelagem/Drop';
+      case 'stock': return 'Estoque';
+      case 'price': return 'Preço Original';
+      case 'promoPrice': return 'Preço Promocional';
+      case 'discount': return 'Desconto';
+      case 'status': return 'Status da Promo';
+      default: return '';
+    }
+  };
+
+  // Limpa todos os filtros e ordenações da tabela
+  const handleClearAllFilters = () => {
+    setSearchTerm('');
+    setFilterMode('all');
+    setCategoryFilter('all');
+    setFitFilter('all');
+    setStockFilter('all');
+    setSortConfig({ key: null, direction: 'none' });
+  };
+
+  // Filtro e Ordenação Completa na Tabela de Promoções
+  const filteredProducts = useMemo(() => {
+    let list = [...products];
+
+    // 1. Categoria (Tipo)
+    if (categoryFilter !== 'all') {
+      list = list.filter(p => (p.category === categoryFilter || p.type === categoryFilter));
+    }
+
+    // 2. Modelagem (Fit Dinâmico)
+    if (fitFilter !== 'all') {
+      list = list.filter(p => (p.fit || '').toLowerCase() === fitFilter.toLowerCase());
+    }
+
+    // 3. Modo de Filtro
+    if (filterMode !== 'all') {
+      list = list.filter(p => {
+        const origPrice = Number(p.price || 0);
+        const discountPrice = Number(p.discountPrice || 0);
+        const isPromo = Boolean(discountPrice > 0 && discountPrice < origPrice && p.discountActive !== false);
+
+        if (filterMode === 'active_promo') return isPromo;
+        if (filterMode === 'suggested') return suggestedProducts.some(s => s.id === p.id);
+        if (filterMode === 'full_price') return !isPromo;
+        return true;
+      });
+    }
+
+    // 4. Filtro de Estoque
+    if (stockFilter !== 'all') {
+      list = list.filter(p => {
+        const totalStock = p.stock 
+          ? Object.values(p.stock).reduce((a, b) => a + (Number(b) || 0), 0)
+          : (p.totalStock ?? 50);
+
+        if (stockFilter === 'in_stock') return totalStock > 5;
+        if (stockFilter === 'low_stock') return totalStock > 0 && totalStock <= 5;
+        if (stockFilter === 'out_of_stock') return totalStock === 0;
+        return true;
+      });
+    }
+
+    // 5. Busca Textual
+    if (searchTerm && searchTerm.trim()) {
+      const q = searchTerm.toLowerCase().trim();
+      list = list.filter(p => {
+        const name = (p.name || '').toLowerCase();
+        const slug = (p.slug || p.id || '').toLowerCase();
+        const fit = (p.fit || '').toLowerCase();
+        const drop = (p.drop || '').toLowerCase();
+        const cat = (p.category || '').toLowerCase();
+        return name.includes(q) || slug.includes(q) || fit.includes(q) || drop.includes(q) || cat.includes(q);
+      });
+    }
+
+    // 6. Ordenação Interativa
+    if (sortConfig.key && sortConfig.direction !== 'none') {
+      const { key, direction } = sortConfig;
+      list.sort((a, b) => {
+        if (key === 'name') {
+          const nameA = a.name || a.title || '';
+          const nameB = b.name || b.title || '';
+          const comp = nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
+          return direction === 'asc' ? comp : -comp;
+        }
+        if (key === 'fit') {
+          const fitA = `${a.fit || ''} ${a.drop || ''}`;
+          const fitB = `${b.fit || ''} ${b.drop || ''}`;
+          const comp = fitA.localeCompare(fitB, 'pt-BR', { sensitivity: 'base' });
+          return direction === 'asc' ? comp : -comp;
+        }
+        if (key === 'stock') {
+          const stA = a.stock ? Object.values(a.stock).reduce((s, v) => s + (Number(v) || 0), 0) : (a.totalStock ?? 50);
+          const stB = b.stock ? Object.values(b.stock).reduce((s, v) => s + (Number(v) || 0), 0) : (b.totalStock ?? 50);
+          return direction === 'asc' ? stA - stB : stB - stA;
+        }
+        if (key === 'price') {
+          const prA = Number(a.price || a.priceNum || 0);
+          const prB = Number(b.price || b.priceNum || 0);
+          return direction === 'asc' ? prA - prB : prB - prA;
+        }
+        if (key === 'promoPrice') {
+          const prA = a.discountPrice ? Number(a.discountPrice) : Number(a.price || 0);
+          const prB = b.discountPrice ? Number(b.discountPrice) : Number(b.price || 0);
+          return direction === 'asc' ? prA - prB : prB - prA;
+        }
+        if (key === 'discount') {
+          const origA = Number(a.price || 0);
+          const discA = Number(a.discountPrice || 0);
+          const pctA = (discA > 0 && discA < origA && a.discountActive !== false) ? Math.round(((origA - discA) / origA) * 100) : 0;
+
+          const origB = Number(b.price || 0);
+          const discB = Number(b.discountPrice || 0);
+          const pctB = (discB > 0 && discB < origB && b.discountActive !== false) ? Math.round(((origB - discB) / origB) * 100) : 0;
+
+          return direction === 'asc' ? pctA - pctB : pctB - pctA;
+        }
+        if (key === 'status') {
+          const isPromoA = Boolean(a.discountPrice && a.discountPrice < a.price && a.discountActive !== false) ? 1 : 0;
+          const isPromoB = Boolean(b.discountPrice && b.discountPrice < b.price && b.discountActive !== false) ? 1 : 0;
+          return direction === 'asc' ? isPromoA - isPromoB : isPromoB - isPromoA;
+        }
+        return 0;
+      });
+    }
+
+    return list;
+  }, [products, categoryFilter, fitFilter, filterMode, stockFilter, searchTerm, sortConfig, suggestedProducts]);
 
   // Abertura do Modal de Edição
   const handleOpenPromoModal = (prod) => {
@@ -355,45 +554,131 @@ export function CmsDescontos() {
 
       {/* BARRA DE BUSCA E FILTROS */}
       <div className={styles.filterBar}>
-        <div className={styles.searchBox}>
-          <Search size={15} className={styles.searchIcon} />
-          <input 
-            type="text" 
-            placeholder="Buscar peça por nome, modelagem ou código..." 
-            value={searchTerm} 
-            onChange={(e) => setSearchTerm(e.target.value)} 
-          />
+        <div className={styles.filterBarTop}>
+          <div className={styles.searchBox}>
+            <Search size={15} className={styles.searchIcon} />
+            <input 
+              type="text" 
+              placeholder="Buscar peça por nome, estampa, modelagem ou código..." 
+              value={searchTerm} 
+              onChange={(e) => setSearchTerm(e.target.value)} 
+            />
+            {searchTerm && (
+              <button 
+                type="button" 
+                onClick={() => setSearchTerm('')} 
+                className={styles.clearSearchBtn}
+                title="Limpar busca"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className={styles.filterModes}>
+            <button 
+              type="button" 
+              className={`${styles.modeBtn} ${filterMode === 'all' ? styles.activeMode : ''}`}
+              onClick={() => setFilterMode('all')}
+            >
+              TODOS ({products.length})
+            </button>
+            <button 
+              type="button" 
+              className={`${styles.modeBtn} ${filterMode === 'active_promo' ? styles.activeMode : ''}`}
+              onClick={() => setFilterMode('active_promo')}
+            >
+              EM PROMOÇÃO ({products.filter(p => p.discountPrice && p.discountActive !== false).length})
+            </button>
+            <button 
+              type="button" 
+              className={`${styles.modeBtn} ${filterMode === 'suggested' ? styles.activeMode : ''}`}
+              onClick={() => setFilterMode('suggested')}
+            >
+              SUGERIDOS ({suggestedProducts.length})
+            </button>
+            <button 
+              type="button" 
+              className={`${styles.modeBtn} ${filterMode === 'full_price' ? styles.activeMode : ''}`}
+              onClick={() => setFilterMode('full_price')}
+            >
+              PREÇO CHEIO ({products.filter(p => !p.discountPrice || p.discountActive === false).length})
+            </button>
+          </div>
         </div>
 
-        <div className={styles.filterModes}>
-          <button 
-            type="button" 
-            className={`${styles.modeBtn} ${filterMode === 'all' ? styles.activeMode : ''}`}
-            onClick={() => setFilterMode('all')}
-          >
-            TODOS ({products.length})
-          </button>
-          <button 
-            type="button" 
-            className={`${styles.modeBtn} ${filterMode === 'active_promo' ? styles.activeMode : ''}`}
-            onClick={() => setFilterMode('active_promo')}
-          >
-            EM PROMOÇÃO ({products.filter(p => p.discountPrice && p.discountActive !== false).length})
-          </button>
-          <button 
-            type="button" 
-            className={`${styles.modeBtn} ${filterMode === 'suggested' ? styles.activeMode : ''}`}
-            onClick={() => setFilterMode('suggested')}
-          >
-            SUGERIDOS ({suggestedProducts.length})
-          </button>
-          <button 
-            type="button" 
-            className={`${styles.modeBtn} ${filterMode === 'full_price' ? styles.activeMode : ''}`}
-            onClick={() => setFilterMode('full_price')}
-          >
-            PREÇO CHEIO ({products.filter(p => !p.discountPrice || p.discountActive === false).length})
-          </button>
+        {/* SUB-BARRA COM SELETORES DE TIPO, MODELAGEM, ESTOQUE & METADADOS */}
+        <div className={styles.filterBarBottom}>
+          <div className={styles.filterSelectorsGroup}>
+            {/* SELETOR DE CATEGORIA / TIPO */}
+            <div className={styles.filterSelectWrapper}>
+              <Layers size={13} className={styles.filterSelectIcon} />
+              <select
+                value={categoryFilter}
+                onChange={(e) => setCategoryFilter(e.target.value)}
+                className={styles.filterSelect}
+                title="Filtrar por Categoria / Tipo"
+              >
+                <option value="all">Todos os Tipos ({products.length})</option>
+                <option value="camisa">Camisetas ({categoryCounts.camisa || 0})</option>
+                <option value="jaqueta">Jaquetas ({categoryCounts.jaqueta || 0})</option>
+                <option value="calca">Calças ({categoryCounts.calca || 0})</option>
+                <option value="brinde">Brindes ({categoryCounts.brinde || 0})</option>
+              </select>
+            </div>
+
+            {/* SELETOR DE MODELAGEM / FIT DINÂMICO */}
+            <div className={styles.filterSelectWrapper}>
+              <Layers size={13} className={styles.filterSelectIcon} />
+              <select 
+                value={fitFilter}
+                onChange={(e) => setFitFilter(e.target.value)}
+                className={styles.filterSelect}
+                title="Filtrar por Modelagem Disponível"
+              >
+                <option value="all">Todas as Modelagens ({fitOptions.reduce((acc, f) => acc + f.count, 0)})</option>
+                {fitOptions.map(f => (
+                  <option key={f.key} value={f.key}>
+                    {f.label} ({f.count})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* SELETOR DE ESTOQUE */}
+            <div className={styles.filterSelectWrapper}>
+              <Filter size={13} className={styles.filterSelectIcon} />
+              <select
+                value={stockFilter}
+                onChange={(e) => setStockFilter(e.target.value)}
+                className={styles.filterSelect}
+                title="Filtrar por Volume de Estoque"
+              >
+                <option value="all">Todos os Estoques</option>
+                <option value="in_stock">Estoque Saudável (&gt; 5 un.)</option>
+                <option value="low_stock">Estoque Baixo (≤ 5 un.)</option>
+                <option value="out_of_stock">Esgotados (0 un.)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className={styles.tableMetaInfo}>
+            <span className={styles.tableMetaCount}>
+              {filteredProducts.length} {filteredProducts.length === 1 ? 'produto listado' : 'produtos listados'}
+              {(searchTerm || categoryFilter !== 'all' || fitFilter !== 'all' || filterMode !== 'all' || stockFilter !== 'all') && ` (de ${products.length})`}
+            </span>
+            {(searchTerm || categoryFilter !== 'all' || fitFilter !== 'all' || filterMode !== 'all' || stockFilter !== 'all' || (sortConfig.key && sortConfig.direction !== 'none')) && (
+              <button 
+                type="button" 
+                onClick={handleClearAllFilters}
+                className={styles.resetSortBtn}
+                title="Limpar todos os filtros e ordenações"
+              >
+                <RotateCw size={11} />
+                <span>Limpar Filtros</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -402,13 +687,76 @@ export function CmsDescontos() {
         <table className={styles.promoTable}>
           <thead>
             <tr>
-              <th>PRODUTO</th>
-              <th>MODELAGEM / DROP</th>
-              <th>ESTOQUE</th>
-              <th>PREÇO ORIGINAL</th>
-              <th>PREÇO PROMOCIONAL</th>
-              <th>DESCONTO</th>
-              <th>STATUS DA PROMO</th>
+              <th
+                onClick={() => handleSort('name')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Produto"
+              >
+                <div className={styles.thSortContent}>
+                  <span>PRODUTO</span>
+                  {renderSortIcon('name')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('fit')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Modelagem / Drop"
+              >
+                <div className={styles.thSortContent}>
+                  <span>MODELAGEM / DROP</span>
+                  {renderSortIcon('fit')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('stock')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Estoque"
+              >
+                <div className={styles.thSortContent}>
+                  <span>ESTOQUE</span>
+                  {renderSortIcon('stock')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('price')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Preço Original"
+              >
+                <div className={styles.thSortContent}>
+                  <span>PREÇO ORIGINAL</span>
+                  {renderSortIcon('price')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('promoPrice')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Preço Promocional"
+              >
+                <div className={styles.thSortContent}>
+                  <span>PREÇO PROMOCIONAL</span>
+                  {renderSortIcon('promoPrice')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('discount')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por % de Desconto"
+              >
+                <div className={styles.thSortContent}>
+                  <span>DESCONTO</span>
+                  {renderSortIcon('discount')}
+                </div>
+              </th>
+              <th
+                onClick={() => handleSort('status')}
+                className={styles.sortableTh}
+                title="Clique para ordenar por Status da Promoção"
+              >
+                <div className={styles.thSortContent}>
+                  <span>STATUS DA PROMO</span>
+                  {renderSortIcon('status')}
+                </div>
+              </th>
               <th style={{ textAlign: 'right' }}>AÇÕES</th>
             </tr>
           </thead>

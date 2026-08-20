@@ -21,7 +21,10 @@ import {
   Settings2,
   SlidersHorizontal,
   Search,
-  Filter
+  Filter,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { campaignService } from '../../services/campaignService';
@@ -112,6 +115,12 @@ export function CmsCampanhas() {
     handleApplyCustomDate,
     periodLabel
   } = useCmsPeriodFilter();
+
+  // Filtros de busca, origem, status e ordenação da Tabela
+  const [campaignSearchQuery, setCampaignSearchQuery] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'none' });
 
   // Estados do Modal
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -472,6 +481,158 @@ function isIsoInPeriod(isoString, periodFilter, customStartDate, customEndDate) 
     }), { clicks: 0, cartAdds: 0, purchases: 0, revenue: 0 });
   }, [processedCampaigns]);
 
+  // Opções de origens / canais com contagem de campanhas
+  const sourceOptions = useMemo(() => {
+    const counts = {};
+    processedCampaigns.forEach(c => {
+      const src = (c.utm_source || 'instagram').toLowerCase();
+      counts[src] = (counts[src] || 0) + 1;
+    });
+
+    const knownSources = allSources.map(s => s.value);
+    const allKeys = Array.from(new Set([...knownSources, ...Object.keys(counts)]));
+
+    return allKeys
+      .filter(k => (counts[k] || 0) > 0 || allSources.some(s => s.value === k))
+      .map(k => {
+        const found = allSources.find(s => s.value === k);
+        return {
+          key: k,
+          label: found ? found.label : (k.charAt(0).toUpperCase() + k.slice(1)),
+          count: counts[k] || 0
+        };
+      });
+  }, [processedCampaigns, allSources]);
+
+  // Manipulador de ordenação com 3 estados (Maior/A-Z -> Menor/Z-A -> Padrão)
+  const handleSort = (key) => {
+    setSortConfig(prev => {
+      if (prev.key !== key || prev.direction === 'none') {
+        const initialDir = (key === 'name' || key === 'target' || key === 'status') ? 'asc' : 'desc';
+        return { key, direction: initialDir };
+      }
+      const isText = key === 'name' || key === 'target' || key === 'status';
+      if (isText) {
+        if (prev.direction === 'asc') return { key, direction: 'desc' };
+        if (prev.direction === 'desc') return { key: null, direction: 'none' };
+      } else {
+        if (prev.direction === 'desc') return { key, direction: 'asc' };
+        if (prev.direction === 'asc') return { key: null, direction: 'none' };
+      }
+      return { key: null, direction: 'none' };
+    });
+  };
+
+  const renderSortIcon = (key) => {
+    if (sortConfig.key !== key || sortConfig.direction === 'none') {
+      return <ArrowUpDown size={12} className={styles.sortIconInactive} />;
+    }
+    if (sortConfig.direction === 'asc') {
+      return <ArrowUp size={12} className={styles.sortIconActive} />;
+    }
+    return <ArrowDown size={12} className={styles.sortIconActive} />;
+  };
+
+  const getSortLabel = (key) => {
+    switch (key) {
+      case 'name': return 'Campanha/Canal';
+      case 'target': return 'Destino/UTM';
+      case 'clicks': return 'Cliques';
+      case 'cartAdds': return 'Sacola';
+      case 'purchases': return 'Vendas';
+      case 'revenue': return 'Receita';
+      case 'conversion': return 'Conversão';
+      case 'status': return 'Status';
+      default: return '';
+    }
+  };
+
+  // Limpa todos os filtros e ordenações da tabela
+  const handleClearAllFilters = () => {
+    setCampaignSearchQuery('');
+    setSourceFilter('all');
+    setStatusFilter('all');
+    setSortConfig({ key: null, direction: 'none' });
+  };
+
+  // Campanhas filtradas por busca, origem, status e ordenadas
+  const displayedCampaigns = useMemo(() => {
+    let list = [...processedCampaigns];
+
+    // 1. Filtro por Origem (Canal)
+    if (sourceFilter !== 'all') {
+      list = list.filter(c => (c.utm_source || '').toLowerCase() === sourceFilter.toLowerCase());
+    }
+
+    // 2. Filtro por Status
+    if (statusFilter !== 'all') {
+      if (statusFilter === 'active') list = list.filter(c => c.active !== false);
+      if (statusFilter === 'paused') list = list.filter(c => c.active === false);
+      if (statusFilter === 'with_sales') list = list.filter(c => Number(c.purchases || 0) > 0);
+    }
+
+    // 3. Busca por texto
+    if (campaignSearchQuery && campaignSearchQuery.trim()) {
+      const q = campaignSearchQuery.toLowerCase().trim();
+      list = list.filter(c => {
+        const name = (c.name || '').toLowerCase();
+        const src = (c.utm_source || '').toLowerCase();
+        const med = (c.utm_medium || '').toLowerCase();
+        const utm = (c.utm_campaign || '').toLowerCase();
+        const target = (c.targetPath || '').toLowerCase();
+        return name.includes(q) || src.includes(q) || med.includes(q) || utm.includes(q) || target.includes(q);
+      });
+    }
+
+    // 4. Ordenação Interativa
+    if (sortConfig.key && sortConfig.direction !== 'none') {
+      const { key, direction } = sortConfig;
+      list.sort((a, b) => {
+        if (key === 'name') {
+          const comp = String(a.name || '').localeCompare(String(b.name || ''), 'pt-BR', { sensitivity: 'base' });
+          return direction === 'asc' ? comp : -comp;
+        }
+        if (key === 'target') {
+          const comp = String(a.targetPath || '').localeCompare(String(b.targetPath || ''), 'pt-BR', { sensitivity: 'base' });
+          return direction === 'asc' ? comp : -comp;
+        }
+        if (key === 'clicks') {
+          const valA = Number(a.clicks || 0);
+          const valB = Number(b.clicks || 0);
+          return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        if (key === 'cartAdds') {
+          const valA = Number(a.cartAdds || 0);
+          const valB = Number(b.cartAdds || 0);
+          return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        if (key === 'purchases') {
+          const valA = Number(a.purchases || 0);
+          const valB = Number(b.purchases || 0);
+          return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        if (key === 'revenue') {
+          const valA = Number(a.revenue || 0);
+          const valB = Number(b.revenue || 0);
+          return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        if (key === 'conversion') {
+          const valA = parseFloat(a.conversion || 0);
+          const valB = parseFloat(b.conversion || 0);
+          return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        if (key === 'status') {
+          const valA = a.active !== false ? 1 : 0;
+          const valB = b.active !== false ? 1 : 0;
+          return direction === 'asc' ? valA - valB : valB - valA;
+        }
+        return 0;
+      });
+    }
+
+    return list;
+  }, [processedCampaigns, sourceFilter, statusFilter, campaignSearchQuery, sortConfig]);
+
   const handleOpenModal = (camp = null) => {
     setShowAddSource(false);
     setShowAddMedium(false);
@@ -734,24 +895,172 @@ function isIsoInPeriod(isoString, periodFilter, customStartDate, customEndDate) 
         </div>
       </section>
 
+      {/* BARRA DE CONTROLES E FILTROS */}
+      <div className={styles.controlBar}>
+        <div className={styles.controlBarTop}>
+          <div className={styles.searchBox}>
+            <Search size={14} className={styles.searchIcon} />
+            <input 
+              type="text" 
+              placeholder="Buscar por campanha, origem, mídia, UTM ou destino..." 
+              value={campaignSearchQuery}
+              onChange={(e) => setCampaignSearchQuery(e.target.value)}
+            />
+            {campaignSearchQuery && (
+              <button 
+                onClick={() => setCampaignSearchQuery('')} 
+                className={styles.clearSearchBtn} 
+                title="Limpar busca"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className={styles.filtersGroup}>
+            <div className={styles.filterSelectWrapper}>
+              <Layers size={13} className={styles.filterSelectIcon} />
+              <select 
+                value={sourceFilter} 
+                onChange={(e) => setSourceFilter(e.target.value)} 
+                className={styles.filterSelect}
+              >
+                <option value="all">TODAS AS ORIGENS ({processedCampaigns.length})</option>
+                {sourceOptions.map(opt => (
+                  <option key={opt.key} value={opt.key}>
+                    {opt.label.toUpperCase()} ({opt.count})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className={styles.filterSelectWrapper}>
+              <Filter size={13} className={styles.filterSelectIcon} />
+              <select 
+                value={statusFilter} 
+                onChange={(e) => setStatusFilter(e.target.value)} 
+                className={styles.filterSelect}
+              >
+                <option value="all">TODOS OS STATUS</option>
+                <option value="active">APENAS ATIVOS</option>
+                <option value="paused">APENAS PAUSADOS</option>
+                <option value="with_sales">COM VENDAS NO PERÍODO</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className={styles.controlBarBottom}>
+          <div className={styles.tableMetaInfo}>
+            <span className={styles.tableMetaCount}>
+              {displayedCampaigns.length} {displayedCampaigns.length === 1 ? 'campanha listada' : 'campanhas listadas'}
+              {(campaignSearchQuery || sourceFilter !== 'all' || statusFilter !== 'all') && ` (de ${processedCampaigns.length})`}
+            </span>
+            {(campaignSearchQuery || sourceFilter !== 'all' || statusFilter !== 'all' || (sortConfig.key && sortConfig.direction !== 'none')) && (
+              <button 
+                type="button" 
+                onClick={handleClearAllFilters}
+                className={styles.resetSortBtn}
+                title="Limpar todos os filtros e ordenações"
+              >
+                <RotateCw size={11} />
+                <span>Limpar Filtros</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
       {/* TABELA DE LINKS & PERFORMANCE */}
       <section className={styles.tableCard}>
         <div className={styles.tableHeader}>
-          <h3>LINKS ATIVOS & DESEMPENHO DE CANAIS ({processedCampaigns.length}) — {periodLabel}</h3>
+          <h3>LINKS ATIVOS & DESEMPENHO DE CANAIS ({displayedCampaigns.length}) — {periodLabel}</h3>
         </div>
 
         <div className={styles.tableResponsive}>
           <table className={styles.table}>
             <thead>
               <tr>
-                <th>CAMPANHA & CANAL</th>
-                <th>DESTINO & IDENTIFICADOR</th>
-                <th>CLIQUES</th>
-                <th>SACOLA</th>
-                <th>VENDAS</th>
-                <th>RECEITA</th>
-                <th>CONVERSÃO</th>
-                <th>STATUS</th>
+                <th
+                  onClick={() => handleSort('name')}
+                  className={styles.sortableTh}
+                  title="Clique para ordenar por Campanha & Canal"
+                >
+                  <div className={styles.thSortContent}>
+                    <span>CAMPANHA & CANAL</span>
+                    {renderSortIcon('name')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('target')}
+                  className={styles.sortableTh}
+                  title="Clique para ordenar por Destino & Identificador"
+                >
+                  <div className={styles.thSortContent}>
+                    <span>DESTINO & IDENTIFICADOR</span>
+                    {renderSortIcon('target')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('clicks')}
+                  className={styles.sortableTh}
+                  title="Clique para ordenar por Cliques"
+                >
+                  <div className={styles.thSortContent}>
+                    <span>CLIQUES</span>
+                    {renderSortIcon('clicks')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('cartAdds')}
+                  className={styles.sortableTh}
+                  title="Clique para ordenar por Sacola"
+                >
+                  <div className={styles.thSortContent}>
+                    <span>SACOLA</span>
+                    {renderSortIcon('cartAdds')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('purchases')}
+                  className={styles.sortableTh}
+                  title="Clique para ordenar por Vendas"
+                >
+                  <div className={styles.thSortContent}>
+                    <span>VENDAS</span>
+                    {renderSortIcon('purchases')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('revenue')}
+                  className={styles.sortableTh}
+                  title="Clique para ordenar por Receita"
+                >
+                  <div className={styles.thSortContent}>
+                    <span>RECEITA</span>
+                    {renderSortIcon('revenue')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('conversion')}
+                  className={styles.sortableTh}
+                  title="Clique para ordenar por Conversão"
+                >
+                  <div className={styles.thSortContent}>
+                    <span>CONVERSÃO</span>
+                    {renderSortIcon('conversion')}
+                  </div>
+                </th>
+                <th
+                  onClick={() => handleSort('status')}
+                  className={styles.sortableTh}
+                  title="Clique para ordenar por Status"
+                >
+                  <div className={styles.thSortContent}>
+                    <span>STATUS</span>
+                    {renderSortIcon('status')}
+                  </div>
+                </th>
                 <th>AÇÕES</th>
               </tr>
             </thead>
@@ -763,14 +1072,18 @@ function isIsoInPeriod(isoString, periodFilter, customStartDate, customEndDate) 
                     <span>Carregando campanhas do Firestore...</span>
                   </td>
                 </tr>
-              ) : processedCampaigns.length === 0 ? (
+              ) : displayedCampaigns.length === 0 ? (
                 <tr>
                   <td colSpan="9" className={styles.centerText}>
-                    <span>Nenhum link de campanha cadastrado. Clique no botão acima para criar o primeiro!</span>
+                    <span>
+                      {campaignSearchQuery || sourceFilter !== 'all' || statusFilter !== 'all'
+                        ? 'Nenhuma campanha encontrada com os filtros selecionados.'
+                        : 'Nenhum link de campanha cadastrado. Clique no botão acima para criar o primeiro!'}
+                    </span>
                   </td>
                 </tr>
               ) : (
-                processedCampaigns.map(camp => {
+                displayedCampaigns.map(camp => {
                   const clicks = Number(camp.clicks) || 0;
                   const purchases = Number(camp.purchases) || 0;
                   const revenue = Number(camp.revenue) || 0;

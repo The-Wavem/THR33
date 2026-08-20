@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
 import { 
   Plus, 
@@ -12,7 +12,12 @@ import {
   Check, 
   ExternalLink,
   Layers,
-  AlertCircle
+  AlertCircle,
+  Filter,
+  RotateCw,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { catalogService } from '../../services/catalogService';
@@ -25,6 +30,9 @@ export function CmsProdutos() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all'); // 'all', 'camisa', 'jaqueta', 'calca', 'brinde'
+  const [fitFilter, setFitFilter] = useState('all'); // 'all', 'boxy', 'oversized', 'normal', 'regata'
+  const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'in_stock', 'low_stock', 'out_of_stock', 'on_sale', 'release', 'featured'
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'none' });
   
   // Controle do Formulário / Drawer de Criação
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -221,13 +229,191 @@ export function CmsProdutos() {
     }
   };
 
-  // Filtragem na Tabela
-  const filteredList = products.filter(p => {
-    const name = (p.name || p.title || '').toLowerCase();
-    const matchesSearch = name.includes(searchTerm.toLowerCase());
-    const matchesCat = selectedFilter === 'all' || p.category === selectedFilter || p.type === selectedFilter;
-    return matchesSearch && matchesCat;
-  });
+  // Manipulador de ordenação com 3 estados (Maior/A-Z -> Menor/Z-A -> Padrão)
+  const handleSort = (key) => {
+    setSortConfig(prev => {
+      if (prev.key !== key || prev.direction === 'none') {
+        const initialDir = (key === 'name' || key === 'category' || key === 'badge') ? 'asc' : 'desc';
+        return { key, direction: initialDir };
+      }
+      const isText = key === 'name' || key === 'category' || key === 'badge';
+      if (isText) {
+        if (prev.direction === 'asc') return { key, direction: 'desc' };
+        if (prev.direction === 'desc') return { key: null, direction: 'none' };
+      } else {
+        if (prev.direction === 'desc') return { key, direction: 'asc' };
+        if (prev.direction === 'asc') return { key: null, direction: 'none' };
+      }
+      return { key: null, direction: 'none' };
+    });
+  };
+
+  const renderSortIcon = (key) => {
+    if (sortConfig.key !== key || sortConfig.direction === 'none') {
+      return <ArrowUpDown size={12} className={styles.sortIconInactive} />;
+    }
+    if (sortConfig.direction === 'asc') {
+      return <ArrowUp size={12} className={styles.sortIconActive} />;
+    }
+    return <ArrowDown size={12} className={styles.sortIconActive} />;
+  };
+
+  const getSortLabel = (key) => {
+    switch (key) {
+      case 'name': return 'Nome';
+      case 'category': return 'Categoria/Fit';
+      case 'price': return 'Preço';
+      case 'badge': return 'Badge';
+      case 'stock': return 'Estoque Total';
+      default: return '';
+    }
+  };
+
+  // Contagem dinâmica de produtos por categoria
+  const categoryCounts = useMemo(() => {
+    const counts = { all: products.length, camisa: 0, jaqueta: 0, calca: 0, brinde: 0 };
+    products.forEach(p => {
+      const cat = (p.category || p.type || 'camisa').toLowerCase();
+      if (counts[cat] !== undefined) counts[cat] += 1;
+      else counts[cat] = 1;
+    });
+    return counts;
+  }, [products]);
+
+  // Modelagens (Fits) dinâmicas mapeadas exclusivamente dos produtos cadastrados no sistema
+  const fitOptions = useMemo(() => {
+    const counts = {};
+    products.forEach(p => {
+      if (p.type === 'brinde' || p.category === 'brinde') return;
+      const fit = String(p.fit || '').trim().toLowerCase();
+      if (!fit || fit === 'único' || fit === 'unico' || fit === 'padrão' || fit === 'padrao') return;
+      counts[fit] = (counts[fit] || 0) + 1;
+    });
+
+    const FIT_LABELS = {
+      'boxy': 'Boxy Fit',
+      'oversized': 'Oversized Fit',
+      'normal': 'Normal / Regular Fit',
+      'regular': 'Normal / Regular Fit',
+      'regata': 'Regata',
+      'slim': 'Slim Fit',
+      'wide_leg': 'Wide Leg',
+      'wide-leg': 'Wide Leg',
+      'cargo': 'Cargo Fit',
+      'cropped': 'Cropped Fit',
+      'drop_shoulder': 'Drop Shoulder Fit',
+      'drop-shoulder': 'Drop Shoulder Fit',
+      'street': 'Street Fit'
+    };
+
+    return Object.keys(counts).sort().map(fitKey => {
+      const formattedLabel = FIT_LABELS[fitKey] || (
+        fitKey.charAt(0).toUpperCase() + fitKey.slice(1).replace(/[-_]/g, ' ') + ' Fit'
+      );
+      return {
+        key: fitKey,
+        label: formattedLabel,
+        count: counts[fitKey]
+      };
+    });
+  }, [products]);
+
+  // Limpa todos os filtros e ordenações da tabela
+  const handleClearAllFilters = () => {
+    setSearchTerm('');
+    setSelectedFilter('all');
+    setFitFilter('all');
+    setStatusFilter('all');
+    setSortConfig({ key: null, direction: 'none' });
+  };
+
+  // Filtragem e Ordenação Completa na Tabela
+  const filteredAndSortedProducts = useMemo(() => {
+    let list = [...products];
+
+    // 1. Categoria (Tab Chips)
+    if (selectedFilter !== 'all') {
+      list = list.filter(p => (p.category === selectedFilter || p.type === selectedFilter));
+    }
+
+    // 2. Modelagem (Fit)
+    if (fitFilter !== 'all') {
+      list = list.filter(p => (p.fit || '').toLowerCase() === fitFilter.toLowerCase());
+    }
+
+    // 3. Status / Estoque / Promoção
+    if (statusFilter !== 'all') {
+      list = list.filter(p => {
+        const totalStock = p.stock 
+          ? Object.values(p.stock).reduce((a, b) => a + (Number(b) || 0), 0)
+          : (p.totalStock ?? 50);
+
+        const priceValue = parseFloat(p.price || p.priceNum || 0);
+        const origPrice = parseFloat(p.originalPrice || 0);
+        const hasDiscount = origPrice > priceValue;
+
+        if (statusFilter === 'in_stock') return totalStock > 5;
+        if (statusFilter === 'low_stock') return totalStock > 0 && totalStock <= 5;
+        if (statusFilter === 'out_of_stock') return totalStock === 0;
+        if (statusFilter === 'on_sale') return hasDiscount;
+        if (statusFilter === 'release') return p.isRelease === true;
+        if (statusFilter === 'featured') return p.isFeatured === true;
+        return true;
+      });
+    }
+
+    // 4. Busca Textual
+    if (searchTerm && searchTerm.trim()) {
+      const q = searchTerm.toLowerCase().trim();
+      list = list.filter(p => {
+        const name = (p.name || p.title || '').toLowerCase();
+        const drop = (p.drop || '').toLowerCase();
+        const category = (p.category || '').toLowerCase();
+        const fit = (p.fit || '').toLowerCase();
+        const badge = (p.customBadge || '').toLowerCase();
+        const id = String(p.id || '').toLowerCase();
+        return name.includes(q) || drop.includes(q) || category.includes(q) || fit.includes(q) || badge.includes(q) || id.includes(q);
+      });
+    }
+
+    // 5. Ordenação Interativa
+    if (sortConfig.key && sortConfig.direction !== 'none') {
+      const { key, direction } = sortConfig;
+      list.sort((a, b) => {
+        if (key === 'name') {
+          const nameA = a.name || a.title || '';
+          const nameB = b.name || b.title || '';
+          const comp = nameA.localeCompare(nameB, 'pt-BR', { sensitivity: 'base' });
+          return direction === 'asc' ? comp : -comp;
+        }
+        if (key === 'category') {
+          const catA = `${a.category || ''} ${a.fit || ''}`;
+          const catB = `${b.category || ''} ${b.fit || ''}`;
+          const comp = catA.localeCompare(catB, 'pt-BR', { sensitivity: 'base' });
+          return direction === 'asc' ? comp : -comp;
+        }
+        if (key === 'price') {
+          const prA = parseFloat(a.price || a.priceNum || 0);
+          const prB = parseFloat(b.price || b.priceNum || 0);
+          return direction === 'asc' ? prA - prB : prB - prA;
+        }
+        if (key === 'badge') {
+          const bA = a.customBadge || (a.isRelease ? 'LANÇAMENTO' : '');
+          const bB = b.customBadge || (b.isRelease ? 'LANÇAMENTO' : '');
+          const comp = bA.localeCompare(bB, 'pt-BR', { sensitivity: 'base' });
+          return direction === 'asc' ? comp : -comp;
+        }
+        if (key === 'stock') {
+          const stA = a.stock ? Object.values(a.stock).reduce((s, v) => s + (Number(v) || 0), 0) : 50;
+          const stB = b.stock ? Object.values(b.stock).reduce((s, v) => s + (Number(v) || 0), 0) : 50;
+          return direction === 'asc' ? stA - stB : stB - stA;
+        }
+        return 0;
+      });
+    }
+
+    return list;
+  }, [products, selectedFilter, fitFilter, statusFilter, searchTerm, sortConfig]);
 
   return (
     <div className={styles.catalogAdmin}>
@@ -245,37 +431,100 @@ export function CmsProdutos() {
 
       {/* BARRA DE CONTROLE & BUSCA */}
       <div className={styles.controlBar}>
-        <div className={styles.searchBox}>
-          <Search size={15} className={styles.searchIcon} />
-          <input 
-            type="text" 
-            placeholder="Buscar por nome da peça ou estampa..." 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          {searchTerm && (
-            <button onClick={() => setSearchTerm('')} className={styles.clearSearchBtn} aria-label="Limpar busca">
-              <X size={14} />
-            </button>
-          )}
+        <div className={styles.controlBarTop}>
+          <div className={styles.searchBox}>
+            <Search size={15} className={styles.searchIcon} />
+            <input 
+              type="text" 
+              placeholder="Buscar por nome da peça, estampa, SKU ou badge..." 
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
+            {searchTerm && (
+              <button onClick={() => setSearchTerm('')} className={styles.clearSearchBtn} aria-label="Limpar busca">
+                <X size={14} />
+              </button>
+            )}
+          </div>
+
+          <div className={styles.filtersRow}>
+            {[
+              { id: 'all', label: 'TODOS' },
+              { id: 'camisa', label: 'CAMISETAS' },
+              { id: 'jaqueta', label: 'JAQUETAS' },
+              { id: 'calca', label: 'CALÇAS' },
+              { id: 'brinde', label: 'BRINDES' }
+            ].map(f => (
+              <button
+                key={f.id}
+                className={`${styles.filterChip} ${selectedFilter === f.id ? styles.activeChip : ''}`}
+                onClick={() => setSelectedFilter(f.id)}
+              >
+                <span>{f.label}</span>
+                <small className={styles.chipCount}>({categoryCounts[f.id] || 0})</small>
+              </button>
+            ))}
+          </div>
         </div>
 
-        <div className={styles.filtersRow}>
-          {[
-            { id: 'all', label: 'TODOS' },
-            { id: 'camisa', label: 'CAMISETAS' },
-            { id: 'jaqueta', label: 'JAQUETAS' },
-            { id: 'calca', label: 'CALÇAS' },
-            { id: 'brinde', label: 'BRINDES' }
-          ].map(f => (
-            <button
-              key={f.id}
-              className={`${styles.filterChip} ${selectedFilter === f.id ? styles.activeChip : ''}`}
-              onClick={() => setSelectedFilter(f.id)}
-            >
-              {f.label}
-            </button>
-          ))}
+        {/* SUB-BARRA COM SELETORES DE FIT, STATUS & CONTADOR */}
+        <div className={styles.controlBarBottom}>
+          <div className={styles.filterSelectorsGroup}>
+            {/* SELETOR DE MODELAGEM / FIT DINÂMICO */}
+            <div className={styles.filterSelectWrapper}>
+              <Layers size={13} className={styles.filterSelectIcon} />
+              <select 
+                value={fitFilter}
+                onChange={(e) => setFitFilter(e.target.value)}
+                className={styles.filterSelect}
+                title="Filtrar por Modelagem Disponível"
+              >
+                <option value="all">Todas as Modelagens ({fitOptions.reduce((acc, f) => acc + f.count, 0)})</option>
+                {fitOptions.map(f => (
+                  <option key={f.key} value={f.key}>
+                    {f.label} ({f.count})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* SELETOR DE STATUS / ESTOQUE */}
+            <div className={styles.filterSelectWrapper}>
+              <Filter size={13} className={styles.filterSelectIcon} />
+              <select 
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className={styles.filterSelect}
+                title="Filtrar por Status de Estoque e Destaque"
+              >
+                <option value="all">Todos os Status</option>
+                <option value="in_stock">Estoque Saudável (&gt; 5 un.)</option>
+                <option value="low_stock">Estoque Baixo (≤ 5 un.)</option>
+                <option value="out_of_stock">Esgotados (0 un.)</option>
+                <option value="on_sale">Em Promoção / Desconto</option>
+                <option value="release">Lançamentos</option>
+                <option value="featured">Destaques da Vitrine</option>
+              </select>
+            </div>
+          </div>
+
+          <div className={styles.tableMetaInfo}>
+            <span className={styles.tableMetaCount}>
+              {filteredAndSortedProducts.length} {filteredAndSortedProducts.length === 1 ? 'produto listado' : 'produtos listados'}
+              {(searchTerm || selectedFilter !== 'all' || fitFilter !== 'all' || statusFilter !== 'all') && ` (de ${products.length})`}
+            </span>
+            {(searchTerm || selectedFilter !== 'all' || fitFilter !== 'all' || statusFilter !== 'all' || (sortConfig.key && sortConfig.direction !== 'none')) && (
+              <button 
+                type="button" 
+                onClick={handleClearAllFilters}
+                className={styles.resetSortBtn}
+                title="Limpar todos os filtros e ordenações"
+              >
+                <RotateCw size={11} />
+                <span>Limpar Filtros</span>
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -285,11 +534,56 @@ export function CmsProdutos() {
           <thead>
             <tr>
               <th>IMAGEM</th>
-              <th>NOME DO PRODUTO</th>
-              <th>CATEGORIA / FIT</th>
-              <th>PREÇO & DESCONTO</th>
-              <th>BADGE</th>
-              <th>ESTOQUE TOTAL</th>
+              <th 
+                onClick={() => handleSort('name')} 
+                className={styles.sortableTh}
+                title="Clique para ordenar por Nome"
+              >
+                <div className={styles.thSortContent}>
+                  <span>NOME DO PRODUTO</span>
+                  {renderSortIcon('name')}
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('category')} 
+                className={styles.sortableTh}
+                title="Clique para ordenar por Categoria / Modelagem"
+              >
+                <div className={styles.thSortContent}>
+                  <span>CATEGORIA / FIT</span>
+                  {renderSortIcon('category')}
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('price')} 
+                className={styles.sortableTh}
+                title="Clique para ordenar por Preço"
+              >
+                <div className={styles.thSortContent}>
+                  <span>PREÇO & DESCONTO</span>
+                  {renderSortIcon('price')}
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('badge')} 
+                className={styles.sortableTh}
+                title="Clique para ordenar por Badge"
+              >
+                <div className={styles.thSortContent}>
+                  <span>BADGE</span>
+                  {renderSortIcon('badge')}
+                </div>
+              </th>
+              <th 
+                onClick={() => handleSort('stock')} 
+                className={styles.sortableTh}
+                title="Clique para ordenar por Estoque Total"
+              >
+                <div className={styles.thSortContent}>
+                  <span>ESTOQUE TOTAL</span>
+                  {renderSortIcon('stock')}
+                </div>
+              </th>
               <th>AÇÕES</th>
             </tr>
           </thead>
@@ -303,17 +597,21 @@ export function CmsProdutos() {
                   </div>
                 </td>
               </tr>
-            ) : filteredList.length === 0 ? (
+            ) : filteredAndSortedProducts.length === 0 ? (
               <tr>
                 <td colSpan="7" className={styles.centerText}>
                   <div className={styles.emptyWrapper}>
                     <AlertCircle size={20} />
-                    <span>Nenhum produto cadastrado com esses filtros.</span>
+                    <span>
+                      {searchTerm || selectedFilter !== 'all' || fitFilter !== 'all' || statusFilter !== 'all'
+                        ? 'Nenhum produto encontrado com os filtros selecionados.'
+                        : 'Nenhum produto cadastrado no catálogo.'}
+                    </span>
                   </div>
                 </td>
               </tr>
             ) : (
-              filteredList.map((prod) => {
+              filteredAndSortedProducts.map((prod) => {
                 const totalUnits = prod.stock 
                   ? Object.values(prod.stock).reduce((a, b) => a + (Number(b) || 0), 0)
                   : 50;

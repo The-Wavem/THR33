@@ -151,8 +151,10 @@ export function CmsAnalytics() {
   const [savingStock, setSavingStock] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // Filtro de busca e ordenação da Tabela de Produtos (Raio-X)
+  // Filtro de busca, tipo/categoria, status e ordenação da Tabela de Produtos (Raio-X)
   const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'none' });
 
   // Trava a rolagem do fundo (eixo Y) quando o drawer estiver aberto
@@ -568,22 +570,88 @@ export function CmsAnalytics() {
     }
   };
 
-  // Produtos filtrados por busca e ordenados interativamente
+  // Opções de categorias com contagem de produtos
+  const categoryOptions = useMemo(() => {
+    const counts = {};
+    productMetrics.forEach(p => {
+      const cat = (p.category || 'camisa').toLowerCase();
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+
+    const knownKeys = ['camisa', 'calca', 'jaqueta', 'brinde'];
+    const allKeys = Array.from(new Set([...knownKeys, ...Object.keys(counts)]));
+
+    return allKeys
+      .filter(k => (counts[k] || 0) > 0 || CATEGORY_LABELS[k])
+      .map(k => ({
+        key: k,
+        label: CATEGORY_LABELS[k] || k.toUpperCase(),
+        count: counts[k] || 0
+      }));
+  }, [productMetrics]);
+
+  // Opções de status com contagem de produtos
+  const statusOptions = useMemo(() => {
+    const counts = {};
+    productMetrics.forEach(p => {
+      const st = p.status || p.statusInfo?.key || 'STABLE';
+      counts[st] = (counts[st] || 0) + 1;
+    });
+
+    const list = [
+      { key: 'STABLE', label: 'Estável' },
+      { key: 'BEST_SELLER', label: 'Best Seller' },
+      { key: 'DEAD_STOCK', label: 'Dead Stock' },
+      { key: 'LOW_STOCK', label: 'Estoque Baixo' },
+      { key: 'OUT_OF_STOCK', label: 'Esgotado' },
+      { key: 'FRICTION', label: 'Alerta Fricção' },
+      { key: 'LOW_VIEWS', label: 'Baixa Visibilidade' },
+      { key: 'HIDDEN', label: 'Oculto' }
+    ];
+
+    return list.map(st => ({
+      ...st,
+      count: counts[st.key] || 0
+    })).filter(st => st.count > 0 || ['STABLE', 'BEST_SELLER', 'DEAD_STOCK', 'OUT_OF_STOCK'].includes(st.key));
+  }, [productMetrics]);
+
+  // Limpa todos os filtros e ordenações aplicados
+  const handleClearAllFilters = () => {
+    setProductSearchQuery('');
+    setCategoryFilter('all');
+    setStatusFilter('all');
+    setSortConfig({ key: null, direction: 'none' });
+  };
+
+  // Produtos filtrados por categoria, status, busca e ordenados interativamente
   const displayedProductMetrics = useMemo(() => {
     let list = [...productMetrics];
 
+    // 1. Filtro por Tipo / Categoria
+    if (categoryFilter && categoryFilter !== 'all') {
+      list = list.filter(p => (p.category || 'camisa').toLowerCase() === categoryFilter.toLowerCase());
+    }
+
+    // 2. Filtro por Status
+    if (statusFilter && statusFilter !== 'all') {
+      list = list.filter(p => (p.status || p.statusInfo?.key) === statusFilter);
+    }
+
+    // 3. Filtro por Busca Textual
     if (productSearchQuery && productSearchQuery.trim()) {
       const q = productSearchQuery.toLowerCase().trim();
       list = list.filter(p => {
         const name = (p.name || '').toLowerCase();
         const cat = (p.category || '').toLowerCase();
+        const catLabel = (CATEGORY_LABELS[p.category] || '').toLowerCase();
         const fit = (p.fit || '').toLowerCase();
         const statusLabel = (p.statusInfo?.label || '').toLowerCase();
         const priceStr = String(p.price || '');
-        return name.includes(q) || cat.includes(q) || fit.includes(q) || statusLabel.includes(q) || priceStr.includes(q);
+        return name.includes(q) || cat.includes(q) || catLabel.includes(q) || fit.includes(q) || statusLabel.includes(q) || priceStr.includes(q);
       });
     }
 
+    // 4. Ordenação Interativa
     if (sortConfig.key && sortConfig.direction !== 'none') {
       const { key, direction } = sortConfig;
       list.sort((a, b) => {
@@ -608,7 +676,7 @@ export function CmsAnalytics() {
     }
 
     return list;
-  }, [productMetrics, productSearchQuery, sortConfig]);
+  }, [productMetrics, categoryFilter, statusFilter, productSearchQuery, sortConfig]);
 
   // Itens em Dead Stock (> 45 dias sem saída e com estoque positivo)
   const deadStockItems = useMemo(() => {
@@ -1102,42 +1170,85 @@ export function CmsAnalytics() {
       {/* TAB 2: RAIO-X COMPLETO POR PRODUTO */}
       {activeTab === 'products' && (
         <section className={styles.sectionCard}>
-          {/* BARRA DE PESQUISA & CONTROLES DA TABELA */}
+          {/* BARRA DE PESQUISA, FILTROS DE TIPO & STATUS */}
           <div className={styles.tableControls}>
-            <div className={styles.tableSearchWrapper}>
-              <Search size={14} className={styles.tableSearchIcon} />
-              <input
-                type="text"
-                placeholder="Buscar peça por nome, categoria, modelagem ou status..."
-                value={productSearchQuery}
-                onChange={(e) => setProductSearchQuery(e.target.value)}
-                className={styles.tableSearchInput}
-              />
-              {productSearchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setProductSearchQuery('')}
-                  className={styles.tableClearSearchBtn}
-                  title="Limpar busca"
-                >
-                  <X size={14} />
-                </button>
-              )}
+            <div className={styles.tableControlsLeft}>
+              {/* BUSCA TEXTUAL */}
+              <div className={styles.tableSearchWrapper}>
+                <Search size={14} className={styles.tableSearchIcon} />
+                <input
+                  type="text"
+                  placeholder="Buscar peça por nome, categoria, modelagem ou status..."
+                  value={productSearchQuery}
+                  onChange={(e) => setProductSearchQuery(e.target.value)}
+                  className={styles.tableSearchInput}
+                />
+                {productSearchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setProductSearchQuery('')}
+                    className={styles.tableClearSearchBtn}
+                    title="Limpar busca"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+
+              {/* GRUPO DE SELETORES DE TIPO E STATUS */}
+              <div className={styles.filterSelectorsGroup}>
+                {/* SELETOR DE TIPO / CATEGORIA */}
+                <div className={styles.filterSelectWrapper}>
+                  <Layers size={13} className={styles.filterSelectIcon} />
+                  <select 
+                    value={categoryFilter}
+                    onChange={(e) => setCategoryFilter(e.target.value)}
+                    className={styles.filterSelect}
+                    title="Filtrar por Tipo / Categoria"
+                  >
+                    <option value="all">Todos os Tipos ({productMetrics.length})</option>
+                    {categoryOptions.map(cat => (
+                      <option key={cat.key} value={cat.key}>
+                        {cat.label} ({cat.count})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* SELETOR DE STATUS */}
+                <div className={styles.filterSelectWrapper}>
+                  <Filter size={13} className={styles.filterSelectIcon} />
+                  <select 
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    className={styles.filterSelect}
+                    title="Filtrar por Status de Inventário & Performance"
+                  >
+                    <option value="all">Todos os Status ({productMetrics.length})</option>
+                    {statusOptions.map(st => (
+                      <option key={st.key} value={st.key}>
+                        {st.label} ({st.count})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
             </div>
+
             <div className={styles.tableMetaInfo}>
               <span className={styles.tableMetaCount}>
                 {displayedProductMetrics.length} {displayedProductMetrics.length === 1 ? 'peça listada' : 'peças listadas'}
-                {productSearchQuery && ` (de ${productMetrics.length})`}
+                {(productSearchQuery || categoryFilter !== 'all' || statusFilter !== 'all') && ` (de ${productMetrics.length})`}
               </span>
-              {sortConfig.key && sortConfig.direction !== 'none' && (
+              {(productSearchQuery || categoryFilter !== 'all' || statusFilter !== 'all' || (sortConfig.key && sortConfig.direction !== 'none')) && (
                 <button 
                   type="button" 
-                  onClick={() => setSortConfig({ key: null, direction: 'none' })}
+                  onClick={handleClearAllFilters}
                   className={styles.resetSortBtn}
-                  title="Redefinir para ordem padrão"
+                  title="Limpar todos os filtros e ordenações"
                 >
                   <RotateCw size={11} />
-                  <span>Redefinir ordem ({getSortLabel(sortConfig.key)}: {sortConfig.direction === 'asc' ? (sortConfig.key === 'name' || sortConfig.key === 'status' ? 'A-Z' : 'Menor→Maior') : (sortConfig.key === 'name' || sortConfig.key === 'status' ? 'Z-A' : 'Maior→Menor')})</span>
+                  <span>Limpar Filtros</span>
                 </button>
               )}
             </div>
@@ -1264,7 +1375,9 @@ export function CmsAnalytics() {
                 ) : displayedProductMetrics.length === 0 ? (
                   <tr>
                     <td colSpan="8" className={styles.centerText}>
-                      {productSearchQuery ? `Nenhum produto encontrado para "${productSearchQuery}".` : 'Nenhum produto cadastrado no momento.'}
+                      {productSearchQuery || categoryFilter !== 'all' || statusFilter !== 'all'
+                        ? 'Nenhum produto encontrado com os filtros selecionados.'
+                        : 'Nenhum produto cadastrado no momento.'}
                     </td>
                   </tr>
                 ) : (
