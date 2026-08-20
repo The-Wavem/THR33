@@ -24,7 +24,11 @@ import {
   Save,
   Check,
   Sparkles,
-  Calendar
+  Calendar,
+  Search,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
@@ -146,6 +150,10 @@ export function CmsAnalytics() {
   const [isAvailableInCatalog, setIsAvailableInCatalog] = useState(true);
   const [savingStock, setSavingStock] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+
+  // Filtro de busca e ordenação da Tabela de Produtos (Raio-X)
+  const [productSearchQuery, setProductSearchQuery] = useState('');
+  const [sortConfig, setSortConfig] = useState({ key: null, direction: 'none' });
 
   // Trava a rolagem do fundo (eixo Y) quando o drawer estiver aberto
   useEffect(() => {
@@ -517,6 +525,90 @@ export function CmsAnalytics() {
       };
     });
   }, [productsList, summaryData, completedOrders, periodFilter]);
+
+  // Manipulador de ordenação com 3 estados (Maior/A-Z -> Menor/Z-A -> Padrão)
+  const handleSort = (key) => {
+    setSortConfig(prev => {
+      if (prev.key !== key || prev.direction === 'none') {
+        const initialDir = (key === 'name' || key === 'status') ? 'asc' : 'desc';
+        return { key, direction: initialDir };
+      }
+      const isText = key === 'name' || key === 'status';
+      if (isText) {
+        if (prev.direction === 'asc') return { key, direction: 'desc' };
+        if (prev.direction === 'desc') return { key: null, direction: 'none' };
+      } else {
+        if (prev.direction === 'desc') return { key, direction: 'asc' };
+        if (prev.direction === 'asc') return { key: null, direction: 'none' };
+      }
+      return { key: null, direction: 'none' };
+    });
+  };
+
+  const renderSortIcon = (key) => {
+    if (sortConfig.key !== key || sortConfig.direction === 'none') {
+      return <ArrowUpDown size={12} className={styles.sortIconInactive} />;
+    }
+    if (sortConfig.direction === 'asc') {
+      return <ArrowUp size={12} className={styles.sortIconActive} />;
+    }
+    return <ArrowDown size={12} className={styles.sortIconActive} />;
+  };
+
+  const getSortLabel = (key) => {
+    switch (key) {
+      case 'name': return 'Produto';
+      case 'status': return 'Status';
+      case 'views': return 'Views PDP';
+      case 'adds': return 'Adicionados';
+      case 'removes': return 'Remoções';
+      case 'purchases': return 'Vendas Pagas';
+      case 'conversion': return 'Conversão Real';
+      default: return '';
+    }
+  };
+
+  // Produtos filtrados por busca e ordenados interativamente
+  const displayedProductMetrics = useMemo(() => {
+    let list = [...productMetrics];
+
+    if (productSearchQuery && productSearchQuery.trim()) {
+      const q = productSearchQuery.toLowerCase().trim();
+      list = list.filter(p => {
+        const name = (p.name || '').toLowerCase();
+        const cat = (p.category || '').toLowerCase();
+        const fit = (p.fit || '').toLowerCase();
+        const statusLabel = (p.statusInfo?.label || '').toLowerCase();
+        const priceStr = String(p.price || '');
+        return name.includes(q) || cat.includes(q) || fit.includes(q) || statusLabel.includes(q) || priceStr.includes(q);
+      });
+    }
+
+    if (sortConfig.key && sortConfig.direction !== 'none') {
+      const { key, direction } = sortConfig;
+      list.sort((a, b) => {
+        if (key === 'name') {
+          const comp = (a.name || '').localeCompare(b.name || '', 'pt-BR', { sensitivity: 'base' });
+          return direction === 'asc' ? comp : -comp;
+        }
+        if (key === 'status') {
+          const comp = (a.statusInfo?.label || '').localeCompare(b.statusInfo?.label || '', 'pt-BR', { sensitivity: 'base' });
+          return direction === 'asc' ? comp : -comp;
+        }
+        let valA = 0;
+        let valB = 0;
+        if (key === 'views') { valA = Number(a.views) || 0; valB = Number(b.views) || 0; }
+        if (key === 'adds') { valA = Number(a.adds) || 0; valB = Number(b.adds) || 0; }
+        if (key === 'removes') { valA = Number(a.removes) || 0; valB = Number(b.removes) || 0; }
+        if (key === 'purchases') { valA = Number(a.purchases) || 0; valB = Number(b.purchases) || 0; }
+        if (key === 'conversion') { valA = parseFloat(a.conversionRate || a.conversion) || 0; valB = parseFloat(b.conversionRate || b.conversion) || 0; }
+
+        return direction === 'asc' ? valA - valB : valB - valA;
+      });
+    }
+
+    return list;
+  }, [productMetrics, productSearchQuery, sortConfig]);
 
   // Itens em Dead Stock (> 45 dias sem saída e com estoque positivo)
   const deadStockItems = useMemo(() => {
@@ -1010,14 +1102,71 @@ export function CmsAnalytics() {
       {/* TAB 2: RAIO-X COMPLETO POR PRODUTO */}
       {activeTab === 'products' && (
         <section className={styles.sectionCard}>
+          {/* BARRA DE PESQUISA & CONTROLES DA TABELA */}
+          <div className={styles.tableControls}>
+            <div className={styles.tableSearchWrapper}>
+              <Search size={14} className={styles.tableSearchIcon} />
+              <input
+                type="text"
+                placeholder="Buscar peça por nome, categoria, modelagem ou status..."
+                value={productSearchQuery}
+                onChange={(e) => setProductSearchQuery(e.target.value)}
+                className={styles.tableSearchInput}
+              />
+              {productSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setProductSearchQuery('')}
+                  className={styles.tableClearSearchBtn}
+                  title="Limpar busca"
+                >
+                  <X size={14} />
+                </button>
+              )}
+            </div>
+            <div className={styles.tableMetaInfo}>
+              <span className={styles.tableMetaCount}>
+                {displayedProductMetrics.length} {displayedProductMetrics.length === 1 ? 'peça listada' : 'peças listadas'}
+                {productSearchQuery && ` (de ${productMetrics.length})`}
+              </span>
+              {sortConfig.key && sortConfig.direction !== 'none' && (
+                <button 
+                  type="button" 
+                  onClick={() => setSortConfig({ key: null, direction: 'none' })}
+                  className={styles.resetSortBtn}
+                  title="Redefinir para ordem padrão"
+                >
+                  <RotateCw size={11} />
+                  <span>Redefinir ordem ({getSortLabel(sortConfig.key)}: {sortConfig.direction === 'asc' ? (sortConfig.key === 'name' || sortConfig.key === 'status' ? 'A-Z' : 'Menor→Maior') : (sortConfig.key === 'name' || sortConfig.key === 'status' ? 'Z-A' : 'Maior→Menor')})</span>
+                </button>
+              )}
+            </div>
+          </div>
+
           <div className={styles.tableCard}>
             <table className={styles.table}>
               <thead>
                 <tr>
-                  <th>PRODUTO</th>
-                  <th>
+                  <th 
+                    onClick={() => handleSort('name')} 
+                    className={styles.sortableTh}
+                    title="Clique para ordenar por Nome"
+                  >
+                    <div className={styles.thSortContent}>
+                      <span>PRODUTO</span>
+                      {renderSortIcon('name')}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('status')} 
+                    className={styles.sortableTh}
+                    title="Clique para ordenar por Status"
+                  >
                     <div className={styles.thWithTooltip}>
-                      <span>STATUS</span>
+                      <div className={styles.thSortContent}>
+                        <span>STATUS</span>
+                        {renderSortIcon('status')}
+                      </div>
                       <InfoTooltip 
                         title="Guia de Status do Inventário"
                         position="bottom"
@@ -1035,33 +1184,68 @@ export function CmsAnalytics() {
                       />
                     </div>
                   </th>
-                  <th>
+                  <th 
+                    onClick={() => handleSort('views')} 
+                    className={styles.sortableTh}
+                    title="Clique para ordenar por Views na PDP"
+                  >
                     <div className={styles.thWithTooltip}>
-                      <span>VIEWS PDP</span>
+                      <div className={styles.thSortContent}>
+                        <span>VIEWS PDP</span>
+                        {renderSortIcon('views')}
+                      </div>
                       <InfoTooltip text="Total de acessos e visualizações na página individual desta peça." title="Visualizações" position="bottom" align="left" width="260px" />
                     </div>
                   </th>
-                  <th>
+                  <th 
+                    onClick={() => handleSort('adds')} 
+                    className={styles.sortableTh}
+                    title="Clique para ordenar por Adições à Sacola"
+                  >
                     <div className={styles.thWithTooltip}>
-                      <span>ADICIONADOS</span>
+                      <div className={styles.thSortContent}>
+                        <span>ADICIONADOS</span>
+                        {renderSortIcon('adds')}
+                      </div>
                       <InfoTooltip text="Total de unidades colocadas na sacola pelos clientes." title="Adições à Sacola" position="bottom" align="left" width="260px" />
                     </div>
                   </th>
-                  <th>
+                  <th 
+                    onClick={() => handleSort('removes')} 
+                    className={styles.sortableTh}
+                    title="Clique para ordenar por Remoções da Sacola"
+                  >
                     <div className={styles.thWithTooltip}>
-                      <span>REMOÇÕES</span>
+                      <div className={styles.thSortContent}>
+                        <span>REMOÇÕES</span>
+                        {renderSortIcon('removes')}
+                      </div>
                       <InfoTooltip text="Total de unidades excluídas da sacola antes da compra." title="Desistências" position="bottom" align="right" width="260px" />
                     </div>
                   </th>
-                  <th>
+                  <th 
+                    onClick={() => handleSort('purchases')} 
+                    className={styles.sortableTh}
+                    title="Clique para ordenar por Vendas Pagas"
+                  >
                     <div className={styles.thWithTooltip}>
-                      <span>VENDAS PAGAS</span>
+                      <div className={styles.thSortContent}>
+                        <span>VENDAS PAGAS</span>
+                        {renderSortIcon('purchases')}
+                      </div>
                       <InfoTooltip text="Total de peças vendidas e quantidade de pedidos únicos correspondentes." title="Vendas Concluídas" position="bottom" align="right" width="280px" />
                     </div>
                   </th>
-                  <th>
+                  <th 
+                    onClick={() => handleSort('conversion')} 
+                    className={styles.sortableTh}
+                    title="Clique para ordenar por Conversão Real"
+                  >
                     <div className={styles.thWithTooltip}>
-                      <span>CONVERSÃO REAL</span>
+                      <div className={styles.thSortContent}>
+                        <span>CONVERSÃO REAL</span>
+                        {renderSortIcon('conversion')}
+                      </div>
                       <InfoTooltip 
                         title="Conversão Real"
                         position="bottom"
@@ -1077,10 +1261,14 @@ export function CmsAnalytics() {
               <tbody>
                 {loading ? (
                   <tr><td colSpan="8" className={styles.centerText}>Carregando métricas reais do Firestore...</td></tr>
-                ) : productMetrics.length === 0 ? (
-                  <tr><td colSpan="8" className={styles.centerText}>Nenhum produto cadastrado no momento.</td></tr>
+                ) : displayedProductMetrics.length === 0 ? (
+                  <tr>
+                    <td colSpan="8" className={styles.centerText}>
+                      {productSearchQuery ? `Nenhum produto encontrado para "${productSearchQuery}".` : 'Nenhum produto cadastrado no momento.'}
+                    </td>
+                  </tr>
                 ) : (
-                  productMetrics.map(prod => (
+                  displayedProductMetrics.map(prod => (
                     <tr key={prod.id}>
                       <td>
                         <div className={styles.prodInfoCell}>

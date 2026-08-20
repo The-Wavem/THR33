@@ -312,8 +312,133 @@
 }
 
 /* ------------------------------------------------------------
-   TABELA
+   TABELA DE PRODUTOS & CONTROLES
    ------------------------------------------------------------ */
+.tableControls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.1rem;
+  flex-wrap: wrap;
+}
+
+.tableSearchWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 440px;
+  min-width: 260px;
+}
+
+.tableSearchIcon {
+  position: absolute;
+  left: 0.85rem;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.tableSearchInput {
+  width: 100%;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.6rem 2.2rem 0.6rem 2.4rem;
+  font-size: 0.82rem;
+  font-family: var(--font-body);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.tableSearchInput:focus {
+  border-color: var(--text-primary);
+}
+
+.tableClearSearchBtn {
+  position: absolute;
+  right: 0.65rem;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem;
+  transition: color var(--transition-fast);
+}
+
+.tableClearSearchBtn:hover {
+  color: var(--text-primary);
+}
+
+.tableMetaInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.tableMetaCount {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.resetSortBtn {
+  background: none;
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  color: #60a5fa;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.25rem 0.65rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  transition: all var(--transition-fast);
+}
+
+.resetSortBtn:hover {
+  border-color: #60a5fa;
+  background-color: rgba(96, 165, 250, 0.1);
+}
+
+.sortableTh {
+  cursor: pointer;
+  user-select: none;
+  transition: color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.sortableTh:hover {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.thSortContent {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.sortIconInactive {
+  opacity: 0.35;
+  transition: opacity var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.sortableTh:hover .sortIconInactive {
+  opacity: 0.85;
+}
+
+.sortIconActive {
+  color: #60a5fa;
+  opacity: 1;
+  flex-shrink: 0;
+}
+
 .tableCard {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
