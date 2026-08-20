@@ -14,12 +14,21 @@ import {
   Flame,
   CheckCircle2,
   Tag,
-  Clock
+  Clock,
+  Calendar,
+  Check,
+  X
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { catalogService } from '../../services/catalogService';
 import { maskCPF } from '../../utils/validators';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
+import { 
+  useCmsPeriodFilter, 
+  parseOrderDate, 
+  getTodayStr, 
+  formatShortDate 
+} from '../../hooks/useCmsPeriodFilter';
 import styles from './CmsDashboard.module.css';
 
 export function CmsDashboard() {
@@ -30,8 +39,21 @@ export function CmsDashboard() {
   const [usersCount, setUsersCount] = useState(0);
   const [summaryData, setSummaryData] = useState({});
 
-  // Filtros e CRM
-  const [periodFilter, setPeriodFilter] = useState('all'); // 'today' | '7days' | '30days' | 'all'
+  // Filtro de Período Sincronizado Globalmente
+  const {
+    periodFilter,
+    setPeriodFilter,
+    customStartDate,
+    customEndDate,
+    showCustomPicker,
+    setShowCustomPicker,
+    dateValidationErr,
+    handleStartDateChange,
+    handleEndDateChange,
+    handleApplyCustomDate,
+    periodLabel
+  } = useCmsPeriodFilter();
+
   const [cpfSearch, setCpfSearch] = useState('');
   const [crmResult, setCrmResult] = useState(null);
   const [crmLoading, setCrmLoading] = useState(false);
@@ -39,19 +61,37 @@ export function CmsDashboard() {
   const loadDashboardData = async () => {
     setLoading(true);
     try {
-      const [prods, ordersSnap, usersSnap, summarySnap] = await Promise.all([
+      const [prods, ordersSnap, usersSnap, summarySnap, sessionsSnap] = await Promise.all([
         catalogService.getAllProducts(),
         getDocs(collection(db, 'orders')),
         getDocs(collection(db, 'users')),
-        getDoc(doc(db, 'analytics', 'summary'))
+        getDoc(doc(db, 'analytics', 'summary')),
+        getDocs(collection(db, 'checkout_sessions')).catch(() => ({ forEach: () => {} }))
       ]);
 
       setProducts(prods || []);
 
       const ords = [];
-      ordersSnap.forEach(d => ords.push({ id: d.id, ...d.data() }));
-      setOrders(ords);
+      const seenIds = new Set();
 
+      ordersSnap.forEach(d => {
+        if (!seenIds.has(d.id)) {
+          seenIds.add(d.id);
+          ords.push({ id: d.id, ...d.data() });
+        }
+      });
+
+      if (sessionsSnap && sessionsSnap.forEach) {
+        sessionsSnap.forEach(d => {
+          const data = d.data();
+          if (data.completed === true && !seenIds.has(d.id)) {
+            seenIds.add(d.id);
+            ords.push({ id: d.id, ...data });
+          }
+        });
+      }
+
+      setOrders(ords);
       setUsersCount(usersSnap.size || 0);
 
       if (summarySnap.exists()) {
@@ -74,17 +114,44 @@ export function CmsDashboard() {
   const filteredOrders = useMemo(() => {
     if (periodFilter === 'all') return orders;
 
-    const now = Date.now();
-    return orders.filter(order => {
-      const orderDate = new Date(order.createdAt || order.date || now).getTime();
-      const diffHours = (now - orderDate) / (1000 * 60 * 60);
+    const now = new Date();
+    // Início de hoje (00:00:00.000)
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    // Fim de hoje (23:59:59.999)
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
-      if (periodFilter === 'today') return diffHours <= 24;
-      if (periodFilter === '7days') return diffHours <= 24 * 7;
-      if (periodFilter === '30days') return diffHours <= 24 * 30;
+    return orders.filter(order => {
+      const orderDate = parseOrderDate(order);
+      if (!orderDate) return false;
+
+      if (periodFilter === 'today') {
+        return orderDate >= startOfToday && orderDate <= endOfToday;
+      }
+
+      if (periodFilter === '7days') {
+        const start7DaysAgo = new Date(startOfToday);
+        start7DaysAgo.setDate(start7DaysAgo.getDate() - 6);
+        return orderDate >= start7DaysAgo && orderDate <= endOfToday;
+      }
+
+      if (periodFilter === '30days') {
+        const start30DaysAgo = new Date(startOfToday);
+        start30DaysAgo.setDate(start30DaysAgo.getDate() - 29);
+        return orderDate >= start30DaysAgo && orderDate <= endOfToday;
+      }
+
+      if (periodFilter === 'custom') {
+        if (!customStartDate || !customEndDate) return true;
+        const [sYear, sMonth, sDay] = customStartDate.split('-').map(Number);
+        const [eYear, eMonth, eDay] = customEndDate.split('-').map(Number);
+        const start = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
+        const end = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
+        return orderDate >= start && orderDate <= end;
+      }
+
       return true;
     });
-  }, [orders, periodFilter]);
+  }, [orders, periodFilter, customStartDate, customEndDate]);
 
   // 2. MÉTRICAS FINANCEIRAS DO PERÍODO
   const financialMetrics = useMemo(() => {
@@ -311,40 +378,100 @@ export function CmsDashboard() {
           <h1 className={styles.title}>VISÃO GERAL DO SISTEMA</h1>
         </div>
         
-        {/* FILTRO DE PERÍODO */}
-        <div className={styles.periodFilterGroup}>
-          <button 
-            className={`${styles.filterBtn} ${periodFilter === 'today' ? styles.activeFilter : ''}`}
-            onClick={() => setPeriodFilter('today')}
-          >
-            Hoje
-          </button>
-          <button 
-            className={`${styles.filterBtn} ${periodFilter === '7days' ? styles.activeFilter : ''}`}
-            onClick={() => setPeriodFilter('7days')}
-          >
-            7 Dias
-          </button>
-          <button 
-            className={`${styles.filterBtn} ${periodFilter === '30days' ? styles.activeFilter : ''}`}
-            onClick={() => setPeriodFilter('30days')}
-          >
-            30 Dias
-          </button>
-          <button 
-            className={`${styles.filterBtn} ${periodFilter === 'all' ? styles.activeFilter : ''}`}
-            onClick={() => setPeriodFilter('all')}
-          >
-            Todo o Período
-          </button>
-          <button 
-            onClick={loadDashboardData} 
-            className={styles.refreshBtn}
-            title="Atualizar dados em tempo real"
-            aria-label="Atualizar dados"
-          >
-            <RotateCw size={14} className={loading ? styles.spinning : ''} />
-          </button>
+        {/* FILTRO DE PERÍODO COM SELETOR DE DATAS */}
+        <div className={styles.periodControlWrapper}>
+          <div className={styles.periodFilterGroup}>
+            <button 
+              className={`${styles.filterBtn} ${periodFilter === 'today' ? styles.activeFilter : ''}`}
+              onClick={() => { setPeriodFilter('today'); setShowCustomPicker(false); }}
+            >
+              Hoje
+            </button>
+            <button 
+              className={`${styles.filterBtn} ${periodFilter === '7days' ? styles.activeFilter : ''}`}
+              onClick={() => { setPeriodFilter('7days'); setShowCustomPicker(false); }}
+            >
+              7 Dias
+            </button>
+            <button 
+              className={`${styles.filterBtn} ${periodFilter === '30days' ? styles.activeFilter : ''}`}
+              onClick={() => { setPeriodFilter('30days'); setShowCustomPicker(false); }}
+            >
+              30 Dias
+            </button>
+            <button 
+              className={`${styles.filterBtn} ${periodFilter === 'all' ? styles.activeFilter : ''}`}
+              onClick={() => { setPeriodFilter('all'); setShowCustomPicker(false); }}
+            >
+              Todo o Período
+            </button>
+            <button 
+              className={`${styles.filterBtn} ${styles.customPeriodBtn} ${periodFilter === 'custom' ? styles.activeFilter : ''}`}
+              onClick={() => setShowCustomPicker(prev => !prev)}
+              title="Filtrar por intervalo de datas personalizado"
+            >
+              <Calendar size={13} />
+              <span>
+                {periodFilter === 'custom' && customStartDate && customEndDate
+                  ? `${formatShortDate(customStartDate)} - ${formatShortDate(customEndDate)}`
+                  : 'Datas'}
+              </span>
+            </button>
+            <button 
+              onClick={loadDashboardData} 
+              className={styles.refreshBtn}
+              title="Atualizar dados em tempo real"
+              aria-label="Atualizar dados"
+            >
+              <RotateCw size={14} className={loading ? styles.spinning : ''} />
+            </button>
+          </div>
+
+          {/* PAINEL FLUTUANTE DE SELEÇÃO DE DATA */}
+          {showCustomPicker && (
+            <div className={styles.customDateBar}>
+              <div className={styles.dateField}>
+                <label>DE</label>
+                <input 
+                  type="date" 
+                  value={customStartDate} 
+                  max={customEndDate || getTodayStr()}
+                  onChange={handleStartDateChange}
+                  className={styles.dateInput}
+                />
+              </div>
+              <span className={styles.dateDivider}>—</span>
+              <div className={styles.dateField}>
+                <label>ATÉ</label>
+                <input 
+                  type="date" 
+                  value={customEndDate} 
+                  min={customStartDate}
+                  max={getTodayStr()}
+                  onChange={handleEndDateChange}
+                  className={styles.dateInput}
+                />
+              </div>
+              <button 
+                onClick={handleApplyCustomDate}
+                className={styles.applyDateBtn}
+                title="Aplicar intervalo"
+              >
+                <Check size={13} />
+                <span>APLICAR</span>
+              </button>
+              <button 
+                onClick={() => setShowCustomPicker(false)}
+                className={styles.closeDateBtn}
+                title="Fechar"
+              >
+                <X size={13} />
+              </button>
+              {dateValidationErr && (
+                <span className={styles.dateErrorText}>{dateValidationErr}</span>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
@@ -353,7 +480,7 @@ export function CmsDashboard() {
         <div className={styles.kpiCard}>
           <div className={styles.kpiHeader}>
             <span className={styles.kpiLabel}>
-              FATURAMENTO ({periodFilter === 'today' ? 'HOJE' : periodFilter === '7days' ? '7 DIAS' : periodFilter === '30days' ? '30 DIAS' : 'TOTAL'})
+              FATURAMENTO ({periodLabel})
             </span>
             <InfoTooltip text="Receita líquida total dos pedidos aprovados no período selecionado." title="Faturamento" position="bottom" align="left" />
           </div>
@@ -365,7 +492,7 @@ export function CmsDashboard() {
 
         <div className={styles.kpiCard}>
           <div className={styles.kpiHeader}>
-            <span className={styles.kpiLabel}>PEDIDOS NO PERÍODO</span>
+            <span className={styles.kpiLabel}>PEDIDOS ({periodLabel})</span>
             <InfoTooltip text="Total de compras finalizadas e pagas no intervalo selecionado." title="Pedidos" position="bottom" align="left" />
           </div>
           <strong className={styles.kpiValue}>{financialMetrics.orderCount}</strong>

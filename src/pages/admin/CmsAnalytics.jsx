@@ -23,11 +23,18 @@ import {
   Clock,
   Save,
   Check,
-  Sparkles
+  Sparkles,
+  Calendar
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import { calculateDynamicMetrics } from '../../services/analyticsService';
+import { 
+  useCmsPeriodFilter, 
+  parseOrderDate, 
+  getTodayStr, 
+  formatShortDate 
+} from '../../hooks/useCmsPeriodFilter';
 import styles from './CmsAnalytics.module.css';
 
 const COLOR_CONFIG = {
@@ -55,52 +62,52 @@ export const getProductStatusDetails = (prod, totalStock, daysIdle, purchases, v
     };
   }
 
-  // 2. Esgotado / Ruptura de Estoque Total (0 un.)
+  // 2. Ruptura Total (Esgotado em todas as grades)
   if (totalStock === 0) {
     return {
       key: 'OUT_OF_STOCK',
       label: 'ESGOTADO',
-      description: 'Estoque totalmente zerado em todas as grades (0 unidades). Demanda reposição imediata.'
+      description: 'Estoque zerado em todas as grades. Reposição necessária.'
     };
   }
 
-  // 3. Dead Stock (> 45 dias sem saída e com estoque parado)
+  // 3. Dead Stock (Sem vendas há mais de 45 dias com estoque disponível)
   if (daysIdle >= 45 && totalStock > 0) {
     return {
       key: 'DEAD_STOCK',
       label: 'DEAD STOCK',
-      description: 'Mais de 45 dias sem novas vendas com estoque parado. Ação promocional ou cupom recomendada.'
+      description: `${daysIdle} dias sem nenhuma venda registrada. Estoque estagnado (${totalStock} un.).`
     };
   }
 
-  // 4. Estoque Baixo (1 a 5 unidades restantes no total)
-  if (totalStock > 0 && totalStock <= 5) {
+  // 4. Best Seller (Alta tração de compras)
+  if (purchases >= 15 || (purchases >= 5 && views > 0 && parseFloat(conversion) >= 5)) {
     return {
-      key: 'LOW_STOCK',
-      label: 'ESTOQUE BAIXO',
-      description: 'Estoque residual crítico (restam 5 ou menos unidades no total). Risco de ruptura.'
+      key: 'BEST_SELLER',
+      label: 'BEST SELLER',
+      description: `Alta performance: ${purchases} un. vendidas e ${conversion}% de conversão.`
     };
   }
 
-  // 5. Alta Saída / Bestseller (vendas aceleradas ou conversão alta)
-  if (purchases >= 5 || (views >= 10 && Number(conversion) >= 3.0)) {
+  // 5. Alerta de Fricção (Muitas adições ao carrinho mas pouca/nenhuma compra)
+  if (adds >= 5 && purchases === 0) {
     return {
-      key: 'HOT',
-      label: 'ALTA SAÍDA',
-      description: 'Bestseller com alta velocidade de giro e forte conversão de clientes.'
+      key: 'FRICTION',
+      label: 'ALERTA FRICÇÃO',
+      description: `${adds} adições à sacola, porém nenhuma conversão em pedido. Possível barreira de preço/frete.`
     };
   }
 
-  // 6. Alto Interesse / Baixa Conversão (muitas views/carrinho, pouca venda)
-  if ((views >= 10 || adds >= 3) && Number(conversion) < 1.0 && purchases === 0) {
+  // 6. Baixa Visibilidade (Poucas visualizações na PDP)
+  if (views < 10) {
     return {
-      key: 'HIGH_INTEREST',
-      label: 'BAIXA CONVERSÃO',
-      description: 'Muitas visualizações e adições à sacola, mas baixa conversão em vendas (verifique preço, frete ou tamanhos).'
+      key: 'LOW_VIEWS',
+      label: 'BAIXA VISIBILIDADE',
+      description: `Apenas ${views} acessos registrados. Requer destaque em campanhas ou vitrine.`
     };
   }
 
-  // 7. Estável (Saída regular e estoque balanceado)
+  // 7. Regular / Saudável
   return {
     key: 'STABLE',
     label: 'ESTÁVEL',
@@ -116,6 +123,21 @@ export function CmsAnalytics() {
   const [checkoutSessions, setCheckoutSessions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Filtro de Período Sincronizado Globalmente
+  const {
+    periodFilter,
+    setPeriodFilter,
+    customStartDate,
+    customEndDate,
+    showCustomPicker,
+    setShowCustomPicker,
+    dateValidationErr,
+    handleStartDateChange,
+    handleEndDateChange,
+    handleApplyCustomDate,
+    periodLabel
+  } = useCmsPeriodFilter();
 
   // Controle de Tabs e Modal de Raio-X
   const [activeTab, setActiveTab] = useState('attributes'); // 'attributes' | 'products' | 'deadstock' | 'funnel'
@@ -135,6 +157,66 @@ export function CmsAnalytics() {
       };
     }
   }, [selectedSkuDetail]);
+
+  // Filtra e unifica apenas pedidos/sessões finalizadas com sucesso no período selecionado
+  const completedOrders = useMemo(() => {
+    const combined = [];
+    const seenIds = new Set();
+
+    // Pedidos da coleção 'orders'
+    (orders || []).forEach(ord => {
+      if (ord.id && !seenIds.has(ord.id)) {
+        seenIds.add(ord.id);
+        combined.push(ord);
+      }
+    });
+
+    // Sessões finalizadas com completed === true da coleção 'checkout_sessions'
+    (checkoutSessions || []).forEach(session => {
+      if (session.completed === true && session.id && !seenIds.has(session.id)) {
+        seenIds.add(session.id);
+        combined.push(session);
+      }
+    });
+
+    if (periodFilter === 'all') return combined;
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    return combined.filter(order => {
+      const orderDate = parseOrderDate(order);
+      if (!orderDate) return false;
+
+      if (periodFilter === 'today') {
+        return orderDate >= startOfToday && orderDate <= endOfToday;
+      }
+
+      if (periodFilter === '7days') {
+        const start7DaysAgo = new Date(startOfToday);
+        start7DaysAgo.setDate(start7DaysAgo.getDate() - 6);
+        return orderDate >= start7DaysAgo && orderDate <= endOfToday;
+      }
+
+      if (periodFilter === '30days') {
+        const start30DaysAgo = new Date(startOfToday);
+        start30DaysAgo.setDate(start30DaysAgo.getDate() - 29);
+        return orderDate >= start30DaysAgo && orderDate <= endOfToday;
+      }
+
+      if (periodFilter === 'custom') {
+        if (!customStartDate || !customEndDate) return true;
+        const [sYear, sMonth, sDay] = customStartDate.split('-').map(Number);
+        const [eYear, eMonth, eDay] = customEndDate.split('-').map(Number);
+        const start = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
+        const end = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
+        return orderDate >= start && orderDate <= end;
+      }
+
+      return true;
+    });
+  }, [orders, checkoutSessions, periodFilter, customStartDate, customEndDate]);
 
   // 1. Carrega dados consolidados do Firestore
   async function loadFullAnalytics() {
@@ -296,7 +378,7 @@ export function CmsAnalytics() {
       let uniqueOrdersCount = 0;
       let lastSaleTimestamp = 0;
 
-      orders.forEach(order => {
+      completedOrders.forEach(order => {
         let orderMatched = false;
         (order.items || []).forEach(it => {
           const itId = String(it?.id || '');
@@ -318,7 +400,7 @@ export function CmsAnalytics() {
 
         if (orderMatched) {
           uniqueOrdersCount += 1;
-          const orderDate = order.createdAt ? new Date(order.createdAt).getTime() : 0;
+          const orderDate = parseOrderDate(order)?.getTime() || 0;
           if (orderDate > lastSaleTimestamp) {
             lastSaleTimestamp = orderDate;
           }
@@ -326,11 +408,11 @@ export function CmsAnalytics() {
       });
 
       // Volume total de peças vendidas (se houver pedidos reais na coleção 'orders', usa a contagem exata)
-      const realPurchases = orders.length > 0 
+      const realPurchases = completedOrders.length > 0 
         ? unitsFromOrders 
-        : Math.max(Number(p.purchases || 0), Number(dataFromId?.purchases || 0), Number(dataFromSlug?.purchases || 0));
+        : (periodFilter === 'all' ? Math.max(Number(p.purchases || 0), Number(dataFromId?.purchases || 0), Number(dataFromSlug?.purchases || 0)) : 0);
 
-      const uniqueOrders = orders.length > 0 
+      const uniqueOrders = completedOrders.length > 0 
         ? uniqueOrdersCount 
         : (realPurchases > 0 ? 1 : 0);
 
@@ -434,7 +516,7 @@ export function CmsAnalytics() {
         status: statusInfo.key
       };
     });
-  }, [productsList, summaryData, orders]);
+  }, [productsList, summaryData, completedOrders, periodFilter]);
 
   // Itens em Dead Stock (> 45 dias sem saída e com estoque positivo)
   const deadStockItems = useMemo(() => {
@@ -444,84 +526,21 @@ export function CmsAnalytics() {
   // Telemetria real da peça aberta no Drawer
   const activeDrawerTelemetry = useMemo(() => {
     if (!selectedSkuDetail?.id) return { views: 0, adds: 0, removes: 0, purchases: 0, uniqueOrders: 0, addToCartRate: '0.0', conversion: '0.0', abandonmentRate: '0.0' };
-    const rawTelemetry = summaryData.products || {};
-    const telemetryKeys = Object.keys(rawTelemetry);
-    const p = selectedSkuDetail;
-    const cleanId = String(p.id || '').replace(/[./#$\[\]]/g, '_');
-    const cleanSlug = p.slug ? String(p.slug).replace(/[./#$\[\]]/g, '_') : '';
-    const cleanName = p.name ? String(p.name).toLowerCase().replace(/[./#$\[\]\s]/g, '_') : '';
-
-    const matchedKey = telemetryKeys.find(k => 
-      k === String(p.id) ||
-      (p.slug && k === String(p.slug)) ||
-      (p.slug && k.replace(/_/g, '-') === String(p.slug).replace(/_/g, '-')) ||
-      (p.name && k.toLowerCase().replace(/[\s_-]/g, '') === String(p.name).toLowerCase().replace(/[\s_-]/g, ''))
-    );
-    const dataFromMatch = matchedKey ? rawTelemetry[matchedKey] : null;
-
-    const dataFromId = rawTelemetry[p.id] || (cleanId ? rawTelemetry[cleanId] : null);
-    const dataFromSlug = (p.slug ? rawTelemetry[p.slug] : null) || (cleanSlug ? rawTelemetry[cleanSlug] : null);
-    const dataFromName = (p.name ? rawTelemetry[p.name] : null) || (cleanName ? rawTelemetry[cleanName] : null);
-
-    const purchases = Number(p.purchases || 0);
-    const uniqueOrders = Number(p.uniqueOrders || (purchases > 0 ? 1 : 0));
-
-    const rawViews = Math.max(
-      Number(p.views || 0),
-      Number(dataFromId?.views || 0),
-      Number(dataFromSlug?.views || 0),
-      Number(dataFromName?.views || 0),
-      Number(dataFromMatch?.views || 0)
-    );
-    const views = Math.max(rawViews, uniqueOrders);
-
-    const adds = Math.max(
-      Number(p.addedToCart || 0),
-      Number(p.adds || 0),
-      Number(dataFromId?.addedToCart || 0),
-      Number(dataFromSlug?.addedToCart || 0),
-      Number(dataFromName?.addedToCart || 0),
-      Number(dataFromMatch?.addedToCart || 0)
-    );
-    const removes = Math.max(
-      Number(p.removedFromCart || 0),
-      Number(p.removes || 0),
-      Number(dataFromId?.removedFromCart || 0),
-      Number(dataFromSlug?.removedFromCart || 0),
-      Number(dataFromName?.removedFromCart || 0),
-      Number(dataFromMatch?.removedFromCart || 0)
-    );
-
-    const addToCartRate = views > 0 ? Math.min(100, (adds / views) * 100).toFixed(1) : '0.0';
-    const conversion = views > 0 ? Math.min(100, (uniqueOrders / views) * 100).toFixed(1) : (uniqueOrders > 0 ? '100.0' : '0.0');
-    const abandonmentRate = adds > 0 ? Math.min(100, (removes / adds) * 100).toFixed(1) : '0.0';
-
-    return { views, adds, removes, purchases, uniqueOrders, addToCartRate, conversion, abandonmentRate };
-  }, [selectedSkuDetail, summaryData]);
-
-  // Filtra e unifica apenas pedidos/sessões finalizadas com sucesso
-  const completedOrders = useMemo(() => {
-    const combined = [];
-    const seenIds = new Set();
-
-    // Pedidos da coleção 'orders'
-    (orders || []).forEach(ord => {
-      if (ord.id && !seenIds.has(ord.id)) {
-        seenIds.add(ord.id);
-        combined.push(ord);
-      }
-    });
-
-    // Sessões finalizadas com completed === true da coleção 'checkout_sessions'
-    (checkoutSessions || []).forEach(session => {
-      if (session.completed === true && session.id && !seenIds.has(session.id)) {
-        seenIds.add(session.id);
-        combined.push(session);
-      }
-    });
-
-    return combined;
-  }, [orders, checkoutSessions]);
+    const found = productMetrics.find(p => p.id === selectedSkuDetail.id);
+    if (found) {
+      return {
+        views: found.views,
+        adds: found.adds,
+        removes: found.removes,
+        purchases: found.purchases,
+        uniqueOrders: found.uniqueOrders,
+        addToCartRate: found.addToCartRate,
+        conversion: found.conversionRate,
+        abandonmentRate: found.abandonmentRate
+      };
+    }
+    return { views: 0, adds: 0, removes: 0, purchases: 0, uniqueOrders: 0, addToCartRate: '0.0', conversion: '0.0', abandonmentRate: '0.0' };
+  }, [selectedSkuDetail, productMetrics]);
 
   // 1. AGREGAÇÃO DINÂMICA DE CORES, TAMANHOS E CATEGORIAS (BASEADA NO CATÁLOGO ATIVO E VENDAS REAIS)
   const { categories: categoryMetrics, sizes: sizeMetrics, colors: colorMetrics } = useMemo(() => {
@@ -562,14 +581,14 @@ export function CmsAnalytics() {
   const sizeDistribution = useMemo(() => {
     const rawSizes = summaryData.sizes || {};
     const sizesCount = {
-      PP: Number(rawSizes.PP || 0),
-      P: Number(rawSizes.P || 0),
-      M: Number(rawSizes.M || 0),
-      G: Number(rawSizes.G || 0),
-      GG: Number(rawSizes.GG || 0)
+      PP: periodFilter === 'all' ? Number(rawSizes.PP || 0) : 0,
+      P: periodFilter === 'all' ? Number(rawSizes.P || 0) : 0,
+      M: periodFilter === 'all' ? Number(rawSizes.M || 0) : 0,
+      G: periodFilter === 'all' ? Number(rawSizes.G || 0) : 0,
+      GG: periodFilter === 'all' ? Number(rawSizes.GG || 0) : 0
     };
 
-    orders.forEach(order => {
+    completedOrders.forEach(order => {
       order.items?.forEach(item => {
         const sz = String(item.size || 'M').toUpperCase();
         if (sizesCount.hasOwnProperty(sz)) {
@@ -584,7 +603,7 @@ export function CmsAnalytics() {
       count,
       percent: count > 0 ? Math.round((count / maxVal) * 100) : 0
     }));
-  }, [summaryData, orders]);
+  }, [summaryData, completedOrders, periodFilter]);
 
   // 1. CONSOLIDAÇÃO DO FUNIL COM RECONCILIAÇÃO REAL & IDENTIFICAÇÃO DE GARGALO
   const funnel = useMemo(() => {
@@ -686,50 +705,139 @@ export function CmsAnalytics() {
     <div className={styles.container}>
       {/* HEADER */}
       <header className={styles.header}>
-        <div>
-          <span className={styles.breadcrumb}>CMS // INTELIGÊNCIA DE PRODUTO & VENDAS</span>
-          <h1 className={styles.title}>MÉTRICAS DE ATRIBUTOS, SKUS & ATIVIDADES</h1>
-        </div>
-        <div className={styles.headerActions}>
-          <div className={styles.headerNav}>
-            <button 
-              className={`${styles.tabBtn} ${activeTab === 'attributes' ? styles.activeTab : ''}`}
-              onClick={() => setActiveTab('attributes')}
-            >
-              <BarChart3 size={13} />
-              <span>Cores, Tamanhos & Tipos</span>
-            </button>
-            <button 
-              className={`${styles.tabBtn} ${activeTab === 'products' ? styles.activeTab : ''}`}
-              onClick={() => setActiveTab('products')}
-            >
-              <ShoppingBag size={13} />
-              <span>Raio-X por Produto ({productMetrics.length})</span>
-            </button>
-            <button 
-              className={`${styles.tabBtn} ${activeTab === 'deadstock' ? styles.activeTab : ''}`}
-              onClick={() => setActiveTab('deadstock')}
-            >
-              <AlertTriangle size={13} color={deadStockItems.length > 0 ? '#f87171' : 'currentColor'} />
-              <span>Alerta Dead Stock ({deadStockItems.length})</span>
-            </button>
-            <button 
-              className={`${styles.tabBtn} ${activeTab === 'funnel' ? styles.activeTab : ''}`}
-              onClick={() => setActiveTab('funnel')}
-            >
-              <TrendingUp size={13} />
-              <span>Funil de Conversão</span>
-            </button>
+        <div className={styles.headerTop}>
+          <div>
+            <span className={styles.breadcrumb}>CMS // INTELIGÊNCIA DE PRODUTO & VENDAS</span>
+            <h1 className={styles.title}>MÉTRICAS DE ATRIBUTOS, SKUS & ATIVIDADES</h1>
           </div>
 
+          {/* FILTRO DE PERÍODO COM SELETOR DE DATAS */}
+          <div className={styles.periodControlWrapper}>
+            <div className={styles.periodFilterGroup}>
+              <button 
+                className={`${styles.filterBtn} ${periodFilter === 'today' ? styles.activeFilter : ''}`}
+                onClick={() => { setPeriodFilter('today'); setShowCustomPicker(false); }}
+              >
+                Hoje
+              </button>
+              <button 
+                className={`${styles.filterBtn} ${periodFilter === '7days' ? styles.activeFilter : ''}`}
+                onClick={() => { setPeriodFilter('7days'); setShowCustomPicker(false); }}
+              >
+                7 Dias
+              </button>
+              <button 
+                className={`${styles.filterBtn} ${periodFilter === '30days' ? styles.activeFilter : ''}`}
+                onClick={() => { setPeriodFilter('30days'); setShowCustomPicker(false); }}
+              >
+                30 Dias
+              </button>
+              <button 
+                className={`${styles.filterBtn} ${periodFilter === 'all' ? styles.activeFilter : ''}`}
+                onClick={() => { setPeriodFilter('all'); setShowCustomPicker(false); }}
+              >
+                Todo o Período
+              </button>
+              <button 
+                className={`${styles.filterBtn} ${styles.customPeriodBtn} ${periodFilter === 'custom' ? styles.activeFilter : ''}`}
+                onClick={() => setShowCustomPicker(prev => !prev)}
+                title="Filtrar por intervalo de datas personalizado"
+              >
+                <Calendar size={13} />
+                <span>
+                  {periodFilter === 'custom' && customStartDate && customEndDate
+                    ? `${formatShortDate(customStartDate)} - ${formatShortDate(customEndDate)}`
+                    : 'Datas'}
+                </span>
+              </button>
+              <button 
+                onClick={loadFullAnalytics} 
+                disabled={refreshing} 
+                className={styles.refreshBtn}
+                title="Atualizar Métricas"
+                aria-label="Atualizar dados"
+              >
+                <RotateCw size={13} className={refreshing ? styles.spinning : ''} />
+              </button>
+            </div>
+
+            {/* PAINEL FLUTUANTE DE SELEÇÃO DE DATA */}
+            {showCustomPicker && (
+              <div className={styles.customDateBar}>
+                <div className={styles.dateField}>
+                  <label>DE</label>
+                  <input 
+                    type="date" 
+                    value={customStartDate} 
+                    max={customEndDate || getTodayStr()}
+                    onChange={handleStartDateChange}
+                    className={styles.dateInput}
+                  />
+                </div>
+                <span className={styles.dateDivider}>—</span>
+                <div className={styles.dateField}>
+                  <label>ATÉ</label>
+                  <input 
+                    type="date" 
+                    value={customEndDate} 
+                    min={customStartDate}
+                    max={getTodayStr()}
+                    onChange={handleEndDateChange}
+                    className={styles.dateInput}
+                  />
+                </div>
+                <button 
+                  onClick={handleApplyCustomDate}
+                  className={styles.applyDateBtn}
+                  title="Aplicar intervalo"
+                >
+                  <Check size={13} />
+                  <span>APLICAR</span>
+                </button>
+                <button 
+                  onClick={() => setShowCustomPicker(false)}
+                  className={styles.closeDateBtn}
+                  title="Fechar"
+                >
+                  <X size={13} />
+                </button>
+                {dateValidationErr && (
+                  <span className={styles.dateErrorText}>{dateValidationErr}</span>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* NAVEGAÇÃO DE TABS */}
+        <div className={styles.headerNav}>
           <button 
-            onClick={loadFullAnalytics} 
-            disabled={refreshing} 
-            className={styles.refreshBtn}
-            title="Atualizar Métricas"
+            className={`${styles.tabBtn} ${activeTab === 'attributes' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('attributes')}
           >
-            <RotateCw size={13} className={refreshing ? styles.spinning : ''} />
-            <span>{refreshing ? 'Atualizando...' : 'Atualizar'}</span>
+            <BarChart3 size={13} />
+            <span>Cores, Tamanhos & Tipos</span>
+          </button>
+          <button 
+            className={`${styles.tabBtn} ${activeTab === 'products' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('products')}
+          >
+            <ShoppingBag size={13} />
+            <span>Raio-X por Produto ({productMetrics.length})</span>
+          </button>
+          <button 
+            className={`${styles.tabBtn} ${activeTab === 'deadstock' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('deadstock')}
+          >
+            <AlertTriangle size={13} color={deadStockItems.length > 0 ? '#f87171' : 'currentColor'} />
+            <span>Alerta Dead Stock ({deadStockItems.length})</span>
+          </button>
+          <button 
+            className={`${styles.tabBtn} ${activeTab === 'funnel' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('funnel')}
+          >
+            <TrendingUp size={13} />
+            <span>Funil de Conversão</span>
           </button>
         </div>
       </header>
