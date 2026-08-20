@@ -34,41 +34,11 @@ import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import { 
   useCmsPeriodFilter, 
   parseOrderDate, 
+  isDateInPeriod,
   getTodayStr, 
   formatShortDate 
 } from '../../hooks/useCmsPeriodFilter';
 import styles from './CmsCupons.module.css';
-
-// Helper para verificar se a data está no intervalo selecionado
-const isIsoInPeriod = (dateIso, period, customStart, customEnd) => {
-  if (!dateIso) return false;
-  if (period === 'all') return true;
-  
-  const parsed = parseOrderDate(dateIso);
-  if (!parsed || isNaN(parsed.getTime())) return false;
-  
-  const orderTime = parsed.getTime();
-  const now = new Date();
-  
-  if (period === 'today') {
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
-    return orderTime >= startOfToday;
-  }
-  if (period === '7days') {
-    const sevenDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 7, 0, 0, 0, 0).getTime();
-    return orderTime >= sevenDaysAgo;
-  }
-  if (period === '30days') {
-    const thirtyDaysAgo = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 30, 0, 0, 0, 0).getTime();
-    return orderTime >= thirtyDaysAgo;
-  }
-  if (period === 'custom' && customStart && customEnd) {
-    const start = new Date(`${customStart}T00:00:00`).getTime();
-    const end = new Date(`${customEnd}T23:59:59.999`).getTime();
-    return orderTime >= start && orderTime <= end;
-  }
-  return true;
-};
 
 export function CmsCupons() {
   const [coupons, setCoupons] = useState([]);
@@ -192,27 +162,42 @@ export function CmsCupons() {
       const ordersSnap = await getDocs(collection(db, 'orders'));
       if (!ordersSnap.empty) {
         const matchingOrders = [];
-        const couponCodeUpper = String(coupon.code || '').toUpperCase();
+        const couponCodeUpper = String(coupon.code || '').toUpperCase().trim();
+        const couponIdLower = String(coupon.id || '').toLowerCase().trim();
 
         ordersSnap.forEach(docSnap => {
           const order = docSnap.data() || {};
-          const orderCouponCode = String(order.couponCode || '').toUpperCase();
-          const orderCouponId = order.couponId;
+          const orderCouponCode = String(order.couponCode || order.coupon || '').toUpperCase().trim();
+          const orderCouponId = String(order.couponId || '').toLowerCase().trim();
 
-          if (orderCouponCode === couponCodeUpper || orderCouponId === coupon.id) {
+          const isMatch = (orderCouponCode && orderCouponCode === couponCodeUpper) ||
+                          (orderCouponId && (orderCouponId === couponIdLower || orderCouponId === coupon.id)) ||
+                          (orderCouponCode && `coupon_${orderCouponCode.toLowerCase()}` === couponIdLower);
+
+          if (isMatch) {
             const items = Array.isArray(order.items) ? order.items : [];
-            const itemsCount = items.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0);
-            const total = Number(order.total || order.subtotal || 0);
+            const itemsCount = items.length > 0
+              ? items.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0)
+              : (Number(order.itemsCount) || 1);
+
+            const gross = Number(order.subtotal || (Number(order.total || 0) + Number(order.discountAmount || 0)) || order.total || 0);
+            const discountAmount = Number(order.discountAmount || ((gross * (Number(coupon.discountPercent) || 10)) / 100) || 0);
+            const total = Number(order.total || (gross - discountAmount) || 0);
             const rate = Number(coupon.commissionRate || 8);
-            const calculatedCommission = coupon.type === 'affiliate' ? (total * rate) / 100 : 0;
+            const calculatedCommission = coupon.type === 'brand' ? 0 : ((gross - discountAmount) * rate) / 100;
+            const netProfit = Math.max(0, gross - discountAmount - calculatedCommission);
 
             matchingOrders.push({
               id: docSnap.id,
               date: order.createdAt ? new Date(order.createdAt).toLocaleDateString('pt-BR') : 'Recente',
+              rawDate: order.createdAt,
               client: order.clientName || 'Cliente',
               itemsCount,
+              gross,
+              discountAmount,
               total,
-              commission: calculatedCommission
+              commission: calculatedCommission,
+              netProfit
             });
           }
         });
@@ -227,6 +212,50 @@ export function CmsCupons() {
       setLoadingOrders(false);
     }
   };
+
+  // Resumo financeiro consolidado do cupom ativo no extrato
+  const statementSummary = useMemo(() => {
+    if (!statementCoupon) return null;
+
+    const payouts = Array.isArray(statementCoupon.payoutHistory) ? statementCoupon.payoutHistory : [];
+    const totalPayoutsPaid = payouts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) || Number(statementCoupon.commissionPaid || 0);
+    const pendingCommission = Number(statementCoupon.commissionPending || 0);
+    const totalCommission = totalPayoutsPaid + pendingCommission;
+
+    const ordersList = statementOrders || [];
+    const ordersCount = ordersList.length;
+    const ordersItemsCount = ordersList.reduce((sum, o) => sum + (Number(o.itemsCount) || 0), 0);
+    
+    const ordersGross = ordersList.reduce((sum, o) => sum + (Number(o.gross || o.total) || 0), 0);
+    const ordersDiscount = ordersList.reduce((sum, o) => sum + (Number(o.discountAmount) || 0), 0);
+    const ordersCommission = ordersList.reduce((sum, o) => sum + (Number(o.commission) || 0), 0);
+
+    const totalGross = ordersGross > 0 ? ordersGross : Number(statementCoupon.grossRevenue || 0);
+    const totalDiscount = ordersDiscount > 0 ? ordersDiscount : Number(statementCoupon.discountGiven || 0);
+    const totalItems = ordersItemsCount > 0 ? ordersItemsCount : Number(statementCoupon.itemsSold || 0);
+    const totalUses = ordersCount > 0 ? ordersCount : Number(statementCoupon.usageCount || 0);
+
+    const isBrand = statementCoupon.type === 'brand';
+    const effectiveCommission = isBrand ? 0 : (ordersCommission > 0 ? ordersCommission : totalCommission);
+    // Para cupons de parceiro/afiliado, o repasse de comissão é a dedução. Para cupons da THR33 (marca), o desconto concedido é a dedução.
+    const netProfit = isBrand 
+      ? Math.max(0, totalGross - totalDiscount) 
+      : Math.max(0, totalGross - effectiveCommission);
+
+    return {
+      totalPayoutsPaid,
+      payoutsCount: payouts.length,
+      pendingCommission,
+      totalCommission,
+      totalGross,
+      totalDiscount,
+      totalItems,
+      totalUses,
+      effectiveCommission,
+      netProfit,
+      isBrand
+    };
+  }, [statementCoupon, statementOrders]);
 
   // HANDLER DE ARQUIVO (PDF ou Imagem)
   const handleProofFileUpload = (e, expectedType) => {
@@ -608,25 +637,38 @@ export function CmsCupons() {
   // Filtra pedidos pelo período selecionado
   const filteredOrders = useMemo(() => {
     if (periodFilter === 'all') return orders;
-    return orders.filter(o => isIsoInPeriod(o.createdAt, periodFilter, customStartDate, customEndDate));
+    return orders.filter(o => isDateInPeriod(o, periodFilter, customStartDate, customEndDate));
   }, [orders, periodFilter, customStartDate, customEndDate]);
 
   // Cupons processados com reconciliação de vendas no período
   const processedCoupons = useMemo(() => {
     return (coupons || []).map(coupon => {
       const cleanCode = String(coupon.code || coupon.id || '').toUpperCase().trim();
+      const couponIdLower = String(coupon.id || '').toLowerCase().trim();
       
       const matchingOrders = filteredOrders.filter(o => {
         const orderCouponCode = String(o.couponCode || o.coupon || '').toUpperCase().trim();
-        const orderCouponId = o.couponId;
-        return (orderCouponCode && (orderCouponCode === cleanCode)) || (orderCouponId && orderCouponId === coupon.id);
+        const orderCouponId = String(o.couponId || '').toLowerCase().trim();
+        return (orderCouponCode && (orderCouponCode === cleanCode)) || 
+               (orderCouponId && (orderCouponId === couponIdLower || orderCouponId === coupon.id)) ||
+               (orderCouponCode && `coupon_${orderCouponCode.toLowerCase()}` === couponIdLower);
       });
 
       const periodUses = matchingOrders.length;
-      const periodGross = matchingOrders.reduce((sum, o) => sum + (Number(o.total || o.subtotal) || 0), 0);
+      const periodGross = matchingOrders.reduce((sum, o) => {
+        const grossVal = Number(o.subtotal || (Number(o.total || 0) + Number(o.discountAmount || 0)) || o.total || 0);
+        return sum + grossVal;
+      }, 0);
+      const periodDiscount = matchingOrders.reduce((sum, o) => {
+        const disc = Number(o.discountAmount || ((Number(o.subtotal || o.total || 0) * (Number(coupon.discountPercent || 10))) / 100) || 0);
+        return sum + disc;
+      }, 0);
       const periodItems = matchingOrders.reduce((sum, o) => {
         const items = Array.isArray(o.items) ? o.items : [];
-        return sum + items.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0);
+        const count = items.length > 0 
+          ? items.reduce((acc, it) => acc + (Number(it.quantity) || 1), 0) 
+          : (Number(o.itemsCount) || 1);
+        return sum + count;
       }, 0);
 
       const firestoreUses = Number(coupon.usageCount || 0);
@@ -647,18 +689,20 @@ export function CmsCupons() {
         usageCount = Math.max(periodUses, firestoreUses);
         grossRevenue = periodGross > 0 ? periodGross : firestoreGross;
         itemsCount = periodItems > 0 ? periodItems : firestoreItems;
-        discountGiven = firestoreDiscount;
+        discountGiven = periodDiscount > 0 ? periodDiscount : firestoreDiscount;
       } else {
         usageCount = periodUses;
         grossRevenue = periodGross;
         itemsCount = periodItems;
-        discountGiven = (grossRevenue * (Number(coupon.discountPercent) || 10)) / 100;
+        discountGiven = periodDiscount > 0 ? periodDiscount : ((grossRevenue * (Number(coupon.discountPercent) || 10)) / 100);
       }
 
       const isBrand = coupon.type === 'brand';
       const rate = Number(coupon.commissionRate || 8);
-      const periodCommission = isBrand ? 0 : (grossRevenue * rate) / 100;
-      const netProfit = grossRevenue - discountGiven - (periodFilter === 'all' ? (commissionPending + commissionPaid) : periodCommission);
+      const periodCommission = isBrand ? 0 : (periodFilter === 'all' ? (commissionPending + commissionPaid) : ((grossRevenue - discountGiven) * rate) / 100);
+      const netProfit = isBrand 
+        ? Math.max(0, grossRevenue - discountGiven)
+        : Math.max(0, grossRevenue - (periodFilter === 'all' ? (commissionPending + commissionPaid) : periodCommission));
 
       return {
         ...coupon,
@@ -679,6 +723,7 @@ export function CmsCupons() {
     let pending = 0;
     let paid = 0;
     let totalUses = 0;
+    let netProfit = 0;
 
     processedCoupons.forEach(c => {
       gross += Number(c.grossRevenue || 0);
@@ -686,9 +731,9 @@ export function CmsCupons() {
       pending += Number(c.commissionPending || 0);
       paid += Number(c.commissionPaid || 0);
       totalUses += Number(c.usageCount || 0);
+      netProfit += Number(c.netProfit || 0);
     });
 
-    const netProfit = Math.max(0, gross - discounts - pending - paid);
     return { gross, discounts, pending, paid, totalUses, netProfit };
   }, [processedCoupons]);
 
@@ -1270,6 +1315,53 @@ export function CmsCupons() {
                 </div>
               </div>
 
+              {/* CARDS DE RESUMO FINANCEIRO CONSOLIDADO DO CUPOM */}
+              {statementSummary && (
+                <div className={styles.drawerKpiGrid}>
+                  <div className={styles.drawerKpiCard}>
+                    <span className={styles.drawerKpiLabel}>FATURAMENTO TOTAL DO CUPOM</span>
+                    <strong className={styles.drawerKpiValue}>
+                      R$ {statementSummary.totalGross.toFixed(2)}
+                    </strong>
+                    <small className={styles.drawerKpiSub}>
+                      {statementSummary.totalUses} {statementSummary.totalUses === 1 ? 'pedido' : 'pedidos'} ({statementSummary.totalItems} {statementSummary.totalItems === 1 ? 'peça' : 'peças'})
+                    </small>
+                  </div>
+
+                  {statementCoupon.type === 'brand' ? (
+                    <div className={styles.drawerKpiCard}>
+                      <span className={styles.drawerKpiLabel}>TOTAL EM DESCONTOS (MARCA)</span>
+                      <strong className={`${styles.drawerKpiValue} ${styles.discountText}`}>
+                        R$ {statementSummary.totalDiscount.toFixed(2)}
+                      </strong>
+                      <small className={styles.drawerKpiSub}>
+                        Desconto direto concedido aos clientes
+                      </small>
+                    </div>
+                  ) : (
+                    <div className={styles.drawerKpiCard}>
+                      <span className={styles.drawerKpiLabel}>TOTAL EM COMISSÕES (PARCEIRO)</span>
+                      <strong className={`${styles.drawerKpiValue} ${styles.blueKpiValue}`}>
+                        R$ {statementSummary.totalCommission.toFixed(2)}
+                      </strong>
+                      <small className={styles.drawerKpiSub}>
+                        R$ {statementSummary.totalPayoutsPaid.toFixed(2)} pago • R$ {statementSummary.pendingCommission.toFixed(2)} pendente
+                      </small>
+                    </div>
+                  )}
+
+                  <div className={`${styles.drawerKpiCard} ${styles.drawerProfitCard}`}>
+                    <span className={styles.drawerKpiLabel}>LUCRO LÍQUIDO REAL THR33</span>
+                    <strong className={`${styles.drawerKpiValue} ${styles.greenKpiValue}`}>
+                      R$ {statementSummary.netProfit.toFixed(2)}
+                    </strong>
+                    <small className={styles.drawerKpiSub}>
+                      Caixa real retido pela marca
+                    </small>
+                  </div>
+                </div>
+              )}
+
               {/* FORMULÁRIO COM SELEÇÃO DO TIPO DE COMPROVANTE (PDF, IMAGEM, LINK) */}
               <form onSubmit={handleConfirmPayout} className={styles.payoutForm}>
                 <div className={styles.payoutFormHeader}>
@@ -1458,9 +1550,16 @@ export function CmsCupons() {
                 </button>
               </form>
 
-              {/* HISTÓRICO DE REPASSES COM BOTÕES POLIMÓRFICOS */}
+              {/* HISTÓRICO DE REPASSES COM TOTAL */}
               <div className={styles.historySection}>
-                <h4>HISTÓRICO DE REPASSES PAGOS</h4>
+                <div className={styles.historySectionHeader}>
+                  <h4>HISTÓRICO DE REPASSES PAGOS ({statementSummary?.payoutsCount || 0})</h4>
+                  {statementSummary && (
+                    <span className={styles.sectionHeaderBadge}>
+                      Total Pago: <strong>R$ {statementSummary.totalPayoutsPaid.toFixed(2)}</strong>
+                    </span>
+                  )}
+                </div>
                 {!statementCoupon.payoutHistory || statementCoupon.payoutHistory.length === 0 ? (
                   <p className={styles.emptyHistoryText}>Nenhum repasse registrado ainda para este parceiro.</p>
                 ) : (
@@ -1505,9 +1604,43 @@ export function CmsCupons() {
                 )}
               </div>
 
-              {/* PEDIDOS ATRIBUÍDOS AO CUPOM */}
+              {/* PEDIDOS ATRIBUÍDOS AO CUPOM COM TOTAL E CONSOLIDAÇÃO FINANCEIRA */}
               <div className={styles.historySection}>
-                <h4>PEDIDOS ATRIBUÍDOS AO CUPOM</h4>
+                <div className={styles.historySectionHeader}>
+                  <h4>PEDIDOS ATRIBUÍDOS AO CUPOM ({statementSummary?.totalUses || 0})</h4>
+                  {statementSummary && (
+                    <span className={styles.sectionHeaderBadge}>
+                      Faturamento: <strong>R$ {statementSummary.totalGross.toFixed(2)}</strong>
+                    </span>
+                  )}
+                </div>
+
+                {statementSummary && (
+                  <div className={styles.ordersSummaryBar}>
+                    <div className={styles.ordersSummaryItem}>
+                      <span>Total de Vendas</span>
+                      <strong>R$ {statementSummary.totalGross.toFixed(2)}</strong>
+                    </div>
+
+                    {statementCoupon.type === 'brand' ? (
+                      <div className={styles.ordersSummaryItem}>
+                        <span>Descontos Concedidos (-{statementCoupon.discountPercent || 10}%)</span>
+                        <strong className={styles.discountText}>-R$ {statementSummary.totalDiscount.toFixed(2)}</strong>
+                      </div>
+                    ) : (
+                      <div className={styles.ordersSummaryItem}>
+                        <span>Comissão Repassada ({statementCoupon.commissionRate || 8}%)</span>
+                        <strong className={styles.blueText}>-R$ {statementSummary.effectiveCommission.toFixed(2)}</strong>
+                      </div>
+                    )}
+
+                    <div className={styles.ordersSummaryItem}>
+                      <span>Lucro Líquido Marca</span>
+                      <strong className={styles.greenText}>R$ {statementSummary.netProfit.toFixed(2)}</strong>
+                    </div>
+                  </div>
+                )}
+
                 {loadingOrders ? (
                   <p className={styles.emptyHistoryText}>Carregando pedidos do Firestore...</p>
                 ) : statementOrders.length === 0 ? (
@@ -1518,11 +1651,15 @@ export function CmsCupons() {
                       <div key={ord.id} className={styles.orderItemRow}>
                         <div>
                           <strong>{ord.id} — {ord.client}</strong>
-                          <small>{ord.date} • {ord.itemsCount} peças</small>
+                          <small>{ord.date} • {ord.itemsCount} {ord.itemsCount === 1 ? 'peça' : 'peças'}</small>
                         </div>
                         <div className={styles.orderVal}>
                           <span>Total: R$ {ord.total.toFixed(2)}</span>
-                          <strong>Comissão: +R$ {ord.commission.toFixed(2)}</strong>
+                          {statementCoupon.type === 'brand' ? (
+                            <strong className={styles.discountText}>Desconto: -R$ {Number(ord.discountAmount || 0).toFixed(2)}</strong>
+                          ) : (
+                            <strong>Comissão: +R$ {Number(ord.commission || 0).toFixed(2)}</strong>
+                          )}
                         </div>
                       </div>
                     ))}

@@ -32,6 +32,7 @@ import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import { 
   useCmsPeriodFilter, 
   parseOrderDate, 
+  isDateInPeriod,
   getTodayStr, 
   formatShortDate 
 } from '../../hooks/useCmsPeriodFilter';
@@ -335,73 +336,8 @@ export function CmsCampanhas() {
   // 1. FILTRAGEM TEMPORAL DE PEDIDOS CONFORME PERÍODO SELECIONADO
   const filteredOrders = useMemo(() => {
     if (periodFilter === 'all') return orders;
-
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-
-    return orders.filter(order => {
-      const orderDate = parseOrderDate(order);
-      if (!orderDate) return false;
-
-      if (periodFilter === 'today') {
-        return orderDate >= startOfToday && orderDate <= endOfToday;
-      }
-      if (periodFilter === '7days') {
-        const start7DaysAgo = new Date(startOfToday);
-        start7DaysAgo.setDate(start7DaysAgo.getDate() - 6);
-        return orderDate >= start7DaysAgo && orderDate <= endOfToday;
-      }
-      if (periodFilter === '30days') {
-        const start30DaysAgo = new Date(startOfToday);
-        start30DaysAgo.setDate(start30DaysAgo.getDate() - 29);
-        return orderDate >= start30DaysAgo && orderDate <= endOfToday;
-      }
-      if (periodFilter === 'custom') {
-        if (!customStartDate || !customEndDate) return true;
-        const [sYear, sMonth, sDay] = customStartDate.split('-').map(Number);
-        const [eYear, eMonth, eDay] = customEndDate.split('-').map(Number);
-        const start = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
-        const end = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
-        return orderDate >= start && orderDate <= end;
-      }
-      return true;
-    });
+    return orders.filter(order => isDateInPeriod(order, periodFilter, customStartDate, customEndDate));
   }, [orders, periodFilter, customStartDate, customEndDate]);
-
-function isIsoInPeriod(isoString, periodFilter, customStartDate, customEndDate) {
-  if (!isoString) return false;
-  if (periodFilter === 'all') return true;
-  const d = new Date(isoString);
-  if (isNaN(d.getTime())) return false;
-
-  const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
-
-  if (periodFilter === 'today') {
-    return d >= startOfToday && d <= endOfToday;
-  }
-  if (periodFilter === '7days') {
-    const start7DaysAgo = new Date(startOfToday);
-    start7DaysAgo.setDate(start7DaysAgo.getDate() - 6);
-    return d >= start7DaysAgo && d <= endOfToday;
-  }
-  if (periodFilter === '30days') {
-    const start30DaysAgo = new Date(startOfToday);
-    start30DaysAgo.setDate(start30DaysAgo.getDate() - 29);
-    return d >= start30DaysAgo && d <= endOfToday;
-  }
-  if (periodFilter === 'custom') {
-    if (!customStartDate || !customEndDate) return true;
-    const [sYear, sMonth, sDay] = customStartDate.split('-').map(Number);
-    const [eYear, eMonth, eDay] = customEndDate.split('-').map(Number);
-    const start = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
-    const end = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
-    return d >= start && d <= end;
-  }
-  return true;
-}
 
   // 2. PROCESSAMENTO DINÂMICO DE MÉTRICAS POR CAMPANHA
   const processedCampaigns = useMemo(() => {
@@ -432,7 +368,7 @@ function isIsoInPeriod(isoString, periodFilter, customStartDate, customEndDate) 
       const firestoreRevenue = Number(camp.revenue || 0);
 
       const hasRecentPurchaseInPeriod = camp.lastPurchaseAt 
-        ? isIsoInPeriod(camp.lastPurchaseAt, periodFilter, customStartDate, customEndDate) 
+        ? isDateInPeriod(camp.lastPurchaseAt, periodFilter, customStartDate, customEndDate) 
         : false;
 
       let periodPurchases = 0;

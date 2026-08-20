@@ -769,6 +769,58 @@
   margin-top: 0.2rem;
 }
 
+/* CARDS DE RESUMO FINANCEIRO CONSOLIDADO DO CUPOM NO DRAWER */
+.drawerKpiGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+}
+
+.drawerKpiCard {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  position: relative;
+}
+
+.drawerProfitCard {
+  border-color: rgba(74, 222, 128, 0.4);
+  background-color: rgba(74, 222, 128, 0.04);
+}
+
+.drawerKpiLabel {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.drawerKpiValue {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  letter-spacing: 0.5px;
+}
+
+.blueKpiValue {
+  color: #60a5fa;
+}
+
+.greenKpiValue {
+  color: #4ade80;
+}
+
+.drawerKpiSub {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  line-height: 1.2;
+}
+
 .payoutForm {
   background-color: var(--bg-card);
   border: 1px solid #2563eb;
@@ -1019,11 +1071,73 @@
   gap: 0.8rem;
 }
 
-.historySection h4 {
-  font-size: 0.85rem;
-  letter-spacing: 1px;
+.historySectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   border-bottom: 1px solid var(--border-color);
   padding-bottom: 0.4rem;
+}
+
+.historySectionHeader h4 {
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+  margin: 0;
+}
+
+.sectionHeaderBadge {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 0.2rem 0.55rem;
+}
+
+.sectionHeaderBadge strong {
+  color: var(--text-primary);
+  font-weight: 800;
+}
+
+/* BARRA DE CONSOLIDAÇÃO FINANCEIRA DE PEDIDOS */
+.ordersSummaryBar {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 0.85rem;
+}
+
+.ordersSummaryItem {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.ordersSummaryItem span {
+  font-size: 0.62rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ordersSummaryItem strong {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+.discountText {
+  color: #f87171 !important;
+}
+
+.blueText {
+  color: #60a5fa !important;
+}
+
+.greenText {
+  color: #4ade80 !important;
 }
 
 .historyList, .ordersList {
@@ -1196,4 +1310,6 @@
   .proofTypeSelector { grid-template-columns: 1fr; }
   .header { flex-direction: column; align-items: flex-start; gap: 1rem; }
   .drawer { max-width: 100%; }
+  .drawerKpiGrid { grid-template-columns: 1fr; }
+  .ordersSummaryBar { grid-template-columns: repeat(2, 1fr); gap: 0.75rem; }
 }

@@ -4,14 +4,57 @@ const STORAGE_KEY = 'thr33_cms_period_filter';
 const EVENT_KEY = 'cms_period_filter_change';
 
 // UTILITÁRIOS DE DATA
-export const parseOrderDate = (order) => {
-  if (!order) return null;
-  const raw = order.createdAt || order.date || order.lastUpdated || order.updatedAt || order.timestamp;
+export const parseOrderDate = (input) => {
+  if (!input) return null;
+  if (input instanceof Date) return isNaN(input.getTime()) ? null : input;
+  if (typeof input.toDate === 'function') return input.toDate();
+  if (input.seconds) return new Date(input.seconds * 1000);
+  
+  let raw = input;
+  if (typeof input === 'object') {
+    raw = input.createdAt || input.date || input.lastUpdated || input.updatedAt || input.timestamp;
+  }
   if (!raw) return null;
+  if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;
   if (typeof raw.toDate === 'function') return raw.toDate();
   if (raw.seconds) return new Date(raw.seconds * 1000);
   const parsed = new Date(raw);
   return isNaN(parsed.getTime()) ? null : parsed;
+};
+
+export const isDateInPeriod = (dateInput, period, customStart, customEnd) => {
+  if (!dateInput) return false;
+  if (period === 'all') return true;
+
+  const parsed = parseOrderDate(dateInput);
+  if (!parsed || isNaN(parsed.getTime())) return false;
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+  const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+  if (period === 'today') {
+    return parsed >= startOfToday && parsed <= endOfToday;
+  }
+  if (period === '7days') {
+    const start7DaysAgo = new Date(startOfToday);
+    start7DaysAgo.setDate(start7DaysAgo.getDate() - 6);
+    return parsed >= start7DaysAgo && parsed <= endOfToday;
+  }
+  if (period === '30days') {
+    const start30DaysAgo = new Date(startOfToday);
+    start30DaysAgo.setDate(start30DaysAgo.getDate() - 29);
+    return parsed >= start30DaysAgo && parsed <= endOfToday;
+  }
+  if (period === 'custom') {
+    if (!customStart || !customEnd) return true;
+    const [sYear, sMonth, sDay] = String(customStart).split('-').map(Number);
+    const [eYear, eMonth, eDay] = String(customEnd).split('-').map(Number);
+    const start = new Date(sYear, sMonth - 1, sDay, 0, 0, 0, 0);
+    const end = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
+    return parsed >= start && parsed <= end;
+  }
+  return true;
 };
 
 export const getTodayStr = () => {
