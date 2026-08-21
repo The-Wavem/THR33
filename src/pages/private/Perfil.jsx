@@ -31,7 +31,8 @@ import {
   HelpCircle as QuestionIcon,
   MessageSquareWarning,
   Send,
-  ShieldCheck
+  ShieldCheck,
+  Headphones
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { 
@@ -44,6 +45,7 @@ import {
   validatePasswordStrength 
 } from '../../utils/validators';
 import { fetchAddressByCep } from '../../services/viaCepService';
+import { supportService } from '../../services/supportService';
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
 import styles from './Perfil.module.css';
@@ -189,6 +191,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
             date: dateStr,
             status: statusText,
             statusCode: statusCode,
+            hasOpenTicket: Boolean(data.hasOpenTicket),
             trackingCode: data.trackingCode || 'Processando envio',
             paymentMethod: data.paymentMethod === 'pix' 
               ? 'PIX Instantâneo PagBank (À Vista)' 
@@ -242,13 +245,65 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   const [issueDescription, setIssueDescription] = useState('');
   const [copiedTracking, setCopiedTracking] = useState(false);
 
+  // MODAL DE SUPORTE CONTEXTUAL & SAC
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [selectedOrderForSupport, setSelectedOrderForSupport] = useState(null);
+  const [supportReason, setSupportReason] = useState('');
+  const [supportMessage, setSupportMessage] = useState('');
+  const [selectedProductForIssue, setSelectedProductForIssue] = useState('');
+  const [sendingTicket, setSendingTicket] = useState(false);
+
+  const handleOpenSupportModal = (order) => {
+    setSelectedOrderForSupport(order);
+    setSelectedProductForIssue(order.items?.[0]?.id || '');
+    setSupportReason('');
+    setSupportMessage('');
+    setIsSupportModalOpen(true);
+  };
+
+  const handleSendSupportTicket = async (e) => {
+    e.preventDefault();
+    if (!supportReason || !supportMessage.trim()) {
+      alert("Por favor, selecione o motivo e detalhe sua solicitação.");
+      return;
+    }
+
+    setSendingTicket(true);
+    try {
+      const selectedProd = selectedOrderForSupport.items?.find(i => i.id === selectedProductForIssue);
+
+      await supportService.createTicket({
+        orderId: selectedOrderForSupport.rawId || selectedOrderForSupport.id,
+        userId: currentUser?.uid || user?.uid || '',
+        customerName: userData.name || currentUser?.displayName || 'Cliente',
+        customerEmail: userData.email || currentUser?.email || '',
+        customerPhone: userData.phone || '',
+        productId: selectedProd?.id || '',
+        productName: selectedProd?.name || 'Geral do Pedido',
+        productSize: selectedProd?.size || '',
+        orderStatus: selectedOrderForSupport.status || 'PAGAMENTO_APROVADO',
+        reason: supportReason,
+        message: supportMessage
+      });
+
+      alert("✅ Chamado de suporte aberto com sucesso! Nossa equipe entrará em contato em breve.");
+      setIsSupportModalOpen(false);
+      setOrders(prev => prev.map(o => (o.id === selectedOrderForSupport.id || o.rawId === selectedOrderForSupport.rawId) ? { ...o, hasOpenTicket: true } : o));
+    } catch (err) {
+      console.error("Erro ao enviar chamado de suporte:", err);
+      alert("Falha ao abrir chamado de suporte. Tente novamente.");
+    } finally {
+      setSendingTicket(false);
+    }
+  };
+
   // MODAL DE AVALIAÇÃO DE PRODUTO
   const [evaluatingItem, setEvaluatingItem] = useState(null);
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState('');
 
   // BLOQUEIO DO SCROLL DA PÁGINA (EIXO Y E RODA DO MOUSE) QUANDO QUALQUER MODAL ESTIVER ABERTO
-  const isAnyModalOpen = Boolean(selectedOrderDetails || cancelingOrder || reportingIssueOrder || evaluatingItem);
+  const isAnyModalOpen = Boolean(selectedOrderDetails || cancelingOrder || reportingIssueOrder || evaluatingItem || isSupportModalOpen);
 
   useEffect(() => {
     if (isAnyModalOpen) {
@@ -256,7 +311,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       document.body.style.overflow = 'hidden';
 
       const preventBackgroundScroll = (e) => {
-        const modalContainer = e.target.closest(`.${styles.orderDetailsModal}, .${styles.modalCard}`);
+        const modalContainer = e.target.closest(`.${styles.orderDetailsModal}, .${styles.modalCard}, .${styles.supportModalCard}`);
         if (modalContainer) {
           return;
         }
@@ -1218,11 +1273,20 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                         <div className={styles.orderFooterActions}>
                           <button 
                             type="button" 
+                            onClick={() => handleOpenSupportModal(order)} 
+                            className={`${styles.supportHelpBtn} ${order.hasOpenTicket ? styles.activeSupportBtn : ''}`}
+                            title="Solicitar troca, devolução ou suporte com a equipe"
+                          >
+                            <Headphones size={13} />
+                            <span>{order.hasOpenTicket ? '🚨 CHAMADO ABERTO' : '🚨 PRECISO DE AJUDA / TROCA'}</span>
+                          </button>
+                          <button 
+                            type="button" 
                             onClick={() => setSelectedOrderDetails(order)} 
                             className={styles.viewDetailsBtn}
                           >
                             <Eye size={14} />
-                            <span>VER DETALHES DO PEDIDO</span>
+                            <span>VER DETALHES</span>
                           </button>
                         </div>
                       </footer>
@@ -1686,6 +1750,103 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                   </button>
                   <button type="submit" className={styles.saveBtn}>
                     PUBLICAR AVALIAÇÃO
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ============================================================
+          MODAL 5: SUPORTE AO CLIENTE & SAC CONTEXTUAL
+          ============================================================ */}
+      <AnimatePresence>
+        {isSupportModalOpen && selectedOrderForSupport && (
+          <div className={styles.modalBackdrop} onClick={() => setIsSupportModalOpen(false)}>
+            <motion.div 
+              className={styles.supportModalCard}
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className={styles.modalHeader}>
+                <div className={styles.modalHeaderInfo}>
+                  <span className={styles.supportBadge}>ATENDIMENTO & TROCAS</span>
+                  <h3 className={styles.modalTitle}>SUPORTE AO PEDIDO #{selectedOrderForSupport.id}</h3>
+                </div>
+                <button type="button" onClick={() => setIsSupportModalOpen(false)} className={styles.closeModalBtn}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              <form onSubmit={handleSendSupportTicket} className={styles.supportForm}>
+                <div className={styles.inputField}>
+                  <label>Qual peça apresentou problema ou necessita de troca?</label>
+                  <select 
+                    value={selectedProductForIssue} 
+                    onChange={(e) => setSelectedProductForIssue(e.target.value)}
+                  >
+                    <option value="">Geral do Pedido (Todos os Itens)</option>
+                    {selectedOrderForSupport.items?.map(item => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} (Tamanho: {item.size}) - R$ {Number(item.price || 0).toFixed(2)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className={styles.inputField}>
+                  <label>Motivo da Solicitação *</label>
+                  <select 
+                    value={supportReason} 
+                    onChange={(e) => setSupportReason(e.target.value)}
+                    required
+                  >
+                    <option value="">Selecione um motivo...</option>
+                    {selectedOrderForSupport.statusCode === 'delivered' || selectedOrderForSupport.status === 'Entregue' || selectedOrderForSupport.status === 'ENTREGUE' ? (
+                      <>
+                        <option value="Troca de Tamanho">Quero trocar o tamanho da peça (Modelagem Boxy/Oversized)</option>
+                        <option value="Defeito de Fabricação">Defeito de costura, acabamento ou estampa</option>
+                        <option value="Item Incorreto">Recebi modelo, cor ou tamanho diferente do pedido</option>
+                        <option value="Devolução / Arrependimento">Direito de arrependimento / devolução (7 dias)</option>
+                      </>
+                    ) : selectedOrderForSupport.statusCode === 'in_transit' || selectedOrderForSupport.status === 'Em Trânsito' || selectedOrderForSupport.status === 'ENVIADO' ? (
+                      <>
+                        <option value="Atraso na Entrega">Atraso na entrega dos Correios ou Transportadora</option>
+                        <option value="Rastreio Inválido / Parado">Código de rastreio não atualiza ou sem movimentação</option>
+                        <option value="Problema no Endereço">Endereço precisa de correção urgente na transportadora</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="Alteração de Endereço">Alterar endereço de entrega antes do envio</option>
+                        <option value="Dúvida de Prazo">Dúvida sobre o prazo de confecção / envio</option>
+                        <option value="Cancelamento">Cancelar pedido antes do envio / estorno</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                <div className={styles.inputField}>
+                  <label>Explique o que aconteceu *</label>
+                  <textarea 
+                    rows={4} 
+                    placeholder="Descreva detalhes como novas medidas desejadas, motivo da troca ou solicitação específica..."
+                    value={supportMessage}
+                    onChange={(e) => setSupportMessage(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className={styles.modalActions}>
+                  <button type="button" onClick={() => setIsSupportModalOpen(false)} className={styles.cancelBtn}>
+                    Cancelar
+                  </button>
+                  <button type="submit" disabled={sendingTicket} className={styles.sendSupportBtn}>
+                    <Headphones size={14} />
+                    <span>{sendingTicket ? 'ENVIANDO CHAMADO...' : 'ENVIAR SOLICITAÇÃO DE SUPORTE'}</span>
                   </button>
                 </div>
               </form>

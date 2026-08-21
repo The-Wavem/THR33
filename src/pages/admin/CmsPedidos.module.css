@@ -750,6 +750,112 @@
   color: var(--text-secondary);
 }
 
+/* TAGS DE CHAMADO DE SUPORTE */
+.orderCodeWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  align-items: flex-start;
+}
+
+.openTicketPulseTag {
+  background: rgba(248, 113, 113, 0.18);
+  color: #f87171;
+  border: 1px solid rgba(248, 113, 113, 0.45);
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0.2rem 0.45rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  letter-spacing: 0.5px;
+  animation: pulseTicket 2s infinite ease-in-out;
+}
+
+@keyframes pulseTicket {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(248, 113, 113, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(248, 113, 113, 0.15);
+  }
+}
+
+.openTicketAlertBox {
+  background: rgba(248, 113, 113, 0.12);
+  border: 1px solid rgba(248, 113, 113, 0.4);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.openTicketAlertHeader {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.openTicketAlertHeader strong {
+  color: #f87171;
+  font-size: 0.85rem;
+  display: block;
+}
+
+.openTicketAlertHeader p {
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  margin-top: 0.2rem;
+}
+
+.goToSupportBtn {
+  background-color: #f87171;
+  color: #000000;
+  border: none;
+  padding: 0.65rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  align-self: flex-start;
+  transition: opacity var(--transition-fast);
+}
+
+.goToSupportBtn:hover {
+  opacity: 0.9;
+}
+
+/* FORMULÁRIO DE LOGÍSTICA & RASTREIO */
+.logisticsForm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.saveLogisticsBtn {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border: none;
+  padding: 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  transition: opacity var(--transition-fast);
+}
+
+.saveLogisticsBtn:hover {
+  opacity: 0.9;
+}
+
 @media (max-width: 1024px) {
   .headerRightControls {
     width: 100%;

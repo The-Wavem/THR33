@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs, doc, updateDoc } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
+import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
 import { 
   RotateCw, 
   Search, 
@@ -17,7 +18,9 @@ import {
   ArrowRight,
   ShieldCheck,
   FileText,
-  Calendar
+  Calendar,
+  Headphones,
+  Save
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { maskCPF } from '../../utils/validators';
@@ -48,6 +51,7 @@ const formatDateBR = (isoStr) => {
 };
 
 export function CmsPedidos() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -64,6 +68,18 @@ export function CmsPedidos() {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [exchangeReason, setExchangeReason] = useState('tamanho-boxy-pequeno');
   const [generatingLabel, setGeneratingLabel] = useState(false);
+
+  // Edição de Rastreio & NF-e no Drawer
+  const [drawerTracking, setDrawerTracking] = useState('');
+  const [drawerNfeKey, setDrawerNfeKey] = useState('');
+  const [savingLogistics, setSavingLogistics] = useState(false);
+
+  useEffect(() => {
+    if (selectedOrder) {
+      setDrawerTracking(selectedOrder.trackingCode && !selectedOrder.trackingCode.includes('Processando') ? selectedOrder.trackingCode : '');
+      setDrawerNfeKey(selectedOrder.nfeKey || selectedOrder.nfeUrl || '');
+    }
+  }, [selectedOrder]);
 
   // 1. Busca os pedidos reais no Firestore
   const fetchOrders = async () => {
@@ -150,14 +166,67 @@ export function CmsPedidos() {
     setDateRangePreset('custom');
   };
 
-  // 2. Atualizar Status do Pedido no Firestore
+  // 2. Atualizar Status do Pedido no Firestore com Validação de Rastreio
   const handleStatusChange = async (orderId, newStatus) => {
+    const currentOrder = orders.find(o => o.id === orderId);
+
+    // Validação: se estiver mudando para 'Em Trânsito' ou 'ENVIADO', o rastreio deve ser informado
+    if (newStatus === 'Em Trânsito' || newStatus === 'ENVIADO') {
+      const hasValidTracking = currentOrder?.trackingCode && 
+        !currentOrder.trackingCode.toLowerCase().includes('processando') && 
+        !currentOrder.trackingCode.toLowerCase().includes('aguardando');
+
+      let trackingToSave = currentOrder?.trackingCode;
+
+      if (!hasValidTracking) {
+        const inputTracking = prompt(
+          "⚠️ VALIDAÇÃO DE RASTREIO OBRIGATÓRIO:\nInforme o Código de Rastreio dos Correios/Transportadora para marcar o pedido como ENVIADO (Ex: BR920851843PR):"
+        );
+
+        if (!inputTracking || !inputTracking.trim()) {
+          alert("❌ Ação bloqueada: É obrigatório informar o Código de Rastreio para avançar o pedido para 'Em Trânsito' / 'ENVIADO'!");
+          return;
+        }
+
+        trackingToSave = inputTracking.trim().toUpperCase();
+      }
+
+      try {
+        const orderRef = doc(db, 'orders', orderId);
+        await updateDoc(orderRef, { 
+          status: newStatus,
+          trackingCode: trackingToSave,
+          shippedAt: currentOrder?.shippedAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        });
+
+        const updated = {
+          ...currentOrder,
+          status: newStatus,
+          trackingCode: trackingToSave,
+          shippedAt: currentOrder?.shippedAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        setOrders(prev => prev.map(o => o.id === orderId ? updated : o));
+        if (selectedOrder?.id === orderId) {
+          setSelectedOrder(updated);
+        }
+      } catch (err) {
+        console.error("Erro ao atualizar status e rastreio:", err);
+      }
+      return;
+    }
+
     try {
       const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, { status: newStatus });
-      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      await updateDoc(orderRef, { 
+        status: newStatus,
+        updatedAt: new Date().toISOString()
+      });
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus, updatedAt: new Date().toISOString() } : o));
       if (selectedOrder?.id === orderId) {
-        setSelectedOrder(prev => ({ ...prev, status: newStatus }));
+        setSelectedOrder(prev => ({ ...prev, status: newStatus, updatedAt: new Date().toISOString() }));
       }
     } catch (err) {
       console.warn("Aviso ao atualizar status no Firestore:", err.message);
@@ -165,6 +234,38 @@ export function CmsPedidos() {
       if (selectedOrder?.id === orderId) {
         setSelectedOrder(prev => ({ ...prev, status: newStatus }));
       }
+    }
+  };
+
+  // Salvar Rastreio e NF-e diretamente pelo Drawer de CRM
+  const handleSaveLogistics = async (e) => {
+    e.preventDefault();
+    if (!selectedOrder) return;
+    setSavingLogistics(true);
+
+    try {
+      const orderRef = doc(db, 'orders', selectedOrder.id);
+      await updateDoc(orderRef, {
+        trackingCode: drawerTracking.trim().toUpperCase(),
+        nfeKey: drawerNfeKey.trim(),
+        updatedAt: new Date().toISOString()
+      });
+
+      const updated = {
+        ...selectedOrder,
+        trackingCode: drawerTracking.trim().toUpperCase(),
+        nfeKey: drawerNfeKey.trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      setOrders(prev => prev.map(o => o.id === selectedOrder.id ? updated : o));
+      setSelectedOrder(updated);
+      alert("✅ Dados logísticos e código de rastreamento salvos com sucesso!");
+    } catch (err) {
+      console.error("Erro ao salvar dados logísticos:", err);
+      alert("Falha ao salvar dados de rastreio no Firestore.");
+    } finally {
+      setSavingLogistics(false);
     }
   };
 
@@ -511,7 +612,15 @@ export function CmsPedidos() {
                 return (
                   <tr key={order.id} className={styles.tableRow}>
                     <td>
-                      <strong className={styles.orderCode}>#{order.id.slice(0, 8).toUpperCase()}</strong>
+                      <div className={styles.orderCodeWrapper}>
+                        <strong className={styles.orderCode}>#{order.id.slice(0, 8).toUpperCase()}</strong>
+                        {order.hasOpenTicket && (
+                          <span className={styles.openTicketPulseTag} title="Cliente abriu chamado de suporte para este pedido">
+                            <Headphones size={10} />
+                            <span>CHAMADO ABERTO</span>
+                          </span>
+                        )}
+                      </div>
                       <span className={styles.trackingBadge}>
                         <Truck size={10} />
                         <span>{order.trackingCode || 'Sem rastreio'}</span>
@@ -595,6 +704,30 @@ export function CmsPedidos() {
             </div>
 
             <div className={styles.drawerContent}>
+              {/* ALERTA DE CHAMADO DE SUPORTE ABERTO */}
+              {selectedOrder.hasOpenTicket && (
+                <div className={styles.openTicketAlertBox}>
+                  <div className={styles.openTicketAlertHeader}>
+                    <Headphones size={18} color="#f87171" />
+                    <div>
+                      <strong>🚨 CHAMADO DE SUPORTE ABERTO PELO CLIENTE</strong>
+                      <p>O cliente registrou uma solicitação no SAC para este pedido.</p>
+                    </div>
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => {
+                      setSelectedOrder(null);
+                      navigate('/cms/suporte');
+                    }} 
+                    className={styles.goToSupportBtn}
+                  >
+                    <span>Abrir Gestão de SAC</span>
+                    <ArrowRight size={13} />
+                  </button>
+                </div>
+              )}
+
               {/* DADOS DO CLIENTE */}
               <div className={styles.sectionBlock}>
                 <div className={styles.sectionHeaderLine}>
@@ -640,6 +773,39 @@ export function CmsPedidos() {
                     </div>
                   ))}
                 </div>
+              </div>
+
+              {/* CONTROLE LOGÍSTICO & RASTREIO SOB DEMANDA */}
+              <div className={styles.sectionBlock}>
+                <div className={styles.sectionHeaderLine}>
+                  <Truck size={15} className={styles.sectionIcon} />
+                  <h3>CONTROLE LOGÍSTICO & RASTREIO SOB DEMANDA</h3>
+                </div>
+                <form onSubmit={handleSaveLogistics} className={styles.logisticsForm}>
+                  <div className={styles.inputGroup}>
+                    <label>CÓDIGO DE RASTREIO (CORREIOS / TRANSPORTADORA) *</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: BR920851843PR"
+                      value={drawerTracking}
+                      onChange={(e) => setDrawerTracking(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className={styles.inputGroup}>
+                    <label>CHAVE / URL DA NOTA FISCAL (NF-E)</label>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: Chave de 44 dígitos ou URL do documento"
+                      value={drawerNfeKey}
+                      onChange={(e) => setDrawerNfeKey(e.target.value)}
+                    />
+                  </div>
+                  <button type="submit" disabled={savingLogistics} className={styles.saveLogisticsBtn}>
+                    <Save size={13} />
+                    <span>{savingLogistics ? 'SALVANDO...' : 'SALVAR RASTREIO & NF-E'}</span>
+                  </button>
+                </form>
               </div>
 
               {/* AUTOMAÇÃO DE LOGÍSTICA REVERSA / TROCAS */}

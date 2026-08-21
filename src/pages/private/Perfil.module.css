@@ -1342,6 +1342,103 @@
   color: var(--text-muted);
 }
 
+/* BOTÃO DE SUPORTE / TROCAS NO CARD DO PEDIDO */
+.supportHelpBtn {
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.65rem 1rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  letter-spacing: 0.5px;
+  transition: all var(--transition-fast);
+}
+
+.supportHelpBtn:hover {
+  border-color: #f87171;
+  color: #f87171;
+  background-color: rgba(248, 113, 113, 0.08);
+}
+
+.activeSupportBtn {
+  border-color: #f87171;
+  color: #f87171;
+  background-color: rgba(248, 113, 113, 0.15);
+  font-weight: 800;
+}
+
+/* MODAL DE SUPORTE CONTEXTUAL */
+.supportModalCard {
+  width: 100%;
+  max-width: 580px;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modalHeaderInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.supportBadge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #f87171;
+  text-transform: uppercase;
+}
+
+.supportForm {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.supportForm select, .supportForm textarea {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.85rem;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.supportForm select:focus, .supportForm textarea:focus {
+  border-color: var(--border-active);
+}
+
+.sendSupportBtn {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border: none;
+  padding: 0.85rem 1.4rem;
+  font-weight: 800;
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  transition: opacity var(--transition-fast);
+}
+
+.sendSupportBtn:hover {
+  opacity: 0.9;
+}
+
 @media (max-width: 850px) {
   .container { padding: 2rem 1.25rem 5rem; }
   .profileGrid { grid-template-columns: 1fr; }
@@ -1350,6 +1447,6 @@
   .welcomeHeader { flex-direction: column; align-items: flex-start; gap: 1rem; }
   .timelineStepper { flex-wrap: wrap; gap: 1rem; }
   .timelineConnector { display: none; }
-  .orderDetailsModal { padding: 1.5rem; }
+  .orderDetailsModal, .supportModalCard { padding: 1.5rem; }
   .orderFooter { flex-direction: column; align-items: flex-start; }
 }

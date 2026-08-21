@@ -9,6 +9,7 @@ import {
   BarChart3, 
   Target,
   Ticket,
+  Headphones,
   ArrowLeft, 
   ShieldCheck, 
   LogOut 
@@ -71,9 +72,16 @@ export function AdminLayout() {
             </NavLink>
           </div>
 
-          {/* SEÇÃO 3: GESTÃO DA LOJA & PRODUTOS */}
+          {/* SEÇÃO 3: OPERAÇÃO & PEDIDOS */}
           <div className={styles.navSection}>
-            <span className={styles.sectionTitle}>GESTÃO DA LOJA</span>
+            <span className={styles.sectionTitle}>OPERAÇÃO & PEDIDOS</span>
+            <NavLink 
+              to="/cms/pedidos" 
+              className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
+            >
+              <Package size={16} className={styles.navIcon} />
+              <span>Gestão de Pedidos</span>
+            </NavLink>
             <NavLink 
               to="/cms/produtos" 
               className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
@@ -86,7 +94,7 @@ export function AdminLayout() {
               className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
             >
               <Percent size={16} className={styles.navIcon} />
-              <span>Descontos & Liquidação</span>
+              <span>Descontos & Promoções</span>
             </NavLink>
             <NavLink 
               to="/cms/vitrine" 
@@ -95,12 +103,17 @@ export function AdminLayout() {
               <Image size={16} className={styles.navIcon} />
               <span>Vitrine & Banners</span>
             </NavLink>
+          </div>
+
+          {/* SEÇÃO 4: ATENDIMENTO & PÓS-VENDA */}
+          <div className={styles.navSection}>
+            <span className={styles.sectionTitle}>ATENDIMENTO & PÓS-VENDA</span>
             <NavLink 
-              to="/cms/pedidos" 
+              to="/cms/suporte" 
               className={({ isActive }) => `${styles.navItem} ${isActive ? styles.activeItem : ''}`}
             >
-              <Package size={16} className={styles.navIcon} />
-              <span>Pedidos & Trocas</span>
+              <Headphones size={16} className={styles.navIcon} />
+              <span>SAC & Chamados</span>
             </NavLink>
           </div>
         </nav>
