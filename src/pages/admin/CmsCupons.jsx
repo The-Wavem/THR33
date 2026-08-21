@@ -169,6 +169,17 @@ export function CmsCupons() {
     fetchCoupons();
   }, []);
 
+  // Bloqueia a rolagem da página no eixo Y quando o drawer ou modal estiver aberto
+  useEffect(() => {
+    if (statementCoupon || isModalOpen || previewImage) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [statementCoupon, isModalOpen, previewImage]);
+
   // 2. Busca pedidos vinculados ao cupom diretamente do Firestore
   const handleOpenStatement = async (coupon) => {
     setStatementCoupon(coupon);
@@ -1631,12 +1642,6 @@ export function CmsCupons() {
                       </span>
                     </div>
                   </div>
-                  <div className={styles.balanceBox}>
-                    <small>ENTRADA LÍQUIDA EM CAIXA</small>
-                    <strong style={{ color: "#4ade80" }}>
-                      R$ {(statementSummary?.netProfit || 0).toFixed(2)}
-                    </strong>
-                  </div>
                 </div>
               ) : (
                 <div className={styles.partnerPixCard}>
@@ -2136,9 +2141,7 @@ export function CmsCupons() {
                     <p>
                       Todas as vendas vinculadas a este cupom têm o desconto de{" "}
                       {statementCoupon.discountPercent || 10}% absorvido
-                      diretamente pela marca. Não há necessidade de
-                      transferências Pix ou prestação de contas com parceiros
-                      externos.
+                      diretamente pela marca.
                     </p>
                   </div>
                 </div>

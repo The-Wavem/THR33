@@ -630,6 +630,7 @@
   z-index: 3000;
   display: flex;
   justify-content: flex-end;
+  overscroll-behavior: contain;
 }
 
 .drawer {
@@ -639,6 +640,7 @@
   background-color: var(--bg-surface);
   border-left: 1px solid var(--border-color);
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 2rem;
   display: flex;
   flex-direction: column;

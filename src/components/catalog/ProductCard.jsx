@@ -31,8 +31,8 @@ export function ProductCard({ product }) {
       <div className={styles.imageWrapper}>
         {hasDiscount ? (
           <span className={styles.promoBadge}>PROMOÇÃO</span>
-        ) : product.isRelease ? (
-          <span className={styles.badge}>LANÇAMENTO</span>
+        ) : (product.customBadge && product.customBadge.trim()) ? (
+          <span className={styles.badge}>{product.customBadge.trim()}</span>
         ) : null}
         
         {/* Placeholder com Shimmer enquanto a imagem carrega */}

@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Search, X, ArrowRight } from 'lucide-react';
 import { analyticsService } from '../../services/analyticsService';
 import styles from './FilterSidebar.module.css';
 
 export function FilterSidebar({ 
+  products = [],
   filters, 
   setFilters, 
   onReset,
@@ -95,6 +96,116 @@ export function FilterSidebar({
     });
   };
 
+  // Extração Dinâmica de Categorias presentes nos produtos do Firestore
+  const availableCategories = useMemo(() => {
+    const counts = {};
+    (products || []).forEach(p => {
+      if (p.type === 'brinde' || p.category === 'brinde' || p.category === 'gift-card') return;
+      const cat = (p.category || 'camisa').toLowerCase().trim();
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+
+    const CATEGORY_MAP = {
+      'camisa': 'CAMISA',
+      'jaqueta': 'JAQUETA & HOODIE',
+      'calca': 'CALÇA',
+      'shorts': 'SHORTS & BERMUDAS',
+      'short': 'SHORTS & BERMUDAS',
+      'bone': 'BONÉ & ACESSÓRIOS',
+      'bones': 'BONÉS & ACESSÓRIOS',
+      'moletom': 'MOLETOM & HOODIE',
+      'moletons': 'MOLETONS & HOODIES',
+      'acessorios': 'ACESSÓRIOS',
+      'acessorio': 'ACESSÓRIOS'
+    };
+
+    const keys = Object.keys(counts);
+    if (keys.length === 0) {
+      return [
+        { id: 'camisa', label: 'CAMISA' },
+        { id: 'calca', label: 'CALÇA' },
+        { id: 'jaqueta', label: 'JAQUETA & HOODIE' }
+      ];
+    }
+
+    return keys.sort().map(catKey => ({
+      id: catKey,
+      label: CATEGORY_MAP[catKey] || catKey.toUpperCase().replace(/[-_]/g, ' '),
+      count: counts[catKey]
+    }));
+  }, [products]);
+
+  // Extração Dinâmica de Modelagens (Fits) presentes nos produtos do Firestore
+  const availableFits = useMemo(() => {
+    const counts = {};
+    (products || []).forEach(p => {
+      if (p.type === 'brinde' || p.category === 'brinde') return;
+      const fit = String(p.fit || '').trim().toLowerCase();
+      if (!fit || fit === 'único' || fit === 'unico' || fit === 'padrão' || fit === 'padrao') return;
+      counts[fit] = (counts[fit] || 0) + 1;
+    });
+
+    const FIT_MAP = {
+      'boxy': 'BOXY',
+      'oversized': 'OVERSIZED',
+      'normal': 'NORMAL',
+      'regular': 'NORMAL',
+      'regata': 'REGATA',
+      'slim': 'SLIM',
+      'wide_leg': 'WIDE LEG',
+      'wide-leg': 'WIDE LEG',
+      'cargo': 'CARGO',
+      'cropped': 'CROPPED',
+      'drop_shoulder': 'DROP SHOULDER',
+      'drop-shoulder': 'DROP SHOULDER',
+      'street': 'STREET'
+    };
+
+    const keys = Object.keys(counts);
+    if (keys.length === 0) {
+      return [
+        { id: 'boxy', label: 'BOXY' },
+        { id: 'oversized', label: 'OVERSIZED' },
+        { id: 'normal', label: 'NORMAL' },
+        { id: 'regata', label: 'REGATA' }
+      ];
+    }
+
+    return keys.sort().map(fitKey => ({
+      id: fitKey,
+      label: FIT_MAP[fitKey] || fitKey.toUpperCase().replace(/[-_]/g, ' '),
+      count: counts[fitKey]
+    }));
+  }, [products]);
+
+  // Extração Dinâmica de Drops presentes nos produtos do Firestore
+  const availableDrops = useMemo(() => {
+    const counts = {};
+    (products || []).forEach(p => {
+      const drop = (p.drop || 'leak-two').toLowerCase().trim();
+      counts[drop] = (counts[drop] || 0) + 1;
+    });
+
+    const DROP_MAP = {
+      'leak-two': 'LEAK TWO (NOVO)',
+      'drop-01': 'DROPS PASSADOS'
+    };
+
+    const keys = Object.keys(counts);
+    if (keys.length === 0) {
+      return [
+        { id: 'leak-two', label: 'LEAK TWO (NOVO)' },
+        { id: 'drop-01', label: 'DROPS PASSADOS' }
+      ];
+    }
+
+    return keys.sort().map(dropKey => ({
+      id: dropKey,
+      label: DROP_MAP[dropKey] || dropKey.toUpperCase().replace(/[-_]/g, ' '),
+      count: counts[dropKey]
+    }));
+  }, [products]);
+
   const isSearchDirty = searchTerm.trim() !== searchQuery.trim() || (searchTerm.trim() && !searchQuery.trim());
 
   const selectedCategories = filters.categories || [];
@@ -144,15 +255,11 @@ export function FilterSidebar({
         )}
       </form>
 
-      {/* Categorias (Multi-Seleção) */}
+      {/* Categorias (Multi-Seleção Dinâmica) */}
       <div className={styles.filterGroup}>
         <span className={styles.groupLabel}>CATEGORIAS</span>
         <div className={styles.optionsList}>
-          {[
-            { id: 'camisa', label: 'CAMISA' },
-            { id: 'calca', label: 'CALÇA' },
-            { id: 'jaqueta', label: 'JAQUETA & HOODIE' }
-          ].map(({ id, label }) => {
+          {availableCategories.map(({ id, label, count }) => {
             const isSelected = selectedCategories.includes(id);
             return (
               <button
@@ -165,22 +272,18 @@ export function FilterSidebar({
                   {isSelected && <span className={styles.checkboxInner} />}
                 </span>
                 <span className={styles.optionLabelText}>{label}</span>
+                {count !== undefined && <small style={{ marginLeft: 'auto', opacity: 0.5, fontSize: '0.65rem' }}>({count})</small>}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Modelagem (Multi-Seleção) */}
+      {/* Modelagem (Multi-Seleção Dinâmica) */}
       <div className={styles.filterGroup}>
         <span className={styles.groupLabel}>MODELAGEM</span>
         <div className={styles.optionsList}>
-          {[
-            { id: 'boxy', label: 'BOXY' },
-            { id: 'oversized', label: 'OVERSIZED' },
-            { id: 'normal', label: 'NORMAL' },
-            { id: 'regata', label: 'REGATA' }
-          ].map(({ id, label }) => {
+          {availableFits.map(({ id, label, count }) => {
             const isSelected = selectedFits.includes(id);
             return (
               <button
@@ -193,20 +296,18 @@ export function FilterSidebar({
                   {isSelected && <span className={styles.checkboxInner} />}
                 </span>
                 <span className={styles.optionLabelText}>{label}</span>
+                {count !== undefined && <small style={{ marginLeft: 'auto', opacity: 0.5, fontSize: '0.65rem' }}>({count})</small>}
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Drops (Multi-Seleção) */}
+      {/* Drops (Multi-Seleção Dinâmica) */}
       <div className={styles.filterGroup}>
         <span className={styles.groupLabel}>DROP</span>
         <div className={styles.optionsList}>
-          {[
-            { id: 'leak-two', label: 'LEAK TWO (NOVO)' },
-            { id: 'drop-01', label: 'DROPS PASSADOS' }
-          ].map(({ id, label }) => {
+          {availableDrops.map(({ id, label }) => {
             const isSelected = selectedDrops.includes(id);
             return (
               <button

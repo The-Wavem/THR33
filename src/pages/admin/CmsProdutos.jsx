@@ -33,6 +33,43 @@ export function CmsProdutos() {
   const [fitFilter, setFitFilter] = useState('all'); // 'all', 'boxy', 'oversized', 'normal', 'regata'
   const [statusFilter, setStatusFilter] = useState('all'); // 'all', 'in_stock', 'low_stock', 'out_of_stock', 'on_sale', 'release', 'featured'
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'none' });
+
+  // Categorias e Modelagens Customizadas (Persistidas no LocalStorage)
+  const [customCategories, setCustomCategories] = useState(() => {
+    try {
+      const saved = localStorage.getItem('thr33_custom_categories');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  const [customFits, setCustomFits] = useState(() => {
+    try {
+      const saved = localStorage.getItem('thr33_custom_fits');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // Estados de criação inline no formulário
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isAddingFit, setIsAddingFit] = useState(false);
+  const [newFitName, setNewFitName] = useState('');
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('thr33_custom_categories', JSON.stringify(customCategories));
+    } catch (e) {}
+  }, [customCategories]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('thr33_custom_fits', JSON.stringify(customFits));
+    } catch (e) {}
+  }, [customFits]);
   
   // Controle do Formulário / Drawer de Criação
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -101,6 +138,53 @@ export function CmsProdutos() {
     }));
   };
 
+  const handleConfirmAddCategory = () => {
+    const raw = newCategoryName.trim();
+    if (!raw) {
+      setIsAddingCategory(false);
+      return;
+    }
+    const slug = raw.toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+    const formattedLabel = raw.charAt(0).toUpperCase() + raw.slice(1);
+    setCustomCategories(prev => {
+      if (prev.some(c => c.key === slug)) return prev;
+      return [...prev, { key: slug, label: formattedLabel }];
+    });
+    setFormData(prev => ({ ...prev, category: slug }));
+    setIsAddingCategory(false);
+    setNewCategoryName('');
+  };
+
+  const handleConfirmAddFit = () => {
+    const raw = newFitName.trim();
+    if (!raw) {
+      setIsAddingFit(false);
+      return;
+    }
+    const slug = raw.toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+    const formattedLabel = raw.toLowerCase().includes('fit') 
+      ? raw.charAt(0).toUpperCase() + raw.slice(1) 
+      : `${raw.charAt(0).toUpperCase() + raw.slice(1)} Fit`;
+
+    setCustomFits(prev => {
+      if (prev.some(f => f.key === slug)) return prev;
+      return [...prev, { key: slug, label: formattedLabel }];
+    });
+    setFormData(prev => ({ ...prev, fit: slug }));
+    setIsAddingFit(false);
+    setNewFitName('');
+  };
+
   const handleStockChange = (size, qty) => {
     setFormData(prev => ({
       ...prev,
@@ -120,8 +204,7 @@ export function CmsProdutos() {
       fit: 'boxy',
       drop: 'leak-two',
       price: '',
-      originalPrice: '',
-      customBadge: 'LANÇAMENTO',
+      customBadge: '',
       isRelease: true,
       isFeatured: false,
       image: '',
@@ -139,8 +222,7 @@ export function CmsProdutos() {
       category: product.category || 'camisa',
       fit: product.fit || 'boxy',
       drop: product.drop || 'leak-two',
-      price: product.price || product.priceNum || '',
-      originalPrice: product.originalPrice || '',
+      price: product.price || product.priceNum || product.originalPrice || '',
       customBadge: product.customBadge || '',
       isRelease: product.isRelease ?? false,
       isFeatured: product.isFeatured ?? false,
@@ -158,12 +240,13 @@ export function CmsProdutos() {
 
     const productId = editingId || `thr33_${Date.now()}`;
     const priceNum = parseFloat(formData.price) || 0;
-    const origPriceNum = parseFloat(formData.originalPrice) || priceNum;
-
-    // Cálculo automático de % de desconto
-    const discountPercent = origPriceNum > priceNum 
-      ? Math.round(((origPriceNum - priceNum) / origPriceNum) * 100)
-      : 0;
+    const existingProd = editingId ? products.find(p => p.id === editingId) : null;
+    
+    // Se o produto já possuir desconto configurado na aba de Descontos, mantém a integridade
+    const origPriceNum = existingProd?.originalPrice && existingProd.originalPrice > priceNum
+      ? existingProd.originalPrice
+      : priceNum;
+    const discountPercent = existingProd?.discount || 0;
 
     // Constrói objeto de variantes com SKU
     const catCode = (formData.category || 'XX').slice(0, 2).toUpperCase();
@@ -187,6 +270,8 @@ export function CmsProdutos() {
       priceNum: priceNum,
       originalPrice: origPriceNum,
       discount: discountPercent,
+      ...(existingProd?.discountPrice !== undefined ? { discountPrice: existingProd.discountPrice } : {}),
+      ...(existingProd?.discountActive !== undefined ? { discountActive: existingProd.discountActive } : {}),
       customBadge: formData.customBadge.trim(),
       isRelease: formData.isRelease,
       isFeatured: formData.isFeatured,
@@ -269,15 +354,97 @@ export function CmsProdutos() {
     }
   };
 
+  // Funções Utilitárias para Formatação de Categorias e Modelagens
+  const formatCategoryLabel = (catKey) => {
+    if (!catKey) return '';
+    const map = {
+      'camisa': 'Camiseta / Camisa',
+      'jaqueta': 'Jaqueta / Moletom',
+      'calca': 'Calça / Bermuda',
+      'brinde': 'Brinde / Acessório',
+      'gift-card': 'Vale-Presente',
+      'short': 'Short / Bermuda',
+      'shorts': 'Shorts / Bermudas',
+      'bone': 'Boné / Acessórios',
+      'bones': 'Bonés / Acessórios',
+      'acessorios': 'Acessórios',
+      'acessorio': 'Acessórios',
+      'moletons': 'Moletons / Hoodies',
+      'moletom': 'Moletom / Hoodie'
+    };
+    const key = String(catKey).toLowerCase().trim();
+    if (map[key]) return map[key];
+    return catKey.charAt(0).toUpperCase() + catKey.slice(1).replace(/[-_]/g, ' ');
+  };
+
+  const formatFitLabel = (fitKey) => {
+    if (!fitKey) return '';
+    const map = {
+      'boxy': 'Boxy Fit',
+      'oversized': 'Oversized Fit',
+      'normal': 'Normal / Regular Fit',
+      'regular': 'Normal / Regular Fit',
+      'regata': 'Regata Athletic',
+      'slim': 'Slim Fit',
+      'wide_leg': 'Wide Leg',
+      'wide-leg': 'Wide Leg',
+      'cargo': 'Cargo Fit',
+      'cropped': 'Cropped Fit',
+      'drop_shoulder': 'Drop Shoulder Fit',
+      'drop-shoulder': 'Drop Shoulder Fit',
+      'street': 'Street Fit',
+      'unico': 'Tamanho Único',
+      'único': 'Tamanho Único'
+    };
+    const key = String(fitKey).toLowerCase().trim();
+    if (map[key]) return map[key];
+    return fitKey.charAt(0).toUpperCase() + fitKey.slice(1).replace(/[-_]/g, ' ') + (key.toLowerCase().includes('fit') ? '' : ' Fit');
+  };
+
   // Contagem dinâmica de produtos por categoria
   const categoryCounts = useMemo(() => {
-    const counts = { all: products.length, camisa: 0, jaqueta: 0, calca: 0, brinde: 0 };
+    const counts = { all: products.length };
     products.forEach(p => {
       const cat = (p.category || p.type || 'camisa').toLowerCase();
-      if (counts[cat] !== undefined) counts[cat] += 1;
-      else counts[cat] = 1;
+      counts[cat] = (counts[cat] || 0) + 1;
     });
     return counts;
+  }, [products]);
+
+  // Tabs dinâmicos de categoria para o topo da tabela
+  const categoryTabs = useMemo(() => {
+    const counts = {};
+    products.forEach(p => {
+      const cat = (p.category || p.type || 'camisa').toLowerCase();
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+
+    const CATEGORY_NAMES = {
+      'camisa': 'CAMISETAS',
+      'jaqueta': 'JAQUETAS',
+      'calca': 'CALÇAS',
+      'brinde': 'BRINDES',
+      'gift-card': 'VALE-PRESENTE'
+    };
+
+    // Garante que as categorias base ou qualquer nova categoria com produtos apareça
+    const allKeys = Array.from(new Set([
+      'camisa', 'jaqueta', 'calca', 'brinde',
+      ...Object.keys(counts)
+    ]));
+
+    const list = [{ id: 'all', label: 'TODOS', count: products.length }];
+
+    allKeys.forEach(key => {
+      const count = counts[key] || 0;
+      // Exibe categorias padrão ou categorias que possuam ao menos 1 item
+      if (count > 0 || ['camisa', 'jaqueta', 'calca', 'brinde'].includes(key)) {
+        const label = CATEGORY_NAMES[key] || key.toUpperCase().replace(/[-_]/g, ' ');
+        list.push({ id: key, label, count });
+      }
+    });
+
+    return list;
   }, [products]);
 
   // Modelagens (Fits) dinâmicas mapeadas exclusivamente dos produtos cadastrados no sistema
@@ -308,7 +475,7 @@ export function CmsProdutos() {
 
     return Object.keys(counts).sort().map(fitKey => {
       const formattedLabel = FIT_LABELS[fitKey] || (
-        fitKey.charAt(0).toUpperCase() + fitKey.slice(1).replace(/[-_]/g, ' ') + ' Fit'
+        fitKey.charAt(0).toUpperCase() + fitKey.slice(1).replace(/[-_]/g, ' ') + (fitKey.toLowerCase().includes('fit') ? '' : ' Fit')
       );
       return {
         key: fitKey,
@@ -317,6 +484,88 @@ export function CmsProdutos() {
       };
     });
   }, [products]);
+
+  // Opções para o select de categoria no formulário de cadastro/edição
+  const formCategoryOptions = useMemo(() => {
+    const baseOptions = [
+      { value: 'camisa', label: 'Camiseta / Camisa' },
+      { value: 'jaqueta', label: 'Jaqueta / Moletom' },
+      { value: 'calca', label: 'Calça / Bermuda' },
+      { value: 'brinde', label: 'Brinde / Acessório' },
+      { value: 'gift-card', label: 'Vale-Presente' }
+    ];
+
+    const existingKeys = new Set(baseOptions.map(o => o.value));
+    const merged = [...baseOptions];
+
+    // Inclui categorias encontradas em produtos existentes
+    products.forEach(p => {
+      const cat = (p.category || '').trim().toLowerCase();
+      if (cat && !existingKeys.has(cat)) {
+        existingKeys.add(cat);
+        merged.push({
+          value: cat,
+          label: formatCategoryLabel(cat)
+        });
+      }
+    });
+
+    // Inclui categorias customizadas criadas nesta sessão
+    customCategories.forEach(custom => {
+      if (!existingKeys.has(custom.key)) {
+        existingKeys.add(custom.key);
+        merged.push({
+          value: custom.key,
+          label: custom.label
+        });
+      }
+    });
+
+    return merged;
+  }, [products, customCategories]);
+
+  // Opções para o select de modelagem no formulário de cadastro/edição
+  const formFitOptions = useMemo(() => {
+    const baseFits = [
+      { value: 'boxy', label: 'Boxy Fit' },
+      { value: 'oversized', label: 'Oversized Fit' },
+      { value: 'normal', label: 'Normal / Regular Fit' },
+      { value: 'regata', label: 'Regata Athletic' },
+      { value: 'slim', label: 'Slim Fit' },
+      { value: 'wide_leg', label: 'Wide Leg' },
+      { value: 'cargo', label: 'Cargo Fit' },
+      { value: 'cropped', label: 'Cropped Fit' },
+      { value: 'drop_shoulder', label: 'Drop Shoulder Fit' }
+    ];
+
+    const existingKeys = new Set(baseFits.map(f => f.value));
+    const merged = [...baseFits];
+
+    // Inclui fits encontrados em produtos existentes
+    products.forEach(p => {
+      const fit = (p.fit || '').trim().toLowerCase();
+      if (fit && fit !== 'único' && fit !== 'unico' && !existingKeys.has(fit)) {
+        existingKeys.add(fit);
+        merged.push({
+          value: fit,
+          label: formatFitLabel(fit)
+        });
+      }
+    });
+
+    // Inclui fits customizados criados nesta sessão
+    customFits.forEach(custom => {
+      if (!existingKeys.has(custom.key)) {
+        existingKeys.add(custom.key);
+        merged.push({
+          value: custom.key,
+          label: custom.label
+        });
+      }
+    });
+
+    return merged;
+  }, [products, customFits]);
 
   // Limpa todos os filtros e ordenações da tabela
   const handleClearAllFilters = () => {
@@ -448,20 +697,14 @@ export function CmsProdutos() {
           </div>
 
           <div className={styles.filtersRow}>
-            {[
-              { id: 'all', label: 'TODOS' },
-              { id: 'camisa', label: 'CAMISETAS' },
-              { id: 'jaqueta', label: 'JAQUETAS' },
-              { id: 'calca', label: 'CALÇAS' },
-              { id: 'brinde', label: 'BRINDES' }
-            ].map(f => (
+            {categoryTabs.map(f => (
               <button
                 key={f.id}
                 className={`${styles.filterChip} ${selectedFilter === f.id ? styles.activeChip : ''}`}
                 onClick={() => setSelectedFilter(f.id)}
               >
                 <span>{f.label}</span>
-                <small className={styles.chipCount}>({categoryCounts[f.id] || 0})</small>
+                <small className={styles.chipCount}>({f.count})</small>
               </button>
             ))}
           </div>
@@ -648,12 +891,10 @@ export function CmsProdutos() {
                       </div>
                     </td>
                     <td>
-                      {prod.customBadge ? (
-                        <span className={styles.customBadge}>{prod.customBadge}</span>
-                      ) : prod.isRelease ? (
-                        <span className={styles.customBadge}>LANÇAMENTO</span>
+                      {prod.customBadge && prod.customBadge.trim() ? (
+                        <span className={styles.customBadge}>{prod.customBadge.trim()}</span>
                       ) : (
-                        <span className={styles.noBadge}>Padrão</span>
+                        <span className={styles.noBadge}>Sem Badge</span>
                       )}
                     </td>
                     <td>
@@ -758,54 +999,167 @@ export function CmsProdutos() {
               {/* CATEGORIA, FIT E DROP */}
               <div className={styles.gridTwo}>
                 <div className={styles.formGroup}>
-                  <label>CATEGORIA</label>
-                  <select name="category" value={formData.category} onChange={handleInputChange}>
-                    <option value="camisa">Camiseta / Camisa</option>
-                    <option value="jaqueta">Jaqueta / Moletom</option>
-                    <option value="calca">Calça / Bermuda</option>
-                    <option value="brinde">Brinde / Acessório</option>
-                    <option value="gift-card">Vale-Presente</option>
-                  </select>
+                  <div className={styles.labelWithAction}>
+                    <label>CATEGORIA *</label>
+                    {!isAddingCategory && (
+                      <button
+                        type="button"
+                        onClick={() => { setIsAddingCategory(true); setNewCategoryName(''); }}
+                        className={styles.addInlineBtn}
+                        title="Criar nova categoria customizada"
+                      >
+                        <Plus size={11} />
+                        <span>Nova</span>
+                      </button>
+                    )}
+                  </div>
+
+                  {isAddingCategory ? (
+                    <div className={styles.inlineAddBox}>
+                      <input
+                        type="text"
+                        placeholder="Nome da categoria (ex: Bonés, Shorts...)"
+                        value={newCategoryName}
+                        onChange={(e) => setNewCategoryName(e.target.value)}
+                        autoFocus
+                        className={styles.inlineInput}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleConfirmAddCategory();
+                          }
+                        }}
+                      />
+                      <div className={styles.inlineActions}>
+                        <button
+                          type="button"
+                          onClick={handleConfirmAddCategory}
+                          className={styles.inlineConfirmBtn}
+                          title="Confirmar categoria"
+                        >
+                          <Check size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setIsAddingCategory(false); setNewCategoryName(''); }}
+                          className={styles.inlineCancelBtn}
+                          title="Cancelar"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <select
+                      name="category"
+                      value={formData.category}
+                      onChange={(e) => {
+                        if (e.target.value === '__NEW__') {
+                          setIsAddingCategory(true);
+                          setNewCategoryName('');
+                        } else {
+                          handleInputChange(e);
+                        }
+                      }}
+                    >
+                      {formCategoryOptions.map(opt => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                      <option value="__NEW__">+ Criar Nova Categoria...</option>
+                    </select>
+                  )}
                 </div>
 
                 {formData.type === 'vestuario' && (
                   <div className={styles.formGroup}>
-                    <label>MODELAGEM (FIT)</label>
-                    <select name="fit" value={formData.fit} onChange={handleInputChange}>
-                      <option value="boxy">Boxy Fit</option>
-                      <option value="oversized">Oversized Fit</option>
-                      <option value="normal">Normal Fit</option>
-                      <option value="regata">Regata Athletic</option>
-                    </select>
+                    <div className={styles.labelWithAction}>
+                      <label>MODELAGEM (FIT)</label>
+                      {!isAddingFit && (
+                        <button
+                          type="button"
+                          onClick={() => { setIsAddingFit(true); setNewFitName(''); }}
+                          className={styles.addInlineBtn}
+                          title="Criar nova modelagem customizada"
+                        >
+                          <Plus size={11} />
+                          <span>Novo Fit</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {isAddingFit ? (
+                      <div className={styles.inlineAddBox}>
+                        <input
+                          type="text"
+                          placeholder="Nome da modelagem (ex: Drop Shoulder, Cargo...)"
+                          value={newFitName}
+                          onChange={(e) => setNewFitName(e.target.value)}
+                          autoFocus
+                          className={styles.inlineInput}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              handleConfirmAddFit();
+                            }
+                          }}
+                        />
+                        <div className={styles.inlineActions}>
+                          <button
+                            type="button"
+                            onClick={handleConfirmAddFit}
+                            className={styles.inlineConfirmBtn}
+                            title="Confirmar modelagem"
+                          >
+                            <Check size={13} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => { setIsAddingFit(false); setNewFitName(''); }}
+                            className={styles.inlineCancelBtn}
+                            title="Cancelar"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <select
+                        name="fit"
+                        value={formData.fit}
+                        onChange={(e) => {
+                          if (e.target.value === '__NEW__') {
+                            setIsAddingFit(true);
+                            setNewFitName('');
+                          } else {
+                            handleInputChange(e);
+                          }
+                        }}
+                      >
+                        {formFitOptions.map(opt => (
+                          <option key={opt.value} value={opt.value}>{opt.label}</option>
+                        ))}
+                        <option value="__NEW__">+ Criar Nova Modelagem...</option>
+                      </select>
+                    )}
                   </div>
                 )}
               </div>
 
-              {/* PREÇOS & DESCONTOS */}
-              <div className={styles.gridTwo}>
-                <div className={styles.formGroup}>
-                  <label>PREÇO FINAL (R$) *</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    name="price"
-                    placeholder="189.90"
-                    value={formData.price}
-                    onChange={handleInputChange}
-                    required
-                  />
-                </div>
-                <div className={styles.formGroup}>
-                  <label>PREÇO ORIGINAL (R$ - P/ DESCONTO)</label>
-                  <input 
-                    type="number" 
-                    step="0.01"
-                    name="originalPrice"
-                    placeholder="229.90"
-                    value={formData.originalPrice}
-                    onChange={handleInputChange}
-                  />
-                </div>
+              {/* PREÇO DA PEÇA */}
+              <div className={styles.formGroup}>
+                <label>
+                  PREÇO DA PEÇA (R$) *
+                  <InfoTooltip text="Preço real de venda da peça. Descontos e liquidações são gerenciados na aba Descontos & Liquidações." title="Valor do Produto" />
+                </label>
+                <input 
+                  type="number" 
+                  step="0.01"
+                  name="price"
+                  placeholder="189.90"
+                  value={formData.price}
+                  onChange={handleInputChange}
+                  required
+                />
               </div>
 
               {/* BADGE CUSTOMIZADO */}
@@ -817,7 +1171,7 @@ export function CmsProdutos() {
                 <input 
                   type="text" 
                   name="customBadge"
-                  placeholder="Ex: LANÇAMENTO, -20% OFF, FOR THE FEW"
+                  placeholder="Opcional (ex: LANÇAMENTO, -20% OFF, FOR THE FEW...)"
                   value={formData.customBadge}
                   onChange={handleInputChange}
                 />

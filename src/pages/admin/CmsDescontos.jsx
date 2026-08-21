@@ -93,13 +93,39 @@ export function CmsDescontos() {
 
   // Contagem dinâmica de categorias disponíveis
   const categoryCounts = useMemo(() => {
-    const counts = { all: products.length, camisa: 0, jaqueta: 0, calca: 0, brinde: 0 };
+    const counts = { all: products.length };
     products.forEach(p => {
       const cat = (p.category || p.type || 'camisa').toLowerCase();
-      if (counts[cat] !== undefined) counts[cat] += 1;
-      else counts[cat] = 1;
+      counts[cat] = (counts[cat] || 0) + 1;
     });
     return counts;
+  }, [products]);
+
+  // Opções dinâmicas de categoria para o seletor de filtros
+  const categoryOptions = useMemo(() => {
+    const counts = {};
+    products.forEach(p => {
+      const cat = (p.category || p.type || 'camisa').toLowerCase();
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+
+    const CATEGORY_LABELS = {
+      'camisa': 'Camisetas',
+      'jaqueta': 'Jaquetas',
+      'calca': 'Calças',
+      'brinde': 'Brindes',
+      'gift-card': 'Vales-Presente',
+      'shorts': 'Shorts & Bermudas',
+      'short': 'Shorts & Bermudas',
+      'bone': 'Bonés & Acessórios',
+      'bones': 'Bonés & Acessórios'
+    };
+
+    return Object.keys(counts).sort().map(k => ({
+      key: k,
+      label: CATEGORY_LABELS[k] || (k.charAt(0).toUpperCase() + k.slice(1).replace(/[-_]/g, ' ')),
+      count: counts[k] || 0
+    }));
   }, [products]);
 
   // Modelagens (Fits) dinâmicas mapeadas exclusivamente dos produtos cadastrados no sistema
@@ -620,10 +646,11 @@ export function CmsDescontos() {
                 title="Filtrar por Categoria / Tipo"
               >
                 <option value="all">Todos os Tipos ({products.length})</option>
-                <option value="camisa">Camisetas ({categoryCounts.camisa || 0})</option>
-                <option value="jaqueta">Jaquetas ({categoryCounts.jaqueta || 0})</option>
-                <option value="calca">Calças ({categoryCounts.calca || 0})</option>
-                <option value="brinde">Brindes ({categoryCounts.brinde || 0})</option>
+                {categoryOptions.map(cat => (
+                  <option key={cat.key} value={cat.key}>
+                    {cat.label} ({cat.count})
+                  </option>
+                ))}
               </select>
             </div>
 

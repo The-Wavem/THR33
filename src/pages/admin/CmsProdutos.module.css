@@ -517,6 +517,81 @@
   color: var(--text-secondary);
 }
 
+.labelWithAction {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.addInlineBtn {
+  background: transparent;
+  border: none;
+  color: #60a5fa;
+  font-size: 0.68rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.addInlineBtn:hover {
+  opacity: 0.8;
+  text-decoration: underline;
+}
+
+.inlineAddBox {
+  display: flex;
+  gap: 0.35rem;
+  align-items: center;
+}
+
+.inlineInput {
+  flex: 1;
+  min-width: 0;
+}
+
+.inlineActions {
+  display: flex;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.inlineConfirmBtn {
+  background-color: #22c55e;
+  color: #ffffff;
+  border: none;
+  padding: 0.75rem 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity var(--transition-fast);
+}
+
+.inlineConfirmBtn:hover {
+  opacity: 0.9;
+}
+
+.inlineCancelBtn {
+  background-color: var(--bg-card);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  padding: 0.75rem 0.85rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+}
+
+.inlineCancelBtn:hover {
+  color: #f87171;
+  border-color: #f87171;
+}
+
 .formGroup input, .formGroup select, .formGroup textarea {
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);

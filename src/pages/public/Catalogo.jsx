@@ -412,7 +412,7 @@ export function Catalogo() {
           )}
           {selectedCategories.map(cat => (
             <span key={cat} className={styles.filterChip}>
-              CATEGORIA: {cat === 'calca' ? 'CALÇA' : cat.toUpperCase()}
+              CATEGORIA: {cat === 'calca' ? 'CALÇA' : cat.toUpperCase().replace(/[-_]/g, ' ')}
               <button onClick={() => removeCategory(cat)} aria-label={`Remover categoria ${cat}`}>
                 <X size={12} />
               </button>
@@ -420,7 +420,7 @@ export function Catalogo() {
           ))}
           {selectedFits.map(fit => (
             <span key={fit} className={styles.filterChip}>
-              MODELAGEM: {fit.toUpperCase()}
+              MODELAGEM: {fit.toUpperCase().replace(/[-_]/g, ' ')}
               <button onClick={() => removeFit(fit)} aria-label={`Remover modelagem ${fit}`}>
                 <X size={12} />
               </button>
@@ -428,7 +428,7 @@ export function Catalogo() {
           ))}
           {selectedDrops.map(drop => (
             <span key={drop} className={styles.filterChip}>
-              DROP: {drop === 'leak-two' ? 'LEAK TWO' : 'DROPS PASSADOS'}
+              DROP: {drop === 'leak-two' ? 'LEAK TWO' : drop.toUpperCase().replace(/[-_]/g, ' ')}
               <button onClick={() => removeDrop(drop)} aria-label={`Remover drop ${drop}`}>
                 <X size={12} />
               </button>
@@ -452,6 +452,7 @@ export function Catalogo() {
       <div className={styles.contentLayout}>
         <div className={`${styles.sidebarWrapper} ${isMobileFilterOpen ? styles.sidebarMobileOpen : ''}`}>
           <FilterSidebar 
+            products={products}
             filters={filters} 
             setFilters={handleFiltersChange} 
             onReset={handleReset} 
