@@ -450,14 +450,31 @@ export function CmsAnalytics() {
         abandonmentRate = Math.min(100, (removes / adds) * 100).toFixed(1);
       }
 
-      // Calcula tempo ocioso em dias
+      // Calcula tempo ocioso em dias com precisão cronológica
       let daysIdle = 0;
       if (lastSaleTimestamp > 0) {
         daysIdle = Math.max(0, Math.floor((Date.now() - lastSaleTimestamp) / (1000 * 60 * 60 * 24)));
-      } else if (p.createdAt) {
-        daysIdle = Math.max(0, Math.floor((Date.now() - new Date(p.createdAt).getTime()) / (1000 * 60 * 60 * 24)));
       } else {
-        daysIdle = Number(p.daysWithoutSale || (realPurchases > 0 ? 2 : 48));
+        // Se nunca teve venda, calcula a partir da data de criação/cadastro da peça
+        let createdTimestamp = null;
+        if (p.createdAt) {
+          const t = new Date(p.createdAt).getTime();
+          if (!isNaN(t) && t > 0) createdTimestamp = t;
+        } else if (p.updatedAt) {
+          const t = new Date(p.updatedAt).getTime();
+          if (!isNaN(t) && t > 0) createdTimestamp = t;
+        } else if (typeof p.id === 'string' && p.id.startsWith('thr33_')) {
+          const num = Number(p.id.replace('thr33_', ''));
+          if (!isNaN(num) && num > 1600000000000) createdTimestamp = num;
+        } else if (p.daysWithoutSale !== undefined) {
+          daysIdle = Number(p.daysWithoutSale);
+        }
+
+        if (createdTimestamp !== null) {
+          daysIdle = Math.max(0, Math.floor((Date.now() - createdTimestamp) / (1000 * 60 * 60 * 24)));
+        } else if (p.daysWithoutSale === undefined) {
+          daysIdle = 0; // Peça recém-cadastrada sem histórico de vendas
+        }
       }
 
       // Parse e consolidação da grade de estoque (PP, P, M, G, GG)

@@ -238,7 +238,25 @@ export function CmsProdutos() {
     if (!formData.name.trim()) return;
     setSubmitting(true);
 
-    const productId = editingId || `thr33_${Date.now()}`;
+    const cleanSlug = generateSlug(formData.name);
+    
+    // Se for um novo produto, cria ID único e amigável baseado na slug do nome
+    let productId = editingId;
+    let productSlug = cleanSlug;
+
+    if (!editingId) {
+      let uniqueSlug = cleanSlug;
+      let counter = 2;
+      while (products.some(p => p.id === uniqueSlug || p.slug === uniqueSlug)) {
+        uniqueSlug = `${cleanSlug}-${counter}`;
+        counter++;
+      }
+      productId = uniqueSlug;
+      productSlug = uniqueSlug;
+    } else {
+      productSlug = cleanSlug;
+    }
+
     const priceNum = parseFloat(formData.price) || 0;
     const existingProd = editingId ? products.find(p => p.id === editingId) : null;
     
@@ -250,7 +268,7 @@ export function CmsProdutos() {
 
     // Constrói objeto de variantes com SKU
     const catCode = (formData.category || 'XX').slice(0, 2).toUpperCase();
-    const idSuffix = productId.slice(-4).toUpperCase();
+    const idSuffix = String(productId).slice(-4).toUpperCase().replace(/[^A-Z0-9]/g, 'X');
     const variants = Object.entries(formData.stock).map(([size, quantity]) => ({
       sku: `THR33-${catCode}-${size}-${idSuffix}`,
       size,
@@ -259,7 +277,7 @@ export function CmsProdutos() {
 
     const productPayload = {
       id: productId,
-      slug: productId,
+      slug: productSlug,
       name: formData.name.trim(),
       title: formData.name.trim(),
       type: formData.type,
@@ -280,6 +298,7 @@ export function CmsProdutos() {
       stock: formData.stock,
       sizes: Object.keys(formData.stock).filter(size => (formData.stock[size] || 0) > 0),
       variants,
+      createdAt: existingProd?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
 
@@ -354,7 +373,20 @@ export function CmsProdutos() {
     }
   };
 
-  // Funções Utilitárias para Formatação de Categorias e Modelagens
+  // Funções Utilitárias para Formatação de Slugs, Categorias e Modelagens
+  const generateSlug = (name) => {
+    if (!name) return `produto-${Date.now()}`;
+    return name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s-]/g, "")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-+|-+$/g, "") || `produto-${Date.now()}`;
+  };
+
   const formatCategoryLabel = (catKey) => {
     if (!catKey) return '';
     const map = {
@@ -977,6 +1009,11 @@ export function CmsProdutos() {
                   onChange={handleInputChange}
                   required
                 />
+                {formData.name.trim() && (
+                  <span className={styles.slugPreview}>
+                    URL amigável: <code>/produto/{generateSlug(formData.name)}</code>
+                  </span>
+                )}
               </div>
 
               <div className={styles.formGroup}>

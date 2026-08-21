@@ -75,7 +75,19 @@ export function CmsDescontos() {
   // Análise de Produtos Sugeridos para Promoção (Inteligência Operacional)
   const suggestedProducts = useMemo(() => {
     return products.filter(p => {
-      const daysIdle = Number(p.daysWithoutSale || 0);
+      let daysIdle = 0;
+      if (p.createdAt) {
+        const t = new Date(p.createdAt).getTime();
+        if (!isNaN(t) && t > 0) daysIdle = Math.max(0, Math.floor((Date.now() - t) / (1000 * 60 * 60 * 24)));
+      } else if (p.updatedAt) {
+        const t = new Date(p.updatedAt).getTime();
+        if (!isNaN(t) && t > 0) daysIdle = Math.max(0, Math.floor((Date.now() - t) / (1000 * 60 * 60 * 24)));
+      } else if (typeof p.id === 'string' && p.id.startsWith('thr33_')) {
+        const num = Number(p.id.replace('thr33_', ''));
+        if (!isNaN(num) && num > 1600000000000) daysIdle = Math.max(0, Math.floor((Date.now() - num) / (1000 * 60 * 60 * 24)));
+      } else if (p.daysWithoutSale !== undefined) {
+        daysIdle = Number(p.daysWithoutSale);
+      }
       const stock = Number(p.totalStock || (p.stock ? Object.values(p.stock).reduce((a, b) => a + (Number(b) || 0), 0) : 0));
       const views = Number(p.views || 0);
       const purchases = Number(p.purchases || 0);
