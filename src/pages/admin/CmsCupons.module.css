@@ -566,11 +566,23 @@
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  transition: opacity var(--transition-fast);
+  transition: all var(--transition-fast);
 }
 
 .statementBtn:hover {
   opacity: 0.9;
+}
+
+.brandStatementBtn {
+  background-color: rgba(168, 85, 247, 0.12);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.35);
+}
+
+.brandStatementBtn:hover {
+  background-color: #a855f7;
+  color: #ffffff;
+  opacity: 1;
 }
 
 .editBtn {
@@ -751,6 +763,20 @@
   background-color: var(--bg-surface);
 }
 
+.brandTopCard {
+  border-color: rgba(168, 85, 247, 0.4);
+  background-color: rgba(168, 85, 247, 0.04);
+}
+
+.brandBadgeText {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+}
+
+.brandBadgeText strong {
+  color: #c084fc;
+}
+
 .balanceBox {
   text-align: right;
 }
@@ -819,6 +845,46 @@
   font-size: 0.65rem;
   color: var(--text-muted);
   line-height: 1.2;
+}
+
+/* BANNER INFORMATIVO PARA CUPONS DA MARCA */
+.brandInfoBanner {
+  background-color: rgba(168, 85, 247, 0.05);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  padding: 1.25rem;
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.brandBannerIconBox {
+  background-color: rgba(168, 85, 247, 0.15);
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.brandBannerIcon {
+  color: #c084fc;
+}
+
+.brandInfoBanner h4 {
+  font-size: 0.78rem;
+  font-weight: 800;
+  color: #c084fc;
+  letter-spacing: 1px;
+  margin: 0 0 0.3rem 0;
+}
+
+.brandInfoBanner p {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin: 0;
 }
 
 .payoutForm {
