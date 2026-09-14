@@ -337,10 +337,10 @@ export function CmsSuporte() {
                 <div className={styles.formGroup}>
                   <label>Status do Atendimento *</label>
                   <select value={newStatus} onChange={(e) => setNewStatus(e.target.value)}>
-                    <option value="ABERTO">🚨 Aberto (Aguardando Resposta / Triagem)</option>
-                    <option value="EM_ANALISE">⏳ Em Análise / Fornecedor Parceiro Acionado</option>
-                    <option value="RESOLVIDO">✅ Resolvido (Troca / Reenvio / Estorno Efetuado)</option>
-                    <option value="RECUSADO">❌ Recusado (Fora da Garantia / Não Aplicável)</option>
+                    <option value="ABERTO">Aberto (Aguardando Resposta / Triagem)</option>
+                    <option value="EM_ANALISE">Em Análise / Fornecedor Parceiro Acionado</option>
+                    <option value="RESOLVIDO">Resolvido (Troca / Reenvio / Estorno Efetuado)</option>
+                    <option value="RECUSADO">Recusado (Fora da Garantia / Não Aplicável)</option>
                   </select>
                 </div>
 

@@ -710,7 +710,7 @@ export function CmsPedidos() {
                   <div className={styles.openTicketAlertHeader}>
                     <Headphones size={18} color="#f87171" />
                     <div>
-                      <strong>🚨 CHAMADO DE SUPORTE ABERTO PELO CLIENTE</strong>
+                      <strong>CHAMADO DE SUPORTE ABERTO PELO CLIENTE</strong>
                       <p>O cliente registrou uma solicitação no SAC para este pedido.</p>
                     </div>
                   </div>

@@ -1439,6 +1439,187 @@
   opacity: 0.9;
 }
 
+/* MODAL DE FEEDBACK & ACOMPANHAMENTO DO CHAMADO */
+.protocolBadge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.loadingTicketBox, .emptyTicketBox {
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.feedbackBody {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.statusDisplayBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 0.85rem 1.25rem;
+}
+
+.statusLabel {
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+}
+
+.ticketStatusPill {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.3rem 0.75rem;
+  letter-spacing: 1px;
+}
+
+.ticketStatusPill.ABERTO, .ABERTO { 
+  color: #f87171; 
+  background: rgba(248, 113, 113, 0.12); 
+  border: 1px solid rgba(248, 113, 113, 0.35); 
+}
+
+.ticketStatusPill.EM_ANALISE, .EM_ANALISE { 
+  color: #facc15; 
+  background: rgba(250, 204, 21, 0.12); 
+  border: 1px solid rgba(250, 204, 21, 0.35); 
+}
+
+.ticketStatusPill.RESOLVIDO, .RESOLVIDO { 
+  color: #4ade80; 
+  background: rgba(74, 222, 128, 0.12); 
+  border: 1px solid rgba(74, 222, 128, 0.35); 
+}
+
+.ticketStatusPill.RECUSADO, .RECUSADO { 
+  color: var(--text-muted); 
+  background: var(--bg-primary); 
+  border: 1px solid var(--border-color); 
+}
+
+.ticketSummaryBox {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.summaryItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+}
+
+.summaryItem span {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.summaryItem strong {
+  color: var(--text-primary);
+}
+
+.summaryItem small {
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+}
+
+.clientMessageBox {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.boxTitle {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.clientMessageBox p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* RESPOSTA OFICIAL DA MARCA */
+.adminResponseBox {
+  background-color: rgba(74, 222, 128, 0.04);
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.responseTitle {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #4ade80;
+}
+
+.responseContent p {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.updateTime {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 0.4rem;
+}
+
+.pendingResponseText {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.confirmBtn {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border: none;
+  padding: 0.85rem 1.5rem;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+}
+
+.confirmBtn:hover {
+  opacity: 0.9;
+}
+
 @media (max-width: 850px) {
   .container { padding: 2rem 1.25rem 5rem; }
   .profileGrid { grid-template-columns: 1fr; }

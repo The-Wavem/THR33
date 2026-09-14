@@ -192,6 +192,8 @@ export function Perfil({ defaultTab = 'pedidos' }) {
             status: statusText,
             statusCode: statusCode,
             hasOpenTicket: Boolean(data.hasOpenTicket),
+            lastTicketId: data.lastTicketId || null,
+            lastTicketStatus: data.lastTicketStatus || null,
             trackingCode: data.trackingCode || 'Processando envio',
             paymentMethod: data.paymentMethod === 'pix' 
               ? 'PIX Instantâneo PagBank (À Vista)' 
@@ -245,20 +247,46 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   const [issueDescription, setIssueDescription] = useState('');
   const [copiedTracking, setCopiedTracking] = useState(false);
 
-  // MODAL DE SUPORTE CONTEXTUAL & SAC
-  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  // MODAIS DE SUPORTE CONTEXTUAL & SAC BIDIRECIONAL
+  const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState(false);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [selectedOrderForSupport, setSelectedOrderForSupport] = useState(null);
+  const [activeTicketData, setActiveTicketData] = useState(null);
+  const [fetchingTicket, setFetchingTicket] = useState(false);
+
+  // FORMULÁRIO DE NOVO CHAMADO
   const [supportReason, setSupportReason] = useState('');
   const [supportMessage, setSupportMessage] = useState('');
   const [selectedProductForIssue, setSelectedProductForIssue] = useState('');
   const [sendingTicket, setSendingTicket] = useState(false);
 
-  const handleOpenSupportModal = (order) => {
+  // Ação de Suporte do Pedido (Abre feedback se já existir chamado, ou abre criação de novo chamado)
+  const handleSupportAction = async (order) => {
     setSelectedOrderForSupport(order);
-    setSelectedProductForIssue(order.items?.[0]?.id || '');
-    setSupportReason('');
-    setSupportMessage('');
-    setIsSupportModalOpen(true);
+
+    if (order.hasOpenTicket || order.lastTicketId) {
+      setFetchingTicket(true);
+      setIsFeedbackModalOpen(true);
+      try {
+        let tkt = null;
+        if (order.rawId || order.id) {
+          tkt = await supportService.getTicketByOrderId(order.rawId || order.id);
+        }
+        if (!tkt && order.lastTicketId) {
+          tkt = await supportService.getTicketById(order.lastTicketId);
+        }
+        setActiveTicketData(tkt);
+      } catch (err) {
+        console.error("Erro ao buscar ticket de suporte:", err);
+      } finally {
+        setFetchingTicket(false);
+      }
+    } else {
+      setSelectedProductForIssue(order.items?.[0]?.id || '');
+      setSupportReason('');
+      setSupportMessage('');
+      setIsNewTicketModalOpen(true);
+    }
   };
 
   const handleSendSupportTicket = async (e) => {
@@ -271,11 +299,12 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     setSendingTicket(true);
     try {
       const selectedProd = selectedOrderForSupport.items?.find(i => i.id === selectedProductForIssue);
+      const targetOrderId = selectedOrderForSupport.rawId || selectedOrderForSupport.id;
 
-      await supportService.createTicket({
-        orderId: selectedOrderForSupport.rawId || selectedOrderForSupport.id,
+      const res = await supportService.createTicket({
+        orderId: targetOrderId,
         userId: currentUser?.uid || user?.uid || '',
-        customerName: userData.name || currentUser?.displayName || 'Cliente',
+        customerName: userData.name || currentUser?.displayName || 'Cliente THR33',
         customerEmail: userData.email || currentUser?.email || '',
         customerPhone: userData.phone || '',
         productId: selectedProd?.id || '',
@@ -286,14 +315,27 @@ export function Perfil({ defaultTab = 'pedidos' }) {
         message: supportMessage
       });
 
-      alert("✅ Chamado de suporte aberto com sucesso! Nossa equipe entrará em contato em breve.");
-      setIsSupportModalOpen(false);
-      setOrders(prev => prev.map(o => (o.id === selectedOrderForSupport.id || o.rawId === selectedOrderForSupport.rawId) ? { ...o, hasOpenTicket: true } : o));
+      alert("Solicitação enviada com sucesso! O andamento pode ser acompanhado diretamente neste painel.");
+      setIsNewTicketModalOpen(false);
+      setOrders(prev => prev.map(o => (o.id === selectedOrderForSupport.id || o.rawId === selectedOrderForSupport.rawId) 
+        ? { ...o, hasOpenTicket: true, lastTicketId: res.ticketId, lastTicketStatus: 'ABERTO' } 
+        : o
+      ));
     } catch (err) {
       console.error("Erro ao enviar chamado de suporte:", err);
       alert("Falha ao abrir chamado de suporte. Tente novamente.");
     } finally {
       setSendingTicket(false);
+    }
+  };
+
+  const getTicketStatusLabel = (status) => {
+    switch (status) {
+      case 'EM_ANALISE': return 'EM ANÁLISE';
+      case 'RESOLVIDO': return 'RESOLVIDO';
+      case 'RECUSADO': return 'RECUSADO';
+      case 'ABERTO': return 'CHAMADO ABERTO';
+      default: return 'CHAMADO ABERTO';
     }
   };
 
@@ -303,7 +345,14 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   const [reviewComment, setReviewComment] = useState('');
 
   // BLOQUEIO DO SCROLL DA PÁGINA (EIXO Y E RODA DO MOUSE) QUANDO QUALQUER MODAL ESTIVER ABERTO
-  const isAnyModalOpen = Boolean(selectedOrderDetails || cancelingOrder || reportingIssueOrder || evaluatingItem || isSupportModalOpen);
+  const isAnyModalOpen = Boolean(
+    selectedOrderDetails || 
+    cancelingOrder || 
+    reportingIssueOrder || 
+    evaluatingItem || 
+    isNewTicketModalOpen || 
+    isFeedbackModalOpen
+  );
 
   useEffect(() => {
     if (isAnyModalOpen) {
@@ -1273,12 +1322,16 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                         <div className={styles.orderFooterActions}>
                           <button 
                             type="button" 
-                            onClick={() => handleOpenSupportModal(order)} 
+                            onClick={() => handleSupportAction(order)} 
                             className={`${styles.supportHelpBtn} ${order.hasOpenTicket ? styles.activeSupportBtn : ''}`}
-                            title="Solicitar troca, devolução ou suporte com a equipe"
+                            title={order.hasOpenTicket || order.lastTicketId ? "Acompanhar posicionamento do suporte" : "Solicitar suporte ou troca da peça"}
                           >
                             <Headphones size={13} />
-                            <span>{order.hasOpenTicket ? '🚨 CHAMADO ABERTO' : '🚨 PRECISO DE AJUDA / TROCA'}</span>
+                            <span>
+                              {order.hasOpenTicket 
+                                ? getTicketStatusLabel(order.lastTicketStatus)
+                                : (order.lastTicketId ? 'VER CHAMADO' : 'SOLICITAR SUPORTE')}
+                            </span>
                           </button>
                           <button 
                             type="button" 
@@ -1759,11 +1812,11 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       </AnimatePresence>
 
       {/* ============================================================
-          MODAL 5: SUPORTE AO CLIENTE & SAC CONTEXTUAL
+          MODAL 5: ACOMPANHAMENTO E FEEDBACK DO ATENDIMENTO (SAC)
           ============================================================ */}
       <AnimatePresence>
-        {isSupportModalOpen && selectedOrderForSupport && (
-          <div className={styles.modalBackdrop} onClick={() => setIsSupportModalOpen(false)}>
+        {isFeedbackModalOpen && selectedOrderForSupport && (
+          <div className={styles.modalBackdrop} onClick={() => setIsFeedbackModalOpen(false)}>
             <motion.div 
               className={styles.supportModalCard}
               onClick={(e) => e.stopPropagation()}
@@ -1774,10 +1827,112 @@ export function Perfil({ defaultTab = 'pedidos' }) {
             >
               <div className={styles.modalHeader}>
                 <div className={styles.modalHeaderInfo}>
-                  <span className={styles.supportBadge}>ATENDIMENTO & TROCAS</span>
+                  <span className={styles.protocolBadge}>
+                    PROTOCOLO: {activeTicketData?.id || selectedOrderForSupport?.lastTicketId || 'CONSULTANDO...'}
+                  </span>
+                  <h3 className={styles.modalTitle}>ACOMPANHAMENTO DE ATENDIMENTO</h3>
+                </div>
+                <button type="button" onClick={() => setIsFeedbackModalOpen(false)} className={styles.closeModalBtn}>
+                  <X size={18} />
+                </button>
+              </div>
+
+              {fetchingTicket ? (
+                <div className={styles.loadingTicketBox}>
+                  <p>Buscando posicionamento da equipe no Firestore...</p>
+                </div>
+              ) : activeTicketData ? (
+                <div className={styles.feedbackBody}>
+                  {/* STATUS BAR */}
+                  <div className={styles.statusDisplayBar}>
+                    <span className={styles.statusLabel}>STATUS ATUAL:</span>
+                    <span className={`${styles.ticketStatusPill} ${styles[activeTicketData.status] || ''}`}>
+                      {getTicketStatusLabel(activeTicketData.status)}
+                    </span>
+                  </div>
+
+                  {/* RESUMO DA SOLICITAÇÃO */}
+                  <div className={styles.ticketSummaryBox}>
+                    <div className={styles.summaryItem}>
+                      <span>Pedido Referente:</span>
+                      <strong>#{selectedOrderForSupport.id}</strong>
+                    </div>
+                    <div className={styles.summaryItem}>
+                      <span>Peça Relatada:</span>
+                      <strong>{activeTicketData.productName} {activeTicketData.productSize ? `(${activeTicketData.productSize})` : ''}</strong>
+                    </div>
+                    <div className={styles.summaryItem}>
+                      <span>Motivo do Chamado:</span>
+                      <strong>{activeTicketData.reason}</strong>
+                    </div>
+                    <div className={styles.summaryItem}>
+                      <span>Data de Abertura:</span>
+                      <small>{activeTicketData.createdAt ? new Date(activeTicketData.createdAt).toLocaleString('pt-BR') : 'Data recente'}</small>
+                    </div>
+                  </div>
+
+                  {/* RELATO DO CLIENTE */}
+                  <div className={styles.clientMessageBox}>
+                    <span className={styles.boxTitle}>SUA MENSAGEM:</span>
+                    <p>"{activeTicketData.message}"</p>
+                  </div>
+
+                  {/* RESPOSTA OFICIAL DA EQUIPE THR33 */}
+                  <div className={styles.adminResponseBox}>
+                    <span className={styles.responseTitle}>RESPOSTA DA EQUIPE THR33:</span>
+                    {activeTicketData.adminNotes ? (
+                      <div className={styles.responseContent}>
+                        <p>{activeTicketData.adminNotes}</p>
+                        <small className={styles.updateTime}>
+                          Atualizado em {new Date(activeTicketData.updatedAt || activeTicketData.createdAt).toLocaleString('pt-BR')}
+                        </small>
+                      </div>
+                    ) : (
+                      <p className={styles.pendingResponseText}>
+                        Sua solicitação foi registrada no sistema e está em análise prioritária pela equipe de expedição e qualidade. As orientações e instruções serão publicadas aqui em breve.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className={styles.modalActions}>
+                    <button type="button" onClick={() => setIsFeedbackModalOpen(false)} className={styles.confirmBtn}>
+                      ENTENDIDO / FECHAR
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className={styles.emptyTicketBox}>
+                  <p>Nenhum registro encontrado para este chamado.</p>
+                  <button type="button" onClick={() => setIsFeedbackModalOpen(false)} className={styles.cancelBtn}>
+                    Fechar
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ============================================================
+          MODAL 6: ABERTURA DE NOVO CHAMADO DE SUPORTE
+          ============================================================ */}
+      <AnimatePresence>
+        {isNewTicketModalOpen && selectedOrderForSupport && (
+          <div className={styles.modalBackdrop} onClick={() => setIsNewTicketModalOpen(false)}>
+            <motion.div 
+              className={styles.supportModalCard}
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className={styles.modalHeader}>
+                <div className={styles.modalHeaderInfo}>
+                  <span className={styles.supportBadge}>NOVO CHAMADO</span>
                   <h3 className={styles.modalTitle}>SUPORTE AO PEDIDO #{selectedOrderForSupport.id}</h3>
                 </div>
-                <button type="button" onClick={() => setIsSupportModalOpen(false)} className={styles.closeModalBtn}>
+                <button type="button" onClick={() => setIsNewTicketModalOpen(false)} className={styles.closeModalBtn}>
                   <X size={18} />
                 </button>
               </div>
@@ -1841,12 +1996,12 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                 </div>
 
                 <div className={styles.modalActions}>
-                  <button type="button" onClick={() => setIsSupportModalOpen(false)} className={styles.cancelBtn}>
-                    Cancelar
+                  <button type="button" onClick={() => setIsNewTicketModalOpen(false)} className={styles.cancelBtn}>
+                    CANCELAR
                   </button>
                   <button type="submit" disabled={sendingTicket} className={styles.sendSupportBtn}>
                     <Headphones size={14} />
-                    <span>{sendingTicket ? 'ENVIANDO CHAMADO...' : 'ENVIAR SOLICITAÇÃO DE SUPORTE'}</span>
+                    <span>{sendingTicket ? 'ENVIANDO CHAMADO...' : 'CONFIRMAR E ABRIR CHAMADO'}</span>
                   </button>
                 </div>
               </form>

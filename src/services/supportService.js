@@ -2,11 +2,11 @@ import {
   collection, 
   getDocs, 
   doc, 
+  getDoc,
   setDoc, 
   updateDoc, 
   query, 
-  where, 
-  orderBy 
+  where 
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 
@@ -29,7 +29,7 @@ export const supportService = {
         customerEmail: ticketData.customerEmail || '',
         customerPhone: ticketData.customerPhone || '',
         productId: ticketData.productId || '',
-        productName: ticketData.productName || 'Todos os itens',
+        productName: ticketData.productName || 'Geral do Pedido',
         productSize: ticketData.productSize || '',
         orderStatusAtOpen: ticketData.orderStatus || 'PAGAMENTO_APROVADO',
         reason: ticketData.reason || 'Dúvida Geral',
@@ -42,16 +42,58 @@ export const supportService = {
 
       await setDoc(docRef, payload);
 
-      // Marca flag no pedido correspondente para alertar o CMS
+      // Sincroniza flag e status no pedido correspondente
       if (ticketData.orderId) {
         const orderRef = doc(db, 'orders', ticketData.orderId);
-        await setDoc(orderRef, { hasOpenTicket: true, lastTicketId: ticketId }, { merge: true });
+        await setDoc(orderRef, { 
+          hasOpenTicket: true, 
+          lastTicketId: ticketId,
+          lastTicketStatus: 'ABERTO',
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
       }
 
       return { success: true, ticketId };
     } catch (err) {
       console.error("Erro ao criar ticket de suporte:", err);
       throw err;
+    }
+  },
+
+  /**
+   * Busca chamado pelo ID do pedido
+   */
+  async getTicketByOrderId(orderId) {
+    if (!orderId) return null;
+    try {
+      const q = query(collection(db, TICKETS_COLLECTION), where('orderId', '==', orderId));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const tickets = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        tickets.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        return tickets[0];
+      }
+      return null;
+    } catch (err) {
+      console.error("Erro ao buscar ticket por pedido:", err);
+      return null;
+    }
+  },
+
+  /**
+   * Busca chamado por ID do ticket
+   */
+  async getTicketById(ticketId) {
+    if (!ticketId) return null;
+    try {
+      const snap = await getDoc(doc(db, TICKETS_COLLECTION, ticketId));
+      if (snap.exists()) {
+        return { id: snap.id, ...snap.data() };
+      }
+      return null;
+    } catch (err) {
+      console.error("Erro ao buscar ticket por id:", err);
+      return null;
     }
   },
 
@@ -93,16 +135,22 @@ export const supportService = {
   async updateTicketStatus(ticketId, orderId, status, adminNotes = '') {
     try {
       const docRef = doc(db, TICKETS_COLLECTION, ticketId);
+      const now = new Date().toISOString();
+
       await updateDoc(docRef, {
         status,
         adminNotes,
-        updatedAt: new Date().toISOString()
+        updatedAt: now
       });
 
-      // Se resolvido ou recusado, remove flag de chamado pendente do pedido
-      if (orderId && (status === 'RESOLVIDO' || status === 'RECUSADO')) {
+      // Sincroniza flag e status no pedido correspondente
+      if (orderId) {
         const orderRef = doc(db, 'orders', orderId);
-        await setDoc(orderRef, { hasOpenTicket: false }, { merge: true });
+        await setDoc(orderRef, { 
+          hasOpenTicket: status === 'ABERTO' || status === 'EM_ANALISE',
+          lastTicketStatus: status,
+          updatedAt: now
+        }, { merge: true });
       }
 
       return true;
