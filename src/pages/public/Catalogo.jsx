@@ -387,15 +387,34 @@ export function Catalogo() {
         </div>
       </header>
 
-      {/* BOTÃO MOBILE PARA TOGGLE DE FILTROS */}
-      <div className={styles.mobileFilterBar}>
+      {/* TOOLBAR MOBILE COMPACTA: FILTROS + ORDENAÇÃO */}
+      <div className={styles.mobileToolbar}>
         <button 
-          onClick={() => setIsMobileFilterOpen(!isMobileFilterOpen)} 
-          className={styles.mobileFilterToggle}
+          type="button"
+          onClick={() => setIsMobileFilterOpen(true)} 
+          className={styles.mobileFilterBtn}
+          aria-label="Abrir filtros"
         >
           <SlidersHorizontal size={16} />
-          <span>FILTROS {activeFiltersCount > 0 && `(${activeFiltersCount})`}</span>
+          <span>FILTROS</span>
+          {activeFiltersCount > 0 && (
+            <span className={styles.mobileFilterBadge}>{activeFiltersCount}</span>
+          )}
         </button>
+
+        <div className={styles.mobileSortWrapper}>
+          <select 
+            id="mobileSortSelect" 
+            className={styles.mobileSortSelect}
+            value={sortOrder}
+            onChange={(e) => handleSortChange(e.target.value)}
+            aria-label="Ordenar produtos"
+          >
+            <option value="newest">LANÇAMENTOS</option>
+            <option value="price-low">MENOR PREÇO</option>
+            <option value="price-high">MAIOR PREÇO</option>
+          </select>
+        </div>
       </div>
 
       {/* CHIPS DE FILTROS ATIVOS (MULTI-SELEÇÃO) */}
@@ -450,7 +469,7 @@ export function Catalogo() {
 
       {/* CORPO DO CATÁLOGO: SIDEBAR + GRADE DE PRODUTOS */}
       <div className={styles.contentLayout}>
-        <div className={`${styles.sidebarWrapper} ${isMobileFilterOpen ? styles.sidebarMobileOpen : ''}`}>
+        <div className={styles.sidebarWrapper}>
           <FilterSidebar 
             products={products}
             filters={filters} 
@@ -459,6 +478,9 @@ export function Catalogo() {
             searchQuery={searchQuery}
             onSearchSubmit={handleSearchSubmit}
             onSearchClear={handleSearchClear}
+            isMobileOpen={isMobileFilterOpen}
+            onCloseMobile={() => setIsMobileFilterOpen(false)}
+            totalResults={totalItems}
           />
         </div>
 
@@ -514,7 +536,7 @@ export function Catalogo() {
                     aria-label="Página anterior"
                   >
                     <ChevronLeft size={16} />
-                    <span>ANTERIOR</span>
+                    <span className={styles.pageBtnText}>ANTERIOR</span>
                   </button>
 
                   <div className={styles.pageNumbers}>
@@ -537,7 +559,7 @@ export function Catalogo() {
                     disabled={currentPage === totalPages}
                     aria-label="Próxima página"
                   >
-                    <span>PRÓXIMA</span>
+                    <span className={styles.pageBtnText}>PRÓXIMA</span>
                     <ChevronRight size={16} />
                   </button>
                 </div>

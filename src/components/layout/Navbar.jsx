@@ -1,7 +1,20 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, ShoppingBag, Heart, LogOut, Package, ArrowRight, Gift, ShieldCheck } from 'lucide-react';
+import { 
+  User, 
+  ShoppingBag, 
+  Heart, 
+  LogOut, 
+  Package, 
+  ArrowRight, 
+  Gift, 
+  ShieldCheck,
+  X,
+  ChevronDown,
+  ChevronRight
+} from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { useWishlist } from '../../context/WishlistContext';
@@ -41,8 +54,20 @@ const dropdownMotionVariants = {
 
 export function Navbar({ onOpenCart }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileCategoriesOpen, setIsMobileCategoriesOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isCatalogDropdownOpen, setIsCatalogDropdownOpen] = useState(false);
+
+  // Trava scroll do body quando menu mobile estiver aberto
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isMobileMenuOpen]);
 
   const dropdownTimerRef = useRef(null);
   const profileWrapperRef = useRef(null);
@@ -125,7 +150,8 @@ export function Navbar({ onOpenCart }) {
   };
 
   return (
-    <header className={styles.header}>
+    <>
+      <header className={styles.header}>
       <div className={styles.container}>
         {/* Mobile Toggle */}
         <button 
@@ -149,7 +175,7 @@ export function Navbar({ onOpenCart }) {
         </Link>
 
         {/* Links de Navegação com Preloading no Hover */}
-        <nav className={`${styles.nav} ${isMobileMenuOpen ? styles.navOpen : ''}`}>
+        <nav className={styles.nav}>
           <NavLink 
             to="/" 
             className={({ isActive }) => isActive ? `${styles.link} ${styles.active}` : styles.link}
@@ -454,7 +480,272 @@ export function Navbar({ onOpenCart }) {
         </div>
       </div>
     </header>
-  );
+
+    {/* DRAWER DESLIZANTE MOBILE COM BACKDROP (PORTAL DIRETAMENTE NO BODY) */}
+    {typeof document !== 'undefined' && createPortal(
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <div className={styles.mobileDrawerWrapper}>
+            <motion.div 
+              className={styles.mobileBackdrop}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              aria-hidden="true"
+            />
+
+            <motion.aside 
+              className={styles.mobileDrawer}
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+              aria-label="Menu de Navegação Mobile"
+            >
+              {/* TOPO DO DRAWER */}
+              <div className={styles.drawerHeader}>
+                <Link 
+                  to="/" 
+                  className={styles.drawerLogo}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <span className={styles.logoText}>THR33</span>
+                  <span className={styles.logoSub}>FOR THE FEW</span>
+                </Link>
+
+                <button 
+                  type="button" 
+                  className={styles.drawerCloseBtn}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  aria-label="Fechar menu"
+                >
+                  <X size={22} />
+                </button>
+              </div>
+
+              {/* CONTEÚDO ROLÁVEL */}
+              <div className={styles.drawerBody}>
+                {/* BLOCO DE USUÁRIO / AUTENTICAÇÃO */}
+                <div className={styles.drawerUserSection}>
+                  {isAuthenticated ? (
+                    <div className={styles.drawerUserCard}>
+                      <div className={styles.drawerUserInfo}>
+                        <p className={styles.drawerUserName}>
+                          Olá, <strong>{currentUser?.name?.split(' ')[0] || 'Usuário'}</strong>
+                        </p>
+                        <span className={styles.drawerUserEmail}>{currentUser?.email}</span>
+                      </div>
+                      <div className={styles.drawerUserActions}>
+                        <Link 
+                          to="/perfil" 
+                          className={styles.drawerUserBtn}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          <User size={15} />
+                          <span>Meu Perfil</span>
+                        </Link>
+                        {isAdmin && (
+                          <Link 
+                            to="/cms" 
+                            className={styles.drawerAdminBtn}
+                            onClick={() => setIsMobileMenuOpen(false)}
+                          >
+                            <ShieldCheck size={15} />
+                            <span>CMS</span>
+                          </Link>
+                        )}
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            handleLogout();
+                            setIsMobileMenuOpen(false);
+                          }} 
+                          className={styles.drawerLogoutBtn}
+                        >
+                          <LogOut size={15} />
+                          <span>Sair</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={styles.drawerAuthCard}>
+                      <p className={styles.drawerAuthTitle}>ACESSAR CONTA</p>
+                      <div className={styles.drawerAuthRow}>
+                        <Link 
+                          to="/auth?mode=login" 
+                          className={styles.drawerPrimaryAuth}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          Entrar
+                        </Link>
+                        <Link 
+                          to="/auth?mode=register" 
+                          className={styles.drawerSecondaryAuth}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          Criar Conta
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* LINKS DE NAVEGAÇÃO */}
+                <nav className={styles.drawerNav}>
+                  <NavLink 
+                    to="/" 
+                    className={({ isActive }) => `${styles.drawerLink} ${isActive ? styles.drawerLinkActive : ''}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <span>Início</span>
+                    <ChevronRight size={16} className={styles.drawerChevron} />
+                  </NavLink>
+
+                  {/* ITEM CATÁLOGO COM ACORDEÃO */}
+                  <div className={styles.drawerCatalogGroup}>
+                    <div className={styles.drawerCatalogHeaderRow}>
+                      <NavLink 
+                        to="/catalogo" 
+                        className={({ isActive }) => `${styles.drawerLink} ${isActive ? styles.drawerLinkActive : ''}`}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        <span>Catálogo Completo</span>
+                      </NavLink>
+                      <button 
+                        type="button" 
+                        className={styles.drawerExpandBtn}
+                        onClick={() => setIsMobileCategoriesOpen(prev => !prev)}
+                        aria-label="Expandir categorias do catálogo"
+                        aria-expanded={isMobileCategoriesOpen}
+                      >
+                        <ChevronDown 
+                          size={18} 
+                          className={`${styles.drawerExpandIcon} ${isMobileCategoriesOpen ? styles.drawerExpandIconOpen : ''}`} 
+                        />
+                      </button>
+                    </div>
+
+                    {isMobileCategoriesOpen && (
+                      <div className={styles.drawerSubLinks}>
+                        <Link 
+                          to="/catalogo?categoria=camisa" 
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={styles.drawerSubLink}
+                        >
+                          Camisetas & Boxy
+                        </Link>
+                        <Link 
+                          to="/catalogo?categoria=calca" 
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={styles.drawerSubLink}
+                        >
+                          Calças Streetwear
+                        </Link>
+                        <Link 
+                          to="/catalogo?categoria=bermuda" 
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={styles.drawerSubLink}
+                        >
+                          Bermudas & Shorts
+                        </Link>
+                        <Link 
+                          to="/catalogo?categoria=moletom" 
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={styles.drawerSubLink}
+                        >
+                          Moletons & Hoodies
+                        </Link>
+                        <Link 
+                          to="/catalogo?categoria=acessorio" 
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={styles.drawerSubLink}
+                        >
+                          Acessórios
+                        </Link>
+                        <Link 
+                          to="/brindes" 
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={`${styles.drawerSubLink} ${styles.drawerSubHighlight}`}
+                        >
+                          <Gift size={14} />
+                          <span>Vales & Brindes</span>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+
+                  <NavLink 
+                    to="/drops-passados" 
+                    className={({ isActive }) => `${styles.drawerLink} ${isActive ? styles.drawerLinkActive : ''}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <span>Drops Passados</span>
+                    <ChevronRight size={16} className={styles.drawerChevron} />
+                  </NavLink>
+
+                  <NavLink 
+                    to="/sobre" 
+                    className={({ isActive }) => `${styles.drawerLink} ${isActive ? styles.drawerLinkActive : ''}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <span>Sobre a THR33</span>
+                    <ChevronRight size={16} className={styles.drawerChevron} />
+                  </NavLink>
+
+                  <NavLink 
+                    to="/favoritos" 
+                    className={({ isActive }) => `${styles.drawerLink} ${isActive ? styles.drawerLinkActive : ''}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <div className={styles.drawerIconLabel}>
+                      <Heart size={16} />
+                      <span>Favoritos</span>
+                    </div>
+                    {favoritesCount > 0 && (
+                      <span className={styles.drawerCountBadge}>{favoritesCount}</span>
+                    )}
+                  </NavLink>
+
+                  <NavLink 
+                    to="/suporte" 
+                    className={({ isActive }) => `${styles.drawerLink} ${isActive ? styles.drawerLinkActive : ''}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <span>Suporte & Trocas</span>
+                    <ChevronRight size={16} className={styles.drawerChevron} />
+                  </NavLink>
+                </nav>
+              </div>
+
+              {/* FOOTER FIXO DO DRAWER */}
+              <div className={styles.drawerFooter}>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    handleCartClick();
+                  }}
+                  className={styles.drawerCartAction}
+                >
+                  <div className={styles.drawerCartLeft}>
+                    <ShoppingBag size={18} />
+                    <span>VER CARRINHO</span>
+                  </div>
+                  <span className={styles.drawerCartBadge}>
+                    {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'itens'}
+                  </span>
+                </button>
+              </div>
+            </motion.aside>
+          </div>
+        )}
+      </AnimatePresence>,
+      document.body
+    )}
+  </>
+);
 }
 
 export default Navbar;

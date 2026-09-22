@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Search, X, ArrowRight } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Search, X, ArrowRight, SlidersHorizontal } from 'lucide-react';
 import { analyticsService } from '../../services/analyticsService';
 import styles from './FilterSidebar.module.css';
 
@@ -10,9 +12,23 @@ export function FilterSidebar({
   onReset,
   searchQuery = '',
   onSearchSubmit,
-  onSearchClear
+  onSearchClear,
+  isMobileOpen = false,
+  onCloseMobile,
+  totalResults
 }) {
   const [searchTerm, setSearchTerm] = useState(searchQuery);
+
+  // Bloqueio de scroll do body quando o drawer mobile estiver aberto
+  useEffect(() => {
+    if (isMobileOpen) {
+      const prev = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prev;
+      };
+    }
+  }, [isMobileOpen]);
 
   useEffect(() => {
     setSearchTerm(searchQuery);
@@ -212,14 +228,10 @@ export function FilterSidebar({
   const selectedFits = filters.fits || [];
   const selectedDrops = filters.drops || [];
   const selectedSizes = filters.sizes || [];
+  const activeCount = selectedCategories.length + selectedFits.length + selectedDrops.length + selectedSizes.length + (searchQuery.trim() ? 1 : 0);
 
-  return (
-    <aside className={styles.sidebar} aria-label="Filtros do Catálogo">
-      <div className={styles.header}>
-        <h3 className={styles.title}>FILTROS</h3>
-        <button onClick={onReset} className={styles.clearBtn}>LIMPAR TUDO</button>
-      </div>
-
+  const renderFiltersBody = () => (
+    <>
       {/* Busca Manual com Botão de Ação */}
       <form onSubmit={handleFormSubmit} className={styles.searchSection}>
         <span className={styles.groupLabel}>BUSCAR PEÇA</span>
@@ -365,7 +377,87 @@ export function FilterSidebar({
           })}
         </div>
       </div>
-    </aside>
+    </>
+  );
+
+  return (
+    <>
+      {/* SIDEBAR TRADICIONAL PARA DESKTOP */}
+      <aside className={styles.sidebar} aria-label="Filtros do Catálogo">
+        <div className={styles.header}>
+          <h3 className={styles.title}>FILTROS</h3>
+          <button onClick={onReset} className={styles.clearBtn}>LIMPAR TUDO</button>
+        </div>
+        {renderFiltersBody()}
+      </aside>
+
+      {/* DRAWER / BOTTOM SHEET PARA MOBILE (PORTAL DIRETAMENTE NO BODY) */}
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {isMobileOpen && (
+            <div className={styles.mobileDrawerWrapper}>
+              <motion.div 
+                className={styles.backdrop}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={onCloseMobile}
+                aria-hidden="true"
+              />
+
+              <motion.div 
+                className={styles.mobileDrawer}
+                initial={{ y: '100%' }}
+                animate={{ y: 0 }}
+                exit={{ y: '100%' }}
+                transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+                aria-label="Filtros Móveis"
+              >
+                <div className={styles.drawerHeader}>
+                  <div className={styles.drawerTitleRow}>
+                    <SlidersHorizontal size={16} />
+                    <h3 className={styles.drawerTitle}>FILTROS</h3>
+                    {activeCount > 0 && (
+                      <span className={styles.drawerActiveBadge}>{activeCount} ativos</span>
+                    )}
+                  </div>
+                  <button 
+                    type="button" 
+                    className={styles.drawerCloseBtn}
+                    onClick={onCloseMobile}
+                    aria-label="Fechar filtros"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                <div className={styles.drawerBody}>
+                  {renderFiltersBody()}
+                </div>
+
+                <div className={styles.drawerStickyFooter}>
+                  <button 
+                    type="button" 
+                    className={styles.drawerResetBtn}
+                    onClick={onReset}
+                  >
+                    LIMPAR FILTROS
+                  </button>
+                  <button 
+                    type="button" 
+                    className={styles.drawerApplyBtn}
+                    onClick={onCloseMobile}
+                  >
+                    VER RESULTADOS {totalResults !== undefined ? `(${totalResults})` : ''}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
+    </>
   );
 }
 

@@ -81,6 +81,22 @@
   gap: 1.25rem;
 }
 
+.accordionHeaderBtn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+  text-align: left;
+}
+
+.accordionChevron {
+  display: none;
+}
+
 .colTitle {
   font-family: var(--font-heading);
   font-size: 0.8rem;
@@ -105,6 +121,10 @@
   transition: color var(--transition-fast), transform var(--transition-fast);
   display: inline-block;
   text-decoration: none;
+  padding: 0.25rem 0;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .linksList a:hover {
@@ -229,7 +249,7 @@
   letter-spacing: 1px;
 }
 
-/* RESPONSIVO */
+/* RESPONSIVO MOBILE */
 @media (max-width: 960px) {
   .topGrid {
     grid-template-columns: 1fr 1fr;
@@ -237,15 +257,79 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
+  .footer {
+    padding-top: 3rem;
+    padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+  }
+
   .topGrid {
     grid-template-columns: 1fr;
-    gap: 2rem;
+    gap: 1.5rem;
+  }
+
+  .brandCol {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .linksCol {
+    gap: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 0.25rem;
+  }
+
+  .accordionHeaderBtn {
+    cursor: pointer;
+    justify-content: space-between;
+    padding: 0.85rem 0;
+    min-height: 44px;
+  }
+
+  .accordionChevron {
+    display: block;
+    color: var(--text-muted);
+    transition: transform var(--transition-fast);
+  }
+
+  .accordionChevronOpen {
+    transform: rotate(180deg);
+    color: var(--text-primary);
+  }
+
+  .linksListCollapsed {
+    display: none;
+  }
+
+  .linksListExpanded {
+    display: flex;
+    padding: 0.5rem 0 1rem;
+    gap: 0.75rem;
+  }
+
+  .newsletterCol {
+    padding-top: 1rem;
+  }
+
+  .socialRow {
+    justify-content: flex-start;
+  }
+
+  .socialRow a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
   }
 
   .bottomBar {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
+    align-items: center;
+    text-align: center;
+    gap: 1.25rem;
+  }
+
+  .paymentMethods {
+    flex-wrap: wrap;
+    justify-content: center;
   }
 }

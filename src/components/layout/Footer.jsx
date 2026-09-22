@@ -1,12 +1,20 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, MapPin, Check } from 'lucide-react';
+import { ArrowRight, MapPin, Check, ChevronDown } from 'lucide-react';
 import { preloadRoute } from '../../utils/preloader';
 import styles from './Footer.module.css';
 
 export function Footer() {
   const [email, setEmail] = useState('');
   const [subscribed, setSubscribed] = useState(false);
+  const [openSections, setOpenSections] = useState({
+    explorar: false,
+    suporte: false
+  });
+
+  const toggleSection = (sec) => {
+    setOpenSections(prev => ({ ...prev, [sec]: !prev[sec] }));
+  };
 
   const handleSubscribe = (e) => {
     e.preventDefault();
@@ -40,10 +48,21 @@ export function Footer() {
             </span>
           </div>
 
-          {/* COLUNA 2: NAVEGAÇÃO */}
+          {/* COLUNA 2: NAVEGAÇÃO / ACORDEÃO MOBILE */}
           <div className={styles.linksCol}>
-            <h4 className={styles.colTitle}>EXPLORAR</h4>
-            <ul className={styles.linksList}>
+            <button 
+              type="button" 
+              className={styles.accordionHeaderBtn}
+              onClick={() => toggleSection('explorar')}
+              aria-expanded={openSections.explorar}
+            >
+              <h4 className={styles.colTitle}>EXPLORAR</h4>
+              <ChevronDown 
+                size={16} 
+                className={`${styles.accordionChevron} ${openSections.explorar ? styles.accordionChevronOpen : ''}`} 
+              />
+            </button>
+            <ul className={`${styles.linksList} ${openSections.explorar ? styles.linksListExpanded : styles.linksListCollapsed}`}>
               <li>
                 <Link to="/" onMouseEnter={() => preloadRoute('/')}>
                   Início
@@ -72,10 +91,21 @@ export function Footer() {
             </ul>
           </div>
 
-          {/* COLUNA 3: ATENDIMENTO & AJUDA */}
+          {/* COLUNA 3: ATENDIMENTO & AJUDA / ACORDEÃO MOBILE */}
           <div className={styles.linksCol}>
-            <h4 className={styles.colTitle}>SUPORTE</h4>
-            <ul className={styles.linksList}>
+            <button 
+              type="button" 
+              className={styles.accordionHeaderBtn}
+              onClick={() => toggleSection('suporte')}
+              aria-expanded={openSections.suporte}
+            >
+              <h4 className={styles.colTitle}>SUPORTE</h4>
+              <ChevronDown 
+                size={16} 
+                className={`${styles.accordionChevron} ${openSections.suporte ? styles.accordionChevronOpen : ''}`} 
+              />
+            </button>
+            <ul className={`${styles.linksList} ${openSections.suporte ? styles.linksListExpanded : styles.linksListCollapsed}`}>
               <li>
                 <Link to="/suporte" onMouseEnter={() => preloadRoute('/suporte')}>
                   Central de Atendimento

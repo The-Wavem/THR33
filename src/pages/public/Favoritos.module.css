@@ -110,9 +110,30 @@
 }
 
 @media (max-width: 768px) {
+  .container {
+    padding: 1.5rem 0.75rem calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+
   .header {
     flex-direction: column;
     align-items: flex-start;
     gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+  }
+
+  .sortWrapper {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .sortSelect {
+    flex: 1;
+    min-height: 44px;
+  }
+
+  .grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
   }
 }

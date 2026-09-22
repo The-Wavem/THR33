@@ -105,26 +105,79 @@
   border-color: var(--border-active);
 }
 
-/* Mobile Filter Bar */
-.mobileFilterBar {
+/* Mobile Toolbar (Filtros + Ordenação) */
+.mobileToolbar {
   display: none;
-  margin-bottom: 1.5rem;
 }
 
-.mobileFilterToggle {
+.mobileFilterBtn {
+  flex: 1;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  width: 100%;
-  padding: 0.75rem;
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 1.5px;
   text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.mobileFilterBtn:active {
+  background-color: #1a1a1a;
+  border-color: var(--border-active);
+}
+
+.mobileFilterBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border-radius: 9px;
+}
+
+.mobileSortWrapper {
+  flex: 1;
+  position: relative;
+}
+
+.mobileSortSelect {
+  width: 100%;
+  min-height: 44px;
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+  padding: 0 1.75rem 0 0.85rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: var(--font-body);
+  letter-spacing: 0.5px;
+  outline: none;
+  cursor: pointer;
+  text-transform: uppercase;
+  transition: border-color var(--transition-fast);
+  border-radius: 0;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 0.75rem center;
+}
+
+.mobileSortSelect:focus {
+  border-color: var(--border-active);
 }
 
 /* Chips de Filtros Ativos */
@@ -350,21 +403,143 @@
     justify-content: space-between;
   }
 
-  .mobileFilterBar {
-    display: block;
-  }
-
   .contentLayout {
     flex-direction: column;
   }
+}
+
+@media (max-width: 768px) {
+  .catalogPage {
+    padding: 1.25rem 0.75rem calc(4rem + env(safe-area-inset-bottom, 0px));
+    max-width: 100vw;
+    overflow-x: clip;
+  }
+
+  .header {
+    margin-bottom: 1rem;
+    padding-bottom: 0.85rem;
+    gap: 0.75rem;
+  }
+
+  .breadcrumbNav {
+    font-size: 0.68rem;
+    overflow-x: auto;
+    white-space: nowrap;
+    width: 100%;
+    padding-bottom: 0.2rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .breadcrumbNav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .title {
+    font-size: clamp(1.4rem, 5.5vw, 1.85rem);
+    letter-spacing: -0.3px;
+    margin-top: 0.15rem;
+  }
+
+  .topActions {
+    display: none !important;
+  }
+
+  .mobileToolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    width: 100%;
+  }
+
+  .activeFiltersRow {
+    padding: 0.5rem 0.65rem;
+    gap: 0.4rem;
+    margin-bottom: 1rem;
+  }
+
+  .filterChip {
+    font-size: 0.65rem;
+    padding: 0.2rem 0.45rem;
+  }
+
+  .filterChip button {
+    min-width: 28px;
+    min-height: 28px;
+  }
+
+  .clearAllLink {
+    font-size: 0.65rem;
+    padding: 0.25rem 0;
+  }
 
   .sidebarWrapper {
-    display: none;
+    display: contents;
     width: 100%;
   }
 
   .sidebarMobileOpen {
-    display: block;
-    margin-bottom: 2rem;
+    display: contents;
+  }
+
+  .resultsBar {
+    margin-bottom: 0.85rem;
+    padding-bottom: 0.5rem;
+  }
+
+  .resultsCount {
+    font-size: 0.7rem;
+    letter-spacing: 1px;
+  }
+
+  .pageIndicatorMini {
+    font-size: 0.65rem;
+  }
+
+  /* GRADE RIGOROSAMENTE EM 2 COLUNAS A PARTIR DE 320px */
+  .grid {
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 10px !important;
+  }
+
+  /* Paginação Mobile Touch-friendly */
+  .paginationContainer {
+    margin-top: 2rem;
+    padding-top: 1.25rem;
+    gap: 0.35rem;
+  }
+
+  .pageBtn {
+    min-height: 44px;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.7rem;
+  }
+
+  .pageNumberBtn {
+    min-width: 36px;
+    height: 38px;
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .pageBtnText {
+    display: none;
+  }
+
+  .pageBtn {
+    min-width: 44px;
+    padding: 0;
+    justify-content: center;
+  }
+
+  .pageNumbers {
+    gap: 0.25rem;
+  }
+
+  .pageNumberBtn {
+    min-width: 34px;
+    height: 36px;
   }
 }

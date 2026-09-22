@@ -5,6 +5,9 @@
   flex-direction: column;
   transition: border-color var(--transition-fast), transform var(--transition-fast);
   height: 100%;
+  position: relative;
+  min-width: 0;
+  width: 100%;
 }
 
 .card:hover {
@@ -17,6 +20,13 @@
   aspect-ratio: 3/4;
   overflow: hidden;
   background-color: #141414;
+}
+
+.imageLink {
+  display: block;
+  width: 100%;
+  height: 100%;
+  text-decoration: none;
 }
 
 .imagePlaceholderShimmer {
@@ -50,6 +60,19 @@
   letter-spacing: 1px;
 }
 
+.promoBadge {
+  position: absolute;
+  top: 0.75rem;
+  left: 0.75rem;
+  z-index: 2;
+  background-color: #ff0055;
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 800;
+  padding: 0.25rem 0.6rem;
+  letter-spacing: 1px;
+}
+
 .image {
   width: 100%;
   height: 100%;
@@ -69,7 +92,42 @@
   transform: scale(1.05);
 }
 
-/* GRUPO DE AÇÕES NO HOVER: VER DETALHES + FAVORITOS */
+/* BOTÃO DE FAVORITO NO TOPO DIREITO (TOUCH TARGET >= 44PX) */
+.favoriteBtn {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  background-color: rgba(10, 10, 10, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: all var(--transition-fast);
+  z-index: 4;
+  border-radius: 2px;
+}
+
+.favoriteBtn:hover {
+  border-color: var(--border-active);
+  background-color: rgba(26, 26, 26, 0.95);
+  transform: scale(1.05);
+}
+
+.favoriteActive {
+  border-color: rgba(239, 68, 68, 0.6);
+  background-color: rgba(239, 68, 68, 0.2);
+  color: #ef4444;
+}
+
+/* OVERLAY ACTIONS APENAS DESKTOP */
 .overlayActions {
   position: absolute;
   bottom: 0.85rem;
@@ -111,51 +169,20 @@
   border-color: #ffffff;
 }
 
-.favoriteBtn {
-  width: 36px;
-  height: 36px;
-  background-color: rgba(10, 10, 10, 0.92);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
+/* LINK DE DETALHES */
+.detailsLink {
+  text-decoration: none;
+  color: inherit;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  backdrop-filter: blur(4px);
-  transition: all var(--transition-fast);
-  flex-shrink: 0;
-}
-
-.favoriteBtn:hover {
-  border-color: var(--border-active);
-  background-color: #1a1a1a;
-  transform: scale(1.06);
-}
-
-.favoriteActive {
-  border-color: rgba(239, 68, 68, 0.6);
-  background-color: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-}
-
-.promoBadge {
-  position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  z-index: 2;
-  background-color: #ff0055;
-  color: #ffffff;
-  font-size: 0.65rem;
-  font-weight: 800;
-  padding: 0.25rem 0.6rem;
-  letter-spacing: 1px;
+  flex-direction: column;
+  flex: 1;
 }
 
 .details {
-  padding: 1.25rem;
+  padding: 1.15rem;
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
+  gap: 0.35rem;
   flex: 1;
 }
 
@@ -177,37 +204,105 @@
 
 .productName {
   font-family: var(--font-heading);
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: 0.5px;
   color: var(--text-primary);
-  margin: 0.2rem 0;
+  margin: 0.15rem 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.25;
+  min-height: 2.5em;
 }
 
 .priceRow {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   gap: 0.5rem;
   margin-top: 0.2rem;
+  flex-wrap: wrap;
 }
 
 .oldPrice {
   color: var(--text-muted);
   text-decoration: line-through;
-  font-size: 0.85rem;
+  font-size: 0.8rem;
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .promoPrice {
-  font-size: 1rem;
+  font-size: 0.95rem;
   font-weight: 800;
   color: #ff0055;
   letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
 .regularPrice, .price {
-  font-size: 0.95rem;
+  font-size: 0.92rem;
   font-weight: 800;
   color: var(--text-primary);
+  white-space: nowrap;
+}
+
+/* RESPONSIVIDADE MOBILE STRICT */
+@media (max-width: 768px) {
+  .details {
+    padding: 0.75rem 0.65rem;
+    gap: 0.25rem;
+  }
+
+  .tagsRow {
+    font-size: 0.58rem;
+    gap: 0.35rem;
+  }
+
+  .fitTag, .dropTag {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .productName {
+    font-size: 0.82rem;
+    min-height: 2.3em;
+    letter-spacing: 0.2px;
+  }
+
+  .badge, .promoBadge {
+    top: 0.4rem;
+    left: 0.4rem;
+    font-size: 0.58rem;
+    padding: 0.2rem 0.45rem;
+  }
+
+  .favoriteBtn {
+    top: 0.35rem;
+    right: 0.35rem;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .oldPrice {
+    font-size: 0.7rem;
+  }
+
+  .promoPrice {
+    font-size: 0.85rem;
+  }
+
+  .regularPrice, .price {
+    font-size: 0.85rem;
+  }
+
+  .overlayActions {
+    display: none !important;
+  }
 }
 
