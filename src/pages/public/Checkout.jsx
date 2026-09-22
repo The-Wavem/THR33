@@ -167,13 +167,22 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     }
   }, [sessionId, cartItems, subtotal, discountAmount, shippingCost, total, clientData.email, clientData.name, currentStep, user]);
 
-  // OPÇÕES DE FRETE
+  // OPÇÕES DE FRETE SOB DEMANDA // ENVIO DIRETO
   const [shippingOptions, setShippingOptions] = useState([
-    { id: 'sedex', name: 'SEDEX Expresso', deadline: '1 a 2 dias úteis', price: 14.90 },
-    { id: 'pac', name: 'PAC Standard', deadline: '3 a 5 dias úteis', price: 9.90 },
-    { id: 'retirada', name: 'Retirada no Ateliê (Curitiba)', deadline: 'Disponível em 24h', price: 0 }
+    { 
+      id: 'padrao', 
+      name: 'Envio Direto da Fábrica', 
+      deadline: 'Produção sob demanda + 5 a 9 dias úteis', 
+      price: 24.90 
+    },
+    { 
+      id: 'expresso', 
+      name: 'Envio Prioritário', 
+      deadline: 'Produção sob demanda + 2 a 4 dias úteis', 
+      price: 38.50 
+    }
   ]);
-  const [selectedShippingMethod, setSelectedShippingMethod] = useState('sedex');
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState('padrao');
 
   // PROCESSAMENTO FINAL E SUCESSO
   const [paymentMethod, setPaymentMethod] = useState('PIX');
@@ -1125,6 +1134,17 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                     </button>
                   </div>
                 )}
+
+                {/* AVISO DE PRODUÇÃO SOB DEMANDA & DESPACHO DIRETO */}
+                <div className={styles.onDemandNoticeCard}>
+                  <Truck size={18} />
+                  <div>
+                    <strong>LOGÍSTICA SOB DEMANDA // FÁBRICA THR33</strong>
+                    <p>
+                      O envio é realizado diretamente do nosso polo de produção para o endereço informado. Você receberá o código de rastreamento assim que o pacote for despachado.
+                    </p>
+                  </div>
+                </div>
 
                 {/* SELEÇÃO DO MÉTODO DE FRETE */}
                 <div className={styles.shippingSelectionBlock}>

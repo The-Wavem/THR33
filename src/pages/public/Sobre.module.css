@@ -1,5 +1,5 @@
 .container {
-  max-width: 1280px;
+  max-width: 1200px;
   margin: 0 auto;
   padding: 3rem 1.5rem 6rem;
   color: var(--text-primary);
@@ -7,12 +7,7 @@
 
 .heroSection {
   text-align: center;
-  max-width: 800px;
-  margin: 0 auto 4rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 1rem;
+  margin-bottom: 4rem;
 }
 
 .tag, .subTag {
@@ -25,13 +20,16 @@
 
 .title {
   font-family: var(--font-heading);
-  font-size: clamp(2.5rem, 5vw, 4rem);
+  font-size: clamp(2rem, 5vw, 3.5rem);
   font-weight: 800;
-  letter-spacing: -1px;
+  letter-spacing: -0.5px;
+  margin: 0.5rem 0 1rem;
 }
 
 .lead {
-  font-size: clamp(1rem, 2vw, 1.25rem);
+  max-width: 720px;
+  margin: 0 auto;
+  font-size: 1rem;
   color: var(--text-secondary);
   line-height: 1.6;
 }
@@ -39,12 +37,13 @@
 .gridSection {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 3.5rem;
+  gap: 3rem;
   align-items: center;
   margin-bottom: 5rem;
 }
 
 .imageBox {
+  width: 100%;
   aspect-ratio: 4/5;
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
@@ -71,51 +70,177 @@
 
 .textBox h2 {
   font-family: var(--font-heading);
-  font-size: clamp(1.8rem, 3vw, 2.4rem);
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  font-weight: 800;
   letter-spacing: -0.5px;
 }
 
 .textBox p {
   color: var(--text-secondary);
-  line-height: 1.7;
+  line-height: 1.6;
   font-size: 0.95rem;
 }
 
-.textBox strong {
+/* ESPECIFICAÇÕES DE TECIDO */
+.specsSection {
+  margin-bottom: 5rem;
+}
+
+.sectionHeader {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+.sectionHeader h2 {
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  letter-spacing: 0.5px;
+  margin: 0.4rem 0;
+}
+
+.sectionHeader p {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.specsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+}
+
+.specCard {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.specHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.specBadge {
+  align-self: flex-start;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.08);
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.specCard h3 {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  letter-spacing: 0.5px;
+}
+
+.specDesc {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.specDetails {
+  list-style: none;
+  padding: 0;
+  margin-top: 0.5rem;
+  border-top: 1px solid var(--border-color);
+  padding-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.specDetails li {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.specDetails strong {
   color: var(--text-primary);
 }
 
-.statementBanner {
-  background-color: var(--bg-card);
+/* TABELA DE MEDIDAS */
+.measuresSection {
+  margin-bottom: 5rem;
+}
+
+.tableWrapper {
+  background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
-  padding: 4rem 2rem;
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 0.85rem;
+}
+
+.table th, .table td {
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.table th {
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  background-color: var(--bg-card);
+}
+
+.dividerRow td {
+  background-color: var(--border-color);
+  padding: 2px 0;
+}
+
+/* BANNER FINAL */
+.statementBanner {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 3.5rem 1.5rem;
   text-align: center;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.25rem;
+  gap: 1rem;
 }
 
 .statementBanner h2 {
   font-family: var(--font-heading);
-  font-size: clamp(1.8rem, 3.5vw, 2.8rem);
-  letter-spacing: 1px;
+  font-size: 1.6rem;
+  letter-spacing: 0.5px;
 }
 
 .statementBanner p {
   color: var(--text-secondary);
-  font-size: 1rem;
+  font-size: 0.9rem;
+}
+
+.bannerActions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 .ctaBtn {
   background-color: var(--text-primary);
   color: var(--bg-primary);
-  padding: 1rem 2rem;
+  padding: 0.85rem 1.75rem;
+  font-size: 0.75rem;
   font-weight: 800;
-  font-size: 0.85rem;
   letter-spacing: 1.5px;
   text-decoration: none;
-  display: inline-block;
   transition: opacity var(--transition-fast);
 }
 
@@ -123,6 +248,28 @@
   opacity: 0.92;
 }
 
+.secondaryBtn {
+  background: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.85rem 1.75rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.secondaryBtn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: var(--border-active);
+}
+
 @media (max-width: 850px) {
-  .gridSection { grid-template-columns: 1fr; gap: 2rem; }
+  .gridSection {
+    grid-template-columns: 1fr;
+  }
+  .specsGrid {
+    grid-template-columns: 1fr;
+  }
 }

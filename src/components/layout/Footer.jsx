@@ -127,6 +127,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link to="/como-funciona-a-entrega" onMouseEnter={() => preloadRoute('/como-funciona-a-entrega')}>
+                  Como Funciona a Entrega
+                </Link>
+              </li>
+              <li>
                 <Link to="/perfil" onMouseEnter={() => preloadRoute('/perfil')}>
                   Minha Conta
                 </Link>

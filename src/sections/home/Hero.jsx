@@ -282,6 +282,14 @@ export function Hero({ bannerData }) {
           </div>
         </>
       )}
+
+      {/* FAIXA MARQUEE STREETWEAR CONTÍNUA */}
+      <div className={styles.marqueeStrip} aria-hidden="true">
+        <div className={styles.marqueeTrack}>
+          <span>THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSO ATELIÊ // TIRAGENS LIMITADAS // </span>
+          <span>THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSO ATELIÊ // TIRAGENS LIMITADAS // </span>
+        </div>
+      </div>
     </section>
   );
 }

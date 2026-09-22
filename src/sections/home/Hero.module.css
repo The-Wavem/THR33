@@ -194,7 +194,7 @@
 /* Indicadores / Traços Inferiores */
 .dotsContainer {
   position: absolute;
-  bottom: 2rem;
+  bottom: 2.8rem;
   z-index: 5;
   display: flex;
   gap: 0.75rem;
@@ -218,8 +218,46 @@
   width: 44px;
 }
 
+/* FAIXA MARQUEE STREETWEAR CONTÍNUA */
+.marqueeStrip {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  background-color: #000000;
+  border-top: 1px solid var(--border-color);
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 0.6rem 0;
+  z-index: 10;
+}
+
+.marqueeTrack {
+  display: inline-block;
+  white-space: nowrap;
+  animation: marqueeScroll 22s linear infinite;
+}
+
+.marqueeTrack span {
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--text-secondary);
+  display: inline-block;
+}
+
+@keyframes marqueeScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
 @media (max-width: 768px) {
   .navArrow {
     display: none;
+  }
+
+  .dotsContainer {
+    bottom: 2.6rem;
   }
 }

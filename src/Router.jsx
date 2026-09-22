@@ -20,6 +20,7 @@ const Lancamentos = lazyWithRetry(() => import('./pages/public/Lancamentos').the
 const Checkout = lazyWithRetry(() => import('./pages/public/Checkout').then(m => ({ default: m.Checkout || m.default })));
 const Auth = lazyWithRetry(() => import('./pages/public/Auth').then(m => ({ default: m.Auth || m.default })));
 const Sobre = lazyWithRetry(() => import('./pages/public/Sobre').then(m => ({ default: m.Sobre || m.default })));
+const ComoFuncionaEntrega = lazyWithRetry(() => import('./pages/public/ComoFuncionaEntrega').then(m => ({ default: m.ComoFuncionaEntrega || m.default })));
 const Suporte = lazyWithRetry(() => import('./pages/public/Suporte').then(m => ({ default: m.Suporte || m.default })));
 const Politicas = lazyWithRetry(() => import('./pages/public/Politicas').then(m => ({ default: m.Politicas || m.default })));
 const GuiaTamanhos = lazyWithRetry(() => import('./pages/public/GuiaTamanhos').then(m => ({ default: m.GuiaTamanhos || m.default })));
@@ -93,6 +94,7 @@ export function AppRoutes() {
 
             {/* ROTAS INSTITUCIONAIS: SOBRE, SUPORTE, POLÍTICAS, GUIA DE TAMANHOS & FAVORITOS */}
             <Route path="/sobre" element={<Sobre />} />
+            <Route path="/como-funciona-a-entrega" element={<ComoFuncionaEntrega />} />
             <Route path="/suporte" element={<Suporte />} />
             <Route path="/politicas" element={<Politicas />} />
             <Route path="/guia-de-tamanhos" element={<GuiaTamanhos />} />

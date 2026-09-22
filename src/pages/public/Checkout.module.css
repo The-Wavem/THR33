@@ -517,6 +517,29 @@
   padding-top: 1.5rem;
 }
 
+.onDemandNoticeCard {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 1rem 1.25rem;
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.onDemandNoticeCard strong {
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.onDemandNoticeCard p {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 .shippingOptionsGrid {
   display: flex;
   flex-direction: column;
