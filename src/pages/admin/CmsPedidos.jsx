@@ -27,12 +27,11 @@ import { maskCPF } from '../../utils/validators';
 import styles from './CmsPedidos.module.css';
 
 const STATUS_OPTIONS = [
-  { value: 'Aprovado', label: 'Aprovado', color: '#4ade80' },
-  { value: 'Em Separação', label: 'Em Separação', color: '#facc15' },
-  { value: 'Em Trânsito', label: 'Em Trânsito', color: '#60a5fa' },
-  { value: 'Entregue', label: 'Entregue', color: '#a3a3a3' },
+  { value: 'Aprovado', label: 'Aprovado (Aguardando Lote)', color: '#facc15' },
+  { value: 'Em Produção', label: 'Em Produção (Na Fábrica)', color: '#60a5fa' },
+  { value: 'Enviado', label: 'Enviado (Rastreio Anexado)', color: '#4ade80' },
   { value: 'Troca Solicitada', label: 'Troca Solicitada', color: '#f87171' },
-  { value: 'Devolvido', label: 'Devolvido', color: '#c084fc' }
+  { value: 'Cancelado', label: 'Cancelado', color: '#a3a3a3' }
 ];
 
 // Helper para obter datas formatadas no formato YYYY-MM-DD
@@ -180,11 +179,11 @@ export function CmsPedidos() {
 
       if (!hasValidTracking) {
         const inputTracking = prompt(
-          "⚠️ VALIDAÇÃO DE RASTREIO OBRIGATÓRIO:\nInforme o Código de Rastreio dos Correios/Transportadora para marcar o pedido como ENVIADO (Ex: BR920851843PR):"
+          "[VALIDAÇÃO DE RASTREIO OBRIGATÓRIO]\nInforme o Código de Rastreio dos Correios/Transportadora para marcar o pedido como ENVIADO (Ex: BR920851843PR):"
         );
 
         if (!inputTracking || !inputTracking.trim()) {
-          alert("❌ Ação bloqueada: É obrigatório informar o Código de Rastreio para avançar o pedido para 'Em Trânsito' / 'ENVIADO'!");
+          alert("Ação bloqueada: É obrigatório informar o Código de Rastreio para avançar o pedido para 'ENVIADO'!");
           return;
         }
 
@@ -260,7 +259,7 @@ export function CmsPedidos() {
 
       setOrders(prev => prev.map(o => o.id === selectedOrder.id ? updated : o));
       setSelectedOrder(updated);
-      alert("✅ Dados logísticos e código de rastreamento salvos com sucesso!");
+      alert("Dados logísticos e código de rastreamento salvos com sucesso!");
     } catch (err) {
       console.error("Erro ao salvar dados logísticos:", err);
       alert("Falha ao salvar dados de rastreio no Firestore.");
@@ -377,6 +376,51 @@ export function CmsPedidos() {
     return { total, count, exchanges, exchangeRate, averageTicket, ordersInPeriodCount: count };
   }, [orders, startDate, endDate]);
 
+  // Exportação do Lote Semanal para a Fábrica (CSV)
+  const handleExportWeeklyBatch = () => {
+    // Filtra pedidos em fila para corte e produção
+    const batchOrders = orders.filter(o => o.status === 'Aprovado' || o.status === 'Em Produção');
+
+    if (batchOrders.length === 0) {
+      alert("Nenhum pedido com status 'Aprovado' ou 'Em Produção' para exportação no momento.");
+      return;
+    }
+
+    const csvRows = [
+      ['ID PEDIDO', 'DATA', 'CLIENTE', 'TELEFONE', 'ENDERECO COMPLETO', 'ITEM', 'MODELAGEM', 'TAMANHO', 'QTD', 'VALOR UNITARIO']
+    ];
+
+    batchOrders.forEach(order => {
+      const addr = order.shippingAddress 
+        ? `"${order.shippingAddress.street || ''}, ${order.shippingAddress.number || ''} - ${order.shippingAddress.neighborhood || ''}, ${order.shippingAddress.city || ''}/${order.shippingAddress.state || ''} CEP: ${order.shippingAddress.cep || ''}"`
+        : 'Endereço não informado';
+
+      order.items?.forEach(item => {
+        csvRows.push([
+          order.id,
+          new Date(order.createdAt).toLocaleDateString('pt-BR'),
+          `"${order.clientName || order.customerName || 'Cliente'}"`,
+          order.clientPhone || order.customerPhone || '',
+          addr,
+          `"${item.name}"`,
+          item.fit || 'Padrão',
+          item.size || 'M',
+          item.quantity || 1,
+          Number(item.price || 0).toFixed(2)
+        ]);
+      });
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," + csvRows.map(e => e.join(";")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `LOTE_FABRICA_THR33_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <div className={styles.container}>
       {/* HEADER */}
@@ -386,7 +430,7 @@ export function CmsPedidos() {
           <h1 className={styles.title}>PEDIDOS & LOGÍSTICA REVERSA</h1>
         </div>
 
-        {/* BARRA DE CONTROLES DO TOPO (SELETOR DE PERÍODOS + SINCRONIZAÇÃO) */}
+        {/* BARRA DE CONTROLES DO TOPO (SELETOR DE PERÍODOS + SINCRONIZAÇÃO + EXPORTAÇÃO) */}
         <div className={styles.headerRightControls}>
           {/* SELETOR DE PERÍODO & DATAS */}
           <div className={styles.dateFilterBox}>
@@ -459,6 +503,15 @@ export function CmsPedidos() {
               )}
             </div>
           </div>
+
+          <button 
+            type="button"
+            onClick={handleExportWeeklyBatch}
+            className={styles.exportBatchBtn}
+            title="Exportar Lote Semanal para a Fábrica"
+          >
+            EXPORTAR LOTE SEMANAL (CSV)
+          </button>
 
           <button 
             onClick={fetchOrders} 

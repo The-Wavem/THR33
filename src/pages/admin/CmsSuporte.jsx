@@ -15,6 +15,8 @@ import {
   FileText 
 } from 'lucide-react';
 import { supportService } from '../../services/supportService';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '../../services/firebaseConfig';
 import InfoTooltip from '../../components/ui/InfoTooltip';
 import styles from './CmsSuporte.module.css';
 
@@ -117,6 +119,43 @@ export function CmsSuporte() {
       alert("Erro ao salvar resolução do chamado.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRefundToWallet = async () => {
+    if (!selectedTicket?.userId) {
+      alert("Este chamado não possui um ID de usuário vinculado para crédito em carteira.");
+      return;
+    }
+
+    const refundAmount = prompt("Informe o valor em R$ para estorno e crédito na carteira do cliente:", "189.90");
+    if (!refundAmount || isNaN(Number(refundAmount))) return;
+
+    const valueNum = Number(refundAmount);
+    try {
+      const userRef = doc(db, 'users', selectedTicket.userId);
+      const userSnap = await getDoc(userRef);
+      const currentBal = userSnap.exists() ? Number(userSnap.data().walletBalance || 0) : 0;
+      const newBal = currentBal + valueNum;
+
+      await setDoc(userRef, { 
+        walletBalance: newBal,
+        lastWalletUpdate: new Date().toISOString()
+      }, { merge: true });
+
+      await supportService.updateTicketStatus(
+        selectedTicket.id,
+        selectedTicket.orderId,
+        'RESOLVIDO',
+        `Estorno de R$ ${valueNum.toFixed(2)} aprovado e creditado na Carteira Digital da conta. O saldo já está disponível para uso imediato.`
+      );
+
+      alert(`Crédito de R$ ${valueNum.toFixed(2)} inserido com sucesso na carteira do cliente! Chamado finalizado.`);
+      setSelectedTicket(null);
+      loadTickets();
+    } catch (err) {
+      console.error("Erro ao estornar na carteira:", err);
+      alert("Falha ao atualizar carteira do cliente no Firestore.");
     }
   };
 
@@ -358,6 +397,14 @@ export function CmsSuporte() {
                 <button type="submit" disabled={saving} className={styles.saveResolutionBtn}>
                   <Save size={15} />
                   <span>{saving ? 'GRAVANDO RESOLUÇÃO NO FIRESTORE...' : 'SALVAR RESOLUÇÃO DO SAC'}</span>
+                </button>
+
+                <button 
+                  type="button" 
+                  onClick={handleRefundToWallet} 
+                  className={styles.walletRefundBtn}
+                >
+                  APROVAR ESTORNO EM CARTEIRA
                 </button>
               </form>
             </div>

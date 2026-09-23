@@ -293,12 +293,10 @@ export function Catalogo() {
   };
 
   // Contagem de filtros ativos
-  const selectedCategories = filters.categories || [];
   const selectedFits = filters.fits || [];
-  const selectedDrops = filters.drops || [];
   const selectedSizes = filters.sizes || [];
 
-  const activeFiltersCount = selectedCategories.length + selectedFits.length + selectedDrops.length + selectedSizes.length + (searchQuery.trim() ? 1 : 0);
+  const activeFiltersCount = selectedFits.length + selectedSizes.length + (searchQuery.trim() ? 1 : 0);
 
   return (
     <main className={styles.catalogPage} ref={topRef}>
@@ -320,29 +318,11 @@ export function Catalogo() {
               CATÁLOGO
             </Link>
 
-            {selectedCategories.length === 1 && (
+            {selectedFits.length === 1 && (
               <>
                 <span className={styles.breadcrumbSeparator}>/</span>
                 <span className={styles.breadcrumbActive}>
-                  {selectedCategories[0] === 'camisa' ? 'CAMISAS' : selectedCategories[0] === 'calca' ? 'CALÇAS' : selectedCategories[0] === 'jaqueta' ? 'JAQUETAS & HOODIES' : selectedCategories[0].toUpperCase()}
-                </span>
-              </>
-            )}
-
-            {selectedCategories.length > 1 && (
-              <>
-                <span className={styles.breadcrumbSeparator}>/</span>
-                <span className={styles.breadcrumbActive}>
-                  MÚLTIPLAS CATEGORIAS ({selectedCategories.length})
-                </span>
-              </>
-            )}
-
-            {selectedDrops.length === 1 && selectedCategories.length === 0 && (
-              <>
-                <span className={styles.breadcrumbSeparator}>/</span>
-                <span className={styles.breadcrumbActive}>
-                  {selectedDrops[0] === 'leak-two' ? 'LEAK TWO' : 'DROPS PASSADOS'}
+                  {selectedFits[0] === 'boxy' ? 'BOXY FIT' : 'OVERSIZED'}
                 </span>
               </>
             )}
@@ -350,44 +330,9 @@ export function Catalogo() {
 
           <h1 className={styles.title}>VESTUÁRIO & CONCEITO</h1>
         </div>
-
-        {/* CONTROLES DO TOPO: ITENS POR PÁGINA & ORDENAÇÃO */}
-        <div className={styles.topActions}>
-          <div className={styles.controlGroup}>
-            {/* ITENS POR PÁGINA */}
-            <div className={styles.selectWrapper}>
-              <label htmlFor="perPageSelect" className={styles.controlLabel}>EXIBIR:</label>
-              <select
-                id="perPageSelect"
-                className={styles.selectInput}
-                value={itemsPerPage}
-                onChange={(e) => handlePerPageChange(Number(e.target.value))}
-              >
-                <option value={6}>6 ITENS</option>
-                <option value={12}>12 ITENS</option>
-                <option value={24}>24 ITENS</option>
-              </select>
-            </div>
-
-            {/* ORDENAÇÃO */}
-            <div className={styles.selectWrapper}>
-              <label htmlFor="sortSelect" className={styles.controlLabel}>ORDENAR:</label>
-              <select 
-                id="sortSelect" 
-                className={styles.selectInput}
-                value={sortOrder}
-                onChange={(e) => handleSortChange(e.target.value)}
-              >
-                <option value="newest">LANÇAMENTOS</option>
-                <option value="price-low">MENOR PREÇO</option>
-                <option value="price-high">MAIOR PREÇO</option>
-              </select>
-            </div>
-          </div>
-        </div>
       </header>
 
-      {/* TOOLBAR MOBILE COMPACTA: FILTROS + ORDENAÇÃO */}
+      {/* TOOLBAR MOBILE COMPACTA: FILTROS */}
       <div className={styles.mobileToolbar}>
         <button 
           type="button"
@@ -401,20 +346,6 @@ export function Catalogo() {
             <span className={styles.mobileFilterBadge}>{activeFiltersCount}</span>
           )}
         </button>
-
-        <div className={styles.mobileSortWrapper}>
-          <select 
-            id="mobileSortSelect" 
-            className={styles.mobileSortSelect}
-            value={sortOrder}
-            onChange={(e) => handleSortChange(e.target.value)}
-            aria-label="Ordenar produtos"
-          >
-            <option value="newest">LANÇAMENTOS</option>
-            <option value="price-low">MENOR PREÇO</option>
-            <option value="price-high">MAIOR PREÇO</option>
-          </select>
-        </div>
       </div>
 
       {/* CHIPS DE FILTROS ATIVOS (MULTI-SELEÇÃO) */}
@@ -429,26 +360,10 @@ export function Catalogo() {
               </button>
             </span>
           )}
-          {selectedCategories.map(cat => (
-            <span key={cat} className={styles.filterChip}>
-              CATEGORIA: {cat === 'calca' ? 'CALÇA' : cat.toUpperCase().replace(/[-_]/g, ' ')}
-              <button onClick={() => removeCategory(cat)} aria-label={`Remover categoria ${cat}`}>
-                <X size={12} />
-              </button>
-            </span>
-          ))}
           {selectedFits.map(fit => (
             <span key={fit} className={styles.filterChip}>
-              MODELAGEM: {fit.toUpperCase().replace(/[-_]/g, ' ')}
+              MODELAGEM: {fit === 'boxy' ? 'BOXY FIT' : 'OVERSIZED (HEAVY & CLÁSSICA)'}
               <button onClick={() => removeFit(fit)} aria-label={`Remover modelagem ${fit}`}>
-                <X size={12} />
-              </button>
-            </span>
-          ))}
-          {selectedDrops.map(drop => (
-            <span key={drop} className={styles.filterChip}>
-              DROP: {drop === 'leak-two' ? 'LEAK TWO' : drop.toUpperCase().replace(/[-_]/g, ' ')}
-              <button onClick={() => removeDrop(drop)} aria-label={`Remover drop ${drop}`}>
                 <X size={12} />
               </button>
             </span>
@@ -474,6 +389,8 @@ export function Catalogo() {
             products={products}
             filters={filters} 
             setFilters={handleFiltersChange} 
+            sortOrder={sortOrder}
+            onSortChange={handleSortChange}
             onReset={handleReset} 
             searchQuery={searchQuery}
             onSearchSubmit={handleSearchSubmit}

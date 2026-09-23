@@ -856,6 +856,23 @@
   opacity: 0.9;
 }
 
+.exportBatchBtn {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border: none;
+  padding: 0.65rem 1.25rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+  white-space: nowrap;
+}
+
+.exportBatchBtn:hover {
+  opacity: 0.9;
+}
+
 @media (max-width: 1024px) {
   .headerRightControls {
     width: 100%;

@@ -220,6 +220,56 @@
   font-weight: 800;
 }
 
+/* Ordenação Unificada */
+.sortOptionsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.radioBox {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.radioActive {
+  border-color: var(--text-primary);
+  background-color: #000000;
+}
+
+.radioInner {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--text-primary);
+}
+
+.mobileApplyBtn {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .mobileApplyBtn {
+    display: block;
+    width: 100%;
+    margin-top: 1.5rem;
+    background-color: var(--text-primary);
+    color: var(--bg-primary);
+    padding: 0.85rem;
+    font-size: 0.75rem;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    cursor: pointer;
+  }
+}
+
 /* ============================================================
    MOBILE BOTTOM SHEET / DRAWER DE FILTROS
    ============================================================ */

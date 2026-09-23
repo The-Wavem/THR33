@@ -223,13 +223,6 @@ export function Footer() {
               </motion.span>
             </MotionAnchor>
           </div>
-
-          <div className={styles.paymentMethods}>
-            <span className={styles.paymentBadge}>PIX</span>
-            <span className={styles.paymentBadge}>CARTÃO</span>
-            <span className={styles.paymentBadge}>BOLETO</span>
-            <span className={styles.paymentBadge}>PAGBANK</span>
-          </div>
         </div>
       </div>
     </footer>

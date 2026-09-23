@@ -1,179 +1,115 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { Ruler, CheckCircle2, User, Info, ArrowRight } from 'lucide-react';
-import { fadeInUp } from '../../utils/motionVariants';
+import { Ruler } from 'lucide-react';
 import styles from './GuiaTamanhos.module.css';
 
-const fitsData = {
+const FITS_SPECS = {
   boxy: {
     id: 'boxy',
-    name: 'BOXY OVERSIZED',
-    gsm: '280GSM HEAVYWEIGHT',
-    description: 'Modelagem autoral retangular com ombros caídos, gola canelada de 3cm e comprimento ajustado na cintura. Projetada para quem busca volume sem sobra de tecido na barra.',
-    modelRef: 'Modelo: 1,80m // 75kg — Veste tamanho G para efeito Boxy ideal.',
+    name: 'BOXY FIT',
+    gsm: '220 GSM ALGODÃO ESTRUTURADO',
+    description: 'Corte contemporâneo quadrado com ombros caídos e comprimento levemente mais curto na cintura. Proporciona volume e presença sem sobras de tecido na barra.',
     measures: [
-      { size: 'P', largura: '56 cm', comprimento: '70 cm', manga: '22 cm', ombro: '54 cm' },
-      { size: 'M', largura: '58 cm', comprimento: '72 cm', manga: '23 cm', ombro: '56 cm' },
-      { size: 'G', largura: '60 cm', comprimento: '74 cm', manga: '24 cm', ombro: '58 cm' },
-      { size: 'GG', largura: '62 cm', comprimento: '76 cm', manga: '25 cm', ombro: '60 cm' }
+      { size: 'PP', largura: '56 cm', comprimento: '66 cm', manga: '22 cm' },
+      { size: 'P', largura: '58 cm', comprimento: '68 cm', manga: '23 cm' },
+      { size: 'M', largura: '61 cm', comprimento: '70 cm', manga: '24 cm' },
+      { size: 'G', largura: '64 cm', comprimento: '72 cm', manga: '25 cm' },
+      { size: 'GG', largura: '67 cm', comprimento: '74 cm', manga: '26 cm' }
     ]
   },
-  heavyweight: {
-    id: 'heavyweight',
-    name: 'HEAVYWEIGHT STREET',
-    gsm: '280GSM ALGODÃO PIMA',
-    description: 'Corte tradicional de rua com mangas alongadas, silhueta reta e tecido encorpado que não marca o corpo. Ideal para composição de camadas (layering).',
-    modelRef: 'Modelo: 1,85m // 82kg — Veste tamanho GG para caimento oversized solto.',
+  heavy: {
+    id: 'heavy',
+    name: 'OVERSIZED HEAVY',
+    gsm: '260 GSM HEAVYWEIGHT',
+    description: 'Malha pesada 100% algodão de caimento reto e rígido. Gola canelada 2x1 de 3cm pespontada para máxima durabilidade.',
     measures: [
-      { size: 'P', largura: '54 cm', comprimento: '73 cm', manga: '23 cm', ombro: '52 cm' },
-      { size: 'M', largura: '56 cm', comprimento: '75 cm', manga: '24 cm', ombro: '54 cm' },
-      { size: 'G', largura: '58 cm', comprimento: '77 cm', manga: '25 cm', ombro: '56 cm' },
-      { size: 'GG', largura: '60 cm', comprimento: '79 cm', manga: '26 cm', ombro: '58 cm' }
+      { size: 'PP', largura: '54 cm', comprimento: '72 cm', manga: '23 cm' },
+      { size: 'P', largura: '57 cm', comprimento: '74 cm', manga: '24 cm' },
+      { size: 'M', largura: '60 cm', comprimento: '76 cm', manga: '25 cm' },
+      { size: 'G', largura: '63 cm', comprimento: '78 cm', manga: '26 cm' },
+      { size: 'GG', largura: '66 cm', comprimento: '80 cm', manga: '27 cm' }
     ]
   },
-  hoodie: {
-    id: 'hoodie',
-    name: 'HOODIE BOXY SP',
-    gsm: '380GSM PESADO',
-    description: 'Moletom de altíssima densidade com capuz duplo encorpado sem cordões soltos. Punhos e barra em ribana canelada de alta compressão para manter a forma.',
-    modelRef: 'Modelo: 1,78m // 72kg — Veste tamanho M para caimento estruturado.',
+  classica: {
+    id: 'classica',
+    name: 'OVERSIZED CLÁSSICA',
+    gsm: '190 GSM ALGODÃO PENTEADO',
+    description: 'Caimento streetwear clássico e fluido em fio 30.1 encorpado. Toque suave ideal para o uso diário.',
     measures: [
-      { size: 'P', largura: '58 cm', comprimento: '68 cm', manga: '62 cm', ombro: '56 cm' },
-      { size: 'M', largura: '60 cm', comprimento: '70 cm', manga: '63 cm', ombro: '58 cm' },
-      { size: 'G', largura: '62 cm', comprimento: '72 cm', manga: '64 cm', ombro: '60 cm' },
-      { size: 'GG', largura: '64 cm', comprimento: '74 cm', manga: '65 cm', ombro: '62 cm' }
+      { size: 'PP', largura: '54 cm', comprimento: '72 cm', manga: '23 cm' },
+      { size: 'P', largura: '57 cm', comprimento: '74 cm', manga: '24 cm' },
+      { size: 'M', largura: '60 cm', comprimento: '76 cm', manga: '25 cm' },
+      { size: 'G', largura: '63 cm', comprimento: '78 cm', manga: '26 cm' },
+      { size: 'GG', largura: '66 cm', comprimento: '80 cm', manga: '27 cm' }
     ]
   }
 };
 
 export function GuiaTamanhos() {
-  const [selectedFit, setSelectedFit] = useState('boxy');
-
-  const currentFit = fitsData[selectedFit];
+  const [activeTab, setActiveTab] = useState('boxy');
+  const activeFit = FITS_SPECS[activeTab];
 
   return (
-    <div className={styles.pageContainer}>
-      <motion.div initial="hidden" animate="visible" variants={fadeInUp} className={styles.contentWrapper}>
-        
-        {/* HEADER DA PÁGINA */}
-        <div className={styles.header}>
-          <span className={styles.tagBadge}>[ BLUEPRINT DE MODELAGENS ]</span>
-          <h1>GUIA DE TAMANHOS & FITS</h1>
-          <p>
-            Cada peça do Ateliê THR33 possui uma estrutura própria desenvolvida com tecidos pesados. 
-            Selecione a modelagem abaixo para conferir as especificações de corte e tabela de centímetros.
-          </p>
+    <main className={styles.container}>
+      <header className={styles.header}>
+        <span className={styles.tag}>ESPECIFICAÇÕES DE CORTE</span>
+        <h1 className={styles.title}>GUIA DE MEDIDAS OFICIAL</h1>
+        <p className={styles.lead}>
+          Medidas exatas das três modelagens de camisetas confeccionadas pela THR33.
+        </p>
+      </header>
+
+      <div className={styles.tabNav}>
+        <button 
+          className={`${styles.tabBtn} ${activeTab === 'boxy' ? styles.activeTab : ''}`}
+          onClick={() => setActiveTab('boxy')}
+        >
+          BOXY FIT (220 GSM)
+        </button>
+        <button 
+          className={`${styles.tabBtn} ${activeTab === 'heavy' ? styles.activeTab : ''}`}
+          onClick={() => setActiveTab('heavy')}
+        >
+          OVERSIZED HEAVY (260 GSM)
+        </button>
+        <button 
+          className={`${styles.tabBtn} ${activeTab === 'classica' ? styles.activeTab : ''}`}
+          onClick={() => setActiveTab('classica')}
+        >
+          OVERSIZED CLÁSSICA (190 GSM)
+        </button>
+      </div>
+
+      <section className={styles.specBox}>
+        <div className={styles.specHeader}>
+          <h2>{activeFit.name}</h2>
+          <span className={styles.gsmBadge}>{activeFit.gsm}</span>
         </div>
+        <p className={styles.desc}>{activeFit.description}</p>
 
-        {/* SELETOR DE MODELAGENS (TABS) */}
-        <div className={styles.fitTabsGrid}>
-          {Object.values(fitsData).map((fit) => (
-            <button
-              key={fit.id}
-              onClick={() => setSelectedFit(fit.id)}
-              className={selectedFit === fit.id ? styles.tabActive : styles.tabBtn}
-            >
-              <strong>{fit.name}</strong>
-              <span>{fit.gsm}</span>
-            </button>
-          ))}
+        <div className={styles.tableWrapper}>
+          <table className={styles.table}>
+            <thead>
+              <tr>
+                <th>TAMANHO</th>
+                <th>TÓRAX (LARGURA)</th>
+                <th>COMPRIMENTO</th>
+                <th>MANGA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {activeFit.measures.map((m) => (
+                <tr key={m.size}>
+                  <td><strong>{m.size}</strong></td>
+                  <td>{m.largura}</td>
+                  <td>{m.comprimento}</td>
+                  <td>{m.manga}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
-
-        {/* PAINEL DE DETALHES DA MODELAGEM */}
-        <div className={styles.blueprintPanel}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={selectedFit}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.2 }}
-              className={styles.panelGrid}
-            >
-              {/* LADO ESQUERDO: ESQUEMA TÁTICO DE MEDIÇÃO */}
-              <div className={styles.diagramCol}>
-                <div className={styles.diagramBox}>
-                  <div className={styles.blueprintOverlay}>
-                    <span className={styles.bpTag}>THR33 // PATTERN #{selectedFit.toUpperCase()}</span>
-                  </div>
-                  
-                  {/* ESQUEMA VISUAL DE CAMISETA */}
-                  <div className={styles.visualTshirtSchematic}>
-                    <div className={styles.lineLargura}><span>[A] LARGURA</span></div>
-                    <div className={styles.lineComprimento}><span>[B] COMPRIMENTO</span></div>
-                    <div className={styles.lineManga}><span>[C] MANGA</span></div>
-                  </div>
-                </div>
-
-                <div className={styles.modelRefCard}>
-                  <User size={18} className={styles.iconAcid} />
-                  <span>{currentFit.modelRef}</span>
-                </div>
-              </div>
-
-              {/* LADO DIREITO: TABELA E CONCEITO */}
-              <div className={styles.tableCol}>
-                <div className={styles.fitConceptBox}>
-                  <h3>{currentFit.name}</h3>
-                  <p>{currentFit.description}</p>
-                </div>
-
-                <div className={styles.tableWrapper}>
-                  <table className={styles.measuresTable}>
-                    <thead>
-                      <tr>
-                        <th>TAMANHO</th>
-                        <th>[A] LARGURA</th>
-                        <th>[B] COMPRIMENTO</th>
-                        <th>[C] MANGA</th>
-                        <th>[D] OMBRO</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {currentFit.measures.map((row) => (
-                        <tr key={row.size}>
-                          <td className={styles.sizeCell}>{row.size}</td>
-                          <td>{row.largura}</td>
-                          <td>{row.comprimento}</td>
-                          <td>{row.manga}</td>
-                          <td>{row.ombro}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        {/* INSTRUÇÕES: COMO MEDIR SUA PEÇA EM CASA */}
-        <div className={styles.howToSection}>
-          <h2>COMO MEDIR UMA PEÇA QUE VOCÊ JÁ TEM EM CASA</h2>
-          
-          <div className={styles.stepsGrid}>
-            <div className={styles.stepCard}>
-              <span className={styles.stepNum}>01</span>
-              <h4>ESCOLHA SUA PEÇA FAVORITA</h4>
-              <p>Pegue uma camiseta ou moletom no seu guarda-roupa que tenha o caimento exatamente como você gosta.</p>
-            </div>
-
-            <div className={styles.stepCard}>
-              <span className={styles.stepNum}>02</span>
-              <h4>ESTIQUE EM UMA SUPERFÍCIE PLANA</h4>
-              <p>Coloque a peça sobre uma mesa plana e alise o tecido para remover dobras, sem esticar a malha.</p>
-            </div>
-
-            <div className={styles.stepCard}>
-              <span className={styles.stepNum}>03</span>
-              <h4>MEÇA COM UMA FITA OU RÉGUA</h4>
-              <p>Meça a largura de uma axila à outra e o comprimento do ombro até a barra. Compare com nossa tabela acima.</p>
-            </div>
-          </div>
-        </div>
-
-      </motion.div>
-    </div>
+      </section>
+    </main>
   );
 }
 
