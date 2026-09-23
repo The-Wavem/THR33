@@ -16,4 +16,13 @@ export default defineConfig({
       '@theme': fileURLToPath(new URL('./src/theme', import.meta.url)),
     },
   },
+  server: {
+    proxy: {
+      '/api/pagbank': {
+        target: 'https://sandbox.api.pagseguro.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/pagbank/, ''),
+      },
+    },
+  },
 })

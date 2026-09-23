@@ -332,7 +332,7 @@ export function Navbar({ onOpenCart }) {
         {/* Ações / Ícones do Usuário */}
         <div className={styles.actions}>
           <a 
-            href="https://instagram.com/thr33streetwear" 
+            href="https://www.instagram.com/madebythr33" 
             target="_blank" 
             rel="noreferrer" 
             className={styles.actionBtn}

@@ -727,6 +727,121 @@
   flex-shrink: 0;
 }
 
+/* FORMULÁRIO DE CARTÃO DE CRÉDITO SANDBOX */
+.cardFormBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.testCardsToolbar {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.testCardsLabel {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+
+.testCardsBtnGroup {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.testCardBtnApproved {
+  background: transparent;
+  border: 1px solid #4ade80;
+  color: #4ade80;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 0.55rem 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.testCardBtnApproved:hover {
+  background-color: rgba(74, 222, 128, 0.12);
+}
+
+.testCardBtnDeclined {
+  background: transparent;
+  border: 1px solid #f87171;
+  color: #f87171;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 0.55rem 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.testCardBtnDeclined:hover {
+  background-color: rgba(248, 113, 113, 0.12);
+}
+
+.cardExpGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.expInput {
+  flex: 1;
+  text-align: center;
+}
+
+.expDivider {
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.installmentsSelect {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.85rem 1rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  width: 100%;
+  transition: border-color var(--transition-fast);
+}
+
+.installmentsSelect:focus {
+  border-color: var(--text-primary);
+}
+
+.installmentsSelect option {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+}
+
+.paymentErrorNotice {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background-color: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: #fca5a5;
+  padding: 0.85rem 1rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  margin-top: 0.5rem;
+}
+
 /* NAVEGAÇÃO ENTRE ETAPAS */
 .stepActions {
   display: flex;
@@ -1113,6 +1228,17 @@
   display: flex;
   justify-content: center;
   margin: 0.5rem 0;
+}
+
+.qrCodeLiveImage {
+  width: 190px;
+  height: 190px;
+  object-fit: contain;
+  background-color: #ffffff;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  margin: 0 auto;
+  display: block;
 }
 
 .qrCodeGraphic {

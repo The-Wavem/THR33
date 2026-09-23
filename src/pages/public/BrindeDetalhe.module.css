@@ -1,13 +1,18 @@
 .container {
-  max-width: 1280px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 2.5rem 1.5rem 6rem;
+  padding: 3rem 1.5rem 6rem;
   color: var(--text-primary);
 }
 
 .breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.75rem;
-  letter-spacing: 2px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
   color: var(--text-muted);
   margin-bottom: 2.5rem;
 }
@@ -22,25 +27,36 @@
   color: var(--text-primary);
 }
 
-.productGrid {
-  display: grid;
-  grid-template-columns: 1.1fr 1fr;
-  gap: 3.5rem;
+.breadcrumbCurrent {
+  color: var(--text-primary);
 }
 
-/* IMAGEM E PREVIEW */
+.productGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 3.5rem;
+  align-items: flex-start;
+}
+
+/* IMAGEM E PREVIEW DO CARD */
 .imageSection {
+  position: sticky;
+  top: 100px;
   display: flex;
   flex-direction: column;
+  gap: 1.5rem;
 }
 
 .imageCard {
   position: relative;
   width: 100%;
   aspect-ratio: 4/3;
-  background-color: var(--bg-card);
+  background-color: #0d0d0d;
   border: 1px solid var(--border-color);
   overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .badge {
@@ -49,259 +65,212 @@
   left: 1rem;
   background-color: var(--text-primary);
   color: var(--bg-primary);
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   font-weight: 800;
-  padding: 0.35rem 0.75rem;
-  letter-spacing: 1px;
-  z-index: 2;
+  letter-spacing: 1.5px;
+  padding: 0.4rem 0.8rem;
+  text-transform: uppercase;
+  z-index: 3;
 }
 
 .mainImage {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  filter: brightness(0.7) contrast(1.1);
+  transition: transform 0.4s ease;
+}
+
+.imageCard:hover .mainImage {
+  transform: scale(1.02);
 }
 
 .cardOverlayPreview {
   position: absolute;
-  bottom: 1.5rem;
-  right: 1.5rem;
-  background-color: rgba(10, 10, 10, 0.9);
-  border: 1px solid var(--border-color);
-  padding: 1.25rem 1.75rem;
+  inset: auto 1.5rem 1.5rem 1.5rem;
+  background: rgba(10, 10, 10, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  padding: 1.25rem 1.5rem;
   display: flex;
   flex-direction: column;
-  align-items: flex-end;
-  backdrop-filter: blur(8px);
-  gap: 0.2rem;
+  gap: 0.25rem;
+  z-index: 2;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.previewHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .previewLogo {
   font-family: var(--font-heading);
-  font-weight: 800;
   font-size: 1.2rem;
+  font-weight: 900;
   letter-spacing: 2px;
-  line-height: 1;
+  color: #ffffff;
 }
 
 .previewSubtitle {
-  font-size: 0.6rem;
-  font-weight: 700;
-  letter-spacing: 2px;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
   color: var(--text-muted);
-  text-transform: uppercase;
 }
 
 .previewValue {
-  font-size: 1.6rem;
+  font-size: 2rem;
   font-weight: 900;
   color: #4ade80;
+  letter-spacing: -0.5px;
+  line-height: 1.2;
   margin-top: 0.25rem;
 }
 
 .previewRecipient {
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 1px;
   color: var(--text-secondary);
-  border-top: 1px solid var(--border-color);
-  padding-top: 0.4rem;
-  margin-top: 0.3rem;
-  max-width: 160px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+  text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* SEÇÃO DE INFORMAÇÕES */
+.previewFooterNote {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  margin-top: 0.25rem;
+}
+
+/* SEÇÃO DE INFORMAÇÕES E CONFIGURAÇÃO */
 .infoSection {
   display: flex;
   flex-direction: column;
   gap: 2rem;
 }
 
+.headerInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 1.5rem;
+}
+
 .typeTag {
   font-size: 0.7rem;
-  font-weight: 700;
-  color: var(--text-muted);
+  font-weight: 800;
   letter-spacing: 2px;
+  color: var(--text-muted);
+  text-transform: uppercase;
 }
 
 .title {
   font-family: var(--font-heading);
-  font-size: clamp(1.8rem, 3vw, 2.5rem);
+  font-size: clamp(1.8rem, 3.5vw, 2.4rem);
   font-weight: 800;
-  margin-top: 0.2rem;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin: 0;
+  line-height: 1.15;
 }
 
 .description {
-  font-size: 0.92rem;
+  font-size: 0.9rem;
   color: var(--text-secondary);
   line-height: 1.6;
-  margin-top: 0.5rem;
+  margin: 0;
 }
 
 .sectionGroup {
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 1rem;
 }
 
 .groupLabel {
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 1.5px;
-  color: var(--text-secondary);
+  color: var(--text-muted);
+  text-transform: uppercase;
 }
 
+/* Chips de valores pré-definidos */
 .valuesGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  grid-template-columns: repeat(4, 1fr);
   gap: 0.75rem;
 }
 
 .valueChip {
-  border: 1px solid var(--border-color);
   background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 0.85rem;
+  padding: 0.9rem 0.5rem;
   font-size: 0.85rem;
   font-weight: 800;
+  letter-spacing: 0.5px;
   cursor: pointer;
+  text-align: center;
   transition: all var(--transition-fast);
 }
 
-.valueChip:hover,
-.activeValue {
-  border-color: var(--text-primary);
-  background-color: var(--text-primary);
-  color: var(--bg-primary);
-}
-
-.giftForm {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.inputField {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  padding: 0.85rem 1rem;
-  font-size: 0.85rem;
-  outline: none;
-  font-family: var(--font-body);
-  transition: border-color var(--transition-fast);
-}
-
-.inputField:focus {
+.valueChip:hover {
   border-color: var(--border-active);
+  background-color: var(--bg-surface);
 }
 
-.actionSection {
-  display: flex;
-  flex-direction: column;
-  gap: 1.25rem;
-  border-top: 1px solid var(--border-color);
-  padding-top: 1.5rem;
-}
-
-.totalDisplay {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.9rem;
-  color: var(--text-secondary);
-}
-
-.totalDisplay strong {
-  font-size: 1.6rem;
-  font-weight: 800;
-  color: var(--text-primary);
-}
-
-.addToCartBtn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
+.activeValue {
   background-color: var(--text-primary);
   color: var(--bg-primary);
-  border: none;
-  padding: 1.1rem;
-  font-weight: 800;
-  font-size: 0.85rem;
-  letter-spacing: 1.5px;
-  cursor: pointer;
-  transition: all var(--transition-fast);
+  border-color: var(--text-primary);
 }
 
-.addToCartBtn:hover {
-  opacity: 0.92;
+.activeValue:hover {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
 }
 
-.addedSuccessBtn {
-  background-color: #22c55e !important;
-  color: #ffffff !important;
-}
-
-.termsBox {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  padding: 1.5rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  font-size: 0.82rem;
-}
-
-.termsHeader {
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  color: var(--text-primary);
-}
-
-.termsHeader h3 {
-  font-size: 0.75rem;
-  font-weight: 800;
-  letter-spacing: 1px;
-}
-
-.termsBox ul {
-  padding-left: 1.2rem;
-  color: var(--text-secondary);
-  line-height: 1.6;
-  margin: 0;
-}
-
+/* Campo de valor livre */
 .customValueBlock {
-  margin-top: 1.25rem;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.6rem;
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  padding: 1.25rem;
 }
 
 .customValueBlock label {
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.5px;
   color: var(--text-secondary);
+  text-transform: uppercase;
 }
 
 .customInputRow {
   display: flex;
   align-items: center;
-  max-width: 240px;
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
-  padding: 0 0.85rem;
+  padding: 0 1rem;
   transition: border-color var(--transition-fast);
+  height: 48px;
 }
 
 .customInputRow:focus-within {
-  border-color: var(--text-primary);
+  border-color: var(--border-active);
 }
 
 .currencyPrefix {
@@ -309,27 +278,179 @@
   font-weight: 800;
   color: var(--text-muted);
   margin-right: 0.5rem;
+  user-select: none;
 }
 
 .customValInput {
-  width: 100%;
+  flex: 1;
   background: transparent;
   border: none;
   color: var(--text-primary);
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 800;
-  padding: 0.75rem 0;
+  font-family: var(--font-body);
   outline: none;
+  padding: 0;
 }
 
 .customValueBlock small {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
 }
 
+/* Campos de dados do destinatário */
+.formFields {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.fieldGroup label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.fieldGroup input,
+.fieldGroup textarea {
+  width: 100%;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.85rem 1rem;
+  font-size: 0.85rem;
+  font-family: var(--font-body);
+  outline: none;
+  transition: border-color var(--transition-fast);
+  box-sizing: border-box;
+}
+
+.fieldGroup input:focus,
+.fieldGroup textarea:focus {
+  border-color: var(--border-active);
+}
+
+.fieldGroup textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* Bloco de compra e total */
+.purchaseBox {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.5rem;
+  margin-top: 0.5rem;
+}
+
+.totalPrice {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.totalPrice span {
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.totalPrice strong {
+  font-size: 1.75rem;
+  font-weight: 900;
+  letter-spacing: -0.5px;
+  color: var(--text-primary);
+}
+
+.buyBtn {
+  width: 100%;
+  min-height: 52px;
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border: none;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.buyBtn:hover {
+  opacity: 0.92;
+}
+
+.buyBtnSuccess {
+  background-color: #22c55e !important;
+  color: #000000 !important;
+}
+
+.guaranteeNotice {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.5;
+}
+
+.guaranteeNotice svg {
+  flex-shrink: 0;
+  color: #4ade80;
+}
+
+/* Termos e vantagens do Vale */
+.termsList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  border-top: 1px solid var(--border-color);
+  padding-top: 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.termItem {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.termDot {
+  width: 4px;
+  height: 4px;
+  background-color: #4ade80;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 @media (max-width: 900px) {
-  .productGrid { 
-    grid-template-columns: 1fr; 
-    gap: 2rem; 
+  .productGrid {
+    grid-template-columns: 1fr;
+    gap: 2.5rem;
+  }
+  .imageSection {
+    position: static;
+  }
+  .valuesGrid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }

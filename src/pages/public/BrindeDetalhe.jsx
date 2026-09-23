@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Check, ShoppingBag, Gift, ShieldCheck, Mail, ArrowLeft, Package } from 'lucide-react';
+import { Check, ShoppingBag, ShieldCheck, ArrowLeft, Package } from 'lucide-react';
 import { catalogService } from '../../services/catalogService';
 import { seedService } from '../../services/seedService';
 import { useCart } from '../../context/CartContext';
 import styles from './BrindeDetalhe.module.css';
 
-const DEFAULT_GIFT_VALUES = [150, 300, 500, 1000, 2500, 5000];
+const DEFAULT_GIFT_VALUES = [150, 300, 500, 1000];
 
 export function BrindeDetalhe() {
   const { id } = useParams();
@@ -52,7 +52,7 @@ export function BrindeDetalhe() {
         }
         if (item) {
           setGiftItem(item);
-          setSelectedValue(item.price ? Number(item.price) : 250);
+          setSelectedValue(item.price ? Number(item.price) : 150);
         }
       } catch (err) {
         console.error("Erro ao carregar brinde:", err);
@@ -90,7 +90,6 @@ export function BrindeDetalhe() {
   }
 
   const isGiftCard = giftItem.category === 'gift-card' || giftItem.id.includes('vale');
-  const values = giftItem.values || DEFAULT_GIFT_VALUES;
 
   const handleAddToCart = () => {
     const customProduct = {
@@ -116,25 +115,36 @@ export function BrindeDetalhe() {
 
   return (
     <main className={styles.container}>
-      <nav className={styles.breadcrumb}>
-        <Link to="/">HOME</Link> / <Link to="/brindes">BRINDES & VALES</Link> / <span>{giftItem.name.toUpperCase()}</span>
+      <nav className={styles.breadcrumb} aria-label="Navegação">
+        <Link to="/">HOME</Link>
+        <span>/</span>
+        <Link to="/brindes">BRINDES & VALES</Link>
+        <span>/</span>
+        <span className={styles.breadcrumbCurrent}>{giftItem.name.toUpperCase()}</span>
       </nav>
 
       <div className={styles.productGrid}>
         {/* IMAGEM DESTACADA DO VALE / BRINDE */}
         <section className={styles.imageSection}>
           <div className={styles.imageCard}>
-            <span className={styles.badge}>{isGiftCard ? 'VALE DIGITAL' : 'BRINDE FÍSICO'}</span>
+            <span className={styles.badge}>{isGiftCard ? 'VALE DIGITAL' : 'BRINDE OFICIAL'}</span>
             <img src={giftItem.image} alt={giftItem.name} className={styles.mainImage} />
             
             {isGiftCard && (
               <div className={styles.cardOverlayPreview}>
-                <span className={styles.previewLogo}>THR33</span>
-                <span className={styles.previewSubtitle}>GIFT PASS</span>
-                <span className={styles.previewValue}>R$ {selectedValue?.toLocaleString('pt-BR')}</span>
-                {recipientName && (
-                  <span className={styles.previewRecipient}>PARA: {recipientName.toUpperCase()}</span>
-                )}
+                <div className={styles.previewHeader}>
+                  <span className={styles.previewLogo}>THR33</span>
+                  <span className={styles.previewSubtitle}>GIFT PASS</span>
+                </div>
+                <div className={styles.previewValue}>
+                  R$ {selectedValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                </div>
+                <div className={styles.previewRecipient}>
+                  {recipientName ? `PARA: ${recipientName.toUpperCase()}` : 'CARTÃO DIGITAL THR33'}
+                </div>
+                <div className={styles.previewFooterNote}>
+                  CÓDIGO DIGITAL EXCLUSIVO • SEM VALIDADE
+                </div>
               </div>
             )}
           </div>
@@ -143,7 +153,7 @@ export function BrindeDetalhe() {
         {/* FORMULÁRIO DE SELEÇÃO E COMPRA */}
         <section className={styles.infoSection}>
           <div className={styles.headerInfo}>
-            <span className={styles.typeTag}>{isGiftCard ? 'DIGITAL GIFT CARD' : 'ACESSÓRIO DA MARCA'}</span>
+            <span className={styles.typeTag}>{isGiftCard ? 'DIGITAL GIFT CARD' : 'ACESSÓRIO OFICIAL'}</span>
             <h1 className={styles.title}>{giftItem.name}</h1>
             <p className={styles.description}>{giftItem.description}</p>
           </div>
@@ -151,9 +161,9 @@ export function BrindeDetalhe() {
           {/* SELETOR DE VALOR (CASO SEJA VALE-PRESENTE) */}
           {isGiftCard && (
             <div className={styles.sectionGroup}>
-              <span className={styles.groupLabel}>ESCOLHA O VALOR OU DIGITE UM VALOR LIVRE:</span>
+              <span className={styles.groupLabel}>ESCOLHA O VALOR DO VALE-PRESENTE:</span>
               <div className={styles.valuesGrid}>
-                {[150, 300, 500, 1000].map((val) => (
+                {DEFAULT_GIFT_VALUES.map((val) => (
                   <button
                     key={val}
                     type="button"
@@ -167,7 +177,7 @@ export function BrindeDetalhe() {
 
               {/* CAMPO DE VALOR LIVRE / ADAPTÁVEL */}
               <div className={styles.customValueBlock}>
-                <label htmlFor="customGiftVal">Outro valor (R$ 50 a R$ 5.000):</label>
+                <label htmlFor="customGiftVal">OUTRO VALOR LIVRE (R$ 50 A R$ 5.000):</label>
                 <div className={styles.customInputRow}>
                   <span className={styles.currencyPrefix}>R$</span>
                   <input 
@@ -181,7 +191,7 @@ export function BrindeDetalhe() {
                     className={styles.customValInput}
                   />
                 </div>
-                <small>O saldo será creditado integralmente no código digital gerado.</small>
+                <small>O saldo será creditado integralmente no código digital gerado para resgate.</small>
               </div>
             </div>
           )}
@@ -189,10 +199,10 @@ export function BrindeDetalhe() {
           {/* DADOS DO PRESENTEAR (SE FOR VALE PRESENTE) */}
           {isGiftCard && (
             <div className={styles.sectionGroup}>
-              <span className={styles.groupLabel}>DADOS DO DESTINATÁRIO:</span>
+              <span className={styles.groupLabel}>PERSONALIZAÇÃO DO CARTÃO DIGITAL:</span>
               <div className={styles.formFields}>
                 <div className={styles.fieldGroup}>
-                  <label htmlFor="recipientName">Nome de quem vai receber:</label>
+                  <label htmlFor="recipientName">NOME DE QUEM VAI RECEBER (OPCIONAL):</label>
                   <input
                     id="recipientName"
                     type="text"
@@ -203,7 +213,7 @@ export function BrindeDetalhe() {
                 </div>
 
                 <div className={styles.fieldGroup}>
-                  <label htmlFor="recipientEmail">E-mail do presenteado:</label>
+                  <label htmlFor="recipientEmail">E-MAIL DO PRESENTEDO (OPCIONAL):</label>
                   <input
                     id="recipientEmail"
                     type="email"
@@ -214,11 +224,11 @@ export function BrindeDetalhe() {
                 </div>
 
                 <div className={styles.fieldGroup}>
-                  <label htmlFor="giftMessage">Mensagem personalizada:</label>
+                  <label htmlFor="giftMessage">MENSAGEM PERSONALIZADA NO CARTÃO (OPCIONAL):</label>
                   <textarea
                     id="giftMessage"
                     rows="3"
-                    placeholder="Escreva uma mensagem especial..."
+                    placeholder="Escreva uma mensagem especial para acompanhar o vale..."
                     value={giftMessage}
                     onChange={(e) => setGiftMessage(e.target.value)}
                   />
@@ -257,7 +267,22 @@ export function BrindeDetalhe() {
 
           <div className={styles.guaranteeNotice}>
             <ShieldCheck size={16} />
-            <span>Vales são entregues instantaneamente via e-mail e não possuem prazo de expiração.</span>
+            <span>Vales digitais são entregues instantaneamente via e-mail e não possuem prazo de expiração.</span>
+          </div>
+
+          <div className={styles.termsList}>
+            <div className={styles.termItem}>
+              <span className={styles.termDot} />
+              <span>Válido para todas as peças e modelagens oficiais do catálogo.</span>
+            </div>
+            <div className={styles.termItem}>
+              <span className={styles.termDot} />
+              <span>Resgate instantâneo na Carteira Digital da conta do cliente.</span>
+            </div>
+            <div className={styles.termItem}>
+              <span className={styles.termDot} />
+              <span>Saldo cumulativo e sem prazo de validade ou expiração.</span>
+            </div>
           </div>
         </section>
       </div>
