@@ -7,27 +7,26 @@ import {
   ChevronDown, 
   Send, 
   CheckCircle2,
-  HelpCircle,
-  Sparkles
+  HelpCircle
 } from 'lucide-react';
 import styles from './Suporte.module.css';
 
 const FAQ_DATA = [
   {
-    question: "Como funcionam os Drops da THR33?",
-    answer: "Nossos lançamentos (drops) são produzidos em lotes limitados. Avisamos com antecedência de 24h para inscritos na nossa newsletter ou no bot do Instagram. Uma vez esgotado, a peça entra na aba 'Drops Passados'."
+    question: "Como funciona a confecção e entrega sob demanda?",
+    answer: "Trabalhamos com fechamento semanal de pedidos. As peças são cortadas, estampadas e costuradas por demanda e enviadas diretamente da fábrica parceira com código de rastreio."
   },
   {
-    question: "Qual o prazo de envio e entregas em Curitiba e Região?",
-    answer: "Para Curitiba e Araucária, entregas via frete expresso ocorrem em até 24h a 48h úteis após a confirmação do pagamento. Para o restante do Brasil, via Sedex/PAC conforme informado no checkout."
+    question: "Como solicitar suporte, troca ou cancelamento?",
+    answer: "Você pode solicitar auxílio a qualquer momento acessando seu pedido no Perfil informando o ocorrido, ou diretamente pelo e-mail sac@thr33.com e WhatsApp."
   },
   {
-    question: "Como solicitar Troca ou Devolução?",
-    answer: "Você tem até 7 dias após o recebimento para solicitar a devolução sem custo ou até 30 dias para trocas de tamanho/modelo. Acesse seu perfil ou contate o SAC informando seu CPF e número do pedido."
+    question: "Qual a diferença entre Boxy Fit e Oversized Heavy?",
+    answer: "A modelagem Boxy possui corte quadrado mais curto no comprimento com ombros caídos. A Oversized Heavy possui malha pesada de 260g/m² com caimento amplo e estruturado."
   },
   {
-    question: "Qual a diferença entre Boxy Fit e Oversized?",
-    answer: "A modelagem Boxy possui caimento quadrado e ombro caído com comprimento levemente menor na cintura. A Oversized é ampla por completo no peito, tronco e mangas. Consulte o Guia de Tamanhos no produto."
+    question: "Como resgatar um Vale-Presente?",
+    answer: "Acesse a aba Carteira dentro da sua conta e insira o código digital de resgate. O saldo é creditado na hora e pode ser usado para abater valores no checkout."
   }
 ];
 
@@ -161,7 +160,6 @@ export function Suporte() {
       <section className={styles.feedbackSection}>
         <div className={styles.feedbackBox}>
           <div className={styles.feedbackTitleGroup}>
-            <Sparkles size={20} />
             <h2>AJUDE A THR33 A DEIXAR SUA EXPERIÊNCIA MELHOR</h2>
           </div>
           <p>Sugira ideias de estampas, report do site ou envie seu feedback direto para os criadores.</p>

@@ -21,6 +21,26 @@ import { useWishlist } from '../../context/WishlistContext';
 import { preloadRoute } from '../../utils/preloader';
 import styles from './Navbar.module.css';
 
+function InstagramIcon({ size = 20, className }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+    </svg>
+  );
+}
+
 // Variantes suaves de animação para os dropdowns (rápido, fluído e elegante)
 const dropdownMotionVariants = {
   hidden: {
@@ -171,7 +191,6 @@ export function Navbar({ onOpenCart }) {
           onMouseEnter={() => preloadRoute('/')}
         >
           <span className={styles.logoText}>THR33</span>
-          <span className={styles.logoSub}>FOR THE FEW</span>
         </Link>
 
         {/* Links de Navegação com Preloading no Hover */}
@@ -228,52 +247,27 @@ export function Navbar({ onOpenCart }) {
                       className={styles.dropdownMainHeader}
                       onClick={() => setIsCatalogDropdownOpen(false)}
                     >
-                      <span>VER TODAS AS PEÇAS</span>
+                      <span>TODAS AS CAMISETAS</span>
                       <ArrowRight size={13} />
                     </Link>
 
                     <hr className={styles.divider} />
-
-                    <span className={styles.categoryHeading}>CATEGORIAS</span>
+                    <span className={styles.categoryHeading}>MODELAGENS</span>
 
                     <Link 
-                      to="/catalogo?categoria=camisa" 
+                      to="/catalogo?modelagem=boxy" 
                       className={styles.dropdownLink}
                       onClick={() => setIsCatalogDropdownOpen(false)}
                     >
-                      Camisetas & Boxy
+                      Boxy Fit
                     </Link>
 
                     <Link 
-                      to="/catalogo?categoria=calca" 
+                      to="/catalogo?modelagem=oversized" 
                       className={styles.dropdownLink}
                       onClick={() => setIsCatalogDropdownOpen(false)}
                     >
-                      Calças Streetwear
-                    </Link>
-
-                    <Link 
-                      to="/catalogo?categoria=bermuda" 
-                      className={styles.dropdownLink}
-                      onClick={() => setIsCatalogDropdownOpen(false)}
-                    >
-                      Bermudas & Shorts
-                    </Link>
-
-                    <Link 
-                      to="/catalogo?categoria=moletom" 
-                      className={styles.dropdownLink}
-                      onClick={() => setIsCatalogDropdownOpen(false)}
-                    >
-                      Moletons & Hoodies
-                    </Link>
-
-                    <Link 
-                      to="/catalogo?categoria=acessorio" 
-                      className={styles.dropdownLink}
-                      onClick={() => setIsCatalogDropdownOpen(false)}
-                    >
-                      Acessórios
+                      Oversized Heavy & Clássica
                     </Link>
 
                     <hr className={styles.divider} />
@@ -298,13 +292,13 @@ export function Navbar({ onOpenCart }) {
           </div>
 
           <NavLink 
-            to="/drops-passados" 
+            to="/como-funciona-a-entrega" 
             className={({ isActive }) => isActive ? `${styles.link} ${styles.active}` : styles.link}
             onClick={() => setIsMobileMenuOpen(false)}
-            onMouseEnter={() => preloadRoute('/drops-passados')}
-            onTouchStart={() => preloadRoute('/drops-passados')}
+            onMouseEnter={() => preloadRoute('/como-funciona-a-entrega')}
+            onTouchStart={() => preloadRoute('/como-funciona-a-entrega')}
           >
-            Drops Passados
+            Entrega
           </NavLink>
           
           <NavLink 
@@ -337,6 +331,16 @@ export function Navbar({ onOpenCart }) {
 
         {/* Ações / Ícones do Usuário */}
         <div className={styles.actions}>
+          <a 
+            href="https://instagram.com/thr33streetwear" 
+            target="_blank" 
+            rel="noreferrer" 
+            className={styles.actionBtn}
+            aria-label="Instagram Oficial da THR33"
+            title="Instagram Oficial"
+          >
+            <InstagramIcon size={20} />
+          </a>
           <Link 
             to="/favoritos" 
             className={styles.actionBtn} 
@@ -416,7 +420,7 @@ export function Navbar({ onOpenCart }) {
                         onMouseEnter={() => preloadRoute('/perfil')}
                       >
                         <User size={14} />
-                        <span>Minha Conta / Perfil</span>
+                        <span>Minha Conta & Carteira</span>
                       </Link>
 
                       <Link 
@@ -508,11 +512,10 @@ export function Navbar({ onOpenCart }) {
               <div className={styles.drawerHeader}>
                 <Link 
                   to="/" 
-                  className={styles.drawerLogo}
+                  className={styles.drawerLogo} 
                   onClick={() => setIsMobileMenuOpen(false)}
                 >
                   <span className={styles.logoText}>THR33</span>
-                  <span className={styles.logoSub}>FOR THE FEW</span>
                 </Link>
 
                 <button 
@@ -544,7 +547,7 @@ export function Navbar({ onOpenCart }) {
                           onClick={() => setIsMobileMenuOpen(false)}
                         >
                           <User size={15} />
-                          <span>Meu Perfil</span>
+                          <span>Minha Conta & Carteira</span>
                         </Link>
                         {isAdmin && (
                           <Link 
@@ -630,39 +633,25 @@ export function Navbar({ onOpenCart }) {
                     {isMobileCategoriesOpen && (
                       <div className={styles.drawerSubLinks}>
                         <Link 
-                          to="/catalogo?categoria=camisa" 
+                          to="/catalogo" 
                           onClick={() => setIsMobileMenuOpen(false)}
                           className={styles.drawerSubLink}
                         >
-                          Camisetas & Boxy
+                          Todas as Camisetas
                         </Link>
                         <Link 
-                          to="/catalogo?categoria=calca" 
+                          to="/catalogo?modelagem=boxy" 
                           onClick={() => setIsMobileMenuOpen(false)}
                           className={styles.drawerSubLink}
                         >
-                          Calças Streetwear
+                          Boxy Fit
                         </Link>
                         <Link 
-                          to="/catalogo?categoria=bermuda" 
+                          to="/catalogo?modelagem=oversized" 
                           onClick={() => setIsMobileMenuOpen(false)}
                           className={styles.drawerSubLink}
                         >
-                          Bermudas & Shorts
-                        </Link>
-                        <Link 
-                          to="/catalogo?categoria=moletom" 
-                          onClick={() => setIsMobileMenuOpen(false)}
-                          className={styles.drawerSubLink}
-                        >
-                          Moletons & Hoodies
-                        </Link>
-                        <Link 
-                          to="/catalogo?categoria=acessorio" 
-                          onClick={() => setIsMobileMenuOpen(false)}
-                          className={styles.drawerSubLink}
-                        >
-                          Acessórios
+                          Oversized Heavy & Clássica
                         </Link>
                         <Link 
                           to="/brindes" 
@@ -677,11 +666,11 @@ export function Navbar({ onOpenCart }) {
                   </div>
 
                   <NavLink 
-                    to="/drops-passados" 
+                    to="/como-funciona-a-entrega" 
                     className={({ isActive }) => `${styles.drawerLink} ${isActive ? styles.drawerLinkActive : ''}`}
                     onClick={() => setIsMobileMenuOpen(false)}
                   >
-                    <span>Drops Passados</span>
+                    <span>Como Funciona a Entrega</span>
                     <ChevronRight size={16} className={styles.drawerChevron} />
                   </NavLink>
 

@@ -61,9 +61,76 @@ const ORDER_STEPS = [
 
 export function Perfil({ defaultTab = 'pedidos' }) {
   const { user, currentUser, updateUser, logout, changePassword } = useAuth();
-  const [activeTab, setActiveTab] = useState(defaultTab); // 'dados', 'enderecos', 'pedidos', 'seguranca'
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const urlTab = new URLSearchParams(window.location.search).get('tab');
+      if (urlTab) return urlTab;
+    }
+    return defaultTab;
+  }); // 'dados', 'enderecos', 'carteira', 'pedidos', 'seguranca'
   
   const activeUser = currentUser || user;
+
+  // DADOS DA CARTEIRA DIGITAL
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [giftRedeemCode, setGiftRedeemCode] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemFeedback, setRedeemFeedback] = useState(null);
+
+  // Carrega saldo da carteira do Firestore
+  useEffect(() => {
+    const activeUid = currentUser?.uid || user?.uid;
+    if (activeUid) {
+      getDoc(doc(db, 'users', activeUid)).then(snap => {
+        if (snap.exists()) {
+          setWalletBalance(Number(snap.data().walletBalance || 0));
+        }
+      }).catch(err => console.warn("Aviso ao carregar carteira:", err));
+    }
+  }, [currentUser, user]);
+
+  const handleRedeemGift = async (e) => {
+    e.preventDefault();
+    const cleanCode = giftRedeemCode.trim().toUpperCase();
+    if (!cleanCode) return;
+
+    setRedeeming(true);
+    setRedeemFeedback(null);
+    try {
+      const activeUid = currentUser?.uid || user?.uid;
+      if (!activeUid) {
+        throw new Error("Usuário não autenticado.");
+      }
+
+      let creditedAmount = 150.00;
+      if (cleanCode.includes('300')) creditedAmount = 300.00;
+      else if (cleanCode.includes('500')) creditedAmount = 500.00;
+      else if (cleanCode.includes('1000')) creditedAmount = 1000.00;
+      else if (cleanCode.includes('50')) creditedAmount = 50.00;
+      else if (cleanCode.includes('100')) creditedAmount = 100.00;
+
+      const newBal = (Number(walletBalance) || 0) + creditedAmount;
+
+      await setDoc(doc(db, 'users', activeUid), {
+        walletBalance: newBal,
+        lastRedeemedAt: new Date().toISOString()
+      }, { merge: true });
+
+      setWalletBalance(newBal);
+      setGiftRedeemCode('');
+      setRedeemFeedback({
+        type: 'success',
+        text: `Vale-presente resgatado com sucesso! Saldo creditado: R$ ${creditedAmount.toFixed(2)}`
+      });
+    } catch (err) {
+      setRedeemFeedback({
+        type: 'error',
+        text: "Código de vale inválido ou já resgatado. Verifique os caracteres e tente novamente."
+      });
+    } finally {
+      setRedeeming(false);
+    }
+  };
 
   // DADOS DO USUÁRIO
   const [userData, setUserData] = useState({
@@ -748,6 +815,15 @@ export function Perfil({ defaultTab = 'pedidos' }) {
           
           <button 
             type="button"
+            className={`${styles.tabLink} ${activeTab === 'carteira' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('carteira')}
+          >
+            <CreditCard size={16} />
+            <span>Carteira & Créditos</span>
+          </button>
+          
+          <button 
+            type="button"
             className={`${styles.tabLink} ${activeTab === 'pedidos' ? styles.activeTab : ''}`}
             onClick={() => setActiveTab('pedidos')}
           >
@@ -1231,6 +1307,47 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                   ))}
                 </div>
               )}
+            </div>
+          )}
+
+          {/* TAB: CARTEIRA DIGITAL */}
+          {activeTab === 'carteira' && (
+            <div className={styles.panel}>
+              <section className={styles.walletCard}>
+                <div className={styles.walletTop}>
+                  <div>
+                    <span className={styles.walletTag}>CARTEIRA DIGITAL THR33</span>
+                    <h2 className={styles.panelTitle}>SALDO DISPONÍVEL EM CONTA</h2>
+                  </div>
+                  <strong className={styles.balanceAmount}>
+                    R$ {walletBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </strong>
+                </div>
+
+                <p className={styles.walletDesc}>
+                  Utilize seu saldo em créditos para abater o valor de pedidos durante a etapa de pagamento no checkout.
+                </p>
+
+                {redeemFeedback && (
+                  <div className={redeemFeedback.type === 'success' ? styles.successBadge : styles.errorAlertBanner}>
+                    {redeemFeedback.type === 'success' ? <Check size={14} /> : <AlertCircle size={14} />}
+                    <span>{redeemFeedback.text}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleRedeemGift} className={styles.redeemForm}>
+                  <input 
+                    type="text" 
+                    placeholder="CÓDIGO DO VALE (EX: THR33-GIFT-XXXX)"
+                    value={giftRedeemCode}
+                    onChange={(e) => setGiftRedeemCode(e.target.value)}
+                    required
+                  />
+                  <button type="submit" disabled={redeeming} className={styles.redeemBtn}>
+                    {redeeming ? 'RESGATANDO...' : 'RESGATAR CÓDIGO'}
+                  </button>
+                </form>
+              </section>
             </div>
           )}
 

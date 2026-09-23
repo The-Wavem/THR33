@@ -16,11 +16,29 @@ export function BrindeDetalhe() {
   const [loading, setLoading] = useState(true);
 
   // Estados específicos para Vale-Presente
-  const [selectedValue, setSelectedValue] = useState(250);
+  const [selectedValue, setSelectedValue] = useState(150);
+  const [customValueInput, setCustomValueInput] = useState('');
+  const [isCustomMode, setIsCustomMode] = useState(false);
   const [recipientName, setRecipientName] = useState('');
   const [recipientEmail, setRecipientEmail] = useState('');
   const [giftMessage, setGiftMessage] = useState('');
   const [added, setAdded] = useState(false);
+
+  const handlePresetSelect = (val) => {
+    setSelectedValue(val);
+    setIsCustomMode(false);
+    setCustomValueInput('');
+  };
+
+  const handleCustomValueChange = (e) => {
+    const raw = e.target.value;
+    setCustomValueInput(raw);
+    setIsCustomMode(true);
+    const num = Number(raw);
+    if (!isNaN(num) && num > 0) {
+      setSelectedValue(Math.min(Math.max(num, 50), 5000));
+    }
+  };
 
   useEffect(() => {
     async function loadGift() {
@@ -133,18 +151,37 @@ export function BrindeDetalhe() {
           {/* SELETOR DE VALOR (CASO SEJA VALE-PRESENTE) */}
           {isGiftCard && (
             <div className={styles.sectionGroup}>
-              <span className={styles.groupLabel}>ESCOLHA O VALOR DO VALE:</span>
+              <span className={styles.groupLabel}>ESCOLHA O VALOR OU DIGITE UM VALOR LIVRE:</span>
               <div className={styles.valuesGrid}>
-                {values.map((val) => (
+                {[150, 300, 500, 1000].map((val) => (
                   <button
                     key={val}
                     type="button"
-                    className={`${styles.valueChip} ${selectedValue === val ? styles.activeValue : ''}`}
-                    onClick={() => setSelectedValue(val)}
+                    className={`${styles.valueChip} ${!isCustomMode && selectedValue === val ? styles.activeValue : ''}`}
+                    onClick={() => handlePresetSelect(val)}
                   >
                     R$ {val.toLocaleString('pt-BR')}
                   </button>
                 ))}
+              </div>
+
+              {/* CAMPO DE VALOR LIVRE / ADAPTÁVEL */}
+              <div className={styles.customValueBlock}>
+                <label htmlFor="customGiftVal">Outro valor (R$ 50 a R$ 5.000):</label>
+                <div className={styles.customInputRow}>
+                  <span className={styles.currencyPrefix}>R$</span>
+                  <input 
+                    id="customGiftVal"
+                    type="number"
+                    min="50"
+                    max="5000"
+                    placeholder="Ex: 250"
+                    value={customValueInput}
+                    onChange={handleCustomValueChange}
+                    className={styles.customValInput}
+                  />
+                </div>
+                <small>O saldo será creditado integralmente no código digital gerado.</small>
               </div>
             </div>
           )}

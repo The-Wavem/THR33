@@ -63,6 +63,24 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     clearCart 
   } = useCart();
 
+  // CARTEIRA DIGITAL & SALDO DA CONTA
+  const [useWalletBalance, setUseWalletBalance] = useState(false);
+  const [userWalletAmount, setUserWalletAmount] = useState(0);
+
+  useEffect(() => {
+    const activeUid = user?.uid || authUser?.uid || currentUser?.uid;
+    if (activeUid) {
+      getDoc(doc(db, 'users', activeUid)).then(snap => {
+        if (snap.exists()) {
+          setUserWalletAmount(Number(snap.data().walletBalance || 0));
+        }
+      }).catch(err => console.warn("Aviso ao carregar saldo da carteira:", err));
+    }
+  }, [user, authUser, currentUser]);
+
+  const walletDeduction = useWalletBalance ? Math.min(userWalletAmount, total) : 0;
+  const finalAmountToPay = Math.max(0, total - walletDeduction);
+
   // CONTROLE DE ETAPAS: 1 = Identificação, 2 = Entrega & Frete, 3 = Pagamento, 4 = Sucesso
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -484,8 +502,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       couponId: appliedCoupon?.id || null,
       shippingCost: Number(shippingCost) || 0,
       shippingMethod: selectedShippingMethod || 'sedex',
-      total: Number(total) || 0,
-      paymentMethod: paymentMethod || 'PIX',
+      total: Number(finalAmountToPay) || 0,
+      originalTotal: Number(total) || 0,
+      walletDeduction: Number(walletDeduction) || 0,
+      paymentMethod: finalAmountToPay === 0 ? 'Carteira Digital THR33' : (paymentMethod || 'PIX'),
       shippingAddress: {
         cep: addressToSave.cep || '',
         street: addressToSave.street || '',
@@ -568,6 +588,16 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
           if (updateUser) {
             updateUser(userPayload);
+          }
+
+          // Abate o saldo da carteira digital se utilizado
+          if (walletDeduction > 0) {
+            const newWalletBal = Math.max(0, userWalletAmount - walletDeduction);
+            await setDoc(userRef, { 
+              walletBalance: newWalletBal,
+              lastWalletUseAt: new Date().toISOString()
+            }, { merge: true });
+            setUserWalletAmount(newWalletBal);
           }
         } catch (syncErr) {
           console.warn("Aviso ao atualizar perfil no Checkout:", syncErr.message);
@@ -1215,61 +1245,93 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                   <button type="button" onClick={() => setCurrentStep(2)} className={styles.changeLink}>Alterar</button>
                 </div>
 
-                {/* CARD PRINCIPAL DO GATEWAY PAGBANK */}
-                <div className={styles.pagBankGatewayCard}>
-                  <div className={styles.pagBankHeader}>
-                    <div className={styles.pagBankBrandGroup}>
-                      <span className={styles.pagBankLogo}>PAGBANK</span>
-                      <span className={styles.pagBankBadge}>GATEWAY OFICIAL</span>
-                    </div>
-                    <div className={styles.pagBankSecureTag}>
-                      <ShieldCheck size={14} color="#4ade80" />
-                      <span>CRIPTOGRAFIA 256-BIT</span>
+                {/* BLOCO DE ABATIMENTO COM SALDO EM CARTEIRA */}
+                {userWalletAmount > 0 && (
+                  <div className={styles.walletPaymentBlock}>
+                    <label className={styles.walletCheckLabel}>
+                      <input 
+                        type="checkbox" 
+                        checked={useWalletBalance}
+                        onChange={(e) => setUseWalletBalance(e.target.checked)}
+                      />
+                      <div>
+                        <span>UTILIZAR SALDO EM CARTEIRA</span>
+                        <small>Você possui R$ {userWalletAmount.toFixed(2)} disponíveis para abater nesta compra.</small>
+                      </div>
+                    </label>
+                    {useWalletBalance && (
+                      <span className={styles.deductionNotice}>
+                        Desconto aplicado da carteira: -R$ {walletDeduction.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {finalAmountToPay === 0 ? (
+                  <div className={styles.walletFullCoverCard}>
+                    <ShieldCheck size={24} color="#4ade80" />
+                    <div>
+                      <strong>COMPRA 100% COBERTA PELO SALDO DA CARTEIRA</strong>
+                      <p>O valor total de R$ {total.toFixed(2)} foi integralmente abatido com seus créditos. Nenhum pagamento adicional é necessário.</p>
                     </div>
                   </div>
-
-                  <p className={styles.pagBankDesc}>
-                    Ao clicar no botão de confirmação, você será conectado ao ambiente seguro do <strong>PagBank</strong> para concluir seu pagamento com total proteção.
-                  </p>
-
-                  <div className={styles.pagBankMethodsList}>
-                    <button 
-                      type="button" 
-                      onClick={() => setPaymentMethod('PIX')}
-                      className={`${styles.methodPillBtn} ${paymentMethod === 'PIX' ? styles.activeMethodPill : ''}`}
-                    >
-                      <div className={styles.methodContent}>
-                        <Zap size={15} />
-                        <span><strong>PIX</strong> (Aprovação imediata)</span>
+                ) : (
+                  /* CARD PRINCIPAL DO GATEWAY PAGBANK */
+                  <div className={styles.pagBankGatewayCard}>
+                    <div className={styles.pagBankHeader}>
+                      <div className={styles.pagBankBrandGroup}>
+                        <span className={styles.pagBankLogo}>PAGBANK</span>
+                        <span className={styles.pagBankBadge}>GATEWAY OFICIAL</span>
                       </div>
-                      {paymentMethod === 'PIX' && <CheckCircle2 size={15} className={styles.methodCheck} />}
-                    </button>
-
-                    <button 
-                      type="button" 
-                      onClick={() => setPaymentMethod('Cartão de Crédito')}
-                      className={`${styles.methodPillBtn} ${paymentMethod === 'Cartão de Crédito' ? styles.activeMethodPill : ''}`}
-                    >
-                      <div className={styles.methodContent}>
-                        <CreditCard size={15} />
-                        <span><strong>Cartão de Crédito</strong> (em até 3x)</span>
+                      <div className={styles.pagBankSecureTag}>
+                        <ShieldCheck size={14} color="#4ade80" />
+                        <span>CRIPTOGRAFIA 256-BIT</span>
                       </div>
-                      {paymentMethod === 'Cartão de Crédito' && <CheckCircle2 size={15} className={styles.methodCheck} />}
-                    </button>
+                    </div>
 
-                    <button 
-                      type="button" 
-                      onClick={() => setPaymentMethod('Boleto Bancário')}
-                      className={`${styles.methodPillBtn} ${paymentMethod === 'Boleto Bancário' ? styles.activeMethodPill : ''}`}
-                    >
-                      <div className={styles.methodContent}>
-                        <FileText size={15} />
-                        <span><strong>Boleto Bancário</strong></span>
-                      </div>
-                      {paymentMethod === 'Boleto Bancário' && <CheckCircle2 size={15} className={styles.methodCheck} />}
-                    </button>
+                    <p className={styles.pagBankDesc}>
+                      Ao clicar no botão de confirmação, você será conectado ao ambiente seguro do <strong>PagBank</strong> para concluir seu pagamento com total proteção.
+                    </p>
+
+                    <div className={styles.pagBankMethodsList}>
+                      <button 
+                        type="button" 
+                        onClick={() => setPaymentMethod('PIX')}
+                        className={`${styles.methodPillBtn} ${paymentMethod === 'PIX' ? styles.activeMethodPill : ''}`}
+                      >
+                        <div className={styles.methodContent}>
+                          <Zap size={15} />
+                          <span><strong>PIX</strong> (Aprovação imediata)</span>
+                        </div>
+                        {paymentMethod === 'PIX' && <CheckCircle2 size={15} className={styles.methodCheck} />}
+                      </button>
+
+                      <button 
+                        type="button" 
+                        onClick={() => setPaymentMethod('Cartão de Crédito')}
+                        className={`${styles.methodPillBtn} ${paymentMethod === 'Cartão de Crédito' ? styles.activeMethodPill : ''}`}
+                      >
+                        <div className={styles.methodContent}>
+                          <CreditCard size={15} />
+                          <span><strong>Cartão de Crédito</strong> (em até 3x)</span>
+                        </div>
+                        {paymentMethod === 'Cartão de Crédito' && <CheckCircle2 size={15} className={styles.methodCheck} />}
+                      </button>
+
+                      <button 
+                        type="button" 
+                        onClick={() => setPaymentMethod('Boleto Bancário')}
+                        className={`${styles.methodPillBtn} ${paymentMethod === 'Boleto Bancário' ? styles.activeMethodPill : ''}`}
+                      >
+                        <div className={styles.methodContent}>
+                          <FileText size={15} />
+                          <span><strong>Boleto Bancário</strong></span>
+                        </div>
+                        {paymentMethod === 'Boleto Bancário' && <CheckCircle2 size={15} className={styles.methodCheck} />}
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className={styles.stepActionsBetween}>
                   <button type="button" onClick={() => setCurrentStep(2)} className={styles.secondaryBtn}>
@@ -1285,11 +1347,16 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                     {isProcessing ? (
                       <>
                         <Loader2 size={16} className={styles.spinner} />
-                        <span>PROCESSANDO COM {paymentMethod.toUpperCase()}...</span>
+                        <span>PROCESSANDO...</span>
+                      </>
+                    ) : finalAmountToPay === 0 ? (
+                      <>
+                        <span>CONCLUIR PEDIDO COM SALDO DA CARTEIRA</span>
+                        <ArrowRight size={15} />
                       </>
                     ) : (
                       <>
-                        <span>PAGAR COM {paymentMethod.toUpperCase()} (R$ {total.toFixed(2)})</span>
+                        <span>PAGAR COM {paymentMethod.toUpperCase()} (R$ {finalAmountToPay.toFixed(2)})</span>
                         <ArrowRight size={15} />
                       </>
                     )}
@@ -1382,14 +1449,21 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
               </div>
             )}
 
+            {useWalletBalance && walletDeduction > 0 && (
+              <div className={`${styles.summaryRow} ${styles.discountRow}`}>
+                <span>Saldo da Carteira</span>
+                <span>- R$ {walletDeduction.toFixed(2)}</span>
+              </div>
+            )}
+
             <div className={styles.summaryRow}>
               <span>Frete</span>
               <span>{shippingCost === 0 ? 'GRÁTIS' : `R$ ${shippingCost.toFixed(2)}`}</span>
             </div>
 
             <div className={`${styles.summaryRow} ${styles.totalRow}`}>
-              <strong>TOTAL</strong>
-              <strong>R$ {total.toFixed(2)}</strong>
+              <strong>TOTAL A PAGAR</strong>
+              <strong>R$ {finalAmountToPay.toFixed(2)}</strong>
             </div>
           </div>
 

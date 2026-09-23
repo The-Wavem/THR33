@@ -1,12 +1,13 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Camera } from 'lucide-react';
 import styles from './BentoGrid.module.css';
 
 const DEFAULT_BENTO_CARDS = [
   {
     id: "bento_1",
-    title: "OVERSIZED FIT",
-    buttonText: "VER MAIS",
+    title: "OVERSIZED HEAVY",
+    buttonText: "VER DETALHES",
     link: "/catalogo?modelagem=oversized",
     image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=800&auto=format&fit=crop",
     size: "large",
@@ -15,7 +16,7 @@ const DEFAULT_BENTO_CARDS = [
   {
     id: "bento_2",
     title: "BOXY TEES",
-    buttonText: "VER MAIS",
+    buttonText: "VER DETALHES",
     link: "/catalogo?modelagem=boxy",
     image: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?q=80&w=600&auto=format&fit=crop",
     size: "normal",
@@ -23,9 +24,9 @@ const DEFAULT_BENTO_CARDS = [
   },
   {
     id: "bento_3",
-    title: "EDITION FOR THE FEW",
-    buttonText: "VER MAIS",
-    link: "/catalogo?drop=leak-two",
+    title: "EDITION 2026",
+    buttonText: "VER CATÁLOGO",
+    link: "/catalogo",
     image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=600&auto=format&fit=crop",
     size: "normal",
     active: true
@@ -42,7 +43,7 @@ export function BentoGrid({ gridItems = [], sectionTag, sectionTitle }) {
   return (
     <section className={styles.section}>
       <div className={styles.header}>
-        <span className={styles.tag}>{sectionTag || 'ENSAIO DE CAMPANHA'}</span>
+        <span className={styles.tag}>{sectionTag || 'COLEÇÃO OFICIAL // ATELIÊ CWB'}</span>
         <h2 className={styles.title}>{sectionTitle || 'A RUA COMO NOSSO ATELIÊ'}</h2>
       </div>
 
@@ -62,7 +63,15 @@ export function BentoGrid({ gridItems = [], sectionTag, sectionTitle }) {
                 className={styles.cardImage}
               />
               <div className={styles.cardOverlay}>
-                <span className={styles.cardCaption}>{item.title}</span>
+                <div>
+                  <span className={styles.cardCaption}>{item.title}</span>
+                  {isLarge && (
+                    <span className={styles.photoCreditInline}>
+                      <Camera size={11} />
+                      <span>FOTOS: @EDULIVE</span>
+                    </span>
+                  )}
+                </div>
                 <Link className={styles.lowOpacityBtn} to={item.link || '/catalogo'}>
                   {item.buttonText || 'VER MAIS'}
                 </Link>

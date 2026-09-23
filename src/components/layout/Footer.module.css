@@ -333,3 +333,51 @@
     justify-content: center;
   }
 }
+
+.photoCreditBox {
+  margin-top: 1rem;
+}
+
+.photoCreditBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 0.45rem 0.85rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.photoCreditBtn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+  background-color: #000000;
+}
+
+.wavemSignature {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.75rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-decoration: none;
+}
+
+.wavemLetter,
+.wavemSpace {
+  display: inline-block;
+}
+
+.wavemSpace {
+  width: 0.3em;
+}

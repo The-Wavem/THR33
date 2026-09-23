@@ -276,6 +276,57 @@
   margin: 0;
 }
 
+.customValueBlock {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.customValueBlock label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+.customInputRow {
+  display: flex;
+  align-items: center;
+  max-width: 240px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 0 0.85rem;
+  transition: border-color var(--transition-fast);
+}
+
+.customInputRow:focus-within {
+  border-color: var(--text-primary);
+}
+
+.currencyPrefix {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  margin-right: 0.5rem;
+}
+
+.customValInput {
+  width: 100%;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 1.1rem;
+  font-weight: 800;
+  padding: 0.75rem 0;
+  outline: none;
+}
+
+.customValueBlock small {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
 @media (max-width: 900px) {
   .productGrid { 
     grid-template-columns: 1fr; 

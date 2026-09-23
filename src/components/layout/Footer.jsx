@@ -1,8 +1,27 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, MapPin, Check, ChevronDown } from 'lucide-react';
+import { ArrowRight, MapPin, Check, ChevronDown, Camera, ArrowUpRight } from 'lucide-react';
+import { motion } from 'framer-motion';
 import { preloadRoute } from '../../utils/preloader';
 import styles from './Footer.module.css';
+
+const MotionAnchor = motion.a;
+const wavemText = 'DESENVOLVIDO POR WAVEM';
+const wavemLetterVariants = {
+  rest: { y: 0 },
+  hover: (index) => ({
+    y: [0, -3, 0],
+    transition: {
+      duration: 0.32,
+      delay: index * 0.025,
+      ease: 'easeOut'
+    }
+  })
+};
+const wavemArrowVariants = {
+  rest: { x: 0, y: 0 },
+  hover: { x: 2, y: -2, transition: { duration: 0.25, ease: 'easeOut' } }
+};
 
 export function Footer() {
   const [email, setEmail] = useState('');
@@ -37,10 +56,9 @@ export function Footer() {
               onMouseEnter={() => preloadRoute('/')}
             >
               <span className={styles.logoText}>THR33</span>
-              <span className={styles.logoSub}>FOR THE FEW</span>
             </Link>
             <p className={styles.brandDesc}>
-              Streetwear autoral e independente nascido no frio de Curitiba. A rua como nosso ateliê e a música como inspiração.
+              Streetwear autoral e independente nascido no concreto de Curitiba. Confecção sob demanda, modelagens pesadas e edições limitadas.
             </p>
             <span className={styles.locationBadge}>
               <MapPin size={12} />
@@ -70,22 +88,22 @@ export function Footer() {
               </li>
               <li>
                 <Link to="/catalogo" onMouseEnter={() => preloadRoute('/catalogo')}>
-                  Catálogo Completo
+                  Catálogo de Camisetas
                 </Link>
               </li>
               <li>
-                <Link to="/catalogo?drop=leak-two" onMouseEnter={() => preloadRoute('/catalogo')}>
-                  Novo Drop (Leak Two)
+                <Link to="/como-funciona-a-entrega" onMouseEnter={() => preloadRoute('/como-funciona-a-entrega')}>
+                  Como Funciona a Entrega
                 </Link>
               </li>
               <li>
-                <Link to="/drops-passados" onMouseEnter={() => preloadRoute('/drops-passados')}>
-                  Drops Passados
+                <Link to="/brindes" onMouseEnter={() => preloadRoute('/brindes')}>
+                  Vales & Brindes
                 </Link>
               </li>
               <li>
                 <Link to="/sobre" onMouseEnter={() => preloadRoute('/sobre')}>
-                  Sobre a THR33
+                  Sobre a Marca
                 </Link>
               </li>
             </ul>
@@ -99,7 +117,7 @@ export function Footer() {
               onClick={() => toggleSection('suporte')}
               aria-expanded={openSections.suporte}
             >
-              <h4 className={styles.colTitle}>SUPORTE</h4>
+              <h4 className={styles.colTitle}>ATENDIMENTO</h4>
               <ChevronDown 
                 size={16} 
                 className={`${styles.accordionChevron} ${openSections.suporte ? styles.accordionChevronOpen : ''}`} 
@@ -108,48 +126,38 @@ export function Footer() {
             <ul className={`${styles.linksList} ${openSections.suporte ? styles.linksListExpanded : styles.linksListCollapsed}`}>
               <li>
                 <Link to="/suporte" onMouseEnter={() => preloadRoute('/suporte')}>
-                  Central de Atendimento
+                  Central de Suporte
                 </Link>
               </li>
               <li>
                 <Link to="/suporte" onMouseEnter={() => preloadRoute('/suporte')}>
-                  Perguntas Frequentes (FAQ)
+                  Dúvidas Frequentes
                 </Link>
               </li>
               <li>
                 <Link to="/politicas" onMouseEnter={() => preloadRoute('/politicas')}>
-                  Trocas e Devoluções
-                </Link>
-              </li>
-              <li>
-                <Link to="/politicas" onMouseEnter={() => preloadRoute('/politicas')}>
-                  Prazos e Entregas
-                </Link>
-              </li>
-              <li>
-                <Link to="/como-funciona-a-entrega" onMouseEnter={() => preloadRoute('/como-funciona-a-entrega')}>
-                  Como Funciona a Entrega
+                  Trocas e Garantia
                 </Link>
               </li>
               <li>
                 <Link to="/perfil" onMouseEnter={() => preloadRoute('/perfil')}>
-                  Minha Conta
+                  Minha Conta & Carteira
                 </Link>
               </li>
             </ul>
           </div>
 
-          {/* COLUNA 4: NEWSLETTER PRÉ-DROPS 24H */}
+          {/* COLUNA 4: NEWSLETTER & CRÉDITO DE FOTOGRAFIA */}
           <div className={styles.newsletterCol}>
-            <h4 className={styles.colTitle}>PRE-DROP ACCESS</h4>
+            <h4 className={styles.colTitle}>AVISOS DE DROPS</h4>
             <p className={styles.newsletterText}>
-              Receba o link de compra 24h antes de cada drop ser liberado no site oficial.
+              Receba links antecipados e informativos de fechamento de lote semanal.
             </p>
 
             {subscribed ? (
               <div className={styles.successMsg}>
                 <Check size={14} />
-                <span>E-mail cadastrado. Fique atento à sua caixa de entrada!</span>
+                <span>E-mail cadastrado com sucesso!</span>
               </div>
             ) : (
               <form onSubmit={handleSubscribe} className={styles.newsletterForm}>
@@ -159,7 +167,7 @@ export function Footer() {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required 
-                  aria-label="Informe seu e-mail para receber avisos de pré-drops"
+                  aria-label="Informe seu e-mail"
                 />
                 <button type="submit" aria-label="Cadastrar e-mail">
                   <ArrowRight size={16} />
@@ -167,23 +175,53 @@ export function Footer() {
               </form>
             )}
 
-            {/* SOCIAIS */}
-            <div className={styles.socialRow}>
-              <a href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram da THR33">
-                INSTAGRAM
-              </a>
-              <span>/</span>
-              <a href="https://wa.me/5541999999999" target="_blank" rel="noreferrer" aria-label="WhatsApp da THR33">
-                WHATSAPP
+            {/* BOTÃO DE CRÉDITO DE FOTOGRAFIA EDU LIVE */}
+            <div className={styles.photoCreditBox}>
+              <a 
+                href="https://instagram.com/eduian.foto" 
+                target="_blank" 
+                rel="noreferrer" 
+                className={styles.photoCreditBtn}
+                title="Conheça o trabalho de fotografia de Edu Live"
+              >
+                <Camera size={13} />
+                <span>FOTOGRAFIA: @eduian.foto</span>
               </a>
             </div>
           </div>
         </div>
 
-        {/* LINHA INFERIOR (COPYRIGHT E PAGAMENTOS) */}
         <div className={styles.bottomBar}>
           <div className={styles.copyright}>
-            © {new Date().getFullYear()} THR33 STREETWEAR. TODOS OS DIREITOS RESERVADOS.
+            <span>© {new Date().getFullYear()} THR33 STREETWEAR.</span>
+            <MotionAnchor
+              href="https://thewavem.web.app"
+              target="_blank"
+              rel="noreferrer"
+              className={styles.wavemSignature}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              whileHover="hover"
+              whileTap={{ scale: 0.98 }}
+              transition={{ duration: 0.35, ease: 'easeOut' }}
+              aria-label="Acessar o site da Wavem"
+            >
+              <span aria-hidden="true">
+                {Array.from(wavemText).map((character, index) => (
+                  <motion.span
+                    key={`${character}-${index}`}
+                    className={character === ' ' ? styles.wavemSpace : styles.wavemLetter}
+                    variants={wavemLetterVariants}
+                    custom={index}
+                  >
+                    {character === ' ' ? null : character}
+                  </motion.span>
+                ))}
+              </span>
+              <motion.span variants={wavemArrowVariants} aria-hidden="true">
+                <ArrowUpRight size={12} />
+              </motion.span>
+            </MotionAnchor>
           </div>
 
           <div className={styles.paymentMethods}>
