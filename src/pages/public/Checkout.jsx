@@ -22,7 +22,11 @@ import {
   Edit3,
   UserCheck,
   ExternalLink,
-  Zap
+  Zap,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
+  Shield
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { 
@@ -41,7 +45,7 @@ import { db } from '../../services/firebaseConfig';
 import { couponService } from '../../services/couponService';
 import { analyticsService } from '../../services/analyticsService';
 import { catalogService } from '../../services/catalogService';
-import { pagbankService, PAGBANK_TEST_CARDS } from '../../services/pagbankService';
+import { pagbankService, PAGBANK_TEST_CARDS, detectCardBrand } from '../../services/pagbankService';
 import styles from './Checkout.module.css';
 
 export function Checkout({ user: propUser, onOpenAuthModal }) {
@@ -216,60 +220,48 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     holder: '',
     expMonth: '',
     expYear: '',
-    securityCode: ''
+    cvv: ''
   });
   const [installments, setInstallments] = useState(1);
   const [cardErrors, setCardErrors] = useState({});
   const [paymentError, setPaymentError] = useState(null);
   const [pagbankResult, setPagbankResult] = useState(null);
+  const [showDevSandbox, setShowDevSandbox] = useState(false);
+  const [cardBrand, setCardBrand] = useState('generic');
 
-  const handleFillTestCard = (type) => {
-    const card = PAGBANK_TEST_CARDS[type];
-    if (card) {
-      setCardData({
-        number: card.number,
-        holder: card.holder,
-        expMonth: card.expMonth,
-        expYear: card.expYear,
-        securityCode: card.securityCode
-      });
-      setCardErrors({});
-      setPaymentError(null);
-    }
-  };
-
+  // Handlers de máscara de cartão
   const handleCardNumberChange = (e) => {
-    const raw = e.target.value.replace(/\D/g, '').slice(0, 16);
-    const formatted = raw.replace(/(\d{4})(?=\d)/g, '$1 ');
-    setCardData(prev => ({ ...prev, number: formatted }));
-    if (cardErrors.number) setCardErrors(prev => ({ ...prev, number: null }));
+    let v = e.target.value.replace(/\D/g, '').slice(0, 16);
+    setCardBrand(detectCardBrand(v));
+    v = v.replace(/(\d{4})(?=\d)/g, '$1 ');
+    setCardData(prev => ({ ...prev, number: v }));
     if (paymentError) setPaymentError(null);
   };
 
-  const handleCardHolderChange = (e) => {
-    setCardData(prev => ({ ...prev, holder: e.target.value.toUpperCase() }));
-    if (cardErrors.holder) setCardErrors(prev => ({ ...prev, holder: null }));
+  const handleExpChange = (e) => {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 4);
+    if (v.length >= 3) {
+      v = `${v.slice(0, 2)}/${v.slice(2)}`;
+    }
+    setCardData(prev => ({
+      ...prev,
+      expMonth: v.slice(0, 2),
+      expYear: v.length >= 5 ? v.slice(3, 5) : v.slice(3)
+    }));
     if (paymentError) setPaymentError(null);
   };
 
-  const handleCardExpMonthChange = (e) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 2);
-    setCardData(prev => ({ ...prev, expMonth: val }));
-    if (cardErrors.expMonth) setCardErrors(prev => ({ ...prev, expMonth: null }));
-    if (paymentError) setPaymentError(null);
-  };
-
-  const handleCardExpYearChange = (e) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 4);
-    setCardData(prev => ({ ...prev, expYear: val }));
-    if (cardErrors.expYear) setCardErrors(prev => ({ ...prev, expYear: null }));
-    if (paymentError) setPaymentError(null);
-  };
-
-  const handleCardCvvChange = (e) => {
-    const val = e.target.value.replace(/\D/g, '').slice(0, 4);
-    setCardData(prev => ({ ...prev, securityCode: val }));
-    if (cardErrors.securityCode) setCardErrors(prev => ({ ...prev, securityCode: null }));
+  const handleApplyTestCard = (type) => {
+    const card = PAGBANK_TEST_CARDS[type];
+    if (!card) return;
+    setCardData({
+      number: card.number,
+      holder: card.holder,
+      expMonth: card.expMonth,
+      expYear: card.expYear,
+      cvv: card.cvv
+    });
+    setCardBrand(card.brand);
     if (paymentError) setPaymentError(null);
   };
 
@@ -533,22 +525,24 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       if (!cardData.holder || cardData.holder.trim().length < 3) {
         errors.holder = 'Informe o nome impresso no cartão.';
       }
+
       const expM = Number(cardData.expMonth);
       if (!expM || expM < 1 || expM > 12) {
-        errors.expMonth = 'Mês inválido (01 a 12).';
+        errors.expiry = 'Mês inválido.';
       }
       const expY = Number(cardData.expYear);
-      const currentYear = new Date().getFullYear();
-      const fullYear = expY < 100 ? 2000 + expY : expY;
-      if (!expY || fullYear < currentYear) {
-        errors.expYear = 'Ano inválido.';
+      const currentYearTwoDigits = Number(String(new Date().getFullYear()).slice(-2));
+      if (!expY || expY < currentYearTwoDigits) {
+        errors.expiry = 'Ano inválido.';
       }
-      if (!cardData.securityCode || cardData.securityCode.length < 3) {
-        errors.securityCode = 'CVV inválido (3 ou 4 dígitos).';
+      const cleanCvv = (cardData.cvv || '').replace(/\D/g, '');
+      if (!cleanCvv || cleanCvv.length < 3) {
+        errors.cvv = 'CVV inválido (3 ou 4 dígitos).';
       }
 
       if (Object.keys(errors).length > 0) {
         setCardErrors(errors);
+        setPaymentError(errors.number || errors.holder || errors.expiry || errors.cvv);
         return;
       }
     }
@@ -580,26 +574,47 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     // Se houver valor financeiro a ser cobrado no gateway PagBank
     if (finalAmountToPay > 0) {
       try {
+        const orderRefId = `THR-${Date.now()}`;
+
         const pagbankRes = await pagbankService.createOrder({
-          referenceId: `THR-${Date.now()}`,
-          clientData,
+          orderReference: orderRefId,
+          customer: {
+            name: clientData.name || user?.displayName || user?.name || 'Cliente THR33',
+            email: clientData.email || user?.email || 'cliente@thr33.com',
+            cpf: clientData.cpf || '',
+            phone: clientData.phone || ''
+          },
           items: cartItems,
           shippingAddress: addressToSave,
           shippingCost: Number(shippingCost) || 0,
-          totalAmount: finalAmountToPay,
           paymentMethod,
-          cardData,
-          installments
+          cardData: {
+            number: cardData.number,
+            holder: cardData.holder,
+            expMonth: cardData.expMonth || '',
+            expYear: cardData.expYear || '',
+            cvv: cardData.cvv
+          },
+          installments,
+          totalAmount: finalAmountToPay
         });
 
-        if (!pagbankRes.success) {
-          setPaymentError(pagbankRes.errorMessage || 'Transação não autorizada. Verifique os dados do cartão ou escolha outro método de pagamento.');
+        // Verifica recusa na cobrança do PagBank
+        const charge = pagbankRes.data?.charges?.[0];
+        if (charge && charge.status === 'DECLINED') {
+          setPaymentError(charge.payment_response?.message || 'Transação negada pelo banco emissor. Verifique os dados ou utilize outro cartão.');
           setIsProcessing(false);
           return;
         }
 
-        pagbankData = pagbankRes;
-        setPagbankResult(pagbankRes);
+        if (!pagbankRes.success) {
+          setPaymentError('Transação não autorizada. Verifique os dados do cartão ou escolha outro método de pagamento.');
+          setIsProcessing(false);
+          return;
+        }
+
+        pagbankData = pagbankRes.data;
+        setPagbankResult(pagbankRes.data);
       } catch (gatewayErr) {
         console.warn("Aviso ao processar gateway PagBank:", gatewayErr.message);
         setPaymentError('Erro temporário de conexão com o PagBank. Tente novamente em instantes.');
@@ -646,13 +661,14 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       },
       status: paymentMethod === 'Cartão de Crédito' || finalAmountToPay === 0 ? 'Aprovado' : 'Aguardando Pagamento',
       pagbank: pagbankData ? {
-        orderId: pagbankData.pagbankOrderId || null,
-        chargeId: pagbankData.chargeId || null,
-        status: pagbankData.status || null,
-        pix: pagbankData.pix || null,
-        creditCard: pagbankData.creditCard || null,
+        orderId: pagbankData.id || null,
+        referenceId: pagbankData.reference_id || null,
+        status: pagbankData.charges?.[0]?.status || (paymentMethod === 'Cartão de Crédito' ? 'PAID' : 'WAITING_PAYMENT'),
+        chargeId: pagbankData.charges?.[0]?.id || null,
+        charges: pagbankData.charges || null,
+        qr_codes: pagbankData.qr_codes || null,
         boleto: pagbankData.boleto || null,
-        isSimulated: Boolean(pagbankData.isSimulated)
+        isSandbox: Boolean(pagbankData.isSandbox || pagbankData.isFallback)
       } : null,
       trackingCode,
       utm_source: utmSource,
@@ -768,7 +784,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   };
 
   const handleCopyPix = () => {
-    const pixCode = pagbankResult?.pix?.text || "00020126580014br.gov.bcb.pix0136thr33-atelie-pagbank-curitiba@thr33.com5204000053039865405189.905802BR5915THR33 ATELIE STREETWEAR6008CURITIBA62070503***6304E2CA";
+    const pixCode = pagbankResult?.qr_codes?.[0]?.text || pagbankResult?.pix?.text || "00020126580014br.gov.bcb.pix0136thr33-sandbox-pagbank@thr33.com5204000053039865405189.905802BR5915THR33 ATELIE STREETWEAR6008CURITIBA62070503***6304E2CA";
     navigator.clipboard.writeText(pixCode);
     setCopiedPix(true);
     setTimeout(() => setCopiedPix(false), 2500);
@@ -776,7 +792,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
   const [copiedBoleto, setCopiedBoleto] = useState(false);
   const handleCopyBoleto = () => {
-    const barcode = pagbankResult?.boleto?.formattedBarcode || pagbankResult?.boleto?.barcode || "23793.38128 60000.123456 78900.123456 1 98760000035591";
+    const barcode = pagbankResult?.boleto?.barcode || pagbankResult?.charges?.[0]?.payment_method?.boleto?.barcode || "23793.38128 60000.123456 78900.123456 1 98760000035591";
     navigator.clipboard.writeText(barcode);
     setCopiedBoleto(true);
     setTimeout(() => setCopiedBoleto(false), 2500);
@@ -825,9 +841,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
               </p>
               
               <div className={styles.qrCodeContainer}>
-                {pagbankResult?.pix?.qrCodeUrl ? (
+                {Boolean(pagbankResult?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href || pagbankResult?.pix?.qrCodeUrl) ? (
                   <img 
-                    src={pagbankResult.pix.qrCodeUrl} 
+                    src={pagbankResult?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href || pagbankResult?.pix?.qrCodeUrl} 
                     alt="QR Code Pix PagBank" 
                     className={styles.qrCodeLiveImage} 
                   />
@@ -846,7 +862,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 <input 
                   type="text" 
                   readOnly 
-                  value={pagbankResult?.pix?.text || "00020126580014br.gov.bcb.pix0136thr33-sandbox-pagbank@thr33.com..."} 
+                  value={pagbankResult?.qr_codes?.[0]?.text || pagbankResult?.pix?.text || "00020126580014br.gov.bcb.pix0136thr33-sandbox-pagbank@thr33.com..."} 
                   className={styles.pixInput} 
                 />
                 <button type="button" onClick={handleCopyPix} className={styles.copyBtn}>
@@ -875,23 +891,25 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 <div className={styles.cardSuccessRow}>
                   <span>Cartão Utilizado:</span>
                   <span>
-                    {(pagbankResult?.creditCard?.brand || 'VISA').toUpperCase()} •••• {pagbankResult?.creditCard?.lastDigits || (cardData.number || '1111').slice(-4)}
+                    {(pagbankResult?.charges?.[0]?.payment_method?.card?.brand || pagbankResult?.creditCard?.brand || detectCardBrand(cardData.number)).toUpperCase()} •••• {pagbankResult?.charges?.[0]?.payment_method?.card?.last_digits || pagbankResult?.creditCard?.lastDigits || cardData.number.replace(/\D/g, '').slice(-4) || '1111'}
                   </span>
                 </div>
                 <div className={styles.cardSuccessRow}>
                   <span>Condição:</span>
                   <span>
-                    {(pagbankResult?.creditCard?.installments || installments)}x de R$ {(finalAmountToPay / (pagbankResult?.creditCard?.installments || installments)).toFixed(2)} sem juros
+                    {(pagbankResult?.charges?.[0]?.payment_method?.installments || pagbankResult?.creditCard?.installments || installments)}x de R$ {(finalAmountToPay / (pagbankResult?.charges?.[0]?.payment_method?.installments || pagbankResult?.creditCard?.installments || installments)).toFixed(2)} sem juros
                   </span>
                 </div>
                 <div className={styles.cardSuccessRow}>
                   <span>Status:</span>
                   <strong style={{ color: '#4ade80' }}>Transação Aprovada</strong>
                 </div>
-                {pagbankResult?.chargeId && (
+                {(pagbankResult?.charges?.[0]?.id || pagbankResult?.chargeId || pagbankResult?.id) && (
                   <div className={styles.cardSuccessRow}>
                     <span>ID da Transação:</span>
-                    <small style={{ color: 'var(--text-muted)' }}>{pagbankResult.chargeId}</small>
+                    <small style={{ color: 'var(--text-muted)' }}>
+                      {pagbankResult?.charges?.[0]?.id || pagbankResult?.chargeId || pagbankResult?.id}
+                    </small>
                   </div>
                 )}
               </div>
@@ -914,7 +932,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 <input 
                   type="text" 
                   readOnly 
-                  value={pagbankResult?.boleto?.formattedBarcode || pagbankResult?.boleto?.barcode || "23793.38128 60000.123456 78900.123456 1 98760000035591"} 
+                  value={pagbankResult?.boleto?.barcode || pagbankResult?.boleto?.formatted_barcode || pagbankResult?.charges?.[0]?.payment_method?.boleto?.barcode || "23793.38128 60000.123456 78900.123456 1 98760000035591"} 
                   className={styles.pixInput} 
                 />
                 <button type="button" onClick={handleCopyBoleto} className={styles.copyBtn}>
@@ -922,10 +940,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                   <span>{copiedBoleto ? 'COPIADO!' : 'COPIAR CÓDIGO'}</span>
                 </button>
               </div>
-              {pagbankResult?.boleto?.pdfUrl && (
+              {(pagbankResult?.charges?.[0]?.links?.find(l => l.rel === 'BOLETO_PDF')?.href || pagbankResult?.boleto?.pdfUrl) && (
                 <div style={{ marginTop: '1rem', textAlign: 'center' }}>
                   <a 
-                    href={pagbankResult.boleto.pdfUrl} 
+                    href={pagbankResult?.charges?.[0]?.links?.find(l => l.rel === 'BOLETO_PDF')?.href || pagbankResult?.boleto?.pdfUrl} 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className={styles.secondaryBtn}
@@ -1516,129 +1534,126 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
                     {/* FORMULÁRIO DE CARTÃO DE CRÉDITO TRANSPARENTE COM ATALHOS DE HOMOLOGAÇÃO */}
                     {paymentMethod === 'Cartão de Crédito' && (
-                      <div className={styles.cardFormBlock}>
-                        {/* Barra de atalhos para cartões de teste de homologação */}
-                        <div className={styles.testCardsToolbar}>
-                          <span className={styles.testCardsLabel}>HOMOLOGAÇÃO SANDBOX:</span>
-                          <div className={styles.testCardsBtnGroup}>
-                            <button
-                              type="button"
-                              onClick={() => handleFillTestCard('approved')}
-                              className={styles.testCardBtnApproved}
-                            >
-                              PREENCHER CARTÃO APROVADO
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => handleFillTestCard('declined')}
-                              className={styles.testCardBtnDeclined}
-                            >
-                              PREENCHER CARTÃO RECUSADO
-                            </button>
+                      <div className={styles.cardPaymentContainer}>
+                        {/* BADGE DE SEGURANCA TOPO */}
+                        <div className={styles.securityHeader}>
+                          <div className={styles.securitySeal}>
+                            <Lock size={13} />
+                            <span>PAGAMENTO CRIPTOGRAFADO 256-BIT SSL</span>
+                          </div>
+                          <span className={styles.pciNotice}>PCI-DSS LEVEL 1</span>
+                        </div>
+
+                        {/* TOOLBAR RECOLHIVEL SANDBOX (APENAS PARA TESTES) */}
+                        <div className={styles.sandboxAccordion}>
+                          <button 
+                            type="button" 
+                            onClick={() => setShowDevSandbox(!showDevSandbox)} 
+                            className={styles.sandboxToggleBtn}
+                          >
+                            <span>MODO HOMOLOGAÇÃO PAGBANK (TESTES)</span>
+                            <ChevronDown 
+                              size={14} 
+                              style={{ 
+                                transform: showDevSandbox ? 'rotate(180deg)' : 'none', 
+                                transition: 'transform 0.2s' 
+                              }} 
+                            />
+                          </button>
+
+                          {showDevSandbox && (
+                            <div className={styles.sandboxBody}>
+                              <button type="button" onClick={() => handleApplyTestCard('approved')} className={styles.testBtnSuccess}>
+                                Usar Cartão de Teste Aprovado
+                              </button>
+                              <button type="button" onClick={() => handleApplyTestCard('declined')} className={styles.testBtnDanger}>
+                                Usar Cartão de Teste Recusado
+                              </button>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* CAMPOS DO FORMULARIO COM MASCARA */}
+                        <div className={styles.fieldGroup}>
+                          <div className={styles.labelWithBrand}>
+                            <label htmlFor="ccNumber">NÚMERO DO CARTÃO *</label>
+                            <span className={styles.brandIndicator}>{cardBrand.toUpperCase()}</span>
+                          </div>
+                          <div className={styles.inputWrapper}>
+                            <input
+                              id="ccNumber"
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="0000 0000 0000 0000"
+                              value={cardData.number}
+                              onChange={handleCardNumberChange}
+                              required
+                              className={styles.styledInput}
+                            />
                           </div>
                         </div>
 
-                        <div className={styles.fieldsGrid}>
-                          <div className={styles.fieldWrapper}>
-                            <label className={styles.fieldLabel}>NÚMERO DO CARTÃO *</label>
+                        <div className={styles.fieldGroup}>
+                          <label htmlFor="ccHolder">TITULAR DO CARTÃO (NOME IMPRESSO) *</label>
+                          <input
+                            id="ccHolder"
+                            type="text"
+                            placeholder="NOME COMO NO CARTÃO"
+                            value={cardData.holder}
+                            onChange={(e) => setCardData(prev => ({ ...prev, holder: e.target.value.toUpperCase() }))}
+                            required
+                            className={styles.styledInput}
+                          />
+                        </div>
+
+                        <div className={styles.cardDualRow}>
+                          <div className={styles.fieldGroup}>
+                            <label htmlFor="ccExp">VALIDADE (MM/AA) *</label>
                             <input
+                              id="ccExp"
                               type="text"
-                              name="cardNumber"
-                              placeholder="0000 0000 0000 0000"
-                              maxLength={19}
-                              value={cardData.number}
-                              onChange={handleCardNumberChange}
-                              className={cardErrors.number ? styles.inputError : ''}
+                              inputMode="numeric"
+                              placeholder="MM/AA"
+                              value={cardData.expMonth ? `${cardData.expMonth}${cardData.expYear ? `/${cardData.expYear}` : ''}` : ''}
+                              onChange={handleExpChange}
+                              required
+                              className={styles.styledInput}
                             />
-                            {cardErrors.number && (
-                              <span className={styles.errorText}>
-                                <AlertCircle size={12} /> {cardErrors.number}
-                              </span>
-                            )}
                           </div>
 
-                          <div className={styles.fieldWrapper}>
-                            <label className={styles.fieldLabel}>TITULAR DO CARTÃO *</label>
+                          <div className={styles.fieldGroup}>
+                            <label htmlFor="ccCvv">CÓDIGO DE SEGURANÇA (CVV) *</label>
                             <input
-                              type="text"
-                              name="cardHolder"
-                              placeholder="NOME COMO IMPRESSO NO CARTÃO"
-                              value={cardData.holder}
-                              onChange={handleCardHolderChange}
-                              className={cardErrors.holder ? styles.inputError : ''}
+                              id="ccCvv"
+                              type="password"
+                              inputMode="numeric"
+                              maxLength={4}
+                              placeholder="123"
+                              value={cardData.cvv}
+                              onChange={(e) => setCardData(prev => ({ ...prev, cvv: e.target.value.replace(/\D/g, '') }))}
+                              required
+                              className={styles.styledInput}
                             />
-                            {cardErrors.holder && (
-                              <span className={styles.errorText}>
-                                <AlertCircle size={12} /> {cardErrors.holder}
-                              </span>
-                            )}
                           </div>
+                        </div>
 
-                          <div className={styles.fieldsRow}>
-                            <div className={styles.fieldWrapper}>
-                              <label className={styles.fieldLabel}>VALIDADE (MM / AAAA) *</label>
-                              <div className={styles.cardExpGroup}>
-                                <input
-                                  type="text"
-                                  placeholder="MM"
-                                  maxLength={2}
-                                  value={cardData.expMonth}
-                                  onChange={handleCardExpMonthChange}
-                                  className={`${styles.expInput} ${cardErrors.expMonth ? styles.inputError : ''}`}
-                                />
-                                <span className={styles.expDivider}>/</span>
-                                <input
-                                  type="text"
-                                  placeholder="AAAA"
-                                  maxLength={4}
-                                  value={cardData.expYear}
-                                  onChange={handleCardExpYearChange}
-                                  className={`${styles.expInput} ${cardErrors.expYear ? styles.inputError : ''}`}
-                                />
-                              </div>
-                              {(cardErrors.expMonth || cardErrors.expYear) && (
-                                <span className={styles.errorText}>
-                                  <AlertCircle size={12} /> {cardErrors.expMonth || cardErrors.expYear}
-                                </span>
-                              )}
-                            </div>
+                        <div className={styles.fieldGroup}>
+                          <label htmlFor="ccInstallments">OPÇÕES DE PARCELAMENTO *</label>
+                          <select
+                            id="ccInstallments"
+                            value={installments}
+                            onChange={(e) => setInstallments(Number(e.target.value))}
+                            className={styles.styledSelect}
+                          >
+                            <option value={1}>1x de R$ {finalAmountToPay.toFixed(2)} (à vista sem juros)</option>
+                            <option value={2}>2x de R$ {(finalAmountToPay / 2).toFixed(2)} sem juros</option>
+                            <option value={3}>3x de R$ {(finalAmountToPay / 3).toFixed(2)} sem juros</option>
+                          </select>
+                        </div>
 
-                            <div className={styles.fieldWrapper}>
-                              <label className={styles.fieldLabel}>CÓDIGO CVV *</label>
-                              <input
-                                type="text"
-                                placeholder="123"
-                                maxLength={4}
-                                value={cardData.securityCode}
-                                onChange={handleCardCvvChange}
-                                className={cardErrors.securityCode ? styles.inputError : ''}
-                              />
-                              {cardErrors.securityCode && (
-                                <span className={styles.errorText}>
-                                  <AlertCircle size={12} /> {cardErrors.securityCode}
-                                </span>
-                              )}
-                            </div>
-                          </div>
-
-                          <div className={styles.fieldWrapper}>
-                            <label className={styles.fieldLabel}>PARCELAMENTO NO PAGBANK *</label>
-                            <select
-                              value={installments}
-                              onChange={(e) => setInstallments(Number(e.target.value))}
-                              className={styles.installmentsSelect}
-                            >
-                              <option value={1}>
-                                1x de R$ {finalAmountToPay.toFixed(2)} (à vista sem juros)
-                              </option>
-                              <option value={2}>
-                                2x de R$ {(finalAmountToPay / 2).toFixed(2)} (sem juros)
-                              </option>
-                              <option value={3}>
-                                3x de R$ {(finalAmountToPay / 3).toFixed(2)} (sem juros)
-                              </option>
-                            </select>
-                          </div>
+                        <div className={styles.securityFooterNotice}>
+                          <ShieldCheck size={14} />
+                          <span>Seus dados são protegidos e tokenizados diretamente pelo gateway PagBank. A THR33 não armazena números de cartão.</span>
                         </div>
                       </div>
                     )}

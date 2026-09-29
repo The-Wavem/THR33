@@ -728,106 +728,167 @@
 }
 
 /* FORMULÁRIO DE CARTÃO DE CRÉDITO SANDBOX */
-.cardFormBlock {
+.cardPaymentContainer {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 1.75rem;
+  margin-top: 1.25rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  padding: 1.25rem;
-  margin-top: 0.5rem;
 }
 
-.testCardsToolbar {
+.securityHeader {
   display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
+  justify-content: space-between;
+  align-items: center;
   padding-bottom: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--border-color);
 }
 
-.testCardsLabel {
-  font-size: 0.65rem;
+.securitySeal {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
   font-weight: 800;
-  letter-spacing: 1.5px;
+  letter-spacing: 1px;
+  color: #4ade80;
+}
+
+.pciNotice {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 1px;
   color: var(--text-muted);
 }
 
-.testCardsBtnGroup {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
+.sandboxAccordion {
+  background-color: var(--bg-card);
+  border: 1px dashed var(--border-color);
+  padding: 0.75rem 1rem;
 }
 
-.testCardBtnApproved {
+.sandboxToggleBtn {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  cursor: pointer;
   background: transparent;
+  border: none;
+}
+
+.sandboxToggleBtn:hover {
+  color: var(--text-primary);
+}
+
+.sandboxBody {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--border-color);
+}
+
+.testBtnSuccess {
+  background-color: rgba(74, 222, 128, 0.1);
   border: 1px solid #4ade80;
   color: #4ade80;
   font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 1px;
-  padding: 0.55rem 0.85rem;
+  font-weight: 700;
+  padding: 0.4rem 0.8rem;
   cursor: pointer;
-  transition: all var(--transition-fast);
 }
 
-.testCardBtnApproved:hover {
-  background-color: rgba(74, 222, 128, 0.12);
-}
-
-.testCardBtnDeclined {
-  background: transparent;
+.testBtnDanger {
+  background-color: rgba(248, 113, 113, 0.1);
   border: 1px solid #f87171;
   color: #f87171;
   font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 1px;
-  padding: 0.55rem 0.85rem;
+  font-weight: 700;
+  padding: 0.4rem 0.8rem;
   cursor: pointer;
-  transition: all var(--transition-fast);
 }
 
-.testCardBtnDeclined:hover {
-  background-color: rgba(248, 113, 113, 0.12);
-}
-
-.cardExpGroup {
+.fieldGroup {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 0.5rem;
 }
 
-.expInput {
-  flex: 1;
-  text-align: center;
-}
-
-.expDivider {
-  color: var(--text-muted);
+.fieldGroup label {
+  font-size: 0.7rem;
   font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
 }
 
-.installmentsSelect {
-  background-color: var(--bg-primary);
+.inputWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.labelWithBrand {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.brandIndicator {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  background-color: var(--bg-card);
+  padding: 0.15rem 0.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.cardDualRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.styledInput,
+.styledSelect {
+  width: 100%;
+  background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
   padding: 0.85rem 1rem;
-  font-size: 0.82rem;
-  font-family: inherit;
+  font-size: 0.85rem;
   outline: none;
-  cursor: pointer;
-  width: 100%;
   transition: border-color var(--transition-fast);
 }
 
-.installmentsSelect:focus {
-  border-color: var(--text-primary);
+.styledInput:focus,
+.styledSelect:focus {
+  border-color: var(--border-active);
 }
 
-.installmentsSelect option {
-  background-color: var(--bg-card);
-  color: var(--text-primary);
+.securityFooterNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
 }
+
+@media (max-width: 600px) {
+  .cardDualRow {
+    grid-template-columns: 1fr;
+  }
+}
+
 
 .paymentErrorNotice {
   display: flex;
