@@ -1251,6 +1251,57 @@
   line-height: 1.6;
 }
 
+.pixConfirmedBox {
+  background-color: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  padding: 1.5rem;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.pixConfirmedHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  text-align: left;
+}
+
+.pixConfirmedHeader strong {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #4ade80;
+  letter-spacing: 0.5px;
+}
+
+.pixConfirmedHeader small {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.2rem;
+}
+
+.pixAwaitingNotice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  color: #facc15;
+  background-color: rgba(250, 204, 21, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  padding: 0.45rem 0.85rem;
+  margin-bottom: 0.75rem;
+  border-radius: 2px;
+}
+
+.pulsingLoader {
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
 .pixBox {
   border: 1px dashed var(--border-color);
   background-color: rgba(255, 255, 255, 0.02);

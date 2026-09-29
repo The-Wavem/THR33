@@ -1866,3 +1866,147 @@
   .orderDetailsModal, .supportModalCard { padding: 1.5rem; }
   .orderFooter { flex-direction: column; align-items: flex-start; }
 }
+
+/* ============================================================
+   RECUPERAÇÃO DE PIX & RASTREAMENTO REAL
+   ============================================================ */
+.pixPayBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background-color: #facc15;
+  color: #000000;
+  border: none;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  padding: 0.45rem 0.85rem;
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+  margin-top: 0.45rem;
+}
+
+.pixPayBtn:hover {
+  opacity: 0.9;
+}
+
+.trackingPendingNote {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  font-style: italic;
+  margin-top: 0.35rem;
+  display: block;
+}
+
+.pixModalBackdrop {
+  position: fixed;
+  inset: 0;
+  background-color: rgba(0, 0, 0, 0.85);
+  backdrop-filter: blur(4px);
+  z-index: 1100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.pixModal {
+  background-color: #0d0d0d;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  width: 100%;
+  max-width: 480px;
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.95);
+  display: flex;
+  flex-direction: column;
+}
+
+.pixModalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.pixModalHeader h3 {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.pixModalBody {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.2rem;
+  text-align: center;
+}
+
+.pixModalOrderTotal {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #4ade80;
+}
+
+.pixModalQrImage {
+  width: 220px;
+  height: 220px;
+  background-color: #ffffff;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.pixModalCopyArea {
+  display: flex;
+  width: 100%;
+  gap: 0.5rem;
+}
+
+.pixModalInput {
+  flex: 1;
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-family: monospace;
+  padding: 0.65rem 0.75rem;
+  outline: none;
+}
+
+.pixModalCopyBtn {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border: none;
+  padding: 0.65rem 1rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  white-space: nowrap;
+  transition: opacity var(--transition-fast);
+}
+
+.pixModalCopyBtn:hover {
+  opacity: 0.9;
+}
+
+.pixModalTimerNote {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
+.pixModalFooter {
+  display: flex;
+  justify-content: flex-end;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  background-color: rgba(0, 0, 0, 0.3);
+}
+

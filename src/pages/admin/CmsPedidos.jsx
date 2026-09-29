@@ -20,18 +20,26 @@ import {
   FileText,
   Calendar,
   Headphones,
-  Save
+  Save,
+  ExternalLink,
+  Link2
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { maskCPF } from '../../utils/validators';
+import { 
+  ORDER_STATUSES, 
+  normalizeOrderStatus, 
+  getOrderStatusMeta 
+} from '../../services/orderStateMachine';
 import styles from './CmsPedidos.module.css';
 
 const STATUS_OPTIONS = [
-  { value: 'Aprovado', label: 'Aprovado (Aguardando Lote)', color: '#facc15' },
-  { value: 'Em Produção', label: 'Em Produção (Na Fábrica)', color: '#60a5fa' },
-  { value: 'Enviado', label: 'Enviado (Rastreio Anexado)', color: '#4ade80' },
-  { value: 'Troca Solicitada', label: 'Troca Solicitada', color: '#f87171' },
-  { value: 'Cancelado', label: 'Cancelado', color: '#a3a3a3' }
+  { value: ORDER_STATUSES.AGUARDANDO_PAGAMENTO, label: 'Aguardando Pagamento', color: '#facc15' },
+  { value: ORDER_STATUSES.PAGAMENTO_APROVADO, label: 'Pagamento Aprovado', color: '#4ade80' },
+  { value: ORDER_STATUSES.EM_PRODUCAO, label: 'Em Produção', color: '#60a5fa' },
+  { value: ORDER_STATUSES.SAIU_PARA_ENTREGA, label: 'Saiu para Entrega', color: '#c084fc' },
+  { value: ORDER_STATUSES.ENTREGUE, label: 'Entregue', color: '#4ade80' },
+  { value: ORDER_STATUSES.CANCELADO, label: 'Cancelado', color: '#f87171' }
 ];
 
 // Helper para obter datas formatadas no formato YYYY-MM-DD
@@ -73,6 +81,28 @@ export function CmsPedidos() {
   const [drawerNfeKey, setDrawerNfeKey] = useState('');
   const [drawerNfeUrl, setDrawerNfeUrl] = useState('');
   const [savingLogistics, setSavingLogistics] = useState(false);
+
+  // Modal de Despacho Obrigatório (Saiu para Entrega)
+  const [dispatchModalOpen, setDispatchModalOpen] = useState(false);
+  const [dispatchTargetOrder, setDispatchTargetOrder] = useState(null);
+  const [dispatchForm, setDispatchForm] = useState({
+    trackingCode: '',
+    carrier: 'Correios SEDEX',
+    trackingUrl: ''
+  });
+  const [savingDispatch, setSavingDispatch] = useState(false);
+  const [dispatchError, setDispatchError] = useState('');
+
+  // Modal de Anexar NF-e (PDF)
+  const [nfeModalOpen, setNfeModalOpen] = useState(false);
+  const [nfeTargetOrder, setNfeTargetOrder] = useState(null);
+  const [nfeForm, setNfeForm] = useState({
+    nfeUrl: '',
+    nfeKey: ''
+  });
+  const [savingNfe, setSavingNfe] = useState(false);
+  const [nfeError, setNfeError] = useState('');
+  const [nfeSuccess, setNfeSuccess] = useState('');
 
   useEffect(() => {
     if (selectedOrder) {
@@ -167,55 +197,121 @@ export function CmsPedidos() {
     setDateRangePreset('custom');
   };
 
-  // 2. Atualizar Status do Pedido no Firestore com Validação de Rastreio
+  // Transições Canônicas da Máquina de Estados
+  const handleMoveToProduction = async (order) => {
+    if (!order) return;
+    try {
+      const orderRef = doc(db, 'orders', order.id);
+      const updates = {
+        status: ORDER_STATUSES.EM_PRODUCAO,
+        inProductionAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      await updateDoc(orderRef, updates);
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...updates } : o));
+      if (selectedOrder?.id === order.id) {
+        setSelectedOrder(prev => ({ ...prev, ...updates }));
+      }
+    } catch (err) {
+      console.error("Erro ao mover pedido para produção:", err);
+      alert("Erro ao mover pedido para produção.");
+    }
+  };
+
+  const handleOpenDispatchModal = (order) => {
+    if (!order) return;
+    setDispatchTargetOrder(order);
+    const existingCode = order.trackingCode && !order.trackingCode.toLowerCase().includes('processando') && !order.trackingCode.toLowerCase().includes('aguardando') ? order.trackingCode : '';
+    const carrier = order.carrier || 'Correios SEDEX';
+    setDispatchForm({
+      trackingCode: existingCode,
+      carrier: carrier,
+      trackingUrl: order.trackingUrl || (existingCode && carrier.includes('Correios') ? `https://rastreamento.correios.com.br/app/index.php?codigo=${existingCode}` : '')
+    });
+    setDispatchError('');
+    setDispatchModalOpen(true);
+  };
+
+  const handleConfirmDispatch = async (e) => {
+    e.preventDefault();
+    if (!dispatchTargetOrder) return;
+    const code = dispatchForm.trackingCode.trim().toUpperCase();
+    if (!code) {
+      setDispatchError("O Código de Rastreamento é obrigatório para despachar a peça!");
+      return;
+    }
+    setSavingDispatch(true);
+    setDispatchError('');
+    try {
+      const trackingUrl = dispatchForm.trackingUrl.trim() || 
+        (dispatchForm.carrier.includes('Correios') 
+          ? `https://rastreamento.correios.com.br/app/index.php?codigo=${code}` 
+          : `https://www.google.com/search?q=${code}`);
+
+      const orderRef = doc(db, 'orders', dispatchTargetOrder.id);
+      const updates = {
+        status: ORDER_STATUSES.SAIU_PARA_ENTREGA,
+        trackingCode: code,
+        carrier: dispatchForm.carrier,
+        trackingUrl: trackingUrl,
+        shippedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await updateDoc(orderRef, updates);
+      setOrders(prev => prev.map(o => o.id === dispatchTargetOrder.id ? { ...o, ...updates } : o));
+      if (selectedOrder?.id === dispatchTargetOrder.id) {
+        setSelectedOrder(prev => ({ ...prev, ...updates }));
+      }
+      setDispatchModalOpen(false);
+      setDispatchTargetOrder(null);
+    } catch (err) {
+      console.error("Erro ao despachar pedido:", err);
+      setDispatchError("Falha ao salvar despacho no Firestore.");
+    } finally {
+      setSavingDispatch(false);
+    }
+  };
+
+  const handleMarkAsDelivered = async (order) => {
+    if (!order) return;
+    const confirmed = window.confirm(`Confirmar que o pedido #${order.id.slice(0, 8).toUpperCase()} foi entregue ao cliente?`);
+    if (!confirmed) return;
+    try {
+      const orderRef = doc(db, 'orders', order.id);
+      const updates = {
+        status: ORDER_STATUSES.ENTREGUE,
+        deliveredAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      await updateDoc(orderRef, updates);
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...updates } : o));
+      if (selectedOrder?.id === order.id) {
+        setSelectedOrder(prev => ({ ...prev, ...updates }));
+      }
+    } catch (err) {
+      console.error("Erro ao marcar pedido como entregue:", err);
+      alert("Erro ao marcar pedido como entregue.");
+    }
+  };
+
+  // 2. Atualizar Status do Pedido no Firestore
   const handleStatusChange = async (orderId, newStatus) => {
     const currentOrder = orders.find(o => o.id === orderId);
+    if (!currentOrder) return;
 
-    // Validação: se estiver mudando para 'Em Trânsito' ou 'ENVIADO', o rastreio deve ser informado
-    if (newStatus === 'Em Trânsito' || newStatus === 'ENVIADO') {
-      const hasValidTracking = currentOrder?.trackingCode && 
-        !currentOrder.trackingCode.toLowerCase().includes('processando') && 
-        !currentOrder.trackingCode.toLowerCase().includes('aguardando');
+    if (newStatus === ORDER_STATUSES.SAIU_PARA_ENTREGA) {
+      handleOpenDispatchModal(currentOrder);
+      return;
+    }
 
-      let trackingToSave = currentOrder?.trackingCode;
+    if (newStatus === ORDER_STATUSES.EM_PRODUCAO) {
+      handleMoveToProduction(currentOrder);
+      return;
+    }
 
-      if (!hasValidTracking) {
-        const inputTracking = prompt(
-          "[VALIDAÇÃO DE RASTREIO OBRIGATÓRIO]\nInforme o Código de Rastreio dos Correios/Transportadora para marcar o pedido como ENVIADO (Ex: BR920851843PR):"
-        );
-
-        if (!inputTracking || !inputTracking.trim()) {
-          alert("Ação bloqueada: É obrigatório informar o Código de Rastreio para avançar o pedido para 'ENVIADO'!");
-          return;
-        }
-
-        trackingToSave = inputTracking.trim().toUpperCase();
-      }
-
-      try {
-        const orderRef = doc(db, 'orders', orderId);
-        await updateDoc(orderRef, { 
-          status: newStatus,
-          trackingCode: trackingToSave,
-          shippedAt: currentOrder?.shippedAt || new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        });
-
-        const updated = {
-          ...currentOrder,
-          status: newStatus,
-          trackingCode: trackingToSave,
-          shippedAt: currentOrder?.shippedAt || new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        };
-
-        setOrders(prev => prev.map(o => o.id === orderId ? updated : o));
-        if (selectedOrder?.id === orderId) {
-          setSelectedOrder(updated);
-        }
-      } catch (err) {
-        console.error("Erro ao atualizar status e rastreio:", err);
-      }
+    if (newStatus === ORDER_STATUSES.ENTREGUE) {
+      handleMarkAsDelivered(currentOrder);
       return;
     }
 
@@ -238,6 +334,96 @@ export function CmsPedidos() {
     }
   };
 
+  // Handlers para Anexar NF-e (PDF)
+  const handleOpenNfeModal = (order) => {
+    if (!order) return;
+    setNfeTargetOrder(order);
+    setNfeForm({
+      nfeUrl: order.nfeUrl || '',
+      nfeKey: order.nfeKey || ''
+    });
+    setNfeError('');
+    setNfeSuccess('');
+    setNfeModalOpen(true);
+  };
+
+  const handleSaveNfe = async (e) => {
+    e.preventDefault();
+    if (!nfeTargetOrder) return;
+    const url = nfeForm.nfeUrl.trim();
+    if (!url) {
+      setNfeError("Insira a URL / link direto do arquivo PDF da NF-e.");
+      return;
+    }
+    if (!/^https?:\/\//i.test(url)) {
+      setNfeError("O link da NF-e deve começar com http:// ou https://");
+      return;
+    }
+
+    setSavingNfe(true);
+    setNfeError('');
+    setNfeSuccess('');
+
+    try {
+      const orderRef = doc(db, 'orders', nfeTargetOrder.id);
+      const updates = {
+        nfeUrl: url,
+        nfeKey: nfeForm.nfeKey.trim() || nfeTargetOrder.nfeKey || null,
+        nfeIssued: true,
+        nfeIssuedAt: nfeTargetOrder.nfeIssuedAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await updateDoc(orderRef, updates);
+
+      // Atualiza lista local
+      setOrders(prev => prev.map(o => o.id === nfeTargetOrder.id ? { ...o, ...updates } : o));
+      if (selectedOrder?.id === nfeTargetOrder.id) {
+        setSelectedOrder(prev => ({ ...prev, ...updates }));
+      }
+
+      setNfeSuccess("Nota fiscal (PDF) anexada com sucesso!");
+      setTimeout(() => {
+        setNfeModalOpen(false);
+        setNfeTargetOrder(null);
+      }, 1000);
+    } catch (err) {
+      console.error("Erro ao salvar NF-e no pedido:", err);
+      setNfeError("Falha ao salvar a NF-e no Firestore.");
+    } finally {
+      setSavingNfe(false);
+    }
+  };
+
+  const handleRemoveNfe = async () => {
+    if (!nfeTargetOrder) return;
+    const confirm = window.confirm(`Deseja desanexar a NF-e do pedido #${nfeTargetOrder.id.slice(0, 8).toUpperCase()}?`);
+    if (!confirm) return;
+
+    setSavingNfe(true);
+    setNfeError('');
+    try {
+      const orderRef = doc(db, 'orders', nfeTargetOrder.id);
+      const updates = {
+        nfeUrl: null,
+        nfeIssued: false,
+        updatedAt: new Date().toISOString()
+      };
+      await updateDoc(orderRef, updates);
+      setOrders(prev => prev.map(o => o.id === nfeTargetOrder.id ? { ...o, ...updates } : o));
+      if (selectedOrder?.id === nfeTargetOrder.id) {
+        setSelectedOrder(prev => ({ ...prev, ...updates }));
+      }
+      setNfeModalOpen(false);
+      setNfeTargetOrder(null);
+    } catch (err) {
+      console.error("Erro ao remover anexo de NF-e:", err);
+      setNfeError("Falha ao remover o anexo de NF-e.");
+    } finally {
+      setSavingNfe(false);
+    }
+  };
+
   // Salvar Rastreio e NF-e diretamente pelo Drawer de CRM
   const handleSaveLogistics = async (e) => {
     e.preventDefault();
@@ -247,15 +433,15 @@ export function CmsPedidos() {
     try {
       const orderRef = doc(db, 'orders', selectedOrder.id);
       const updates = {
-        trackingCode: drawerTracking.trim().toUpperCase(),
-        nfeKey: drawerNfeKey.trim(),
-        nfeUrl: drawerNfeUrl.trim(),
+        trackingCode: drawerTracking.trim() ? drawerTracking.trim().toUpperCase() : (selectedOrder.trackingCode || null),
+        nfeKey: drawerNfeKey.trim() || selectedOrder.nfeKey || null,
+        nfeUrl: drawerNfeUrl.trim() || null,
         updatedAt: new Date().toISOString()
       };
 
       if (drawerNfeKey.trim() || drawerNfeUrl.trim()) {
         updates.nfeIssued = true;
-        updates.nfeIssuedAt = new Date().toISOString();
+        updates.nfeIssuedAt = selectedOrder.nfeIssuedAt || new Date().toISOString();
       }
 
       await setDoc(orderRef, updates, { merge: true });
@@ -264,7 +450,7 @@ export function CmsPedidos() {
       setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, ...updates } : o));
       setSelectedOrder(prev => ({ ...prev, ...updates }));
 
-      alert("Rastreamento e Nota Fiscal (NF-e) atualizados com sucesso no Firestore.");
+      alert("Dados logísticos e Nota Fiscal (NF-e) atualizados com sucesso no Firestore.");
     } catch (err) {
       console.error("Erro ao salvar dados fiscais:", err);
       alert("Falha ao salvar dados no pedido.");
@@ -331,8 +517,11 @@ export function CmsPedidos() {
       }
 
       // 2. Filtro por Status
-      if (statusFilter !== 'all' && order.status !== statusFilter) {
-        return false;
+      if (statusFilter !== 'all') {
+        const norm = normalizeOrderStatus(order.status);
+        if (norm !== statusFilter) {
+          return false;
+        }
       }
 
       // 3. Filtro por Busca
@@ -384,10 +573,13 @@ export function CmsPedidos() {
   // Exportação do Lote Semanal para a Fábrica (CSV)
   const handleExportWeeklyBatch = () => {
     // Filtra pedidos em fila para corte e produção
-    const batchOrders = orders.filter(o => o.status === 'Aprovado' || o.status === 'Em Produção');
+    const batchOrders = orders.filter(o => {
+      const norm = normalizeOrderStatus(o.status);
+      return norm === ORDER_STATUSES.PAGAMENTO_APROVADO || norm === ORDER_STATUSES.EM_PRODUCAO;
+    });
 
     if (batchOrders.length === 0) {
-      alert("Nenhum pedido com status 'Aprovado' ou 'Em Produção' para exportação no momento.");
+      alert("Nenhum pedido com status 'Pagamento Aprovado' ou 'Em Produção' para exportação no momento.");
       return;
     }
 
@@ -612,7 +804,7 @@ export function CmsPedidos() {
                 if (startDate && dStr < startDate) return false;
                 if (endDate && dStr > endDate) return false;
               }
-              return o.status === st.value;
+              return normalizeOrderStatus(o.status) === st.value;
             }).length;
 
             return (
@@ -664,7 +856,8 @@ export function CmsPedidos() {
               </tr>
             ) : (
               filteredOrders.map(order => {
-                const statusColor = STATUS_OPTIONS.find(s => s.value === order.status)?.color || '#ffffff';
+                const normStatus = normalizeOrderStatus(order.status);
+                const statusMeta = getOrderStatusMeta(normStatus);
                 const formattedCpf = order.clientCpf ? maskCPF(order.clientCpf) : 'Não informado';
 
                 return (
@@ -679,10 +872,37 @@ export function CmsPedidos() {
                           </span>
                         )}
                       </div>
-                      <span className={styles.trackingBadge}>
-                        <Truck size={10} />
-                        <span>{order.trackingCode || 'Sem rastreio'}</span>
-                      </span>
+                      <div className={styles.orderBadgesStack}>
+                        <span className={styles.trackingBadge}>
+                          <Truck size={10} />
+                          <span>{order.trackingCode || 'Sem rastreio'}</span>
+                        </span>
+
+                        {order.nfeUrl ? (
+                          <a 
+                            href={order.nfeUrl} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className={styles.nfeTableBadge}
+                            title="Abrir DANFE (PDF) em nova aba"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <FileText size={10} />
+                            <span>DANFE (PDF)</span>
+                            <ExternalLink size={9} />
+                          </a>
+                        ) : (
+                          <button 
+                            type="button" 
+                            onClick={() => handleOpenNfeModal(order)} 
+                            className={styles.nfeAttachQuickBtn}
+                            title="Anexar link do PDF da NF-e"
+                          >
+                            <FileText size={10} />
+                            <span>+ Anexar NF-e</span>
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td>
                       <span className={styles.dateText}>
@@ -714,10 +934,10 @@ export function CmsPedidos() {
                       </span>
                     </td>
                     <td>
-                      <div className={styles.statusSelectWrapper} style={{ borderColor: statusColor }}>
-                        <span className={styles.statusDotSmall} style={{ backgroundColor: statusColor }}></span>
+                      <div className={styles.statusSelectWrapper} style={{ borderColor: statusMeta.color }}>
+                        <span className={styles.statusDotSmall} style={{ backgroundColor: statusMeta.color }}></span>
                         <select
-                          value={order.status || 'Aprovado'}
+                          value={normStatus}
                           onChange={(e) => handleStatusChange(order.id, e.target.value)}
                           className={styles.statusSelect}
                         >
@@ -728,16 +948,65 @@ export function CmsPedidos() {
                           ))}
                         </select>
                       </div>
+
+                      {/* AÇÕES RÁPIDAS DA MÁQUINA DE ESTADOS */}
+                      {normStatus === ORDER_STATUSES.PAGAMENTO_APROVADO && (
+                        <button 
+                          type="button" 
+                          onClick={() => handleMoveToProduction(order)} 
+                          className={`${styles.quickActionBtn} ${styles.quickActionBtnBlue}`}
+                          title="Avançar para corte e costura"
+                        >
+                          <Package size={11} />
+                          <span>Mover p/ Produção</span>
+                        </button>
+                      )}
+
+                      {normStatus === ORDER_STATUSES.EM_PRODUCAO && (
+                        <button 
+                          type="button" 
+                          onClick={() => handleOpenDispatchModal(order)} 
+                          className={`${styles.quickActionBtn} ${styles.quickActionBtnPurple}`}
+                          title="Despachar peça e anexar rastreamento real"
+                        >
+                          <Truck size={11} />
+                          <span>Despachar Peça</span>
+                        </button>
+                      )}
+
+                      {normStatus === ORDER_STATUSES.SAIU_PARA_ENTREGA && (
+                        <button 
+                          type="button" 
+                          onClick={() => handleMarkAsDelivered(order)} 
+                          className={`${styles.quickActionBtn} ${styles.quickActionBtnGreen}`}
+                          title="Confirmar entrega ao cliente"
+                        >
+                          <CheckCircle2 size={11} />
+                          <span>Marcar Entregue</span>
+                        </button>
+                      )}
                     </td>
                     <td>
-                      <button 
-                        onClick={() => setSelectedOrder(order)} 
-                        className={styles.actionBtn}
-                        title="Ver Detalhes do Pedido e CRM"
-                      >
-                        <span>Ver / Suporte</span>
-                        <ArrowRight size={12} />
-                      </button>
+                      <div className={styles.tableActionsCol}>
+                        <button 
+                          onClick={() => setSelectedOrder(order)} 
+                          className={styles.actionBtn}
+                          title="Ver Detalhes do Pedido e CRM"
+                        >
+                          <span>Ver / Suporte</span>
+                          <ArrowRight size={12} />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleOpenNfeModal(order)}
+                          className={`${styles.nfeActionRowBtn} ${order.nfeUrl ? styles.nfeActionRowBtnActive : ''}`}
+                          title={order.nfeUrl ? "Editar ou visualizar link do PDF da NF-e" : "Anexar link do PDF da NF-e"}
+                        >
+                          <FileText size={11} />
+                          <span>{order.nfeUrl ? 'Gerenciar NF-e' : 'Anexar NF-e'}</span>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -785,6 +1054,81 @@ export function CmsPedidos() {
                   </button>
                 </div>
               )}
+
+              {/* STATUS ATUAL & MÁQUINA DE ESTADOS */}
+              {(() => {
+                const normStatus = normalizeOrderStatus(selectedOrder.status);
+                const statusMeta = getOrderStatusMeta(normStatus);
+                return (
+                  <div className={styles.sectionBlock} style={{ borderColor: statusMeta.borderColor, backgroundColor: statusMeta.bgColor }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                      <div>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--text-secondary)', display: 'block', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                          STATUS DO PEDIDO
+                        </span>
+                        <strong style={{ fontSize: '1rem', color: statusMeta.color, display: 'block', marginTop: '0.2rem' }}>
+                          {statusMeta.label.toUpperCase()}
+                        </strong>
+                      </div>
+
+                      {normStatus === ORDER_STATUSES.PAGAMENTO_APROVADO && (
+                        <button
+                          type="button"
+                          onClick={() => handleMoveToProduction(selectedOrder)}
+                          className={`${styles.quickActionBtn} ${styles.quickActionBtnBlue}`}
+                          style={{ margin: 0, padding: '0.5rem 0.85rem' }}
+                        >
+                          <Package size={13} />
+                          <span>Mover para Produção</span>
+                        </button>
+                      )}
+
+                      {normStatus === ORDER_STATUSES.EM_PRODUCAO && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenDispatchModal(selectedOrder)}
+                          className={`${styles.quickActionBtn} ${styles.quickActionBtnPurple}`}
+                          style={{ margin: 0, padding: '0.5rem 0.85rem' }}
+                        >
+                          <Truck size={13} />
+                          <span>Despachar / Saiu para Entrega</span>
+                        </button>
+                      )}
+
+                      {normStatus === ORDER_STATUSES.SAIU_PARA_ENTREGA && (
+                        <button
+                          type="button"
+                          onClick={() => handleMarkAsDelivered(selectedOrder)}
+                          className={`${styles.quickActionBtn} ${styles.quickActionBtnGreen}`}
+                          style={{ margin: 0, padding: '0.5rem 0.85rem' }}
+                        >
+                          <CheckCircle2 size={13} />
+                          <span>Marcar como Entregue</span>
+                        </button>
+                      )}
+                    </div>
+
+                    {selectedOrder.trackingCode && (
+                      <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <span style={{ fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                          Rastreio: <strong style={{ color: 'var(--text-primary)' }}>{selectedOrder.trackingCode}</strong> {selectedOrder.carrier ? `(${selectedOrder.carrier})` : ''}
+                        </span>
+                        {selectedOrder.trackingUrl && (
+                          <a
+                            href={selectedOrder.trackingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ fontSize: '0.75rem', color: '#c084fc', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
+                          >
+                            <span>Rastrear Objeto</span>
+                            <ArrowRight size={11} />
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* DADOS DO CLIENTE */}
               <div className={styles.sectionBlock}>
@@ -841,13 +1185,12 @@ export function CmsPedidos() {
                 </div>
                 <form onSubmit={handleSaveLogistics} className={styles.logisticsForm}>
                   <div className={styles.fieldGroup}>
-                    <label>CÓDIGO DE RASTREAMENTO *</label>
+                    <label>CÓDIGO DE RASTREAMENTO (OPCIONAL NO ATO DA NF-E)</label>
                     <input 
                       type="text" 
                       placeholder="Ex: BR920851843PR" 
                       value={drawerTracking} 
                       onChange={(e) => setDrawerTracking(e.target.value)}
-                      required
                     />
                   </div>
 
@@ -863,7 +1206,21 @@ export function CmsPedidos() {
                   </div>
 
                   <div className={styles.fieldGroup}>
-                    <label>LINK DO DANFE / PDF DA NOTA FISCAL</label>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                      <label style={{ margin: 0 }}>LINK DO DANFE / PDF DA NOTA FISCAL</label>
+                      {drawerNfeUrl && (
+                        <a 
+                          href={drawerNfeUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          style={{ fontSize: '0.68rem', color: '#a855f7', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.2rem' }}
+                        >
+                          <FileText size={10} />
+                          <span>Abrir PDF Atual</span>
+                          <ExternalLink size={9} />
+                        </a>
+                      )}
+                    </div>
                     <input 
                       type="url" 
                       placeholder="https://.../danfe.pdf" 
@@ -938,6 +1295,253 @@ export function CmsPedidos() {
                 )}
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE DESPACHO OBRIGATÓRIO (SAIU PARA ENTREGA) */}
+      {dispatchModalOpen && dispatchTargetOrder && (
+        <div className={styles.dispatchModalBackdrop} onClick={() => setDispatchModalOpen(false)}>
+          <div className={styles.dispatchModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.dispatchModalHeader}>
+              <h3>DESPACHAR PEDIDO #{dispatchTargetOrder.id.slice(0, 8).toUpperCase()}</h3>
+              <button 
+                type="button" 
+                onClick={() => setDispatchModalOpen(false)} 
+                className={styles.closeBtn}
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmDispatch}>
+              <div className={styles.dispatchModalBody}>
+                <div className={styles.dispatchOrderSummary}>
+                  <div>
+                    <strong>{dispatchTargetOrder.clientName || 'Cliente THR33'}</strong>
+                    <div><span>{dispatchTargetOrder.shippingAddress?.city || 'Curitiba'} / {dispatchTargetOrder.shippingAddress?.state || 'PR'}</span></div>
+                  </div>
+                  <div>
+                    <strong>R$ {Number(dispatchTargetOrder.total || 0).toFixed(2)}</strong>
+                    <div><span>{dispatchTargetOrder.itemsCount || dispatchTargetOrder.items?.length || 1} item(ns)</span></div>
+                  </div>
+                </div>
+
+                {dispatchError && (
+                  <div className={styles.dispatchErrorNotice}>
+                    <AlertCircle size={14} />
+                    <span>{dispatchError}</span>
+                  </div>
+                )}
+
+                <div className={styles.fieldGroup}>
+                  <label>TRANSPORTADORA / MODALIDADE *</label>
+                  <select
+                    value={dispatchForm.carrier}
+                    onChange={(e) => {
+                      const newCarrier = e.target.value;
+                      const code = dispatchForm.trackingCode.trim().toUpperCase();
+                      setDispatchForm(prev => ({
+                        ...prev,
+                        carrier: newCarrier,
+                        trackingUrl: code && newCarrier.includes('Correios') 
+                          ? `https://rastreamento.correios.com.br/app/index.php?codigo=${code}`
+                          : prev.trackingUrl
+                      }));
+                    }}
+                    style={{ backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.75rem', fontSize: '0.8rem' }}
+                  >
+                    <option value="Correios SEDEX">Correios SEDEX</option>
+                    <option value="Correios PAC">Correios PAC</option>
+                    <option value="Loggi Express">Loggi Express</option>
+                    <option value="Jadlog .Package">Jadlog .Package</option>
+                    <option value="Total Express">Total Express</option>
+                    <option value="Motoboy Curitiba / Entrega Expressa">Motoboy Curitiba / Entrega Expressa</option>
+                  </select>
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <label>CÓDIGO DE RASTREAMENTO REAL (OBRIGATÓRIO) *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Ex: BR920851843PR ou LOG12345678"
+                    value={dispatchForm.trackingCode}
+                    onChange={(e) => {
+                      const code = e.target.value.toUpperCase();
+                      setDispatchForm(prev => ({
+                        ...prev,
+                        trackingCode: code,
+                        trackingUrl: prev.carrier.includes('Correios') && code
+                          ? `https://rastreamento.correios.com.br/app/index.php?codigo=${code}`
+                          : prev.trackingUrl
+                      }));
+                      if (dispatchError) setDispatchError('');
+                    }}
+                    autoFocus
+                  />
+                  <small style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                    O front-end não gera códigos fictícios. Insira o código emitido pelo sistema logístico.
+                  </small>
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <label>LINK DIRETO DE RASTREAMENTO</label>
+                  <input
+                    type="url"
+                    placeholder="https://rastreamento.correios.com.br/..."
+                    value={dispatchForm.trackingUrl}
+                    onChange={(e) => setDispatchForm(prev => ({ ...prev, trackingUrl: e.target.value }))}
+                  />
+                </div>
+              </div>
+
+              <div className={styles.dispatchModalFooter}>
+                <button
+                  type="button"
+                  onClick={() => setDispatchModalOpen(false)}
+                  className={styles.cancelModalBtn}
+                >
+                  CANCELAR
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingDispatch || !dispatchForm.trackingCode.trim()}
+                  className={styles.confirmDispatchBtn}
+                >
+                  <Truck size={14} />
+                  <span>{savingDispatch ? 'DESPACHANDO...' : 'CONFIRMAR DESPACHO'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DEDICADO: ANEXAR NF-E (LINK PDF) */}
+      {nfeModalOpen && nfeTargetOrder && (
+        <div className={styles.dispatchModalBackdrop} onClick={() => setNfeModalOpen(false)}>
+          <div className={styles.dispatchModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.dispatchModalHeader}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <FileText size={18} color="#a855f7" />
+                <h3>ANEXAR NF-E (PDF) • #{nfeTargetOrder.id.slice(0, 8).toUpperCase()}</h3>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setNfeModalOpen(false)} 
+                className={styles.closeBtn}
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveNfe} className={styles.dispatchModalBody}>
+              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                Cole o link direto do arquivo PDF da Nota Fiscal (DANFE). O documento ficará disponível para download imediato na tela de pedidos do cliente.
+              </p>
+
+              <div className={styles.dispatchOrderSummary}>
+                <div>
+                  <strong>{nfeTargetOrder.clientName || 'Cliente'}</strong>
+                  <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                    Total: R$ {Number(nfeTargetOrder.total || 0).toFixed(2)} • {nfeTargetOrder.items?.length || 0} item(ns)
+                  </span>
+                </div>
+                <span className={styles.statusDotSmall} style={{ backgroundColor: getOrderStatusMeta(normalizeOrderStatus(nfeTargetOrder.status)).color }} />
+              </div>
+
+              {nfeError && (
+                <div className={styles.dispatchErrorNotice}>
+                  <AlertCircle size={14} />
+                  <span>{nfeError}</span>
+                </div>
+              )}
+
+              {nfeSuccess && (
+                <div style={{ backgroundColor: 'rgba(74, 222, 128, 0.12)', border: '1px solid rgba(74, 222, 128, 0.4)', color: '#4ade80', padding: '0.65rem 0.85rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <CheckCircle2 size={14} />
+                  <span>{nfeSuccess}</span>
+                </div>
+              )}
+
+              <div className={styles.fieldGroup}>
+                <label>LINK DIRETO DO PDF DA NF-E (DANFE) *</label>
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <input 
+                    type="url" 
+                    placeholder="https://.../danfe-pedido.pdf" 
+                    value={nfeForm.nfeUrl} 
+                    onChange={(e) => {
+                      setNfeForm(prev => ({ ...prev, nfeUrl: e.target.value }));
+                      if (nfeError) setNfeError('');
+                    }}
+                    style={{ flex: 1 }}
+                    required
+                    autoFocus
+                  />
+                  {nfeForm.nfeUrl.trim() && (
+                    <a 
+                      href={nfeForm.nfeUrl.trim()} 
+                      target="_blank" 
+                      rel="noopener noreferrer" 
+                      className={styles.refreshBtn}
+                      style={{ padding: '0 0.85rem', height: 'auto', textDecoration: 'none' }}
+                      title="Testar abertura do link em nova aba"
+                    >
+                      <ExternalLink size={13} />
+                      <span>Testar PDF</span>
+                    </a>
+                  )}
+                </div>
+                <small style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  Aceita links diretos do Google Drive, AWS S3, Cloud Storage, Bling, Tiny ou ERP emissor.
+                </small>
+              </div>
+
+              <div className={styles.fieldGroup}>
+                <label>CHAVE DE ACESSO NF-E (44 DÍGITOS - OPCIONAL)</label>
+                <input 
+                  type="text" 
+                  placeholder="Ex: 4126 0900 0000 0001 0055 0010 0000 0001 2345 6789" 
+                  maxLength={54}
+                  value={nfeForm.nfeKey} 
+                  onChange={(e) => setNfeForm(prev => ({ ...prev, nfeKey: e.target.value }))}
+                />
+              </div>
+
+              <div className={styles.dispatchModalFooter} style={{ padding: 0, border: 'none', background: 'transparent' }}>
+                {nfeTargetOrder.nfeUrl && (
+                  <button 
+                    type="button" 
+                    onClick={handleRemoveNfe} 
+                    disabled={savingNfe}
+                    style={{ marginRight: 'auto', background: 'transparent', border: '1px solid rgba(248, 113, 113, 0.4)', color: '#f87171', padding: '0.65rem 1rem', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}
+                  >
+                    Desanexar NF-e
+                  </button>
+                )}
+
+                <button 
+                  type="button" 
+                  onClick={() => setNfeModalOpen(false)} 
+                  className={styles.cancelModalBtn}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={savingNfe} 
+                  className={styles.confirmDispatchBtn}
+                  style={{ backgroundColor: '#a855f7', color: '#ffffff' }}
+                >
+                  <Save size={13} />
+                  <span>{savingNfe ? 'Salvando...' : 'Salvar e Anexar NF-e'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

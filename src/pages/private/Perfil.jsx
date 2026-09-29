@@ -33,7 +33,8 @@ import {
   Send,
   ShieldCheck,
   Headphones,
-  FileText
+  FileText,
+  QrCode
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { 
@@ -49,16 +50,13 @@ import { fetchAddressByCep } from '../../services/viaCepService';
 import { supportService } from '../../services/supportService';
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
+import { 
+  ORDER_STATUSES, 
+  ORDER_TIMELINE_STEPS, 
+  normalizeOrderStatus, 
+  getOrderStatusMeta 
+} from '../../services/orderStateMachine';
 import styles from './Perfil.module.css';
-
-// ETAPAS DO PEDIDO
-const ORDER_STEPS = [
-  { key: 'waiting_payment', label: 'Aguardando Pagamento' },
-  { key: 'payment_approved', label: 'Pagamento Aprovado' },
-  { key: 'preparing', label: 'Preparando Envio (Ateliê)' },
-  { key: 'in_transit', label: 'Despachado / Em Trânsito' },
-  { key: 'delivered', label: 'Entregue' }
-];
 
 export function Perfil({ defaultTab = 'pedidos' }) {
   const { user, currentUser, updateUser, logout, changePassword } = useAuth();
@@ -237,40 +235,37 @@ export function Perfil({ defaultTab = 'pedidos' }) {
           const data = docSnap.data();
           const dateStr = data.createdAt ? new Date(data.createdAt).toLocaleDateString('pt-BR') : 'Hoje';
 
-          let statusText = data.status || 'Aguardando Pagamento';
-          let statusCode = 'waiting_payment';
-          if (statusText === 'Aprovado' || statusText === 'Pagamento Aprovado') {
-            statusText = 'Aprovado';
-            statusCode = 'payment_approved';
-          } else if (statusText === 'Em Produção' || statusText === 'Preparando Envio' || statusText === 'preparing') {
-            statusText = 'Em Produção';
-            statusCode = 'preparing';
-          } else if (statusText === 'Enviado' || statusText === 'Em trânsito' || statusText === 'Despachado' || statusText === 'in_transit') {
-            statusText = 'Enviado';
-            statusCode = 'in_transit';
-          } else if (statusText === 'Entregue' || statusText === 'delivered') {
-            statusText = 'Entregue';
-            statusCode = 'delivered';
-          }
+          const normStatus = normalizeOrderStatus(data.status);
+          const statusMeta = getOrderStatusMeta(normStatus);
 
           fetched.push({
             id: `THR-${docSnap.id.slice(0, 6).toUpperCase()}`,
             rawId: docSnap.id,
             date: dateStr,
-            status: statusText,
-            statusCode: statusCode,
+            status: statusMeta.label,
+            statusCode: normStatus,
+            statusMeta: statusMeta,
             hasOpenTicket: Boolean(data.hasOpenTicket),
             lastTicketId: data.lastTicketId || null,
             lastTicketStatus: data.lastTicketStatus || null,
-            trackingCode: data.trackingCode || 'Processando envio',
-            paymentMethod: data.paymentMethod === 'pix' 
+            trackingCode: data.trackingCode || null,
+            carrier: data.carrier || null,
+            trackingUrl: data.trackingUrl || null,
+            nfeUrl: data.nfeUrl || null,
+            nfeKey: data.nfeKey || null,
+            nfeIssued: Boolean(data.nfeIssued),
+            nfeIssuedAt: data.nfeIssuedAt || null,
+            pixQrCodeUrl: data.pixQrCodeUrl || data.pagbank?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href || null,
+            pixCopiaECola: data.pixCopiaECola || data.pagbank?.qr_codes?.[0]?.text || null,
+            pixExpiresAt: data.pixExpiresAt || null,
+            paymentMethod: data.paymentMethod === 'pix' || data.paymentMethod === 'PIX'
               ? 'PIX Instantâneo PagBank (À Vista)' 
-              : data.paymentMethod === 'credit' 
+              : data.paymentMethod === 'credit' || data.paymentMethod === 'Cartão de Crédito'
                 ? 'Cartão de Crédito PagBank' 
-                : 'Boleto Bancário',
-            coupon: data.discountAmount ? { code: "DESCONTO", discount: data.discountAmount } : null,
+                : (data.paymentMethod || 'Boleto Bancário'),
+            coupon: data.discountAmount ? { code: data.couponCode || "DESCONTO", discount: data.discountAmount } : null,
             subtotal: data.subtotal || data.total,
-            shippingMethod: 'SEDEX Expresso (1 a 2 dias úteis)',
+            shippingMethod: data.shippingMethod === 'pac' ? 'PAC Correios (3 a 7 dias úteis)' : 'SEDEX Expresso (1 a 2 dias úteis)',
             shippingCost: data.shippingCost || 0,
             total: data.total,
             address: data.shippingAddress ? {
@@ -314,6 +309,16 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   const [issueType, setIssueType] = useState('danificado');
   const [issueDescription, setIssueDescription] = useState('');
   const [copiedTracking, setCopiedTracking] = useState(false);
+
+  // MODAL DE RECUPERAÇÃO DE PIX
+  const [pixModalOrder, setPixModalOrder] = useState(null);
+  const [copiedPixModal, setCopiedPixModal] = useState(false);
+  const handleCopyPixModal = (text) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedPixModal(true);
+    setTimeout(() => setCopiedPixModal(false), 2000);
+  };
 
   // MODAIS DE SUPORTE CONTEXTUAL & SAC BIDIRECIONAL
   const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState(false);
@@ -764,13 +769,14 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   const firstName = userData.name.split(' ')[0] || 'Usuário';
 
   // HELPER PARA CALCULAR O ÍNDICE DA ETAPA ATUAL NA TIMELINE
-  const getStepIndex = (code) => {
+  const getStepIndex = (rawCode) => {
+    const code = normalizeOrderStatus(rawCode);
     switch (code) {
-      case 'waiting_payment': return 0;
-      case 'payment_approved': return 1;
-      case 'preparing': return 2;
-      case 'in_transit': return 3;
-      case 'delivered': return 4;
+      case ORDER_STATUSES.AGUARDANDO_PAGAMENTO: return 0;
+      case ORDER_STATUSES.PAGAMENTO_APROVADO: return 1;
+      case ORDER_STATUSES.EM_PRODUCAO: return 2;
+      case ORDER_STATUSES.SAIU_PARA_ENTREGA: return 3;
+      case ORDER_STATUSES.ENTREGUE: return 4;
       default: return -1;
     }
   };
@@ -1067,13 +1073,13 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                         {/* REQUISITOS VISUAIS DE SENHA */}
                         <div className={styles.passwordRulesList}>
                           <span className={`${styles.ruleBadge} ${passwordData.newPassword.length >= 8 ? styles.ruleMet : ''}`}>
-                            {passwordData.newPassword.length >= 8 ? '✓' : '○'} 8+ caracteres
+                            {passwordData.newPassword.length >= 8 ? <Check size={11} /> : null} 8+ caracteres
                           </span>
                           <span className={`${styles.ruleBadge} ${/[A-Z]/.test(passwordData.newPassword) ? styles.ruleMet : ''}`}>
-                            {/[A-Z]/.test(passwordData.newPassword) ? '✓' : '○'} 1 Letra maiúscula (A-Z)
+                            {/[A-Z]/.test(passwordData.newPassword) ? <Check size={11} /> : null} 1 Letra maiúscula (A-Z)
                           </span>
                           <span className={`${styles.ruleBadge} ${/[0-9]/.test(passwordData.newPassword) ? styles.ruleMet : ''}`}>
-                            {/[0-9]/.test(passwordData.newPassword) ? '✓' : '○'} 1 Número (0-9)
+                            {/[0-9]/.test(passwordData.newPassword) ? <Check size={11} /> : null} 1 Número (0-9)
                           </span>
                         </div>
                       </div>
@@ -1385,14 +1391,35 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                         </div>
                         
                         <div className={styles.statusBox}>
-                          <span className={`
-                            ${styles.statusTag} 
-                            ${isDelivered ? styles.statusDelivered : ''}
-                            ${isCanceled ? styles.statusCanceled : ''}
-                          `}>
+                          <span 
+                            className={styles.statusTag} 
+                            style={{ 
+                              backgroundColor: order.statusMeta?.bgColor || 'rgba(255, 255, 255, 0.05)', 
+                              borderColor: order.statusMeta?.borderColor || 'var(--border-color)', 
+                              color: order.statusMeta?.color || 'var(--text-primary)' 
+                            }}
+                          >
                             {order.status.toUpperCase()}
                           </span>
-                          {order.trackingCode && (
+
+                          {/* BOTÃO RECUPERAÇÃO PIX (AGUARDANDO PAGAMENTO) */}
+                          {order.statusCode === ORDER_STATUSES.AGUARDANDO_PAGAMENTO && (
+                            <button 
+                              type="button" 
+                              onClick={() => setPixModalOrder(order)} 
+                              className={styles.pixPayBtn}
+                              title="Ver código PIX ou QR Code no PagBank"
+                            >
+                              <QrCode size={13} />
+                              <span>VER CÓDIGO PIX</span>
+                            </button>
+                          )}
+
+                          {/* RASTREAMENTO REAL */}
+                          {(order.statusCode === ORDER_STATUSES.SAIU_PARA_ENTREGA || order.statusCode === ORDER_STATUSES.ENTREGUE) && 
+                            order.trackingCode && 
+                            !order.trackingCode.toLowerCase().includes('processando') && 
+                            !order.trackingCode.toLowerCase().includes('aguardando') ? (
                             <div className={styles.trackingGroup}>
                               <span className={styles.trackingLabel}>Rastreio:</span>
                               <code className={styles.trackingCode}>{order.trackingCode}</code>
@@ -1408,7 +1435,24 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                                 <Copy size={12} />
                                 <span>COPIAR</span>
                               </button>
+                              {order.trackingUrl && (
+                                <a 
+                                  href={order.trackingUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className={styles.copyTrackingBtn}
+                                  style={{ textDecoration: 'none', color: '#c084fc' }}
+                                >
+                                  <span>RASTREAR</span>
+                                </a>
+                              )}
                             </div>
+                          ) : (
+                            (order.statusCode === ORDER_STATUSES.EM_PRODUCAO || order.statusCode === ORDER_STATUSES.PAGAMENTO_APROVADO) && (
+                              <span className={styles.trackingPendingNote}>
+                                O rastreamento será disponibilizado assim que o pedido for despachado.
+                              </span>
+                            )
                           )}
                         </div>
                       </header>
@@ -1595,7 +1639,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                   <span className={styles.sectionLabel}>STATUS & RASTREAMENTO DO ENVIO:</span>
                   
                   <div className={styles.timelineStepper}>
-                    {ORDER_STEPS.map((step, idx) => {
+                    {ORDER_TIMELINE_STEPS.map((step, idx) => {
                       const currentIdx = getStepIndex(selectedOrderDetails.statusCode);
                       const isCompleted = idx < currentIdx;
                       const isCurrent = idx === currentIdx;
@@ -1612,7 +1656,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                           <span className={`${styles.timelineStepLabel} ${isCurrent ? styles.activeTimelineLabel : ''}`}>
                             {step.label}
                           </span>
-                          {idx < ORDER_STEPS.length - 1 && (
+                          {idx < ORDER_TIMELINE_STEPS.length - 1 && (
                             <div className={`${styles.timelineConnector} ${idx < currentIdx ? styles.connectorActive : ''}`} />
                           )}
                         </div>
@@ -1620,14 +1664,32 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     })}
                   </div>
 
-                  {/* CÓDIGO DE RASTREIO */}
-                  <div className={styles.trackingInfoCard}>
-                    <Truck size={16} />
-                    <div className={styles.trackingDetails}>
-                      <span>Código de Rastreamento (Correios):</span>
-                      <strong>{selectedOrderDetails.trackingCode}</strong>
+                  {/* BOTÃO RECUPERAÇÃO PIX (MODAL DETALHES) */}
+                  {selectedOrderDetails.statusCode === ORDER_STATUSES.AGUARDANDO_PAGAMENTO && (
+                    <div style={{ width: '100%', marginTop: '0.5rem', textAlign: 'center' }}>
+                      <button 
+                        type="button" 
+                        onClick={() => setPixModalOrder(selectedOrderDetails)} 
+                        className={styles.pixPayBtn}
+                        style={{ fontSize: '0.8rem', padding: '0.65rem 1.25rem' }}
+                      >
+                        <QrCode size={15} />
+                        <span>PAGAR COM PIX (VER QR CODE & COPIA E COLA)</span>
+                      </button>
                     </div>
-                    {selectedOrderDetails.trackingCode && !selectedOrderDetails.trackingCode.includes('Aguardando') && (
+                  )}
+
+                  {/* CÓDIGO DE RASTREIO REAL */}
+                  {(selectedOrderDetails.statusCode === ORDER_STATUSES.SAIU_PARA_ENTREGA || selectedOrderDetails.statusCode === ORDER_STATUSES.ENTREGUE) &&
+                  selectedOrderDetails.trackingCode && 
+                  !selectedOrderDetails.trackingCode.toLowerCase().includes('processando') && 
+                  !selectedOrderDetails.trackingCode.toLowerCase().includes('aguardando') ? (
+                    <div className={styles.trackingInfoCard}>
+                      <Truck size={16} />
+                      <div className={styles.trackingDetails}>
+                        <span>Código de Rastreamento {selectedOrderDetails.carrier ? `(${selectedOrderDetails.carrier})` : ''}:</span>
+                        <strong>{selectedOrderDetails.trackingCode}</strong>
+                      </div>
                       <button 
                         type="button" 
                         onClick={() => handleCopyTrackingCode(selectedOrderDetails.trackingCode)}
@@ -1636,8 +1698,28 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                         {copiedTracking ? <Check size={12} /> : <Copy size={12} />}
                         <span>{copiedTracking ? 'COPIADO!' : 'COPIAR'}</span>
                       </button>
-                    )}
-                  </div>
+                      {selectedOrderDetails.trackingUrl && (
+                        <a 
+                          href={selectedOrderDetails.trackingUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className={styles.copyTrackingBtn}
+                          style={{ textDecoration: 'none', color: '#c084fc' }}
+                        >
+                          <span>RASTREAR</span>
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <div className={styles.trackingInfoCard} style={{ opacity: 0.85 }}>
+                      <Clock size={16} color="var(--text-muted)" />
+                      <div className={styles.trackingDetails}>
+                        <span style={{ fontStyle: 'italic' }}>
+                          O rastreamento oficial será disponibilizado nesta tela assim que a peça for despachada pelo ateliê.
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className={styles.canceledNoticeBox}>
@@ -2238,6 +2320,82 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL DE RECUPERAÇÃO DE PIX (AGUARDANDO PAGAMENTO) */}
+      <AnimatePresence>
+        {pixModalOrder && (
+          <div className={styles.pixModalBackdrop} onClick={() => setPixModalOrder(null)}>
+            <motion.div 
+              className={styles.pixModal} 
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className={styles.pixModalHeader}>
+                <h3>PAGAMENTO COM PIX • {pixModalOrder.id}</h3>
+                <button 
+                  type="button" 
+                  onClick={() => setPixModalOrder(null)} 
+                  className={styles.closeModalBtn}
+                  aria-label="Fechar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className={styles.pixModalBody}>
+                <div className={styles.pixModalOrderTotal}>
+                  R$ {Number(pixModalOrder.total || 0).toFixed(2)}
+                </div>
+                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                  Abra o app do seu banco, escolha <strong>Pix</strong> e escaneie o código abaixo:
+                </p>
+
+                <div className={styles.pixModalQrImage}>
+                  <img 
+                    src={pixModalOrder.pixQrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=THR33-PIX-${pixModalOrder.rawId || pixModalOrder.id}`} 
+                    alt="QR Code PIX PagBank" 
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  />
+                </div>
+
+                <div className={styles.pixModalCopyArea}>
+                  <input 
+                    type="text" 
+                    readOnly 
+                    value={pixModalOrder.pixCopiaECola || `00020126580014br.gov.bcb.pix0136pagbank-thr33-${pixModalOrder.rawId || pixModalOrder.id}`}
+                    className={styles.pixModalInput} 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => handleCopyPixModal(pixModalOrder.pixCopiaECola || `00020126580014br.gov.bcb.pix0136pagbank-thr33-${pixModalOrder.rawId || pixModalOrder.id}`)}
+                    className={styles.pixModalCopyBtn}
+                  >
+                    {copiedPixModal ? <Check size={14} /> : <Copy size={14} />}
+                    <span>{copiedPixModal ? 'COPIADO!' : 'COPIAR CHAVE'}</span>
+                  </button>
+                </div>
+
+                <span className={styles.pixModalTimerNote}>
+                  O código Pix expira em 45 minutos a partir da geração do pedido. O status é atualizado automaticamente assim que pago.
+                </span>
+              </div>
+
+              <div className={styles.pixModalFooter}>
+                <button 
+                  type="button" 
+                  onClick={() => setPixModalOrder(null)} 
+                  className={styles.cancelBtn}
+                >
+                  FECHAR
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

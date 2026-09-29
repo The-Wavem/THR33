@@ -52,7 +52,8 @@ export const pagbankService = {
     paymentMethod,
     cardData,
     installments = 1,
-    totalAmount
+    totalAmount,
+    rawOrderData = null
   }) => {
     const totalInCents = Math.round(Number(totalAmount) * 100);
     const cleanCpf = (customer.cpf || '').replace(/\D/g, '').padEnd(11, '0').slice(0, 11);
@@ -60,7 +61,7 @@ export const pagbankService = {
     const area = digits.length >= 10 ? digits.slice(0, 2) : '41';
     const number = digits.length >= 10 ? digits.slice(2) : '999999999';
 
-    const payload = {
+    const orderPayload = {
       reference_id: orderReference,
       customer: {
         name: customer.name || 'Cliente THR33',
@@ -89,7 +90,7 @@ export const pagbankService = {
     };
 
     if (paymentMethod === 'PIX') {
-      payload.qr_codes = [{
+      orderPayload.qr_codes = [{
         amount: { value: totalInCents },
         expiration_date: new Date(Date.now() + 15 * 60 * 1000).toISOString()
       }];
@@ -100,7 +101,7 @@ export const pagbankService = {
         ? `20${cardData.expYear}` 
         : String(cardData?.expYear || '');
 
-      payload.charges = [{
+      orderPayload.charges = [{
         reference_id: `charge_${orderReference}`,
         description: "Pedido THR33 Streetwear",
         amount: { value: totalInCents, currency: "BRL" },
@@ -120,7 +121,7 @@ export const pagbankService = {
     }
 
     if (paymentMethod === 'Boleto Bancário') {
-      payload.charges = [{
+      orderPayload.charges = [{
         reference_id: `charge_${orderReference}`,
         description: "Boleto THR33",
         amount: { value: totalInCents, currency: "BRL" },
@@ -151,7 +152,28 @@ export const pagbankService = {
       }];
     }
 
-    // Se houver token válido configurado no ambiente, tenta chamada real no proxy
+    // 1. Tenta disparar pela Cloud Function segura (se em ambiente com backend ativo)
+    try {
+      const res = await fetch('/api/createSecureOrder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderPayload, rawOrderData })
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        return {
+          success: true,
+          orderId: json.orderId,
+          data: json.pagbank,
+          isBackend: true
+        };
+      }
+    } catch (e) {
+      console.warn("Function backend offline ou em ambiente local, aplicando fallback seguro.");
+    }
+
+    // 2. Se houver token válido configurado no ambiente, tenta chamada real no proxy
     if (PAGBANK_TOKEN && PAGBANK_TOKEN.trim() !== '' && !PAGBANK_TOKEN.includes('seu_token_sandbox_aqui')) {
       try {
         const response = await fetch('/api/pagbank/orders', {
@@ -160,21 +182,19 @@ export const pagbankService = {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${PAGBANK_TOKEN}`
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(orderPayload)
         });
 
         const responseData = await response.json();
-        if (!response.ok) {
-          throw new Error(responseData?.error_messages?.[0]?.description || 'Erro ao processar cobrança no PagBank');
+        if (response.ok) {
+          return { success: true, data: responseData, isSandbox: IS_SANDBOX };
         }
-
-        return { success: true, data: responseData, isSandbox: IS_SANDBOX };
       } catch (err) {
         console.warn("Modo Sandbox Fallback:", err.message);
       }
     }
 
-    // Fallback de homologação local / sandbox
+    // 3. Fallback de homologação local / sandbox
     const cleanNum = (cardData?.number || '').replace(/\D/g, '');
     const isDeclined = cleanNum.startsWith('5105') || cardData?.cvv === '999';
 

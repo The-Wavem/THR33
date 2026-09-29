@@ -42,13 +42,15 @@ import {
 } from '../../utils/validators';
 import { fetchAddressByCep } from '../../services/viaCepService';
 import { useAuth } from '../../context/AuthContext';
-import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
 import { couponService } from '../../services/couponService';
 import { analyticsService } from '../../services/analyticsService';
 import { catalogService } from '../../services/catalogService';
 import { pagbankService, PAGBANK_TEST_CARDS, detectCardBrand } from '../../services/pagbankService';
 import { CardBrandIcon } from '../../components/ui/CardBrandIcon';
+import { ORDER_STATUSES, normalizeOrderStatus } from '../../services/orderStateMachine';
+import { webhookService } from '../../services/webhookService';
 import styles from './Checkout.module.css';
 
 export function Checkout({ user: propUser, onOpenAuthModal }) {
@@ -238,6 +240,23 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   const [copiedPix, setCopiedPix] = useState(false);
   const [couponInput, setCouponInput] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
+  const [createdOrderId, setCreatedOrderId] = useState(null);
+  const [createdOrderStatus, setCreatedOrderStatus] = useState(null);
+
+  // Escuta em tempo real do status do pedido (Firestore onSnapshot)
+  useEffect(() => {
+    if (!createdOrderId) return;
+    const unsub = onSnapshot(doc(db, 'orders', createdOrderId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const norm = normalizeOrderStatus(data.status);
+        setCreatedOrderStatus(norm);
+      }
+    }, (err) => {
+      console.warn("Aviso ao escutar status do pedido:", err.message);
+    });
+    return () => unsub();
+  }, [createdOrderId]);
 
   // DADOS DE PAGAMENTO PAGBANK (CHECKOUT TRANSPARENTE)
   const [cardData, setCardData] = useState({
@@ -580,8 +599,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       complement: addressForm.complement || ''
     };
 
-    const trackingCode = `BR${Math.floor(100000000 + Math.random() * 900000000)}PR`;
     const totalItemsCount = cartItems.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
+    const orderRefId = `THR-${Date.now()}`;
 
     // Captura UTMs congeladas da sessão/campanha ou URL
     const urlParams = new URLSearchParams(window.location.search);
@@ -591,63 +610,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     const utmCampaign = urlParams.get('utm_campaign') || activeUtm?.utm_campaign || sessionStorage.getItem('thr33_utm_campaign') || null;
 
     let pagbankData = null;
-
-    // Se houver valor financeiro a ser cobrado no gateway PagBank
-    if (finalAmountToPay > 0) {
-      try {
-        const orderRefId = `THR-${Date.now()}`;
-
-        const pagbankRes = await pagbankService.createOrder({
-          orderReference: orderRefId,
-          customer: {
-            name: clientData.name || user?.displayName || user?.name || 'Cliente THR33',
-            email: clientData.email || user?.email || 'cliente@thr33.com',
-            cpf: clientData.cpf || '',
-            phone: clientData.phone || ''
-          },
-          items: cartItems,
-          shippingAddress: addressToSave,
-          shippingCost: Number(shippingCost) || 0,
-          paymentMethod,
-          cardData: {
-            number: cardData.number,
-            holder: cardData.holder,
-            expMonth: cardData.expMonth || '',
-            expYear: cardData.expYear || '',
-            cvv: cardData.cvv
-          },
-          installments,
-          totalAmount: finalAmountToPay
-        });
-
-        // Verifica recusa na cobrança do PagBank
-        const charge = pagbankRes.data?.charges?.[0];
-        if (charge && charge.status === 'DECLINED') {
-          setPaymentError(charge.payment_response?.message || 'Transação negada pelo banco emissor. Verifique os dados ou utilize outro cartão.');
-          setIsProcessing(false);
-          return;
-        }
-
-        if (!pagbankRes.success) {
-          setPaymentError('Transação não autorizada. Verifique os dados do cartão ou escolha outro método de pagamento.');
-          setIsProcessing(false);
-          return;
-        }
-
-        pagbankData = pagbankRes.data;
-        setPagbankResult(pagbankRes.data);
-      } catch (gatewayErr) {
-        console.warn("Aviso ao processar gateway PagBank:", gatewayErr.message);
-        setPaymentError('Erro temporário de conexão com o PagBank. Tente novamente em instantes.');
-        setIsProcessing(false);
-        return;
-      }
-    }
+    let pagbankRes = null;
 
     const cleanCardNumber = (cardData.number || '').replace(/\D/g, '');
     const lastDigits = cleanCardNumber ? `•••• ${cleanCardNumber.slice(-4)}` : null;
 
-    const orderData = {
+    const baseOrderData = {
       userId: user?.uid || 'guest',
       clientName: clientData.name || user?.displayName || user?.name || 'Cliente THR33',
       clientEmail: clientData.email || user?.email || '',
@@ -688,22 +656,104 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         state: addressToSave.state || 'PR',
         complement: addressToSave.complement || ''
       },
-      status: paymentMethod === 'Cartão de Crédito' || finalAmountToPay === 0 ? 'Aprovado' : 'Aguardando Pagamento',
+      trackingCode: null,
+      carrier: null,
+      trackingUrl: null,
+      utm_source: utmSource,
+      utm_medium: utmMedium,
+      utm_campaign: utmCampaign,
+      createdAt: new Date().toISOString()
+    };
+
+    // Se houver valor financeiro a ser cobrado no gateway PagBank
+    if (finalAmountToPay > 0) {
+      try {
+        pagbankRes = await pagbankService.createOrder({
+          orderReference: orderRefId,
+          customer: {
+            name: clientData.name || user?.displayName || user?.name || 'Cliente THR33',
+            email: clientData.email || user?.email || 'cliente@thr33.com',
+            cpf: clientData.cpf || '',
+            phone: clientData.phone || ''
+          },
+          items: cartItems,
+          shippingAddress: addressToSave,
+          shippingCost: Number(shippingCost) || 0,
+          paymentMethod,
+          cardData: {
+            number: cardData.number,
+            holder: cardData.holder,
+            expMonth: cardData.expMonth || '',
+            expYear: cardData.expYear || '',
+            cvv: cardData.cvv
+          },
+          installments,
+          totalAmount: finalAmountToPay,
+          rawOrderData: baseOrderData
+        });
+
+        // Verifica recusa na cobrança do PagBank
+        const charge = pagbankRes.data?.charges?.[0];
+        if (charge && charge.status === 'DECLINED') {
+          setPaymentError(charge.payment_response?.message || 'Transação negada pelo banco emissor. Verifique os dados ou utilize outro cartão.');
+          setIsProcessing(false);
+          return;
+        }
+
+        if (!pagbankRes.success) {
+          setPaymentError('Transação não autorizada. Verifique os dados do cartão ou escolha outro método de pagamento.');
+          setIsProcessing(false);
+          return;
+        }
+
+        pagbankData = pagbankRes.data;
+        setPagbankResult(pagbankRes.data);
+      } catch (gatewayErr) {
+        console.warn("Aviso ao processar gateway PagBank:", gatewayErr.message);
+        setPaymentError('Erro temporário de conexão com o PagBank. Tente novamente em instantes.');
+        setIsProcessing(false);
+        return;
+      }
+    }
+
+    // Determina o status canônico inicial segundo a máquina de estados
+    let initialStatus = ORDER_STATUSES.AGUARDANDO_PAGAMENTO;
+    let paidAt = null;
+
+    if (finalAmountToPay === 0) {
+      initialStatus = ORDER_STATUSES.PAGAMENTO_APROVADO;
+      paidAt = new Date().toISOString();
+    } else if (paymentMethod === 'Cartão de Crédito') {
+      const charge = pagbankData?.charges?.[0];
+      if (charge?.status === 'PAID' || charge?.status === 'AUTHORIZED') {
+        initialStatus = ORDER_STATUSES.PAGAMENTO_APROVADO;
+        paidAt = new Date().toISOString();
+      } else {
+        initialStatus = ORDER_STATUSES.AGUARDANDO_PAGAMENTO;
+      }
+    } else {
+      initialStatus = ORDER_STATUSES.AGUARDANDO_PAGAMENTO;
+    }
+
+    let finalDocId = pagbankRes?.orderId || null;
+
+    const orderData = {
+      ...baseOrderData,
+      status: initialStatus,
+      paidAt,
+      pixQrCodeUrl: pagbankData?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href || (paymentMethod === 'PIX' ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=THR33-PIX-${orderRefId}` : null),
+      pixCopiaECola: pagbankData?.qr_codes?.[0]?.text || (paymentMethod === 'PIX' ? `00020126580014br.gov.bcb.pix0136pagbank-thr33-${orderRefId}` : null),
+      pixExpiresAt: paymentMethod === 'PIX' ? new Date(Date.now() + 45 * 60 * 1000).toISOString() : null,
       pagbank: pagbankData ? {
         orderId: pagbankData.id || null,
-        referenceId: pagbankData.reference_id || null,
-        status: pagbankData.charges?.[0]?.status || (paymentMethod === 'Cartão de Crédito' ? 'PAID' : 'WAITING_PAYMENT'),
+        referenceId: pagbankData.reference_id || orderRefId,
+        status: pagbankData.charges?.[0]?.status || (initialStatus === ORDER_STATUSES.PAGAMENTO_APROVADO ? 'PAID' : 'WAITING_PAYMENT'),
         chargeId: pagbankData.charges?.[0]?.id || null,
         charges: pagbankData.charges || null,
         qr_codes: pagbankData.qr_codes || null,
         boleto: pagbankData.boleto || null,
         isSandbox: Boolean(pagbankData.isSandbox || pagbankData.isFallback)
-      } : null,
-      trackingCode,
-      utm_source: utmSource,
-      utm_medium: utmMedium,
-      utm_campaign: utmCampaign,
-      createdAt: new Date().toISOString()
+      } : null
     };
 
     // Sanitizador recursivo para remover qualquer resquício de undefined
@@ -712,10 +762,26 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     }));
 
     try {
-      // 1. Grava o pedido completo no Firestore na coleção global 'orders'
-      const orderRef = await addDoc(collection(db, 'orders'), cleanPayload);
-      const generatedOrder = `THR-${orderRef.id.slice(0, 6).toUpperCase()}`;
+      // 1. Grava o pedido no Firestore caso a Function backend não tenha criado
+      if (!finalDocId) {
+        const orderRef = await addDoc(collection(db, 'orders'), cleanPayload);
+        finalDocId = orderRef.id;
+      }
+      const generatedOrder = `THR-${finalDocId.slice(0, 6).toUpperCase()}`;
       setOrderNumber(generatedOrder);
+      setCreatedOrderId(finalDocId);
+      setCreatedOrderStatus(initialStatus);
+
+      // Notifica time operacional se já iniciou aprovado
+      if (initialStatus === ORDER_STATUSES.PAGAMENTO_APROVADO) {
+        webhookService.notifyInternalTeam({
+          orderId: finalDocId,
+          clientName: cleanPayload.clientName,
+          total: cleanPayload.total,
+          items: cleanPayload.items,
+          paymentMethod: cleanPayload.paymentMethod
+        });
+      }
 
       // 2. Se um cupom foi utilizado, atualiza métricas e saldo de comissões do parceiro
       if (appliedCoupon?.id || appliedCoupon?.code) {
@@ -790,7 +856,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       // 4. Marca a sessão de checkout como concluída na telemetria
       await analyticsService.trackCheckoutSession(sessionId, {
         completed: true,
-        orderId: orderRef.id,
+        orderId: finalDocId,
         status: 'concluido'
       });
 
@@ -860,47 +926,65 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
           {/* CONFIRMAÇÃO DINÂMICA DO PAGAMENTO */}
           {paymentMethod === 'PIX' && (
-            <div className={styles.pixBox}>
-              <div className={styles.pixHeader}>
-                <QrCode size={18} />
-                <strong>PAGUE COM PIX NO PAGBANK</strong>
-              </div>
-              <p className={styles.pixInstruction}>
-                Escaneie o QR Code abaixo no app do seu banco ou use o código Pix Copia e Cola:
-              </p>
-              
-              <div className={styles.qrCodeContainer}>
-                {Boolean(pagbankResult?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href || pagbankResult?.pix?.qrCodeUrl) ? (
-                  <img 
-                    src={pagbankResult?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href || pagbankResult?.pix?.qrCodeUrl} 
-                    alt="QR Code Pix PagBank" 
-                    className={styles.qrCodeLiveImage} 
-                  />
-                ) : (
-                  <div className={styles.qrCodeGraphic}>
-                    <div className={styles.qrCornerTopLeft} />
-                    <div className={styles.qrCornerTopRight} />
-                    <div className={styles.qrCornerBottomLeft} />
-                    <span className={styles.qrCodeText}>[ QR CODE PAGBANK ]</span>
-                    <span className={styles.qrCodeValue}>R$ {finalAmountToPay.toFixed(2)}</span>
+            createdOrderStatus === ORDER_STATUSES.PAGAMENTO_APROVADO ? (
+              <div className={styles.pixConfirmedBox}>
+                <div className={styles.pixConfirmedHeader}>
+                  <CheckCircle2 size={28} color="#4ade80" />
+                  <div>
+                    <strong>PAGAMENTO PIX CONFIRMADO</strong>
+                    <small>Seu pagamento foi compensado em tempo real pelo PagBank.</small>
                   </div>
-                )}
+                </div>
               </div>
+            ) : (
+              <div className={styles.pixBox}>
+                <div className={styles.pixHeader}>
+                  <QrCode size={18} />
+                  <strong>PAGUE COM PIX NO PAGBANK</strong>
+                </div>
 
-              <div className={styles.pixCopyArea}>
-                <input 
-                  type="text" 
-                  readOnly 
-                  value={pagbankResult?.qr_codes?.[0]?.text || pagbankResult?.pix?.text || "00020126580014br.gov.bcb.pix0136thr33-sandbox-pagbank@thr33.com..."} 
-                  className={styles.pixInput} 
-                />
-                <button type="button" onClick={handleCopyPix} className={styles.copyBtn}>
-                  {copiedPix ? <Check size={14} /> : <Copy size={14} />}
-                  <span>{copiedPix ? 'COPIADO!' : 'COPIAR CHAVE'}</span>
-                </button>
+                <div className={styles.pixAwaitingNotice}>
+                  <Loader2 size={13} className={styles.pulsingLoader} />
+                  <span>Aguardando compensação do banco... A tela confirmará automaticamente assim que pago.</span>
+                </div>
+
+                <p className={styles.pixInstruction}>
+                  Escaneie o QR Code abaixo no app do seu banco ou use o código Pix Copia e Cola:
+                </p>
+                
+                <div className={styles.qrCodeContainer}>
+                  {Boolean(pagbankResult?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href || pagbankResult?.pix?.qrCodeUrl) ? (
+                    <img 
+                      src={pagbankResult?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href || pagbankResult?.pix?.qrCodeUrl} 
+                      alt="QR Code Pix PagBank" 
+                      className={styles.qrCodeLiveImage} 
+                    />
+                  ) : (
+                    <div className={styles.qrCodeGraphic}>
+                      <div className={styles.qrCornerTopLeft} />
+                      <div className={styles.qrCornerTopRight} />
+                      <div className={styles.qrCornerBottomLeft} />
+                      <span className={styles.qrCodeText}>[ QR CODE PAGBANK ]</span>
+                      <span className={styles.qrCodeValue}>R$ {finalAmountToPay.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className={styles.pixCopyArea}>
+                  <input 
+                    type="text" 
+                    readOnly 
+                    value={pagbankResult?.qr_codes?.[0]?.text || pagbankResult?.pix?.text || "00020126580014br.gov.bcb.pix0136thr33-sandbox-pagbank@thr33.com..."} 
+                    className={styles.pixInput} 
+                  />
+                  <button type="button" onClick={handleCopyPix} className={styles.copyBtn}>
+                    {copiedPix ? <Check size={14} /> : <Copy size={14} />}
+                    <span>{copiedPix ? 'COPIADO!' : 'COPIAR CHAVE'}</span>
+                  </button>
+                </div>
+                <span className={styles.pixTimerText}>O código Pix expira em 45 minutos.</span>
               </div>
-              <span className={styles.pixTimerText}>O código Pix expira em 15 minutos.</span>
-            </div>
+            )
           )}
 
           {paymentMethod === 'Cartão de Crédito' && (
