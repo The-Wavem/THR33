@@ -34,6 +34,8 @@ import {
   validateEmail, 
   validatePhone, 
   validateCEP,
+  validateCardNumber,
+  validateCardExpiry,
   maskCPF, 
   maskPhone, 
   maskCEP
@@ -46,6 +48,7 @@ import { couponService } from '../../services/couponService';
 import { analyticsService } from '../../services/analyticsService';
 import { catalogService } from '../../services/catalogService';
 import { pagbankService, PAGBANK_TEST_CARDS, detectCardBrand } from '../../services/pagbankService';
+import { CardBrandIcon } from '../../components/ui/CardBrandIcon';
 import styles from './Checkout.module.css';
 
 export function Checkout({ user: propUser, onOpenAuthModal }) {
@@ -141,6 +144,28 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   });
   const [addressErrors, setAddressErrors] = useState({});
 
+  // Validações em tempo real com indicador visual (Etapa 1 & 2)
+  const isNameValid = useMemo(() => {
+    const trimmed = (clientData.name || '').trim();
+    return trimmed.length >= 3 && trimmed.includes(' ');
+  }, [clientData.name]);
+
+  const isEmailValid = useMemo(() => {
+    return validateEmail(clientData.email);
+  }, [clientData.email]);
+
+  const isCpfValid = useMemo(() => {
+    return validateCPF(clientData.cpf);
+  }, [clientData.cpf]);
+
+  const isPhoneValid = useMemo(() => {
+    return validatePhone(clientData.phone);
+  }, [clientData.phone]);
+
+  const isCepValid = useMemo(() => {
+    return validateCEP(addressForm.cep);
+  }, [addressForm.cep]);
+
   // Sincroniza e pré-preenche dados pessoais e endereços do Firestore
   useEffect(() => {
     const active = currentUser || user;
@@ -226,8 +251,27 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   const [cardErrors, setCardErrors] = useState({});
   const [paymentError, setPaymentError] = useState(null);
   const [pagbankResult, setPagbankResult] = useState(null);
-  const [showDevSandbox, setShowDevSandbox] = useState(false);
   const [cardBrand, setCardBrand] = useState('generic');
+
+  // Validações em tempo real com indicador visual (Etapa 3 - Cartão)
+  const isCardNumberValid = useMemo(() => {
+    const clean = (cardData.number || '').replace(/\D/g, '');
+    return (clean.length === 15 || clean.length === 16) && validateCardNumber(clean);
+  }, [cardData.number]);
+
+  const isCardHolderValid = useMemo(() => {
+    const trimmed = (cardData.holder || '').trim();
+    return trimmed.length >= 4 && trimmed.includes(' ');
+  }, [cardData.holder]);
+
+  const isCardExpiryValid = useMemo(() => {
+    return validateCardExpiry(cardData.expMonth, cardData.expYear);
+  }, [cardData.expMonth, cardData.expYear]);
+
+  const isCardCvvValid = useMemo(() => {
+    const clean = (cardData.cvv || '').replace(/\D/g, '');
+    return clean.length >= 3 && clean.length <= 4;
+  }, [cardData.cvv]);
 
   // Handlers de máscara de cartão
   const handleCardNumberChange = (e) => {
@@ -248,20 +292,6 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       expMonth: v.slice(0, 2),
       expYear: v.length >= 5 ? v.slice(3, 5) : v.slice(3)
     }));
-    if (paymentError) setPaymentError(null);
-  };
-
-  const handleApplyTestCard = (type) => {
-    const card = PAGBANK_TEST_CARDS[type];
-    if (!card) return;
-    setCardData({
-      number: card.number,
-      holder: card.holder,
-      expMonth: card.expMonth,
-      expYear: card.expYear,
-      cvv: card.cvv
-    });
-    setCardBrand(card.brand);
     if (paymentError) setPaymentError(null);
   };
 
@@ -518,25 +548,16 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     // Validação de cartão de crédito quando houver cobrança financeira
     if (finalAmountToPay > 0 && paymentMethod === 'Cartão de Crédito') {
       const errors = {};
-      const cleanNum = (cardData.number || '').replace(/\D/g, '');
-      if (!cleanNum || cleanNum.length < 15) {
-        errors.number = 'Número de cartão inválido.';
+      if (!isCardNumberValid) {
+        errors.number = 'Número de cartão inválido ou incompleto.';
       }
-      if (!cardData.holder || cardData.holder.trim().length < 3) {
-        errors.holder = 'Informe o nome impresso no cartão.';
+      if (!isCardHolderValid) {
+        errors.holder = 'Informe o nome completo impresso no cartão.';
       }
-
-      const expM = Number(cardData.expMonth);
-      if (!expM || expM < 1 || expM > 12) {
-        errors.expiry = 'Mês inválido.';
+      if (!isCardExpiryValid) {
+        errors.expiry = 'Validade do cartão inválida ou expirada.';
       }
-      const expY = Number(cardData.expYear);
-      const currentYearTwoDigits = Number(String(new Date().getFullYear()).slice(-2));
-      if (!expY || expY < currentYearTwoDigits) {
-        errors.expiry = 'Ano inválido.';
-      }
-      const cleanCvv = (cardData.cvv || '').replace(/\D/g, '');
-      if (!cleanCvv || cleanCvv.length < 3) {
+      if (!isCardCvvValid) {
         errors.cvv = 'CVV inválido (3 ou 4 dígitos).';
       }
 
@@ -623,6 +644,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       }
     }
 
+    const cleanCardNumber = (cardData.number || '').replace(/\D/g, '');
+    const lastDigits = cleanCardNumber ? `•••• ${cleanCardNumber.slice(-4)}` : null;
+
     const orderData = {
       userId: user?.uid || 'guest',
       clientName: clientData.name || user?.displayName || user?.name || 'Cliente THR33',
@@ -650,6 +674,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       originalTotal: Number(total) || 0,
       walletDeduction: Number(walletDeduction) || 0,
       paymentMethod: finalAmountToPay === 0 ? 'Carteira Digital THR33' : (paymentMethod || 'PIX'),
+      paymentDetails: paymentMethod === 'Cartão de Crédito' ? {
+        brand: cardBrand,
+        lastDigits,
+        installments: Number(installments) || 1
+      } : null,
       shippingAddress: {
         cep: addressToSave.cep || '',
         street: addressToSave.street || '',
@@ -979,7 +1008,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       <header className={styles.header}>
         <div className={styles.tagGroup}>
           <Lock size={12} />
-          <span className={styles.tag}>CHECKOUT SEGURO // PAGBANK</span>
+          <span className={styles.tag}>CHECKOUT</span>
         </div>
         <h1 className={styles.title}>FINALIZAR PEDIDO</h1>
 
@@ -1084,29 +1113,43 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 <div className={styles.fieldsGrid}>
                   <div className={styles.fieldWrapper}>
                     <label className={styles.fieldLabel}>NOME COMPLETO *</label>
-                    <input 
-                      type="text" 
-                      name="name" 
-                      placeholder="Ex: Matheus Rocha" 
-                      value={clientData.name} 
-                      onChange={handleClientChange} 
-                      disabled={Boolean(user && !isEditingAccountData)}
-                      className={`${clientErrors.name ? styles.inputError : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
-                    />
+                    <div className={styles.inputWithCheckWrapper}>
+                      <input 
+                        type="text" 
+                        name="name" 
+                        placeholder="Ex: Matheus Rocha" 
+                        value={clientData.name} 
+                        onChange={handleClientChange} 
+                        disabled={Boolean(user && !isEditingAccountData)}
+                        className={`${clientErrors.name ? styles.inputError : ''} ${isNameValid && !clientErrors.name ? styles.inputSuccess : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
+                      />
+                      {isNameValid && !clientErrors.name && (
+                        <div className={styles.inputCheckPosition}>
+                          <Check size={16} className={styles.validCheckIcon} />
+                        </div>
+                      )}
+                    </div>
                     {clientErrors.name && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.name}</span>}
                   </div>
 
                   <div className={styles.fieldWrapper}>
                     <label className={styles.fieldLabel}>E-MAIL PARA ENVIO DA NOTA FISCAL *</label>
-                    <input 
-                      type="email" 
-                      name="email" 
-                      placeholder="seu@email.com" 
-                      value={clientData.email} 
-                      onChange={handleClientChange} 
-                      disabled={Boolean(user && !isEditingAccountData)}
-                      className={`${clientErrors.email ? styles.inputError : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
-                    />
+                    <div className={styles.inputWithCheckWrapper}>
+                      <input 
+                        type="email" 
+                        name="email" 
+                        placeholder="seu@email.com" 
+                        value={clientData.email} 
+                        onChange={handleClientChange} 
+                        disabled={Boolean(user && !isEditingAccountData)}
+                        className={`${clientErrors.email ? styles.inputError : ''} ${isEmailValid && !clientErrors.email ? styles.inputSuccess : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
+                      />
+                      {isEmailValid && !clientErrors.email && (
+                        <div className={styles.inputCheckPosition}>
+                          <Check size={16} className={styles.validCheckIcon} />
+                        </div>
+                      )}
+                    </div>
                     {clientErrors.email && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.email}</span>}
                   </div>
 
@@ -1116,16 +1159,23 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                         <label className={styles.fieldLabel}>CPF DO TITULAR DA COMPRA *</label>
                         <span className={styles.requiredBadge}>NF / PagBank</span>
                       </div>
-                      <input 
-                        type="text" 
-                        name="cpf" 
-                        placeholder="000.000.000-00"
-                        maxLength={14}
-                        value={clientData.cpf} 
-                        onChange={handleClientChange} 
-                        disabled={Boolean(user && !isEditingAccountData)}
-                        className={`${clientErrors.cpf ? styles.inputError : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
-                      />
+                      <div className={styles.inputWithCheckWrapper}>
+                        <input 
+                          type="text" 
+                          name="cpf" 
+                          placeholder="000.000.000-00" 
+                          maxLength={14}
+                          value={clientData.cpf} 
+                          onChange={handleClientChange} 
+                          disabled={Boolean(user && !isEditingAccountData)}
+                          className={`${clientErrors.cpf ? styles.inputError : ''} ${isCpfValid && !clientErrors.cpf ? styles.inputSuccess : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
+                        />
+                        {isCpfValid && !clientErrors.cpf && (
+                          <div className={styles.inputCheckPosition}>
+                            <Check size={16} className={styles.validCheckIcon} />
+                          </div>
+                        )}
+                      </div>
                       {clientErrors.cpf && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.cpf}</span>}
                     </div>
 
@@ -1134,16 +1184,23 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                         <label className={styles.fieldLabel}>TELEFONE / WHATSAPP *</label>
                         <span className={styles.requiredBadge}>Rastreio de Envio</span>
                       </div>
-                      <input 
-                        type="text" 
-                        name="phone" 
-                        placeholder="(41) 99999-9999"
-                        maxLength={15}
-                        value={clientData.phone} 
-                        onChange={handleClientChange} 
-                        disabled={Boolean(user && !isEditingAccountData)}
-                        className={`${clientErrors.phone ? styles.inputError : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
-                      />
+                      <div className={styles.inputWithCheckWrapper}>
+                        <input 
+                          type="text" 
+                          name="phone" 
+                          placeholder="(41) 99999-9999" 
+                          maxLength={15}
+                          value={clientData.phone} 
+                          onChange={handleClientChange} 
+                          disabled={Boolean(user && !isEditingAccountData)}
+                          className={`${clientErrors.phone ? styles.inputError : ''} ${isPhoneValid && !clientErrors.phone ? styles.inputSuccess : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
+                        />
+                        {isPhoneValid && !clientErrors.phone && (
+                          <div className={styles.inputCheckPosition}>
+                            <Check size={16} className={styles.validCheckIcon} />
+                          </div>
+                        )}
+                      </div>
                       {clientErrors.phone && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.phone}</span>}
                     </div>
                   </div>
@@ -1261,9 +1318,15 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                             maxLength={9}
                             value={addressForm.cep} 
                             onChange={handleAddressChange} 
-                            className={addressErrors.cep ? styles.inputError : ''}
+                            className={`${addressErrors.cep ? styles.inputError : ''} ${isCepValid && !addressErrors.cep ? styles.inputSuccess : ''}`}
                           />
-                          {isSearchingCep && <Loader2 size={16} className={styles.spinner} />}
+                          {isSearchingCep ? (
+                            <Loader2 size={16} className={styles.spinner} />
+                          ) : isCepValid && !addressErrors.cep ? (
+                            <div className={styles.inputCheckPosition}>
+                              <Check size={16} className={styles.validCheckIcon} />
+                            </div>
+                          ) : null}
                         </div>
                         {cepApiMessage && (
                           <span className={cepApiMessage.type === 'success' ? styles.successApiText : styles.errorText}>
@@ -1434,7 +1497,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
               >
                 <div className={styles.stepCardHeader}>
                   <span className={styles.stepCardBadge}>ETAPA 03</span>
-                  <h2 className={styles.stepCardTitle}>PAGAMENTO SEGURO (PAGBANK)</h2>
+                  <h2 className={styles.stepCardTitle}>PAGAMENTO</h2>
                 </div>
 
                 {/* Resumo do Destino */}
@@ -1481,12 +1544,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                   <div className={styles.pagBankGatewayCard}>
                     <div className={styles.pagBankHeader}>
                       <div className={styles.pagBankBrandGroup}>
-                        <span className={styles.pagBankLogo}>PAGBANK</span>
-                        <span className={styles.pagBankBadge}>GATEWAY OFICIAL</span>
-                      </div>
-                      <div className={styles.pagBankSecureTag}>
-                        <ShieldCheck size={14} color="#4ade80" />
-                        <span>CRIPTOGRAFIA 256-BIT</span>
+                        <span className={styles.pagBankLogo}>VIA PAGBANK</span>
                       </div>
                     </div>
 
@@ -1532,54 +1590,21 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                       </button>
                     </div>
 
-                    {/* FORMULÁRIO DE CARTÃO DE CRÉDITO TRANSPARENTE COM ATALHOS DE HOMOLOGAÇÃO */}
+                    {/* FORMULÁRIO DE CARTÃO DE CRÉDITO TRANSPARENTE LIMPO (PADRÃO PRODUÇÃO) */}
                     {paymentMethod === 'Cartão de Crédito' && (
                       <div className={styles.cardPaymentContainer}>
-                        {/* BADGE DE SEGURANCA TOPO */}
+                        {/* CABECALHO DE SEGURANCA LIMPO */}
                         <div className={styles.securityHeader}>
                           <div className={styles.securitySeal}>
                             <Lock size={13} />
-                            <span>PAGAMENTO CRIPTOGRAFADO 256-BIT SSL</span>
+                            <span>PAGAMENTO</span>
                           </div>
-                          <span className={styles.pciNotice}>PCI-DSS LEVEL 1</span>
                         </div>
 
-                        {/* TOOLBAR RECOLHIVEL SANDBOX (APENAS PARA TESTES) */}
-                        <div className={styles.sandboxAccordion}>
-                          <button 
-                            type="button" 
-                            onClick={() => setShowDevSandbox(!showDevSandbox)} 
-                            className={styles.sandboxToggleBtn}
-                          >
-                            <span>MODO HOMOLOGAÇÃO PAGBANK (TESTES)</span>
-                            <ChevronDown 
-                              size={14} 
-                              style={{ 
-                                transform: showDevSandbox ? 'rotate(180deg)' : 'none', 
-                                transition: 'transform 0.2s' 
-                              }} 
-                            />
-                          </button>
-
-                          {showDevSandbox && (
-                            <div className={styles.sandboxBody}>
-                              <button type="button" onClick={() => handleApplyTestCard('approved')} className={styles.testBtnSuccess}>
-                                Usar Cartão de Teste Aprovado
-                              </button>
-                              <button type="button" onClick={() => handleApplyTestCard('declined')} className={styles.testBtnDanger}>
-                                Usar Cartão de Teste Recusado
-                              </button>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* CAMPOS DO FORMULARIO COM MASCARA */}
+                        {/* NUMERO DO CARTAO COM DETECCAO DE BANDEIRA */}
                         <div className={styles.fieldGroup}>
-                          <div className={styles.labelWithBrand}>
-                            <label htmlFor="ccNumber">NÚMERO DO CARTÃO *</label>
-                            <span className={styles.brandIndicator}>{cardBrand.toUpperCase()}</span>
-                          </div>
-                          <div className={styles.inputWrapper}>
+                          <label htmlFor="ccNumber">NÚMERO DO CARTÃO *</label>
+                          <div className={styles.cardInputWrapper}>
                             <input
                               id="ccNumber"
                               type="text"
@@ -1588,57 +1613,86 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                               value={cardData.number}
                               onChange={handleCardNumberChange}
                               required
-                              className={styles.styledInput}
+                              className={`${styles.styledInput} ${styles.cardInputWithAdornment} ${isCardNumberValid ? styles.inputSuccess : ''}`}
                             />
+                            <div className={styles.brandIconPosition}>
+                              {isCardNumberValid && <Check size={16} className={styles.validCheckIcon} />}
+                              <CardBrandIcon brand={cardBrand} />
+                            </div>
                           </div>
                         </div>
 
+                        {/* TITULAR DO CARTAO */}
                         <div className={styles.fieldGroup}>
                           <label htmlFor="ccHolder">TITULAR DO CARTÃO (NOME IMPRESSO) *</label>
-                          <input
-                            id="ccHolder"
-                            type="text"
-                            placeholder="NOME COMO NO CARTÃO"
-                            value={cardData.holder}
-                            onChange={(e) => setCardData(prev => ({ ...prev, holder: e.target.value.toUpperCase() }))}
-                            required
-                            className={styles.styledInput}
-                          />
+                          <div className={styles.cardInputWrapper}>
+                            <input
+                              id="ccHolder"
+                              type="text"
+                              placeholder="NOME COMO NO CARTÃO"
+                              value={cardData.holder}
+                              onChange={(e) => setCardData(prev => ({ ...prev, holder: e.target.value.toUpperCase() }))}
+                              required
+                              className={`${styles.styledInput} ${styles.cardInputWithCheck} ${isCardHolderValid ? styles.inputSuccess : ''}`}
+                            />
+                            {isCardHolderValid && (
+                              <div className={styles.inputCheckPosition}>
+                                <Check size={16} className={styles.validCheckIcon} />
+                              </div>
+                            )}
+                          </div>
                         </div>
 
+                        {/* VALIDADE E CVV */}
                         <div className={styles.cardDualRow}>
                           <div className={styles.fieldGroup}>
                             <label htmlFor="ccExp">VALIDADE (MM/AA) *</label>
-                            <input
-                              id="ccExp"
-                              type="text"
-                              inputMode="numeric"
-                              placeholder="MM/AA"
-                              value={cardData.expMonth ? `${cardData.expMonth}${cardData.expYear ? `/${cardData.expYear}` : ''}` : ''}
-                              onChange={handleExpChange}
-                              required
-                              className={styles.styledInput}
-                            />
+                            <div className={styles.cardInputWrapper}>
+                              <input
+                                id="ccExp"
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="MM/AA"
+                                maxLength={5}
+                                value={cardData.expMonth ? `${cardData.expMonth}${cardData.expYear ? `/${cardData.expYear}` : ''}` : ''}
+                                onChange={handleExpChange}
+                                required
+                                className={`${styles.styledInput} ${styles.cardInputWithCheck} ${isCardExpiryValid ? styles.inputSuccess : ''}`}
+                              />
+                              {isCardExpiryValid && (
+                                <div className={styles.inputCheckPosition}>
+                                  <Check size={16} className={styles.validCheckIcon} />
+                                </div>
+                              )}
+                            </div>
                           </div>
 
                           <div className={styles.fieldGroup}>
                             <label htmlFor="ccCvv">CÓDIGO DE SEGURANÇA (CVV) *</label>
-                            <input
-                              id="ccCvv"
-                              type="password"
-                              inputMode="numeric"
-                              maxLength={4}
-                              placeholder="123"
-                              value={cardData.cvv}
-                              onChange={(e) => setCardData(prev => ({ ...prev, cvv: e.target.value.replace(/\D/g, '') }))}
-                              required
-                              className={styles.styledInput}
-                            />
+                            <div className={styles.cardInputWrapper}>
+                              <input
+                                id="ccCvv"
+                                type="password"
+                                inputMode="numeric"
+                                maxLength={4}
+                                placeholder="123"
+                                value={cardData.cvv}
+                                onChange={(e) => setCardData(prev => ({ ...prev, cvv: e.target.value.replace(/\D/g, '') }))}
+                                required
+                                className={`${styles.styledInput} ${styles.cardInputWithCheck} ${isCardCvvValid ? styles.inputSuccess : ''}`}
+                              />
+                              {isCardCvvValid && (
+                                <div className={styles.inputCheckPosition}>
+                                  <Check size={16} className={styles.validCheckIcon} />
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
 
+                        {/* PARCELAMENTO */}
                         <div className={styles.fieldGroup}>
-                          <label htmlFor="ccInstallments">OPÇÕES DE PARCELAMENTO *</label>
+                          <label htmlFor="ccInstallments">PARCELAMENTO NO PAGBANK *</label>
                           <select
                             id="ccInstallments"
                             value={installments}

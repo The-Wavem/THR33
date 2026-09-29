@@ -35,6 +35,7 @@ export const detectCardBrand = (number = '') => {
   if (/^(5[1-5]|2[2-7])/.test(clean)) return 'mastercard';
   if (/^(4011|4389|5041|5067|6362|6363)/.test(clean)) return 'elo';
   if (/^(606282|3841)/.test(clean)) return 'hipercard';
+  if (/^(34|37)/.test(clean)) return 'amex';
   return 'generic';
 };
 

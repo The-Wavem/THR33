@@ -239,13 +239,13 @@ export function Perfil({ defaultTab = 'pedidos' }) {
           let statusText = data.status || 'Aguardando Pagamento';
           let statusCode = 'waiting_payment';
           if (statusText === 'Aprovado' || statusText === 'Pagamento Aprovado') {
-            statusText = 'Pagamento Aprovado';
+            statusText = 'Aprovado';
             statusCode = 'payment_approved';
-          } else if (statusText === 'Preparando Envio' || statusText === 'preparing') {
-            statusText = 'Preparando Envio';
+          } else if (statusText === 'Em Produção' || statusText === 'Preparando Envio' || statusText === 'preparing') {
+            statusText = 'Em Produção';
             statusCode = 'preparing';
-          } else if (statusText === 'Em trânsito' || statusText === 'Despachado' || statusText === 'in_transit') {
-            statusText = 'Em trânsito';
+          } else if (statusText === 'Enviado' || statusText === 'Em trânsito' || statusText === 'Despachado' || statusText === 'in_transit') {
+            statusText = 'Enviado';
             statusCode = 'in_transit';
           } else if (statusText === 'Entregue' || statusText === 'delivered') {
             statusText = 'Entregue';
@@ -1391,9 +1391,24 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                           `}>
                             {order.status.toUpperCase()}
                           </span>
-                          <span className={styles.tracking}>
-                            Rastreio: <strong>{order.trackingCode}</strong>
-                          </span>
+                          {order.trackingCode && (
+                            <div className={styles.trackingGroup}>
+                              <span className={styles.trackingLabel}>Rastreio:</span>
+                              <code className={styles.trackingCode}>{order.trackingCode}</code>
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(order.trackingCode);
+                                  alert("Código de rastreamento copiado!");
+                                }}
+                                className={styles.copyTrackingBtn}
+                                title="Copiar código"
+                              >
+                                <Copy size={12} />
+                                <span>COPIAR</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </header>
 
@@ -1819,11 +1834,11 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     onChange={(e) => setIssueType(e.target.value)}
                     className={styles.selectInput}
                   >
-                    <option value="danificado">📦 Produto danificado ou com defeito de confecção</option>
-                    <option value="nao_chegou">❌ Pedido não chegou / Extravio no transporte</option>
-                    <option value="errado">🔄 Tamanho ou item entregue incorreto</option>
-                    <option value="indevida">⚠️ Cobrança indevida ou problema no pagamento</option>
-                    <option value="outro">💬 Outro tipo de solicitação</option>
+                    <option value="danificado">Produto danificado ou com defeito de confecção</option>
+                    <option value="nao_chegou">Pedido não chegou / Extravio no transporte</option>
+                    <option value="errado">Tamanho ou item entregue incorreto</option>
+                    <option value="indevida">Cobrança indevida ou problema no pagamento</option>
+                    <option value="outro">Outro tipo de solicitação</option>
                   </select>
                 </div>
 

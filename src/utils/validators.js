@@ -145,27 +145,6 @@ export function validateCVC(cvc) {
   return clean.length >= 3 && clean.length <= 4;
 }
 
-/**
- * Validação de Número de Cartão de Crédito (Luhn Algorithm)
- */
-export function validateCardNumber(number) {
-  if (!number) return false;
-  const clean = number.replace(/\D/g, '');
-  if (clean.length < 13 || clean.length > 19) return false;
-
-  let sum = 0;
-  let shouldDouble = false;
-  for (let i = clean.length - 1; i >= 0; i--) {
-    let digit = parseInt(clean.charAt(i), 10);
-    if (shouldDouble) {
-      digit *= 2;
-      if (digit > 9) digit -= 9;
-    }
-    sum += digit;
-    shouldDouble = !shouldDouble;
-  }
-  return sum % 10 === 0;
-}
 
 // -------------------------------------------------------------
 // MÁSCARAS DE FORMATAÇÃO EM TEMPO REAL
@@ -224,3 +203,46 @@ export function getCardBrand(number) {
   if (/^(30[0-5]|36|38)/.test(clean)) return 'Diners';
   return 'Cartão';
 }
+
+/**
+ * Validação algorítmica de número de cartão de crédito via Algoritmo de Luhn (Mod 10)
+ */
+export function validateCardNumber(number) {
+  if (!number) return false;
+  const clean = String(number).replace(/\D/g, '');
+  if (clean.length < 13 || clean.length > 19) return false;
+
+  let sum = 0;
+  let alternate = false;
+  for (let i = clean.length - 1; i >= 0; i--) {
+    let n = parseInt(clean.charAt(i), 10);
+    if (alternate) {
+      n *= 2;
+      if (n > 9) n -= 9;
+    }
+    sum += n;
+    alternate = !alternate;
+  }
+  return sum % 10 === 0;
+}
+
+/**
+ * Valida validade do cartão (mês 01-12 e ano não expirado)
+ */
+export function validateCardExpiry(month, year) {
+  const m = Number(month);
+  const y = Number(year);
+  if (!m || m < 1 || m > 12) return false;
+  if (!y) return false;
+
+  const now = new Date();
+  const currentYear = Number(String(now.getFullYear()).slice(-2));
+  const currentMonth = now.getMonth() + 1;
+
+  if (y < currentYear) return false;
+  if (y === currentYear && m < currentMonth) return false;
+  if (y > currentYear + 20) return false;
+
+  return true;
+}
+

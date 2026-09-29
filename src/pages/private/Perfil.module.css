@@ -627,6 +627,30 @@
   font-family: monospace;
 }
 
+.trackingGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.trackingLabel {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+}
+
+.trackingCode {
+  font-family: monospace;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 0.15rem 0.45rem;
+  letter-spacing: 0.5px;
+}
+
 .orderItems {
   display: flex;
   flex-direction: column;

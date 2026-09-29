@@ -727,7 +727,7 @@
   flex-shrink: 0;
 }
 
-/* FORMULÁRIO DE CARTÃO DE CRÉDITO SANDBOX */
+/* FORMULÁRIO DE CARTÃO DE CRÉDITO LIMPO (PADRÃO PRODUÇÃO) */
 .cardPaymentContainer {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -740,9 +740,9 @@
 
 .securityHeader {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-start;
   align-items: center;
-  padding-bottom: 1rem;
+  padding-bottom: 0.75rem;
   border-bottom: 1px solid var(--border-color);
 }
 
@@ -754,65 +754,6 @@
   font-weight: 800;
   letter-spacing: 1px;
   color: #4ade80;
-}
-
-.pciNotice {
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--text-muted);
-}
-
-.sandboxAccordion {
-  background-color: var(--bg-card);
-  border: 1px dashed var(--border-color);
-  padding: 0.75rem 1rem;
-}
-
-.sandboxToggleBtn {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 1px;
-  color: var(--text-muted);
-  cursor: pointer;
-  background: transparent;
-  border: none;
-}
-
-.sandboxToggleBtn:hover {
-  color: var(--text-primary);
-}
-
-.sandboxBody {
-  display: flex;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-  padding-top: 0.75rem;
-  border-top: 1px solid var(--border-color);
-}
-
-.testBtnSuccess {
-  background-color: rgba(74, 222, 128, 0.1);
-  border: 1px solid #4ade80;
-  color: #4ade80;
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 0.4rem 0.8rem;
-  cursor: pointer;
-}
-
-.testBtnDanger {
-  background-color: rgba(248, 113, 113, 0.1);
-  border: 1px solid #f87171;
-  color: #f87171;
-  font-size: 0.68rem;
-  font-weight: 700;
-  padding: 0.4rem 0.8rem;
-  cursor: pointer;
 }
 
 .fieldGroup {
@@ -828,25 +769,75 @@
   color: var(--text-secondary);
 }
 
-.inputWrapper {
+.cardInputWrapper {
   position: relative;
   width: 100%;
 }
 
-.labelWithBrand {
+.brandIconPosition {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.cardInputWithAdornment {
+  padding-right: 5rem !important;
+}
+
+.cardInputWithCheck {
+  padding-right: 2.75rem !important;
+}
+
+.inputCheckPosition {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.validCheckIcon {
+  color: #4ade80;
+  animation: fadeInCheck 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInCheck {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.inputSuccess {
+  border-color: rgba(74, 222, 128, 0.5) !important;
+}
+
+.inputSuccess:focus {
+  border-color: #4ade80 !important;
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.25) !important;
+}
+
+.inputWithCheckWrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
   align-items: center;
 }
 
-.brandIndicator {
-  font-size: 0.68rem;
-  font-weight: 800;
-  letter-spacing: 1px;
-  color: var(--text-secondary);
-  background-color: var(--bg-card);
-  padding: 0.15rem 0.5rem;
-  border: 1px solid var(--border-color);
+.inputWithCheckWrapper input {
+  width: 100%;
+  padding-right: 2.75rem !important;
 }
 
 .cardDualRow {
