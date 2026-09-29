@@ -1747,6 +1747,113 @@
   font-weight: 600;
 }
 
+/* SEÇÃO FISCAL & NOTA FISCAL (NF-E) */
+.orderFiscalSection {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1rem 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.nfeContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.nfeHeaderRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.nfeLabel {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+.viewDanfeLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  padding: 0.35rem 0.75rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  text-decoration: none;
+  transition: opacity var(--transition-fast);
+}
+
+.viewDanfeLink:hover {
+  opacity: 0.9;
+}
+
+.nfeKeyRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.75rem;
+}
+
+.keyLabel {
+  color: var(--text-muted);
+}
+
+.nfeKeyCode {
+  font-family: monospace;
+  font-size: 0.72rem;
+  color: var(--text-primary);
+  background-color: var(--bg-primary);
+  padding: 0.2rem 0.5rem;
+  border: 1px solid var(--border-color);
+  word-break: break-all;
+}
+
+.copyKeyBtn {
+  background: none;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.2rem 0.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.copyKeyBtn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.nfePendingBox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.nfePendingText {
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+}
+
+.nfePendingSub {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  opacity: 0.8;
+}
+
 @media (max-width: 850px) {
   .redeemForm { flex-direction: column; }
   .container { padding: 2rem 1.25rem 5rem; }

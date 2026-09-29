@@ -191,9 +191,24 @@ export function Footer() {
           </div>
         </div>
 
+        {/* BLOCO LEGAL OBRIGATÓRIO (DECRETO FEDERAL Nº 7.962/2013) */}
+        <div className={styles.legalInfoSection}>
+          <div className={styles.legalTextBlock}>
+            <strong>THR33 STREETWEAR COMERCIO E CONFECCAO DE VESTUARIO LTDA</strong>
+            <span>CNPJ: 00.000.000/0001-00 • INSCRIÇÃO ESTADUAL: ISENTO</span>
+            <span>ENDEREÇO: RUA COMENDADOR ARAÚJO, 333 - BATEL, CURITIBA - PR, CEP: 80420-000</span>
+            <span>ATENDIMENTO AO CONSUMIDOR: SAC@THR33.COM • WHATSAPP: (41) 99542-4186</span>
+          </div>
+          <div className={styles.legalBadgesBlock}>
+            <span className={styles.legalBadge}>LEI DO E-COMMERCE</span>
+            <span className={styles.legalBadge}>LGPD COMPLIANT</span>
+            <span className={styles.legalBadge}>PAGBANK PROTECTED</span>
+          </div>
+        </div>
+
         <div className={styles.bottomBar}>
           <div className={styles.copyright}>
-            <span>© {new Date().getFullYear()} THR33 STREETWEAR.</span>
+            <span>© {new Date().getFullYear()} THR33 STREETWEAR. TODOS OS DIREITOS RESERVADOS.</span>
             <MotionAnchor
               href="https://thewavem.web.app"
               target="_blank"
@@ -222,6 +237,13 @@ export function Footer() {
                 <ArrowUpRight size={12} />
               </motion.span>
             </MotionAnchor>
+          </div>
+
+          <div className={styles.paymentMethods}>
+            <span className={styles.paymentBadge}>PIX</span>
+            <span className={styles.paymentBadge}>CARTÃO</span>
+            <span className={styles.paymentBadge}>BOLETO</span>
+            <span className={styles.paymentBadge}>PAGBANK</span>
           </div>
         </div>
       </div>

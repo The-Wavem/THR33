@@ -217,6 +217,49 @@
 .socialRow span {
   color: var(--border-color);
 }
+/* BLOCO LEGAL OBRIGATÓRIO (DECRETO FEDERAL Nº 7.962/2013) */
+.legalInfoSection {
+  margin-top: 3rem;
+  padding: 1.5rem 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.legalTextBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.legalTextBlock strong {
+  color: var(--text-secondary);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.legalBadgesBlock {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.legalBadge {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 0.25rem 0.6rem;
+}
 
 /* BOTTOM BAR */
 .bottomBar {
@@ -381,3 +424,11 @@
 .wavemSpace {
   width: 0.3em;
 }
+
+@media (max-width: 800px) {
+  .legalInfoSection {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+

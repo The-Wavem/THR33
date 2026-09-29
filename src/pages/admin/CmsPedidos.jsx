@@ -71,12 +71,14 @@ export function CmsPedidos() {
   // Edição de Rastreio & NF-e no Drawer
   const [drawerTracking, setDrawerTracking] = useState('');
   const [drawerNfeKey, setDrawerNfeKey] = useState('');
+  const [drawerNfeUrl, setDrawerNfeUrl] = useState('');
   const [savingLogistics, setSavingLogistics] = useState(false);
 
   useEffect(() => {
     if (selectedOrder) {
       setDrawerTracking(selectedOrder.trackingCode && !selectedOrder.trackingCode.includes('Processando') ? selectedOrder.trackingCode : '');
-      setDrawerNfeKey(selectedOrder.nfeKey || selectedOrder.nfeUrl || '');
+      setDrawerNfeKey(selectedOrder.nfeKey || '');
+      setDrawerNfeUrl(selectedOrder.nfeUrl || '');
     }
   }, [selectedOrder]);
 
@@ -239,30 +241,33 @@ export function CmsPedidos() {
   // Salvar Rastreio e NF-e diretamente pelo Drawer de CRM
   const handleSaveLogistics = async (e) => {
     e.preventDefault();
-    if (!selectedOrder) return;
+    if (!selectedOrder?.id) return;
     setSavingLogistics(true);
 
     try {
       const orderRef = doc(db, 'orders', selectedOrder.id);
-      await updateDoc(orderRef, {
+      const updates = {
         trackingCode: drawerTracking.trim().toUpperCase(),
         nfeKey: drawerNfeKey.trim(),
-        updatedAt: new Date().toISOString()
-      });
-
-      const updated = {
-        ...selectedOrder,
-        trackingCode: drawerTracking.trim().toUpperCase(),
-        nfeKey: drawerNfeKey.trim(),
+        nfeUrl: drawerNfeUrl.trim(),
         updatedAt: new Date().toISOString()
       };
 
-      setOrders(prev => prev.map(o => o.id === selectedOrder.id ? updated : o));
-      setSelectedOrder(updated);
-      alert("Dados logísticos e código de rastreamento salvos com sucesso!");
+      if (drawerNfeKey.trim() || drawerNfeUrl.trim()) {
+        updates.nfeIssued = true;
+        updates.nfeIssuedAt = new Date().toISOString();
+      }
+
+      await setDoc(orderRef, updates, { merge: true });
+
+      // Atualiza estado local
+      setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, ...updates } : o));
+      setSelectedOrder(prev => ({ ...prev, ...updates }));
+
+      alert("Rastreamento e Nota Fiscal (NF-e) atualizados com sucesso no Firestore.");
     } catch (err) {
-      console.error("Erro ao salvar dados logísticos:", err);
-      alert("Falha ao salvar dados de rastreio no Firestore.");
+      console.error("Erro ao salvar dados fiscais:", err);
+      alert("Falha ao salvar dados no pedido.");
     } finally {
       setSavingLogistics(false);
     }
@@ -835,28 +840,41 @@ export function CmsPedidos() {
                   <h3>CONTROLE LOGÍSTICO & RASTREIO SOB DEMANDA</h3>
                 </div>
                 <form onSubmit={handleSaveLogistics} className={styles.logisticsForm}>
-                  <div className={styles.inputGroup}>
-                    <label>CÓDIGO DE RASTREIO (CORREIOS / TRANSPORTADORA) *</label>
+                  <div className={styles.fieldGroup}>
+                    <label>CÓDIGO DE RASTREAMENTO *</label>
                     <input 
                       type="text" 
-                      placeholder="Ex: BR920851843PR"
-                      value={drawerTracking}
+                      placeholder="Ex: BR920851843PR" 
+                      value={drawerTracking} 
                       onChange={(e) => setDrawerTracking(e.target.value)}
                       required
                     />
                   </div>
-                  <div className={styles.inputGroup}>
-                    <label>CHAVE / URL DA NOTA FISCAL (NF-E)</label>
+
+                  <div className={styles.fieldGroup}>
+                    <label>CHAVE DE ACESSO NF-E (44 DÍGITOS)</label>
                     <input 
                       type="text" 
-                      placeholder="Ex: Chave de 44 dígitos ou URL do documento"
-                      value={drawerNfeKey}
+                      placeholder="Ex: 4126 0900 0000 0001 0055 0010 0000 0001 2345 6789" 
+                      maxLength={54}
+                      value={drawerNfeKey} 
                       onChange={(e) => setDrawerNfeKey(e.target.value)}
                     />
                   </div>
+
+                  <div className={styles.fieldGroup}>
+                    <label>LINK DO DANFE / PDF DA NOTA FISCAL</label>
+                    <input 
+                      type="url" 
+                      placeholder="https://.../danfe.pdf" 
+                      value={drawerNfeUrl} 
+                      onChange={(e) => setDrawerNfeUrl(e.target.value)}
+                    />
+                  </div>
+
                   <button type="submit" disabled={savingLogistics} className={styles.saveLogisticsBtn}>
                     <Save size={13} />
-                    <span>{savingLogistics ? 'SALVANDO...' : 'SALVAR RASTREIO & NF-E'}</span>
+                    <span>{savingLogistics ? 'SALVANDO...' : 'SALVAR RASTREIO & DADOS FISCAIS'}</span>
                   </button>
                 </form>
               </div>

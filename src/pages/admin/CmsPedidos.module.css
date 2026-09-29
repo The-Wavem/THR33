@@ -836,6 +836,38 @@
   gap: 0.85rem;
 }
 
+.fieldGroup,
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.fieldGroup label,
+.inputGroup label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+.fieldGroup input,
+.inputGroup input {
+  background-color: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.75rem;
+  font-size: 0.8rem;
+  font-family: var(--font-body);
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.fieldGroup input:focus,
+.inputGroup input:focus {
+  border-color: var(--text-primary);
+}
+
 .saveLogisticsBtn {
   background-color: var(--text-primary);
   color: var(--bg-primary);

@@ -32,7 +32,8 @@ import {
   MessageSquareWarning,
   Send,
   ShieldCheck,
-  Headphones
+  Headphones,
+  FileText
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { 
@@ -1444,6 +1445,56 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                         ))}
                       </div>
 
+                      {/* SEÇÃO FISCAL & NOTA FISCAL (NF-E) */}
+                      <div className={styles.orderFiscalSection}>
+                        {order.nfeUrl || order.nfeKey ? (
+                          <div className={styles.nfeContainer}>
+                            <div className={styles.nfeHeaderRow}>
+                              <span className={styles.nfeLabel}>NOTA FISCAL ELETRÔNICA (NF-E):</span>
+                              {order.nfeUrl && (
+                                <a 
+                                  href={order.nfeUrl} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className={styles.viewDanfeLink}
+                                >
+                                  <FileText size={13} />
+                                  <span>BAIXAR DANFE (PDF)</span>
+                                </a>
+                              )}
+                            </div>
+
+                            {order.nfeKey && (
+                              <div className={styles.nfeKeyRow}>
+                                <span className={styles.keyLabel}>Chave de Acesso:</span>
+                                <code className={styles.nfeKeyCode}>{order.nfeKey}</code>
+                                <button 
+                                  type="button" 
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(order.nfeKey);
+                                    alert("Chave da NF-e copiada com sucesso.");
+                                  }} 
+                                  className={styles.copyKeyBtn}
+                                  title="Copiar Chave de Acesso"
+                                >
+                                  <Copy size={11} />
+                                  <span>COPIAR</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className={styles.nfePendingBox}>
+                            <span className={styles.nfePendingText}>
+                              NF-E: EM EMISSÃO JUNTO AO LOTE DE PRODUÇÃO
+                            </span>
+                            <small className={styles.nfePendingSub}>
+                              O documento fiscal será disponibilizado para download assim que o pedido for despachado.
+                            </small>
+                          </div>
+                        )}
+                      </div>
+
                       {/* FOOTER DO CARD COM BOTÃO DE VER DETALHES */}
                       <footer className={styles.orderFooter}>
                         <div className={styles.orderFooterLeft}>
@@ -1688,6 +1739,56 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* SEÇÃO FISCAL & NOTA FISCAL (NF-E) */}
+              <div className={styles.orderFiscalSection}>
+                {selectedOrderDetails.nfeUrl || selectedOrderDetails.nfeKey ? (
+                  <div className={styles.nfeContainer}>
+                    <div className={styles.nfeHeaderRow}>
+                      <span className={styles.nfeLabel}>NOTA FISCAL ELETRÔNICA (NF-E):</span>
+                      {selectedOrderDetails.nfeUrl && (
+                        <a 
+                          href={selectedOrderDetails.nfeUrl} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className={styles.viewDanfeLink}
+                        >
+                          <FileText size={13} />
+                          <span>BAIXAR DANFE (PDF)</span>
+                        </a>
+                      )}
+                    </div>
+
+                    {selectedOrderDetails.nfeKey && (
+                      <div className={styles.nfeKeyRow}>
+                        <span className={styles.keyLabel}>Chave de Acesso:</span>
+                        <code className={styles.nfeKeyCode}>{selectedOrderDetails.nfeKey}</code>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedOrderDetails.nfeKey);
+                            alert("Chave da NF-e copiada com sucesso.");
+                          }} 
+                          className={styles.copyKeyBtn}
+                          title="Copiar Chave de Acesso"
+                        >
+                          <Copy size={11} />
+                          <span>COPIAR</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className={styles.nfePendingBox}>
+                    <span className={styles.nfePendingText}>
+                      NF-E: EM EMISSÃO JUNTO AO LOTE DE PRODUÇÃO
+                    </span>
+                    <small className={styles.nfePendingSub}>
+                      O documento fiscal será disponibilizado para download assim que o pedido for despachado.
+                    </small>
+                  </div>
+                )}
               </div>
 
               {/* SEÇÃO DE CUIDADOS & SUPORTE DO CLIENTE */}
