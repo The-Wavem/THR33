@@ -66,7 +66,23 @@ export const encryptCardData = async ({
   const cleanCvv = String(securityCode || '').replace(/\D/g, '');
   const cleanHolder = String(holder || '').trim();
 
-  const publicKey = import.meta.env.VITE_PAGBANK_PUBLIC_KEY || '';
+  let publicKey = import.meta.env.VITE_PAGBANK_PUBLIC_KEY || '';
+
+  // Se a chave publica nao estiver definida no .env, tenta obter dinamicamente da Cloud Function getPublicKey
+  if (!publicKey || publicKey.includes('sua_chave') || publicKey.includes('mock')) {
+    try {
+      const pkRes = await fetch('/api/getPublicKey', { method: 'POST' });
+      if (pkRes.ok) {
+        const pkData = await pkRes.json();
+        if (pkData?.publicKey && !pkData?.isMock) {
+          publicKey = pkData.publicKey;
+        }
+      }
+    } catch (pkErr) {
+      console.warn("Aviso ao buscar chave publica da Cloud Function getPublicKey:", pkErr.message);
+    }
+  }
+
   const pagSeguroSdk = typeof window !== 'undefined' ? (window.PagSeguro || window.Pagseguro) : null;
 
   // Verifica se o SDK do PagBank esta pronto e com chave publica real configurada
