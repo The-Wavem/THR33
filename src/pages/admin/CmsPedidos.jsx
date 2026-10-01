@@ -107,8 +107,8 @@ export function CmsPedidos() {
   useEffect(() => {
     if (selectedOrder) {
       setDrawerTracking(selectedOrder.trackingCode && !selectedOrder.trackingCode.includes('Processando') ? selectedOrder.trackingCode : '');
-      setDrawerNfeKey(selectedOrder.nfeKey || '');
-      setDrawerNfeUrl(selectedOrder.nfeUrl || '');
+      setDrawerNfeKey(selectedOrder.nfe?.key || selectedOrder.nfeKey || '');
+      setDrawerNfeUrl(selectedOrder.nfe?.danfeUrl || selectedOrder.nfeUrl || '');
     }
   }, [selectedOrder]);
 
@@ -339,8 +339,8 @@ export function CmsPedidos() {
     if (!order) return;
     setNfeTargetOrder(order);
     setNfeForm({
-      nfeUrl: order.nfeUrl || '',
-      nfeKey: order.nfeKey || ''
+      nfeUrl: order.nfe?.danfeUrl || order.nfeUrl || '',
+      nfeKey: order.nfe?.key || order.nfeKey || ''
     });
     setNfeError('');
     setNfeSuccess('');
@@ -878,9 +878,9 @@ export function CmsPedidos() {
                           <span>{order.trackingCode || 'Sem rastreio'}</span>
                         </span>
 
-                        {order.nfeUrl ? (
+                        {(order.nfe?.danfeUrl || order.nfeUrl) ? (
                           <a 
-                            href={order.nfeUrl} 
+                            href={order.nfe?.danfeUrl || order.nfeUrl} 
                             target="_blank" 
                             rel="noopener noreferrer" 
                             className={styles.nfeTableBadge}
@@ -1000,11 +1000,11 @@ export function CmsPedidos() {
                         <button
                           type="button"
                           onClick={() => handleOpenNfeModal(order)}
-                          className={`${styles.nfeActionRowBtn} ${order.nfeUrl ? styles.nfeActionRowBtnActive : ''}`}
-                          title={order.nfeUrl ? "Editar ou visualizar link do PDF da NF-e" : "Anexar link do PDF da NF-e"}
+                          className={`${styles.nfeActionRowBtn} ${(order.nfe?.danfeUrl || order.nfeUrl) ? styles.nfeActionRowBtnActive : ''}`}
+                          title={(order.nfe?.danfeUrl || order.nfeUrl) ? "Editar ou visualizar link do PDF da NF-e" : "Anexar link do PDF da NF-e"}
                         >
                           <FileText size={11} />
-                          <span>{order.nfeUrl ? 'Gerenciar NF-e' : 'Anexar NF-e'}</span>
+                          <span>{(order.nfe?.danfeUrl || order.nfeUrl) ? 'Gerenciar NF-e' : 'Anexar NF-e'}</span>
                         </button>
                       </div>
                     </td>

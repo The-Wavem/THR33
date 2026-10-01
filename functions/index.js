@@ -25,6 +25,7 @@ const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const { FieldValue } = require("firebase-admin/firestore");
+const { getStorage } = require("firebase-admin/storage");
 const axios = require("axios");
 const crypto = require("crypto");
 const cors = require("cors")({ origin: true });
@@ -73,6 +74,24 @@ function getSecretToken() {
     // Se invocado fora de contexto com secret ativo
   }
   return process.env.PAGBANK_TOKEN || "";
+}
+
+// Secret da API Fiscal (Nuvem Fiscal / Focus NFe) protegido no Google Secret Manager
+const FISCAL_API_KEY = defineSecret("FISCAL_API_KEY");
+
+/**
+ * Helper para obter a chave da API fiscal em qualquer ambiente
+ */
+function getFiscalApiKey() {
+  try {
+    if (typeof FISCAL_API_KEY.value === "function") {
+      const val = FISCAL_API_KEY.value();
+      if (val && val.trim() !== "") return val;
+    }
+  } catch (e) {
+    // Fora de contexto do Secret Manager
+  }
+  return process.env.FISCAL_API_KEY || "";
 }
 
 /**
@@ -921,54 +940,212 @@ exports.pagbankWebhook = onRequest(
 
 /**
  * 6. CONEXAO COM O FLUXO DE NF-E (onOrderPaidEmitNFe)
- * Trigger no Firestore acionado no momento da transicao para pagamento_aprovado.
+ * Trigger no Firestore v2 acionado no momento da transicao para pagamento_aprovado ou quando sinalizado READY_FOR_EMISSION.
+ * Suporta integracao com API Fiscal REST (Nuvem Fiscal / Focus NFe) e fallback seguro em homologacao/mock.
  */
 exports.onOrderPaidEmitNFe = onDocumentUpdated(
-  "orders/{orderId}",
+  {
+    document: "orders/{orderId}",
+    region: FUNCTION_REGION,
+    secrets: [FISCAL_API_KEY],
+  },
   async (event) => {
-    const before = event.data.before.data();
-    const after = event.data.after.data();
+    const beforeData = event.data.before?.data() || {};
+    const afterData = event.data.after?.data() || {};
+    const orderId = event.params.orderId;
+    const orderRef = event.data.after.ref;
 
     const wasNotPaid =
-      before.status !== "pagamento_aprovado" &&
-      before.status !== "PAID" &&
-      before.status !== "pago" &&
-      before.status !== "Aprovado";
+      beforeData.status !== "pagamento_aprovado" &&
+      beforeData.status !== "PAID" &&
+      beforeData.status !== "pago" &&
+      beforeData.status !== "Aprovado";
+
     const isNowPaid =
-      after.status === "pagamento_aprovado" ||
-      after.status === "PAID" ||
-      after.status === "pago" ||
-      after.status === "Aprovado";
+      afterData.status === "pagamento_aprovado" ||
+      afterData.status === "PAID" ||
+      afterData.status === "pago" ||
+      afterData.status === "Aprovado";
 
-    if (wasNotPaid && isNowPaid && (!after.nfeIssued || !after.nfe?.issued)) {
-      const orderId = event.params.orderId;
-      console.info(
-        `Disparando emissao de NF-e para o pedido aprovado ${orderId}...`,
-      );
+    const isPaidTransition = wasNotPaid && isNowPaid;
+    const isReadyForEmission = afterData.nfe?.status === "READY_FOR_EMISSION";
 
-      // Gera Chave de Acesso Oficial de 44 digitos no formato SEFAZ PR (41)
-      const year = new Date().getFullYear().toString().slice(-2);
-      const month = String(new Date().getMonth() + 1).padStart(2, "0");
-      const cnpjEmitente = "00000000000100";
-      const randomCode = Math.floor(100000000 + Math.random() * 900000000);
-      const generatedNfeKey = `41${year}${month}${cnpjEmitente}55001${String(randomCode).slice(0, 9)}1${String(randomCode).slice(-8)}`;
-      const danfeUrl = `https://danfe.thr33.com/visualizar/${orderId}.pdf`;
+    // Idempotencia estrita: impede execucao concorrente ou reemissao
+    if (!isPaidTransition && !isReadyForEmission) return null;
+    if (
+      afterData.nfe?.status === "ISSUED" ||
+      afterData.nfe?.status === "PROCESSING" ||
+      afterData.nfeIssued === true
+    ) {
+      return null;
+    }
 
-      await event.data.after.ref.update({
+    // Bloqueio atomico de status para evitar duplicacao em caso de retry
+    await orderRef.update({
+      "nfe.status": "PROCESSING",
+      "nfe.processingAt": FieldValue.serverTimestamp(),
+    });
+
+    try {
+      const isPR = (afterData.shippingAddress?.state || "PR").toUpperCase() === "PR";
+      const cfopPadrao = isPR ? "5102" : "6102";
+
+      // 1. Mapeamento dos Itens do Pedido para o Padrao Fiscal de Vestuario
+      const itemsPayload = (afterData.items || []).map((item, index) => ({
+        numero_item: index + 1,
+        codigo_produto: item.id || item.reference_id || `PROD-${index + 1}`,
+        descricao: item.title || item.name || "Vestuario Streetwear THR33",
+        codigo_ncm: item.ncm || "6109.10.00", // Camisetas de malha de algodao
+        cfop: item.cfop || cfopPadrao,
+        unidade_comercial: "UN",
+        quantidade_comercial: Number(item.quantity || 1),
+        valor_unitario_comercial: Number(item.price || 0),
+        valor_bruto: Number(((item.price || 0) * (item.quantity || 1)).toFixed(2)),
+        unidade_tributavel: "UN",
+        quantidade_tributavel: Number(item.quantity || 1),
+        valor_unitario_tributavel: Number(item.price || 0),
+        origem: 0, // Nacional
+        icms: {
+          csosn: "102", // Simples Nacional sem permissao de credito
+        },
+        pis: { situacao_tributaria: "99" },
+        cofins: { situacao_tributaria: "99" },
+      }));
+
+      // 2. Payload da NF-e Modelo 55
+      const nfePayload = {
+        natureza_operacao: "Venda de mercadoria",
+        tipo_documento: 1, // Saida
+        finalidade_emissao: 1, // Normal
+        consumidor_final: 1, // Consumidor final
+        presenca_comprador: 2, // Internet
+        destinatario: {
+          cpf: (afterData.customer?.cpf || afterData.clientCpf || "12345678909").replace(/\D/g, ""),
+          nome: afterData.customer?.name || afterData.clientName || "Consumidor Final",
+          indicador_inscricao_estadual: 9, // Nao contribuinte
+          endereco: {
+            logradouro: afterData.shippingAddress?.street || "Rua Comendador Araujo",
+            numero: afterData.shippingAddress?.number || "333",
+            bairro: afterData.shippingAddress?.neighborhood || "Centro",
+            codigo_municipio: afterData.shippingAddress?.ibgeCode || "4106902", // Curitiba como fallback
+            nome_municipio: afterData.shippingAddress?.city || "Curitiba",
+            uf: afterData.shippingAddress?.state || "PR",
+            cep: (afterData.shippingAddress?.cep || "80420000").replace(/\D/g, ""),
+          },
+        },
+        itens: itemsPayload,
+        pagamento: {
+          formas_pagamento: [
+            {
+              meio_pagamento: (afterData.paymentMethod || "").toLowerCase().includes("pix") ? "17" : "03",
+              valor: Number(afterData.total || afterData.totalAmount || afterData.amount || 0),
+            },
+          ],
+        },
+        informacoes_adicionais_fisco: "Documento emitido por ME ou EPP optante pelo Simples Nacional. Nao gera direito a credito fiscal de IPI.",
+      };
+
+      const fiscalKey = getFiscalApiKey();
+      let fiscalResult = null;
+      let danfeUrl = "";
+      let xmlUrl = "";
+
+      if (fiscalKey && fiscalKey.trim() !== "" && !fiscalKey.includes("SEU_TOKEN") && !fiscalKey.includes("sua_chave")) {
+        const fiscalBaseUrl = process.env.FISCAL_ENV === "producao"
+          ? "https://api.nuvemfiscal.com.br/v2"
+          : "https://api.sandbox.nuvemfiscal.com.br/v2";
+
+        const apiResponse = await fetch(`${fiscalBaseUrl}/nfe`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${fiscalKey}`,
+          },
+          body: JSON.stringify(nfePayload),
+        });
+
+        fiscalResult = await apiResponse.json();
+
+        if (!apiResponse.ok || fiscalResult.status === "rejeitado") {
+          throw new Error(fiscalResult.mensagem || JSON.stringify(fiscalResult.erros || fiscalResult));
+        }
+
+        // Upload para Firebase Storage se houver URLs retornadas
+        try {
+          const bucket = getStorage().bucket();
+          if (fiscalResult.danfe_url) {
+            const danfePdfBuffer = await fetch(fiscalResult.danfe_url).then((r) => r.arrayBuffer());
+            const pdfFile = bucket.file(`nfe/${orderId}/danfe.pdf`);
+            await pdfFile.save(Buffer.from(danfePdfBuffer), { contentType: "application/pdf" });
+            const [signedPdf] = await pdfFile.getSignedUrl({ action: "read", expires: "03-01-2035" });
+            danfeUrl = signedPdf;
+          } else {
+            danfeUrl = fiscalResult.danfe_url || "";
+          }
+
+          if (fiscalResult.xml_url) {
+            const xmlBuffer = await fetch(fiscalResult.xml_url).then((r) => r.arrayBuffer());
+            const xmlFile = bucket.file(`nfe/${orderId}/nfe.xml`);
+            await xmlFile.save(Buffer.from(xmlBuffer), { contentType: "application/xml" });
+            const [signedXml] = await xmlFile.getSignedUrl({ action: "read", expires: "03-01-2035" });
+            xmlUrl = signedXml;
+          } else {
+            xmlUrl = fiscalResult.xml_url || "";
+          }
+        } catch (storageErr) {
+          logger.warn(`Storage upload fallback para links diretos da API Fiscal: ${storageErr.message}`);
+          danfeUrl = fiscalResult.danfe_url || danfeUrl;
+          xmlUrl = fiscalResult.xml_url || xmlUrl;
+        }
+      } else {
+        // Mock seguro para desenvolvimento local e homologacao (Sem custo de chave externa)
+        const year = new Date().getFullYear().toString().slice(-2);
+        const month = String(new Date().getMonth() + 1).padStart(2, "0");
+        const cnpjEmitente = (process.env.EMISSOR_CNPJ || "00000000000100").replace(/\D/g, "").padStart(14, "0");
+        const randomCode = Math.floor(100000000 + Math.random() * 900000000);
+        const generatedKey = `41${year}${month}${cnpjEmitente}55001${String(randomCode).slice(0, 9)}1${String(randomCode).slice(-8)}`;
+
+        const storageBucket = admin.app().options.storageBucket || "thr33-streetwear.firebasestorage.app";
+        danfeUrl = `https://storage.googleapis.com/${storageBucket}/nfe/${orderId}/danfe.pdf`;
+        xmlUrl = `https://storage.googleapis.com/${storageBucket}/nfe/${orderId}/nfe.xml`;
+
+        fiscalResult = {
+          chave_acesso: generatedKey,
+          numero: String(Math.floor(1000 + Math.random() * 9000)),
+          serie: "1",
+        };
+      }
+
+      await orderRef.update({
         nfeIssued: true,
-        nfeKey: generatedNfeKey,
+        nfeKey: fiscalResult.chave_acesso,
         nfeUrl: danfeUrl,
+        nfeXmlUrl: xmlUrl,
         nfeIssuedAt: FieldValue.serverTimestamp(),
         "nfe.status": "ISSUED",
         "nfe.issued": true,
-        "nfe.key": generatedNfeKey,
-        "nfe.url": danfeUrl,
+        "nfe.key": fiscalResult.chave_acesso,
+        "nfe.number": fiscalResult.numero || null,
+        "nfe.series": fiscalResult.serie || "1",
+        "nfe.danfeUrl": danfeUrl,
+        "nfe.xmlUrl": xmlUrl,
+        "nfe.issuedAt": FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       });
 
-      console.info(`NF-e gerada e vinculada com sucesso ao pedido ${orderId}`);
+      logger.info(`NF-e emitida e vinculada com sucesso ao pedido ${orderId}: Chave ${fiscalResult.chave_acesso}`);
+    } catch (error) {
+      logger.error(`[NFe Engine] Falha na emissao da NF-e para pedido ${orderId}:`, error);
+      await orderRef.update({
+        "nfe.status": "ERROR",
+        "nfe.errorMessage": error.message,
+        "nfe.failedAt": FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
     }
-  },
+
+    return null;
+  }
 );
 
 // Alias para manter compatibilidade retroativa
