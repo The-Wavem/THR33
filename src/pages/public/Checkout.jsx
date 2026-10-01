@@ -47,7 +47,7 @@ import { db } from '../../services/firebaseConfig';
 import { couponService } from '../../services/couponService';
 import { analyticsService } from '../../services/analyticsService';
 import { catalogService } from '../../services/catalogService';
-import { pagbankService, PAGBANK_TEST_CARDS, detectCardBrand } from '../../services/pagbankService';
+import { pagbankService, PAGBANK_TEST_CARDS, detectCardBrand, encryptCardData } from '../../services/pagbankService';
 import { CardBrandIcon } from '../../components/ui/CardBrandIcon';
 import { ORDER_STATUSES, normalizeOrderStatus } from '../../services/orderStateMachine';
 import { webhookService } from '../../services/webhookService';
@@ -668,6 +668,29 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     // Se houver valor financeiro a ser cobrado no gateway PagBank
     if (finalAmountToPay > 0) {
       try {
+        let cardEncrypted = null;
+        if (paymentMethod === 'Cartão de Crédito') {
+          const expYearClean = String(cardData.expYear || '').length === 2 
+            ? `20${cardData.expYear}` 
+            : String(cardData.expYear || '');
+
+          const encResult = await encryptCardData({
+            number: cardData.number,
+            holder: cardData.holder || clientData.name,
+            expMonth: cardData.expMonth,
+            expYear: expYearClean,
+            securityCode: cardData.cvv
+          });
+
+          if (!encResult?.success || !encResult?.encryptedCard) {
+            setPaymentError('Não foi possível criptografar os dados do cartão com segurança. Verifique os dados e tente novamente.');
+            setIsProcessing(false);
+            return;
+          }
+
+          cardEncrypted = encResult.encryptedCard;
+        }
+
         pagbankRes = await pagbankService.createOrder({
           orderReference: orderRefId,
           customer: {
@@ -681,14 +704,15 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           shippingCost: Number(shippingCost) || 0,
           paymentMethod,
           cardData: {
-            number: cardData.number,
             holder: cardData.holder,
-            expMonth: cardData.expMonth || '',
-            expYear: cardData.expYear || '',
-            cvv: cardData.cvv
+            lastDigits: cleanCardNumber ? cleanCardNumber.slice(-4) : '1111'
           },
+          cardEncrypted,
           installments,
           totalAmount: finalAmountToPay,
+          couponCode: appliedCoupon?.code || null,
+          discountAmount: Number(discountAmount) || 0,
+          walletDeduction: Number(walletDeduction) || 0,
           rawOrderData: baseOrderData
         });
 
@@ -766,6 +790,18 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       if (!finalDocId) {
         const orderRef = await addDoc(collection(db, 'orders'), cleanPayload);
         finalDocId = orderRef.id;
+      } else {
+        // Enriquece o pedido já gravado no backend com metadados complementares (UTMs e detalhes visuais)
+        try {
+          await setDoc(doc(db, 'orders', finalDocId), {
+            utm_source: utmSource,
+            utm_medium: utmMedium,
+            utm_campaign: utmCampaign,
+            paymentDetails: cleanPayload.paymentDetails
+          }, { merge: true });
+        } catch (syncDocErr) {
+          console.warn("Aviso ao enriquecer documento do pedido:", syncDocErr.message);
+        }
       }
       const generatedOrder = `THR-${finalDocId.slice(0, 6).toUpperCase()}`;
       setOrderNumber(generatedOrder);
