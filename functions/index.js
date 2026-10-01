@@ -5,10 +5,11 @@
  * - getPublicKey: Emissao dinamica de chave publica RSA via PagBank API (/public-keys)
  * - createOrder: Endpoint HTTP REST para processamento de cobranca (Pix / Cartao Criptografado)
  * - createPagBankOrder: Callable Function com autoridade server-side e validacao de precos
- * - pagbankWebhook: Receptor autenticado com verificacao de assinatura SHA-256 (x-authenticity-token)
+ * - pagbankWebhook: Receptor autenticado com verificacao de assinatura SHA-256 (x-authenticity-token) e auditoria
  * - onOrderPaidEmitNFe: Disparo de emissao de NF-e e chave de 44 digitos SEFAZ PR
  * 
  * Otimizacoes de Inicializacao:
+ * - Regiao: southamerica-east1 (Sao Paulo, Brasil) para menor latencia de gateway
  * - Escopo global leve (apenas initializeApp e declaracoes de funcoes)
  * - Conexao Firestore instanciada via lazy-getter getDb() dentro dos handlers
  * - Previne Timeout after 10000 no carregamento inicial do emulador
@@ -23,13 +24,22 @@ const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
+const { FieldValue } = require("firebase-admin/firestore");
 const axios = require("axios");
 const crypto = require("crypto");
 const cors = require("cors")({ origin: true });
 
+// Em ambiente de emulador local, garante comunicacao direta com o Firestore Emulator (porta 8080)
+if (process.env.FUNCTIONS_EMULATOR === "true") {
+  process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";
+}
+
 if (!admin.apps.length) {
   admin.initializeApp();
 }
+
+// Regiao padrao do Cloud Functions v2 (Sao Paulo)
+const FUNCTION_REGION = "southamerica-east1";
 
 /**
  * Lazy getter para o Firestore DB.
@@ -39,6 +49,9 @@ if (!admin.apps.length) {
 let _db = null;
 function getDb() {
   if (!_db) {
+    if (process.env.FUNCTIONS_EMULATOR === "true") {
+      process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";
+    }
     _db = admin.firestore();
   }
   return _db;
@@ -67,7 +80,7 @@ function getSecretToken() {
  * O front-end precisa dessa chave para criptografar os dados do cartao do cliente antes do envio (PCI-Free).
  */
 exports.getPublicKey = onRequest(
-  { secrets: [PAGBANK_TOKEN], cors: true },
+  { region: FUNCTION_REGION, secrets: [PAGBANK_TOKEN], cors: true },
   (req, res) => {
     cors(req, res, async () => {
       if (req.method !== "POST") {
@@ -123,7 +136,7 @@ exports.getPublicKey = onRequest(
  * Suporta Pix, Boleto ou Cartao de Credito com token criptografado.
  */
 exports.createOrder = onRequest(
-  { secrets: [PAGBANK_TOKEN], cors: true },
+  { region: FUNCTION_REGION, secrets: [PAGBANK_TOKEN], cors: true },
   (req, res) => {
     cors(req, res, async () => {
       if (req.method !== "POST") {
@@ -269,8 +282,8 @@ exports.createOrder = onRequest(
             paymentMethod: paymentMethod.type === "CREDIT_CARD" ? "Cartão de Crédito" : "PIX",
             pixQrCodeUrl: data.qr_codes?.[0]?.links?.find(l => l.rel === "QRCODE.PNG" || l.media === "image/png")?.href || null,
             pixCopiaECola: data.qr_codes?.[0]?.text || null,
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
             nfe: {
               status: "PENDING_EMISSION",
               issued: false,
@@ -295,7 +308,7 @@ exports.createOrder = onRequest(
  * Callable Function com autoridade server-side, validacao de precos em Firestore e itens fiscais.
  */
 exports.createPagBankOrder = onCall(
-  { secrets: [PAGBANK_TOKEN], cors: true },
+  { region: FUNCTION_REGION, secrets: [PAGBANK_TOKEN], cors: true },
   async (request) => {
     // 1. Identifica usuario autenticado ou visitante
     const userId = request.auth
@@ -435,7 +448,7 @@ exports.createPagBankOrder = onCall(
     const webhookUrl =
       process.env.PAGBANK_WEBHOOK_URL ||
       (process.env.FIREBASE_CONFIG
-        ? `https://us-central1-${JSON.parse(process.env.FIREBASE_CONFIG).projectId}.cloudfunctions.net/pagbankWebhook`
+        ? `https://${FUNCTION_REGION}-${JSON.parse(process.env.FIREBASE_CONFIG).projectId}.cloudfunctions.net/pagbankWebhook`
         : "https://sua-cloud-function.run.app/pagbankWebhook");
 
     const orderPayload = {
@@ -582,7 +595,7 @@ exports.createPagBankOrder = onCall(
       status: initialStatus,
       paidAt:
         charge.status === "PAID" || charge.status === "AUTHORIZED"
-          ? admin.firestore.FieldValue.serverTimestamp()
+          ? FieldValue.serverTimestamp()
           : null,
       paymentMethod:
         paymentMethod.type === "CREDIT_CARD"
@@ -608,8 +621,8 @@ exports.createPagBankOrder = onCall(
         paymentMethod.type === "PIX"
           ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
           : null,
-      createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
       nfe: {
         status: "PENDING_EMISSION",
         issued: false,
@@ -631,167 +644,248 @@ exports.createPagBankOrder = onCall(
 /**
  * 4. Rota HTTP legada / fallback para compatibilidade com rewrite direto (/api/createSecureOrder)
  */
-exports.createSecureOrder = onRequest((req, res) => {
-  cors(req, res, async () => {
-    if (req.method !== "POST") {
-      return res.status(405).json({ error: "Metodo nao permitido" });
-    }
-
-    try {
-      const { orderPayload, rawOrderData } = req.body || {};
-      if (!orderPayload || !rawOrderData) {
-        return res.status(400).json({ error: "Payload invalido" });
+exports.createSecureOrder = onRequest(
+  { region: FUNCTION_REGION, cors: true },
+  (req, res) => {
+    cors(req, res, async () => {
+      if (req.method !== "POST") {
+        return res.status(405).json({ error: "Metodo nao permitido" });
       }
 
-      const referenceId = orderPayload.reference_id || `THR-${Date.now()}`;
-      const token = getSecretToken();
-      let pagbankData = null;
+      try {
+        const { orderPayload, rawOrderData } = req.body || {};
+        if (!orderPayload || !rawOrderData) {
+          return res.status(400).json({ error: "Payload invalido" });
+        }
 
-      if (token && token.trim() !== "" && !token.includes("SEU_TOKEN")) {
-        const isSandbox = process.env.PAGBANK_ENV !== "production";
-        const baseUrl = isSandbox
-          ? "https://sandbox.api.pagseguro.com"
-          : "https://api.pagseguro.com";
-        const response = await axios.post(`${baseUrl}/orders`, orderPayload, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
+        const referenceId = orderPayload.reference_id || `THR-${Date.now()}`;
+        const token = getSecretToken();
+        let pagbankData = null;
+
+        if (token && token.trim() !== "" && !token.includes("SEU_TOKEN")) {
+          const isSandbox = process.env.PAGBANK_ENV !== "production";
+          const baseUrl = isSandbox
+            ? "https://sandbox.api.pagseguro.com"
+            : "https://api.pagseguro.com";
+          const response = await axios.post(`${baseUrl}/orders`, orderPayload, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+          });
+          pagbankData = response.data;
+        } else {
+          data = {
+            id: `ORDE_${Date.now()}`,
+            reference_id: referenceId,
+            qr_codes: orderPayload.qr_codes || null,
+            charges: orderPayload.charges || null,
+          };
+          pagbankData = data;
+        }
+
+        const db = getDb();
+        const orderRef = db.collection("orders").doc(referenceId);
+        await orderRef.set(
+          {
+            ...rawOrderData,
+            orderId: referenceId,
+            pagbankOrderId: pagbankData.id,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
           },
-        });
-        pagbankData = response.data;
-      } else {
-        pagbankData = {
-          id: `ORDE_${Date.now()}`,
-          reference_id: referenceId,
-          qr_codes: orderPayload.qr_codes || null,
-          charges: orderPayload.charges || null,
-        };
-      }
+          { merge: true },
+        );
 
-      const db = getDb();
-      const orderRef = db.collection("orders").doc(referenceId);
-      await orderRef.set(
-        {
-          ...rawOrderData,
+        return res.status(200).json({
+          success: true,
           orderId: referenceId,
-          pagbankOrderId: pagbankData.id,
-          createdAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-
-      return res.status(200).json({
-        success: true,
-        orderId: referenceId,
-        pagbank: pagbankData,
-      });
-    } catch (err) {
-      console.error("Erro em createSecureOrder:", err);
-      return res.status(500).json({ error: err.message });
-    }
-  });
-});
+          pagbank: pagbankData,
+        });
+      } catch (err) {
+        console.error("Erro em createSecureOrder:", err);
+        return res.status(500).json({ error: err.message });
+      }
+    });
+  }
+);
 
 /**
- * 5. WEBHOOK SEGURO COM ASSINATURA SHA-256 (pagbankWebhook)
- * Valida a autenticidade via header x-authenticity-token e atualiza status no Firestore transacionalmente.
+ * 5. WEBHOOK PAGBANK V4/V5 COM IDEMPOTENCIA E AUDITORIA (pagbankWebhook)
+ * Rota HTTP REST para receber eventos de cobranca/pedidos do PagBank.
+ * Executa em southamerica-east1 com baixa latencia, historico de pagamento e disparo transacional.
  */
+const STATUS_MAP = {
+  PAID: "pagamento_aprovado",
+  AUTHORIZED: "analise",
+  IN_ANALYSIS: "analise",
+  DECLINED: "cancelado",
+  CANCELED: "cancelado",
+  WAITING: "aguardando_pagamento",
+};
+
 exports.pagbankWebhook = onRequest(
-  { secrets: [PAGBANK_TOKEN] },
+  {
+    region: FUNCTION_REGION,
+    cors: false,
+    timeoutSeconds: 60,
+    memory: "256MiB",
+    secrets: [PAGBANK_TOKEN],
+  },
   async (req, res) => {
     if (req.method !== "POST") {
-      return res.status(405).send("Method Not Allowed");
-    }
-
-    const token = getSecretToken();
-    const signature = req.headers["x-authenticity-token"];
-
-    // 1. Validacao de assinatura SHA-256 (PagBank Official Docs)
-    // Formula oficial: sha256(token + "-" + rawBody)
-    if (signature && token) {
-      const rawBody = req.rawBody
-        ? req.rawBody.toString("utf8")
-        : JSON.stringify(req.body);
-      const computedHash = crypto
-        .createHash("sha256")
-        .update(`${token}-${rawBody}`)
-        .digest("hex");
-
-      if (computedHash !== signature) {
-        console.warn("Assinatura invalida recebida no webhook do PagBank");
-        return res.status(401).send("Unauthorized: Invalid signature");
-      }
-    }
-
-    const notificationData = req.body || {};
-    const referenceId =
-      notificationData.reference_id ||
-      notificationData.charges?.[0]?.reference_id;
-    const charge = notificationData.charges?.[0] || notificationData;
-    const chargeStatus = charge.status;
-
-    if (!referenceId && !charge.id) {
-      return res.status(400).send("No reference_id found");
-    }
-
-    // 2. Localiza pedido no Firestore
-    const db = getDb();
-    let orderDoc = null;
-    if (referenceId) {
-      const docSnap = await db.collection("orders").doc(referenceId).get();
-      if (docSnap.exists) orderDoc = docSnap;
-    }
-
-    if (!orderDoc && charge.id) {
-      const querySnap = await db
-        .collection("orders")
-        .where("pagbankChargeId", "==", charge.id)
-        .limit(1)
-        .get();
-      if (!querySnap.empty) orderDoc = querySnap.docs[0];
-    }
-
-    if (!orderDoc) {
-      console.warn("Pedido nao encontrado para conciliacao:", {
-        referenceId,
-        chargeId: charge.id,
-      });
-      return res.status(200).send("Order not found");
+      return res.status(405).json({ error: "Method not allowed" });
     }
 
     try {
-      await db.runTransaction(async (t) => {
-        const freshSnap = await t.get(orderDoc.ref);
+      // 1. Validacao de Seguranca do Webhook (Token de webhook ou assinatura oficial)
+      const isEmulator = process.env.FUNCTIONS_EMULATOR === "true";
+      const webhookToken = process.env.PAGBANK_WEBHOOK_TOKEN || getSecretToken();
+      const headerAuth = req.headers["x-authenticity-token"];
+      const queryToken = req.query?.token;
+
+      if (webhookToken && !isEmulator && !webhookToken.includes("SEU_TOKEN") && !webhookToken.includes("seu_token")) {
+        let isAuthorized = false;
+
+        // Validacao direta por query token (?token=...)
+        if (queryToken && queryToken === webhookToken) {
+          isAuthorized = true;
+        }
+
+        // Validacao direta por header token
+        if (headerAuth && headerAuth === webhookToken) {
+          isAuthorized = true;
+        }
+
+        // Validacao por hash criptografico SHA-256 oficial PagBank: sha256(token + "-" + rawBody)
+        if (headerAuth && !isAuthorized) {
+          const rawBody = req.rawBody
+            ? req.rawBody.toString("utf8")
+            : JSON.stringify(req.body);
+          const computedHash = crypto
+            .createHash("sha256")
+            .update(`${webhookToken}-${rawBody}`)
+            .digest("hex");
+
+          if (computedHash === headerAuth) {
+            isAuthorized = true;
+          }
+        }
+
+        if (!isAuthorized) {
+          logger.warn("Requisicao nao autorizada no webhook PagBank (token ou assinatura invalida)");
+          return res.status(401).json({ error: "Unauthorized" });
+        }
+      }
+
+      const payload = req.body || {};
+      const { id: orderId, reference_id: referenceId, charges } = payload;
+
+      if (!referenceId && !orderId) {
+        logger.warn("Webhook recebido sem identificador de pedido", { payload });
+        return res.status(400).json({ error: "Invalid payload: missing reference_id/id" });
+      }
+
+      // Identifica a cobranca principal
+      const charge = charges && charges.length > 0 ? charges[0] : null;
+      const pagbankStatus = charge ? charge.status : payload.status;
+      const internalStatus = STATUS_MAP[pagbankStatus] || "aguardando_pagamento";
+
+      // 2. Localiza o pedido no Firestore (suporte para colecao 'orders' e 'pedidos')
+      const db = getDb();
+      let orderDoc = null;
+      let orderRef = null;
+
+      if (referenceId) {
+        orderRef = db.collection("orders").doc(referenceId);
+        const snap = await orderRef.get();
+        if (snap.exists) {
+          orderDoc = snap;
+        } else {
+          const fallbackRef = db.collection("pedidos").doc(referenceId);
+          const fallbackSnap = await fallbackRef.get();
+          if (fallbackSnap.exists) {
+            orderDoc = fallbackSnap;
+            orderRef = fallbackRef;
+          }
+        }
+      }
+
+      if (!orderDoc && charge?.id) {
+        const queryOrders = await db
+          .collection("orders")
+          .where("pagbankChargeId", "==", charge.id)
+          .limit(1)
+          .get();
+        if (!queryOrders.empty) {
+          orderDoc = queryOrders.docs[0];
+          orderRef = orderDoc.ref;
+        } else {
+          const queryPedidos = await db
+            .collection("pedidos")
+            .where("pagbankChargeId", "==", charge.id)
+            .limit(1)
+            .get();
+          if (!queryPedidos.empty) {
+            orderDoc = queryPedidos.docs[0];
+            orderRef = orderDoc.ref;
+          }
+        }
+      }
+
+      if (!orderDoc || !orderRef) {
+        logger.error(`Pedido ${referenceId || orderId} nao encontrado no Firestore.`);
+        // Retorna 200 para evitar retentativas infinitas do gateway para pedidos inexistentes
+        return res.status(200).json({ received: true, warning: "Order not found" });
+      }
+
+      const orderData = orderDoc.data();
+
+      // 3. Idempotencia: evita reprocessar pedidos ja finalizados com o mesmo status
+      const currentPagbankStatus = orderData.pagbank?.status || orderData["pagbank.status"];
+      if (
+        orderData.status === internalStatus &&
+        currentPagbankStatus === pagbankStatus
+      ) {
+        logger.info(`Pedido ${referenceId || orderId} ja esta com o status ${internalStatus}. Ignorando.`);
+        return res.status(200).json({ received: true, ignored: true });
+      }
+
+      // 4. Atualiza o pedido e armazena historico do evento transacionalmente
+      await db.runTransaction(async (transaction) => {
+        const freshSnap = await transaction.get(orderRef);
         if (!freshSnap.exists) return;
+        const freshData = freshSnap.data() || {};
 
-        const currentData = freshSnap.data();
+        const updateData = {
+          status: internalStatus,
+          pagbank: {
+            ...(freshData.pagbank || {}),
+            status: pagbankStatus,
+            chargeId: charge?.id || null,
+            lastUpdate: FieldValue.serverTimestamp(),
+          },
+          updatedAt: FieldValue.serverTimestamp(),
+        };
 
-        // Evitar processamento redundante se ja liquidado
-        if (
-          currentData.status === "pagamento_aprovado" ||
-          currentData.status === "PAID"
-        )
-          return;
+        if (pagbankStatus === "PAID" || pagbankStatus === "AUTHORIZED") {
+          updateData.paidAt = FieldValue.serverTimestamp();
+          updateData.nfe = {
+            ...(freshData.nfe || {}),
+            status: "READY_FOR_EMISSION",
+          };
 
-        if (chargeStatus === "PAID" || chargeStatus === "AUTHORIZED") {
-          t.update(orderDoc.ref, {
-            status: "pagamento_aprovado",
-            paidAt: admin.firestore.FieldValue.serverTimestamp(),
-            "nfe.status": "READY_FOR_EMISSION",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
-
-          // Baixa de estoque transacional
-          if (Array.isArray(currentData.items)) {
-            for (const item of currentData.items) {
+          // Baixa de estoque transacional se itens estiverem presentes
+          const itemsList = freshData.items || orderData.items;
+          if (Array.isArray(itemsList)) {
+            for (const item of itemsList) {
               const prodId = item.reference_id || item.id;
               if (prodId) {
                 const productRef = db.collection("products").doc(prodId);
-                const prodSnap = await t.get(productRef);
+                const prodSnap = await transaction.get(productRef);
                 if (prodSnap.exists) {
-                  t.update(productRef, {
-                    stock: admin.firestore.FieldValue.increment(
+                  transaction.update(productRef, {
+                    stock: FieldValue.increment(
                       -Number(item.quantity || 1),
                     ),
                   });
@@ -799,21 +893,28 @@ exports.pagbankWebhook = onRequest(
               }
             }
           }
-        } else if (chargeStatus === "DECLINED" || chargeStatus === "CANCELED") {
-          t.update(orderDoc.ref, {
-            status: "cancelado",
-            declinedReason:
-              charge.payment_response?.message ||
-              "Negado pelo emissor do cartao",
-            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-          });
+        } else if (pagbankStatus === "DECLINED" || pagbankStatus === "CANCELED") {
+          updateData.declinedReason =
+            charge?.payment_response?.message || "Negado pelo emissor do cartao";
         }
+
+        transaction.update(orderRef, updateData);
+
+        const historyRef = orderRef.collection("historico_pagamento").doc();
+        transaction.set(historyRef, {
+          eventDate: FieldValue.serverTimestamp(),
+          pagbankStatus,
+          internalStatus,
+          payload,
+        });
       });
 
-      return res.status(200).send("OK");
-    } catch (err) {
-      console.error("Erro no processamento do webhook:", err);
-      return res.status(500).send("Internal Server Error");
+      logger.info(`Pedido ${referenceId || orderId} atualizado com sucesso para: ${internalStatus}`);
+      return res.status(200).json({ received: true, status: internalStatus });
+    } catch (error) {
+      logger.error("Erro ao processar webhook do PagBank:", error);
+      // Retorna 500 para permitir retentativa automatica do gateway em falhas transientes
+      return res.status(500).json({ error: "Internal processing error" });
     }
   },
 );
@@ -831,10 +932,12 @@ exports.onOrderPaidEmitNFe = onDocumentUpdated(
     const wasNotPaid =
       before.status !== "pagamento_aprovado" &&
       before.status !== "PAID" &&
+      before.status !== "pago" &&
       before.status !== "Aprovado";
     const isNowPaid =
       after.status === "pagamento_aprovado" ||
       after.status === "PAID" ||
+      after.status === "pago" ||
       after.status === "Aprovado";
 
     if (wasNotPaid && isNowPaid && (!after.nfeIssued || !after.nfe?.issued)) {
@@ -855,12 +958,12 @@ exports.onOrderPaidEmitNFe = onDocumentUpdated(
         nfeIssued: true,
         nfeKey: generatedNfeKey,
         nfeUrl: danfeUrl,
-        nfeIssuedAt: admin.firestore.FieldValue.serverTimestamp(),
+        nfeIssuedAt: FieldValue.serverTimestamp(),
         "nfe.status": "ISSUED",
         "nfe.issued": true,
         "nfe.key": generatedNfeKey,
         "nfe.url": danfeUrl,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       });
 
       console.info(`NF-e gerada e vinculada com sucesso ao pedido ${orderId}`);

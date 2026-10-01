@@ -1,0 +1,42 @@
+{
+  "id": "ORDE_87A13C02-8610-4F54-946D-91E33D8D7992",
+  "reference_id": "PEDIDO-TESTE-101",
+  "created_at": "2026-10-01T08:30:00.000-03:00",
+  "customer": {
+    "name": "Cliente Teste",
+    "email": "cliente@teste.com",
+    "tax_id": "12345678909"
+  },
+  "items": [
+    {
+      "reference_id": "PROD-001",
+      "name": "Camiseta Oversized Minimal",
+      "quantity": 1,
+      "unit_amount": 15990
+    }
+  ],
+  "charges": [
+    {
+      "id": "CHAR_B5C66741-9494-4AC5-B9F2-C5E502DC3265",
+      "reference_id": "PEDIDO-TESTE-101",
+      "status": "PAID",
+      "created_at": "2026-10-01T08:30:05.000-03:00",
+      "paid_at": "2026-10-01T08:31:00.000-03:00",
+      "amount": {
+        "value": 15990,
+        "currency": "BRL",
+        "summary": {
+          "total": 15990,
+          "paid": 15990,
+          "refunded": 0
+        }
+      },
+      "payment_method": {
+        "type": "PIX"
+      }
+    }
+  ],
+  "notification_urls": [
+    "http://127.0.0.1:5001/seu-projeto/southamerica-east1/pagbankWebhook"
+  ]
+}

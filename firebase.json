@@ -9,19 +9,31 @@
     "rewrites": [
       {
         "source": "/api/webhook/pagbank",
-        "function": "pagbankWebhook"
+        "function": {
+          "functionId": "pagbankWebhook",
+          "region": "southamerica-east1"
+        }
       },
       {
         "source": "/api/getPublicKey",
-        "function": "getPublicKey"
+        "function": {
+          "functionId": "getPublicKey",
+          "region": "southamerica-east1"
+        }
       },
       {
         "source": "/api/createOrder",
-        "function": "createOrder"
+        "function": {
+          "functionId": "createOrder",
+          "region": "southamerica-east1"
+        }
       },
       {
         "source": "/api/createSecureOrder",
-        "function": "createSecureOrder"
+        "function": {
+          "functionId": "createSecureOrder",
+          "region": "southamerica-east1"
+        }
       },
       {
         "source": "**",
@@ -48,6 +60,9 @@
         ]
       }
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
   },
   "functions": [
     {
