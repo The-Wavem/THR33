@@ -229,7 +229,15 @@ export const pagbankService = {
         }
       }
     } catch (callErr) {
-      console.warn("Aviso ao conectar Cloud Function createPagBankOrder (aplicando fallback):", callErr.message);
+      console.error("Erro na Cloud Function createPagBankOrder:", callErr);
+      if (!isSandboxMode()) {
+        const details = String(callErr.details || callErr.message || "");
+        if (details.includes("whitelist access required")) {
+          throw new Error("Sua conta PagBank requer liberação de Whitelist em Produção para a API de Pedidos. Solicite a homologação no PagBank Developers.");
+        }
+        throw new Error(callErr.message || "Erro ao conectar ao gateway PagBank");
+      }
+      console.warn("Aviso ao conectar Cloud Function createPagBankOrder (aplicando fallback sandbox):", callErr.message);
     }
 
     // 2. Fallback HTTP direto (/api/createSecureOrder) se disponivel
@@ -342,7 +350,11 @@ export const pagbankService = {
       }
     }
 
-    // 4. Fallback de homologacao local / sandbox offline
+    // 4. Fallback de homologacao local / sandbox offline (apenas se IS_SANDBOX ativo)
+    if (!isSandboxMode()) {
+      throw new Error("Não foi possível gerar a cobrança no PagBank. Verifique a liberação de Whitelist da sua conta ou tente novamente.");
+    }
+
     const cleanNum = (cardData?.number || cardData?.lastDigits || '').replace(/\D/g, '');
     const isDeclined = cleanNum.startsWith('5105') || cardData?.cvv === '999';
 

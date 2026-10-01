@@ -7,7 +7,7 @@
  * - createPagBankOrder: Callable Function com autoridade server-side e validacao de precos
  * - pagbankWebhook: Receptor autenticado com verificacao de assinatura SHA-256 (x-authenticity-token) e auditoria
  * - onOrderPaidEmitNFe: Disparo de emissao de NF-e e chave de 44 digitos SEFAZ PR
- * 
+ *
  * Otimizacoes de Inicializacao:
  * - Regiao: southamerica-east1 (Sao Paulo, Brasil) para menor latencia de gateway
  * - Escopo global leve (apenas initializeApp e declaracoes de funcoes)
@@ -20,6 +20,7 @@ const {
   onRequest,
   HttpsError,
 } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const { FieldValue } = require("firebase-admin/firestore");
@@ -29,7 +30,8 @@ const cors = require("cors")({ origin: true });
 
 // Em ambiente de emulador local, garante comunicacao direta com o Firestore Emulator (porta 8080)
 if (process.env.FUNCTIONS_EMULATOR === "true") {
-  process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";
+  process.env.FIRESTORE_EMULATOR_HOST =
+    process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";
 }
 
 if (!admin.apps.length) {
@@ -48,34 +50,30 @@ let _db = null;
 function getDb() {
   if (!_db) {
     if (process.env.FUNCTIONS_EMULATOR === "true") {
-      process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";
+      process.env.FIRESTORE_EMULATOR_HOST =
+        process.env.FIRESTORE_EMULATOR_HOST || "127.0.0.1:8080";
     }
     _db = admin.firestore();
   }
   return _db;
 }
 
+// Secret oficial do PagBank protegido no Google Secret Manager
+const PAGBANK_TOKEN = defineSecret("PAGBANK_TOKEN");
+
 /**
- * Helper para obter o token do PagBank em qualquer contexto (producao ou homologacao local)
- * Le diretamente das variaveis de ambiente (.env) nativas do Firebase Functions v2
+ * Helper para obter o token seguro em qualquer contexto (producao ou fallback local)
  */
 function getSecretToken() {
-  return process.env.PAGBANK_TOKEN || "";
-}
-
-/**
- * Helper centralizado para verificar o modo do PagBank.
- * Suporta o toggle booleano PAGBANK_SANDBOX ("true" / "false") e PAGBANK_ENV ("sandbox" / "production").
- */
-function isSandboxMode() {
-  if (process.env.PAGBANK_SANDBOX === "false" || process.env.PAGBANK_ENV === "production") {
-    return false;
+  try {
+    if (typeof PAGBANK_TOKEN.value === "function") {
+      const val = PAGBANK_TOKEN.value();
+      if (val && val.trim() !== "") return val;
+    }
+  } catch (e) {
+    // Se invocado fora de contexto com secret ativo
   }
-  return true;
-}
-
-function getPagBankBaseUrl() {
-  return isSandboxMode() ? "https://sandbox.api.pagseguro.com" : "https://api.pagseguro.com";
+  return process.env.PAGBANK_FALLBACK_TOKEN || process.env.PAGBANK_TOKEN || "";
 }
 
 /**
@@ -83,7 +81,7 @@ function getPagBankBaseUrl() {
  * O front-end precisa dessa chave para criptografar os dados do cartao do cliente antes do envio (PCI-Free).
  */
 exports.getPublicKey = onRequest(
-  { region: FUNCTION_REGION, cors: true },
+  { region: FUNCTION_REGION, secrets: [PAGBANK_TOKEN], cors: true },
   (req, res) => {
     cors(req, res, async () => {
       if (req.method !== "POST") {
@@ -91,7 +89,10 @@ exports.getPublicKey = onRequest(
       }
 
       const token = getSecretToken();
-      const BASE_URL = getPagBankBaseUrl();
+      const isProduction = process.env.PAGBANK_ENV === "production";
+      const BASE_URL = isProduction
+        ? "https://api.pagseguro.com"
+        : "https://sandbox.api.pagseguro.com";
 
       const HEADERS = {
         Authorization: `Bearer ${token}`,
@@ -100,7 +101,12 @@ exports.getPublicKey = onRequest(
       };
 
       try {
-        if (token && token.trim() !== "" && !token.includes("SEU_TOKEN") && !token.includes("seu_token")) {
+        if (
+          token &&
+          token.trim() !== "" &&
+          !token.includes("SEU_TOKEN") &&
+          !token.includes("seu_token")
+        ) {
           const response = await fetch(`${BASE_URL}/public-keys`, {
             method: "POST",
             headers: HEADERS,
@@ -119,7 +125,8 @@ exports.getPublicKey = onRequest(
         } else {
           // Mock seguro de desenvolvimento local / homologacao
           return res.status(200).json({
-            publicKey: "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0THR33PUBKEYMOCK...\n-----END PUBLIC KEY-----",
+            publicKey:
+              "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA0THR33PUBKEYMOCK...\n-----END PUBLIC KEY-----",
             isMock: true,
           });
         }
@@ -128,7 +135,7 @@ exports.getPublicKey = onRequest(
         return res.status(500).json({ error: "Erro interno no servidor" });
       }
     });
-  }
+  },
 );
 
 /**
@@ -136,7 +143,7 @@ exports.getPublicKey = onRequest(
  * Suporta Pix, Boleto ou Cartao de Credito com token criptografado.
  */
 exports.createOrder = onRequest(
-  { region: FUNCTION_REGION, cors: true },
+  { region: FUNCTION_REGION, secrets: [PAGBANK_TOKEN], cors: true },
   (req, res) => {
     cors(req, res, async () => {
       if (req.method !== "POST") {
@@ -146,11 +153,16 @@ exports.createOrder = onRequest(
       const { referenceId, customer, items, paymentMethod } = req.body || {};
 
       if (!customer || !items || !paymentMethod) {
-        return res.status(400).json({ error: "Dados incompletos no corpo da requisicao" });
+        return res
+          .status(400)
+          .json({ error: "Dados incompletos no corpo da requisicao" });
       }
 
       const token = getSecretToken();
-      const BASE_URL = getPagBankBaseUrl();
+      const isProduction = process.env.PAGBANK_ENV === "production";
+      const BASE_URL = isProduction
+        ? "https://api.pagseguro.com"
+        : "https://sandbox.api.pagseguro.com";
 
       const HEADERS = {
         Authorization: `Bearer ${token}`,
@@ -159,10 +171,14 @@ exports.createOrder = onRequest(
       };
 
       const cleanRefId = referenceId || `PEDIDO_${Date.now()}`;
-      const cleanTaxId = String(customer.taxId || customer.cpf || "").replace(/\D/g, "");
+      const cleanTaxId = String(customer.taxId || customer.cpf || "").replace(
+        /\D/g,
+        "",
+      );
       const cleanPhone = String(customer.phone || "").replace(/\D/g, "");
       const phoneArea = cleanPhone.length >= 10 ? cleanPhone.slice(0, 2) : "41";
-      const phoneNumber = cleanPhone.length >= 10 ? cleanPhone.slice(2) : "999999999";
+      const phoneNumber =
+        cleanPhone.length >= 10 ? cleanPhone.slice(2) : "999999999";
 
       // Montagem da estrutura de Pedido (Order) do PagBank v4
       const orderPayload = {
@@ -184,7 +200,9 @@ exports.createOrder = onRequest(
           reference_id: String(item.id || item.reference_id || `item_${idx}`),
           name: String(item.title || item.name || "Produto THR33").slice(0, 64),
           quantity: Number(item.quantity) || 1,
-          unit_amount: Math.round(Number(item.unitPrice || item.price || 0) * 100),
+          unit_amount: Math.round(
+            Number(item.unitPrice || item.price || 0) * 100,
+          ),
         })),
         charges: [
           {
@@ -208,9 +226,15 @@ exports.createOrder = onRequest(
           soft_descriptor: "THR33",
           card: {
             encrypted: paymentMethod.cardEncrypted,
-            security_code: paymentMethod.cvv ? String(paymentMethod.cvv) : undefined,
+            security_code: paymentMethod.cvv
+              ? String(paymentMethod.cvv)
+              : undefined,
             holder: {
-              name: (paymentMethod.holderName || customer.name || "TITULAR DO CARTAO").toUpperCase(),
+              name: (
+                paymentMethod.holderName ||
+                customer.name ||
+                "TITULAR DO CARTAO"
+              ).toUpperCase(),
             },
           },
         };
@@ -221,14 +245,21 @@ exports.createOrder = onRequest(
             amount: {
               value: Math.round(Number(paymentMethod.amount || 0) * 100),
             },
-            expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+            expiration_date: new Date(
+              Date.now() + 24 * 60 * 60 * 1000,
+            ).toISOString(),
           },
         ];
       }
 
       try {
         let data = null;
-        if (token && token.trim() !== "" && !token.includes("SEU_TOKEN") && !token.includes("seu_token")) {
+        if (
+          token &&
+          token.trim() !== "" &&
+          !token.includes("SEU_TOKEN") &&
+          !token.includes("seu_token")
+        ) {
           const response = await fetch(`${BASE_URL}/orders`, {
             method: "POST",
             headers: HEADERS,
@@ -246,58 +277,94 @@ exports.createOrder = onRequest(
           data = {
             id: `ORDE_${Date.now()}`,
             reference_id: cleanRefId,
-            charges: paymentMethod.type === "CREDIT_CARD" ? [
-              {
-                id: `CHAR_${Date.now()}`,
-                reference_id: cleanRefId,
-                status: "PAID",
-                amount: { value: Math.round(Number(paymentMethod.amount || 0) * 100), currency: "BRL" },
-                payment_method: orderPayload.charges[0].payment_method,
-              }
-            ] : null,
-            qr_codes: paymentMethod.type === "PIX" ? [
-              {
-                text: `00020126580014br.gov.bcb.pix0136pagbank-thr33-${cleanRefId}`,
-                links: [{ rel: "QRCODE.PNG", href: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=THR33-PIX-${cleanRefId}` }],
-              }
-            ] : null,
+            charges:
+              paymentMethod.type === "CREDIT_CARD"
+                ? [
+                    {
+                      id: `CHAR_${Date.now()}`,
+                      reference_id: cleanRefId,
+                      status: "PAID",
+                      amount: {
+                        value: Math.round(
+                          Number(paymentMethod.amount || 0) * 100,
+                        ),
+                        currency: "BRL",
+                      },
+                      payment_method: orderPayload.charges[0].payment_method,
+                    },
+                  ]
+                : null,
+            qr_codes:
+              paymentMethod.type === "PIX"
+                ? [
+                    {
+                      text: `00020126580014br.gov.bcb.pix0136pagbank-thr33-${cleanRefId}`,
+                      links: [
+                        {
+                          rel: "QRCODE.PNG",
+                          href: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=THR33-PIX-${cleanRefId}`,
+                        },
+                      ],
+                    },
+                  ]
+                : null,
           };
         }
 
         // Persiste pedido no Firestore com inicializacao de status e NF-e
         try {
           const db = getDb();
-          const initialStatus = paymentMethod.type === "PIX" ? "aguardando_pagamento" : "pagamento_aprovado";
-          await db.collection("orders").doc(cleanRefId).set({
-            orderId: cleanRefId,
-            pagbankOrderId: data.id,
-            clientName: customer.name || "Cliente THR33",
-            clientEmail: customer.email || "cliente@thr33.com",
-            clientCpf: cleanTaxId,
-            total: Number(paymentMethod.amount || 0),
-            status: initialStatus,
-            paymentMethod: paymentMethod.type === "CREDIT_CARD" ? "Cartão de Crédito" : "PIX",
-            pixQrCodeUrl: data.qr_codes?.[0]?.links?.find(l => l.rel === "QRCODE.PNG" || l.media === "image/png")?.href || null,
-            pixCopiaECola: data.qr_codes?.[0]?.text || null,
-            createdAt: FieldValue.serverTimestamp(),
-            updatedAt: FieldValue.serverTimestamp(),
-            nfe: {
-              status: "PENDING_EMISSION",
-              issued: false,
-            },
-            nfeIssued: false,
-          }, { merge: true });
+          const initialStatus =
+            paymentMethod.type === "PIX"
+              ? "aguardando_pagamento"
+              : "pagamento_aprovado";
+          await db
+            .collection("orders")
+            .doc(cleanRefId)
+            .set(
+              {
+                orderId: cleanRefId,
+                pagbankOrderId: data.id,
+                clientName: customer.name || "Cliente THR33",
+                clientEmail: customer.email || "cliente@thr33.com",
+                clientCpf: cleanTaxId,
+                total: Number(paymentMethod.amount || 0),
+                status: initialStatus,
+                paymentMethod:
+                  paymentMethod.type === "CREDIT_CARD"
+                    ? "Cartão de Crédito"
+                    : "PIX",
+                pixQrCodeUrl:
+                  data.qr_codes?.[0]?.links?.find(
+                    (l) => l.rel === "QRCODE.PNG" || l.media === "image/png",
+                  )?.href || null,
+                pixCopiaECola: data.qr_codes?.[0]?.text || null,
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+                nfe: {
+                  status: "PENDING_EMISSION",
+                  issued: false,
+                },
+                nfeIssued: false,
+              },
+              { merge: true },
+            );
         } catch (dbErr) {
-          logger.warn("Aviso ao persistir pedido via createOrder no Firestore:", dbErr.message);
+          logger.warn(
+            "Aviso ao persistir pedido via createOrder no Firestore:",
+            dbErr.message,
+          );
         }
 
         return res.status(201).json(data);
       } catch (error) {
         logger.error("Falha ao processar pagamento:", error);
-        return res.status(500).json({ error: "Erro interno ao processar cobranca" });
+        return res
+          .status(500)
+          .json({ error: "Erro interno ao processar cobranca" });
       }
     });
-  }
+  },
 );
 
 /**
@@ -305,7 +372,7 @@ exports.createOrder = onRequest(
  * Callable Function com autoridade server-side, validacao de precos em Firestore e itens fiscais.
  */
 exports.createPagBankOrder = onCall(
-  { region: FUNCTION_REGION, cors: true },
+  { region: FUNCTION_REGION, secrets: [PAGBANK_TOKEN], cors: true },
   async (request) => {
     // 1. Identifica usuario autenticado ou visitante
     const userId = request.auth
@@ -329,7 +396,10 @@ exports.createPagBankOrder = onCall(
       );
     }
 
-    const baseUrl = getPagBankBaseUrl();
+    const isSandbox = process.env.PAGBANK_ENV !== "production";
+    const baseUrl = isSandbox
+      ? "https://sandbox.api.pagseguro.com"
+      : "https://api.pagseguro.com";
 
     // 2. Recalcula precos server-side via Firestore (colecao products)
     const db = getDb();
@@ -382,13 +452,24 @@ exports.createPagBankOrder = onCall(
       calculatedTotal - totalDeductionInCents,
     );
 
-    // 3. Montar objeto Charge para Cartao de Credito (se aplicavel)
+    // 3. Montar objeto de cobranca conforme o metodo de pagamento
     const referenceId = `THR-${Date.now()}-${userId.slice(0, 5)}`;
     let chargePayload = null;
+    let qrCodesPayload = null;
 
-    if (paymentMethod.type === "CREDIT_CARD") {
+    if (paymentMethod.type === "PIX") {
+      // Expiracao do Pix: 24 horas no padrao PagBank
+      const expirationDate = new Date();
+      expirationDate.setHours(expirationDate.getHours() + 24);
+      qrCodesPayload = [
+        {
+          amount: { value: finalAmountInCents },
+          expiration_date: expirationDate.toISOString(),
+        },
+      ];
+    } else if (paymentMethod.type === "CREDIT_CARD") {
       chargePayload = {
-        reference_id: `CHAR-${referenceId}`,
+        reference_id: referenceId,
         amount: {
           value: finalAmountInCents,
           currency: "BRL",
@@ -410,17 +491,15 @@ exports.createPagBankOrder = onCall(
           },
         },
       };
-    } else if (paymentMethod.type !== "PIX") {
-      throw new HttpsError(
-        "invalid-argument",
-        "Metodo de pagamento invalido.",
-      );
+    } else {
+      throw new HttpsError("invalid-argument", "Metodo de pagamento invalido.");
     }
 
     // 4. Montar o payload final da Orders API do PagBank
-    const cleanTaxId = String(
-      customer.taxId || customer.cpf || "",
-    ).replace(/\D/g, "");
+    const cleanTaxId = String(customer.taxId || customer.cpf || "").replace(
+      /\D/g,
+      "",
+    );
     const cleanPhone = String(customer.phone || "").replace(/\D/g, "");
     const phoneArea = cleanPhone.length >= 10 ? cleanPhone.slice(0, 2) : "41";
     const phoneNumber =
@@ -472,19 +551,10 @@ exports.createPagBankOrder = onCall(
       notification_urls: [webhookUrl],
     };
 
-    // No PagBank v4: PIX utiliza array de qr_codes na raiz; Cartao de Credito utiliza charges
-    if (paymentMethod.type === "PIX") {
-      const expirationDate = new Date();
-      expirationDate.setHours(expirationDate.getHours() + 24);
-      orderPayload.qr_codes = [
-        {
-          amount: {
-            value: finalAmountInCents,
-          },
-          expiration_date: expirationDate.toISOString(),
-        },
-      ];
-    } else if (paymentMethod.type === "CREDIT_CARD" && chargePayload) {
+    if (qrCodesPayload) {
+      orderPayload.qr_codes = qrCodesPayload;
+    }
+    if (chargePayload) {
       orderPayload.charges = [chargePayload];
     }
 
@@ -508,7 +578,7 @@ exports.createPagBankOrder = onCall(
           },
         });
         pagbankOrder = response.data;
-        charge = pagbankOrder.charges?.[0] || {};
+        charge = pagbankOrder.charges?.[0] || null;
       } catch (error) {
         console.error(
           "Erro na API PagBank Orders:",
@@ -527,15 +597,18 @@ exports.createPagBankOrder = onCall(
       pagbankOrder = {
         id: `ORDE_${Date.now()}`,
         reference_id: referenceId,
-        charges: paymentMethod.type === "CREDIT_CARD" ? [
-          {
-            id: `CHAR_${Date.now()}`,
-            reference_id: referenceId,
-            status: "PAID",
-            amount: { value: finalAmountInCents, currency: "BRL" },
-            payment_method: chargePayload?.payment_method,
-          }
-        ] : [],
+        charges:
+          paymentMethod.type === "CREDIT_CARD"
+            ? [
+                {
+                  id: `CHAR_${Date.now()}`,
+                  reference_id: referenceId,
+                  status: "PAID",
+                  amount: { value: finalAmountInCents, currency: "BRL" },
+                  payment_method: chargePayload?.payment_method,
+                },
+              ]
+            : null,
         qr_codes:
           paymentMethod.type === "PIX"
             ? [
@@ -554,14 +627,15 @@ exports.createPagBankOrder = onCall(
       charge = pagbankOrder.charges?.[0] || null;
     }
 
-    // 6. Persistir no Firestore
+    // 6. Persistir no Firestore com estrutura preparada para NF-e
     const orderRef = db.collection("orders").doc(referenceId);
-    const chargeObj = charge || pagbankOrder.charges?.[0] || null;
-    const isPaid = chargeObj?.status === "PAID" || chargeObj?.status === "AUTHORIZED";
-    const initialStatus = isPaid ? "pagamento_aprovado" : "aguardando_pagamento";
+    const initialStatus =
+      charge?.status === "PAID" || charge?.status === "AUTHORIZED"
+        ? "pagamento_aprovado"
+        : "aguardando_pagamento";
 
     const qrCodeObj =
-      pagbankOrder.qr_codes?.[0] || chargeObj?.qr_codes?.[0] || null;
+      pagbankOrder.qr_codes?.[0] || charge?.qr_codes?.[0] || null;
     const pixQrCodeUrl =
       qrCodeObj?.links?.find(
         (l) => l.rel === "QRCODE.PNG" || l.media === "image/png",
@@ -571,14 +645,17 @@ exports.createPagBankOrder = onCall(
     await orderRef.set({
       orderId: referenceId,
       pagbankOrderId: pagbankOrder.id,
-      pagbankChargeId: chargeObj?.id || null,
+      pagbankChargeId: charge?.id || null,
       userId: userId,
       clientName: customer.name,
       clientEmail: customer.email,
       clientCpf: cleanTaxId,
       clientPhone: cleanPhone,
       status: initialStatus,
-      paidAt: isPaid ? FieldValue.serverTimestamp() : null,
+      paidAt:
+        charge?.status === "PAID" || charge?.status === "AUTHORIZED"
+          ? FieldValue.serverTimestamp()
+          : null,
       paymentMethod:
         paymentMethod.type === "CREDIT_CARD"
           ? "Cartão de Crédito"
@@ -617,7 +694,7 @@ exports.createPagBankOrder = onCall(
     return {
       success: true,
       orderId: referenceId,
-      status: chargeObj?.status || (paymentMethod.type === "PIX" ? "WAITING" : "WAITING"),
+      status: charge?.status || (paymentMethod.type === "PIX" ? "WAITING" : "PENDING"),
       qrCode: qrCodeObj,
     };
   },
@@ -645,7 +722,10 @@ exports.createSecureOrder = onRequest(
         let pagbankData = null;
 
         if (token && token.trim() !== "" && !token.includes("SEU_TOKEN")) {
-          const baseUrl = getPagBankBaseUrl();
+          const isSandbox = process.env.PAGBANK_ENV !== "production";
+          const baseUrl = isSandbox
+            ? "https://sandbox.api.pagseguro.com"
+            : "https://api.pagseguro.com";
           const response = await axios.post(`${baseUrl}/orders`, orderPayload, {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -654,12 +734,13 @@ exports.createSecureOrder = onRequest(
           });
           pagbankData = response.data;
         } else {
-          pagbankData = {
+          data = {
             id: `ORDE_${Date.now()}`,
             reference_id: referenceId,
             qr_codes: orderPayload.qr_codes || null,
             charges: orderPayload.charges || null,
           };
+          pagbankData = data;
         }
 
         const db = getDb();
@@ -685,7 +766,7 @@ exports.createSecureOrder = onRequest(
         return res.status(500).json({ error: err.message });
       }
     });
-  }
+  },
 );
 
 /**
@@ -708,6 +789,7 @@ exports.pagbankWebhook = onRequest(
     cors: false,
     timeoutSeconds: 60,
     memory: "256MiB",
+    secrets: [PAGBANK_TOKEN],
   },
   async (req, res) => {
     if (req.method !== "POST") {
@@ -717,11 +799,17 @@ exports.pagbankWebhook = onRequest(
     try {
       // 1. Validacao de Seguranca do Webhook (Token de webhook ou assinatura oficial)
       const isEmulator = process.env.FUNCTIONS_EMULATOR === "true";
-      const webhookToken = process.env.PAGBANK_WEBHOOK_TOKEN || getSecretToken();
+      const webhookToken =
+        process.env.PAGBANK_WEBHOOK_TOKEN || getSecretToken();
       const headerAuth = req.headers["x-authenticity-token"];
       const queryToken = req.query?.token;
 
-      if (webhookToken && !isEmulator && !webhookToken.includes("SEU_TOKEN") && !webhookToken.includes("seu_token")) {
+      if (
+        webhookToken &&
+        !isEmulator &&
+        !webhookToken.includes("SEU_TOKEN") &&
+        !webhookToken.includes("seu_token")
+      ) {
         let isAuthorized = false;
 
         // Validacao direta por query token (?token=...)
@@ -750,7 +838,9 @@ exports.pagbankWebhook = onRequest(
         }
 
         if (!isAuthorized) {
-          logger.warn("Requisicao nao autorizada no webhook PagBank (token ou assinatura invalida)");
+          logger.warn(
+            "Requisicao nao autorizada no webhook PagBank (token ou assinatura invalida)",
+          );
           return res.status(401).json({ error: "Unauthorized" });
         }
       }
@@ -759,14 +849,19 @@ exports.pagbankWebhook = onRequest(
       const { id: orderId, reference_id: referenceId, charges } = payload;
 
       if (!referenceId && !orderId) {
-        logger.warn("Webhook recebido sem identificador de pedido", { payload });
-        return res.status(400).json({ error: "Invalid payload: missing reference_id/id" });
+        logger.warn("Webhook recebido sem identificador de pedido", {
+          payload,
+        });
+        return res
+          .status(400)
+          .json({ error: "Invalid payload: missing reference_id/id" });
       }
 
       // Identifica a cobranca principal
       const charge = charges && charges.length > 0 ? charges[0] : null;
       const pagbankStatus = charge ? charge.status : payload.status;
-      const internalStatus = STATUS_MAP[pagbankStatus] || "aguardando_pagamento";
+      const internalStatus =
+        STATUS_MAP[pagbankStatus] || "aguardando_pagamento";
 
       // 2. Localiza o pedido no Firestore (suporte para colecao 'orders' e 'pedidos')
       const db = getDb();
@@ -788,30 +883,6 @@ exports.pagbankWebhook = onRequest(
         }
       }
 
-      // Fallback 1: Localiza pelo ID do pedido PagBank (ordens Pix criadas sem chargeId imediato)
-      if (!orderDoc && orderId) {
-        const queryOrdersByPagbankId = await db
-          .collection("orders")
-          .where("pagbankOrderId", "==", orderId)
-          .limit(1)
-          .get();
-        if (!queryOrdersByPagbankId.empty) {
-          orderDoc = queryOrdersByPagbankId.docs[0];
-          orderRef = orderDoc.ref;
-        } else {
-          const queryPedidosByPagbankId = await db
-            .collection("pedidos")
-            .where("pagbankOrderId", "==", orderId)
-            .limit(1)
-            .get();
-          if (!queryPedidosByPagbankId.empty) {
-            orderDoc = queryPedidosByPagbankId.docs[0];
-            orderRef = orderDoc.ref;
-          }
-        }
-      }
-
-      // Fallback 2: Localiza pelo ID da cobranca (Cartao de Credito)
       if (!orderDoc && charge?.id) {
         const queryOrders = await db
           .collection("orders")
@@ -835,9 +906,13 @@ exports.pagbankWebhook = onRequest(
       }
 
       if (!orderDoc || !orderRef) {
-        logger.error(`Pedido ${referenceId || orderId} nao encontrado no Firestore.`);
+        logger.error(
+          `Pedido ${referenceId || orderId} nao encontrado no Firestore.`,
+        );
         // Retorna 200 para evitar retentativas infinitas do gateway para pedidos inexistentes
-        return res.status(200).json({ received: true, warning: "Order not found" });
+        return res
+          .status(200)
+          .json({ received: true, warning: "Order not found" });
       }
 
       const orderData = orderDoc.data();
@@ -851,17 +926,25 @@ exports.pagbankWebhook = onRequest(
         orderData.status === "saiu_para_entrega" ||
         orderData.status === "entregue";
 
-      if (isAlreadyPaid && (pagbankStatus === "PAID" || pagbankStatus === "AUTHORIZED")) {
-        logger.info(`Pedido ${referenceId || orderId} ja esta com pagamento confirmado (${orderData.status}). Respondendo 200 imediatamente.`);
+      if (
+        isAlreadyPaid &&
+        (pagbankStatus === "PAID" || pagbankStatus === "AUTHORIZED")
+      ) {
+        logger.info(
+          `Pedido ${referenceId || orderId} ja esta com pagamento confirmado (${orderData.status}). Respondendo 200 imediatamente.`,
+        );
         return res.status(200).json({ received: true, alreadyPaid: true });
       }
 
-      const currentPagbankStatus = orderData.pagbank?.status || orderData["pagbank.status"];
+      const currentPagbankStatus =
+        orderData.pagbank?.status || orderData["pagbank.status"];
       if (
         orderData.status === internalStatus &&
         currentPagbankStatus === pagbankStatus
       ) {
-        logger.info(`Pedido ${referenceId || orderId} ja esta com o status ${internalStatus}. Ignorando.`);
+        logger.info(
+          `Pedido ${referenceId || orderId} ja esta com o status ${internalStatus}. Ignorando.`,
+        );
         return res.status(200).json({ received: true, ignored: true });
       }
 
@@ -879,7 +962,10 @@ exports.pagbankWebhook = onRequest(
           freshData.status === "saiu_para_entrega" ||
           freshData.status === "entregue";
 
-        if (freshIsAlreadyPaid && (pagbankStatus === "PAID" || pagbankStatus === "AUTHORIZED")) {
+        if (
+          freshIsAlreadyPaid &&
+          (pagbankStatus === "PAID" || pagbankStatus === "AUTHORIZED")
+        ) {
           return;
         }
 
@@ -907,17 +993,19 @@ exports.pagbankWebhook = onRequest(
                 const prodSnap = await transaction.get(productRef);
                 if (prodSnap.exists) {
                   transaction.update(productRef, {
-                    stock: FieldValue.increment(
-                      -Number(item.quantity || 1),
-                    ),
+                    stock: FieldValue.increment(-Number(item.quantity || 1)),
                   });
                 }
               }
             }
           }
-        } else if (pagbankStatus === "DECLINED" || pagbankStatus === "CANCELED") {
+        } else if (
+          pagbankStatus === "DECLINED" ||
+          pagbankStatus === "CANCELED"
+        ) {
           updateData.declinedReason =
-            charge?.payment_response?.message || "Negado pelo emissor do cartao";
+            charge?.payment_response?.message ||
+            "Negado pelo emissor do cartao";
         }
 
         transaction.update(orderRef, updateData);
@@ -931,7 +1019,9 @@ exports.pagbankWebhook = onRequest(
         });
       });
 
-      logger.info(`Pedido ${referenceId || orderId} atualizado com sucesso para: ${internalStatus}`);
+      logger.info(
+        `Pedido ${referenceId || orderId} atualizado com sucesso para: ${internalStatus}`,
+      );
       return res.status(200).json({ received: true, status: internalStatus });
     } catch (error) {
       logger.error("Erro ao processar webhook do PagBank:", error);

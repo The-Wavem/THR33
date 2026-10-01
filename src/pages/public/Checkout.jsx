@@ -734,7 +734,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         setPagbankResult(pagbankRes.data);
       } catch (gatewayErr) {
         console.warn("Aviso ao processar gateway PagBank:", gatewayErr.message);
-        setPaymentError('Erro temporário de conexão com o PagBank. Tente novamente em instantes.');
+        setPaymentError(gatewayErr.message || 'Erro temporário de conexão com o PagBank. Tente novamente em instantes.');
         setIsProcessing(false);
         return;
       }
