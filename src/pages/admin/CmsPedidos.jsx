@@ -22,7 +22,9 @@ import {
   Headphones,
   Save,
   ExternalLink,
-  Link2
+  Link2,
+  Copy,
+  Send
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { maskCPF } from '../../utils/validators';
@@ -101,6 +103,7 @@ export function CmsPedidos() {
     nfeKey: ''
   });
   const [savingNfe, setSavingNfe] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
   const [nfeError, setNfeError] = useState('');
   const [nfeSuccess, setNfeSuccess] = useState('');
 
@@ -334,17 +337,24 @@ export function CmsPedidos() {
     }
   };
 
-  // Handlers para Anexar NF-e (PDF)
+  // Handlers para NF-e (Emissao SEFAZ e Anexo Manual)
   const handleOpenNfeModal = (order) => {
     if (!order) return;
     setNfeTargetOrder(order);
     setNfeForm({
       nfeUrl: order.nfe?.danfeUrl || order.nfeUrl || '',
-      nfeKey: order.nfe?.key || order.nfeKey || ''
+      nfeKey: order.nfe?.chave || order.nfe?.key || order.nfeKey || ''
     });
     setNfeError('');
     setNfeSuccess('');
     setNfeModalOpen(true);
+  };
+
+  const handleCopyKey = (key) => {
+    if (!key) return;
+    navigator.clipboard.writeText(key.replace(/\s+/g, ''));
+    setCopiedKey(true);
+    setTimeout(() => setCopiedKey(false), 2000);
   };
 
   const handleSaveNfe = async (e) => {
@@ -1001,10 +1011,10 @@ export function CmsPedidos() {
                           type="button"
                           onClick={() => handleOpenNfeModal(order)}
                           className={`${styles.nfeActionRowBtn} ${(order.nfe?.danfeUrl || order.nfeUrl) ? styles.nfeActionRowBtnActive : ''}`}
-                          title={(order.nfe?.danfeUrl || order.nfeUrl) ? "Editar ou visualizar link do PDF da NF-e" : "Anexar link do PDF da NF-e"}
+                          title={(order.nfe?.danfeUrl || order.nfeUrl) ? "Visualizar ou gerenciar NF-e" : "Emitir ou gerenciar NF-e"}
                         >
                           <FileText size={11} />
-                          <span>{(order.nfe?.danfeUrl || order.nfeUrl) ? 'Gerenciar NF-e' : 'Anexar NF-e'}</span>
+                          <span>{(order.nfe?.danfeUrl || order.nfeUrl) ? 'Gerenciar NF-e' : 'NF-e'}</span>
                         </button>
                       </div>
                     </td>
@@ -1420,13 +1430,14 @@ export function CmsPedidos() {
       )}
 
       {/* MODAL DEDICADO: ANEXAR NF-E (LINK PDF) */}
+      {/* MODAL DEDICADO: GERENCIAR NF-E (MODELO 55) */}
       {nfeModalOpen && nfeTargetOrder && (
         <div className={styles.dispatchModalBackdrop} onClick={() => setNfeModalOpen(false)}>
           <div className={styles.dispatchModal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.dispatchModalHeader}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <FileText size={18} color="#a855f7" />
-                <h3>ANEXAR NF-E (PDF) • #{nfeTargetOrder.id.slice(0, 8).toUpperCase()}</h3>
+                <h3>GERENCIAR NF-E (MODELO 55) • #{nfeTargetOrder.id.slice(0, 8).toUpperCase()}</h3>
               </div>
               <button 
                 type="button" 
@@ -1438,11 +1449,7 @@ export function CmsPedidos() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveNfe} className={styles.dispatchModalBody}>
-              <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-                Cole o link direto do arquivo PDF da Nota Fiscal (DANFE). O documento ficará disponível para download imediato na tela de pedidos do cliente.
-              </p>
-
+            <div className={styles.dispatchModalBody}>
               <div className={styles.dispatchOrderSummary}>
                 <div>
                   <strong>{nfeTargetOrder.clientName || 'Cliente'}</strong>
@@ -1467,81 +1474,160 @@ export function CmsPedidos() {
                 </div>
               )}
 
-              <div className={styles.fieldGroup}>
-                <label>LINK DIRETO DO PDF DA NF-E (DANFE) *</label>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                  <input 
-                    type="url" 
-                    placeholder="https://.../danfe-pedido.pdf" 
-                    value={nfeForm.nfeUrl} 
-                    onChange={(e) => {
-                      setNfeForm(prev => ({ ...prev, nfeUrl: e.target.value }));
-                      if (nfeError) setNfeError('');
-                    }}
-                    style={{ flex: 1 }}
-                    required
-                    autoFocus
-                  />
-                  {nfeForm.nfeUrl.trim() && (
-                    <a 
-                      href={nfeForm.nfeUrl.trim()} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className={styles.refreshBtn}
-                      style={{ padding: '0 0.85rem', height: 'auto', textDecoration: 'none' }}
-                      title="Testar abertura do link em nova aba"
-                    >
-                      <ExternalLink size={13} />
-                      <span>Testar PDF</span>
-                    </a>
+              {/* CARD DE STATUS SEFAZ */}
+              {(nfeTargetOrder.nfe?.status === 'AUTHORIZED' || (nfeTargetOrder.nfeIssued && (nfeTargetOrder.nfe?.danfeUrl || nfeTargetOrder.nfeUrl))) ? (
+                <div className={styles.nfeAuthorizedCard}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#4ade80', fontSize: '0.75rem', fontWeight: 700 }}>
+                      <CheckCircle2 size={14} />
+                      <span>NF-E AUTORIZADA PELA SEFAZ-PR</span>
+                    </div>
+                    {nfeTargetOrder.nfe?.issuedAt && (
+                      <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)' }}>
+                        {new Date(nfeTargetOrder.nfe.issuedAt.toDate ? nfeTargetOrder.nfe.issuedAt.toDate() : nfeTargetOrder.nfe.issuedAt).toLocaleString('pt-BR')}
+                      </span>
+                    )}
+                  </div>
+
+                  {(nfeTargetOrder.nfe?.chave || nfeTargetOrder.nfe?.key || nfeTargetOrder.nfeKey) && (
+                    <div>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', display: 'block', marginBottom: '0.25rem', letterSpacing: '0.05em' }}>
+                        CHAVE DE ACESSO (44 DÍGITOS):
+                      </span>
+                      <div className={styles.nfeKeyDisplay}>
+                        <span>{nfeTargetOrder.nfe?.chave || nfeTargetOrder.nfe?.key || nfeTargetOrder.nfeKey}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyKey(nfeTargetOrder.nfe?.chave || nfeTargetOrder.nfe?.key || nfeTargetOrder.nfeKey)}
+                          className={styles.copyKeyBtn}
+                          title="Copiar Chave de Acesso"
+                        >
+                          <Copy size={11} />
+                          <span>{copiedKey ? 'COPIADO' : 'COPIAR'}</span>
+                        </button>
+                      </div>
+                    </div>
                   )}
+
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.25rem' }}>
+                    {(nfeTargetOrder.nfe?.danfeUrl || nfeTargetOrder.nfeUrl) && (
+                      <a
+                        href={nfeTargetOrder.nfe?.danfeUrl || nfeTargetOrder.nfeUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className={styles.nfeEmitActionBtn}
+                        style={{ padding: '0.5rem 0.85rem', fontSize: '0.7rem', textDecoration: 'none' }}
+                      >
+                        <FileText size={12} />
+                        <span>ABRIR DANFE (PDF)</span>
+                        <ExternalLink size={10} />
+                      </a>
+                    )}
+                    {(nfeTargetOrder.nfe?.xmlUrl || nfeTargetOrder.nfeXmlUrl) && (
+                      <a
+                        href={nfeTargetOrder.nfe?.xmlUrl || nfeTargetOrder.nfeXmlUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          color: '#ffffff',
+                          padding: '0.5rem 0.85rem',
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          textDecoration: 'none',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <FileText size={12} />
+                        <span>BAIXAR XML SEFAZ</span>
+                        <ExternalLink size={10} />
+                      </a>
+                    )}
+                  </div>
                 </div>
-                <small style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>
-                  Aceita links diretos do Google Drive, AWS S3, Cloud Storage, Bling, Tiny ou ERP emissor.
-                </small>
-              </div>
+              ) : null}
 
-              <div className={styles.fieldGroup}>
-                <label>CHAVE DE ACESSO NF-E (44 DÍGITOS - OPCIONAL)</label>
-                <input 
-                  type="text" 
-                  placeholder="Ex: 4126 0900 0000 0001 0055 0010 0000 0001 2345 6789" 
-                  maxLength={54}
-                  value={nfeForm.nfeKey} 
-                  onChange={(e) => setNfeForm(prev => ({ ...prev, nfeKey: e.target.value }))}
-                />
-              </div>
+              {/* FORMULÁRIO DE ANEXO MANUAL */}
+              <form onSubmit={handleSaveNfe} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem', marginTop: '0.5rem' }}>
+                <span style={{ fontSize: '0.68rem', color: 'var(--text-muted)', fontWeight: 700, letterSpacing: '0.05em' }}>
+                  VINCULAÇÃO MANUAL OU AJUSTE DE LINKS (OPCIONAL)
+                </span>
 
-              <div className={styles.dispatchModalFooter} style={{ padding: 0, border: 'none', background: 'transparent' }}>
-                {nfeTargetOrder.nfeUrl && (
+                <div className={styles.fieldGroup}>
+                  <label>LINK DIRETO DO PDF DA NF-E (DANFE)</label>
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input 
+                      type="url" 
+                      placeholder="https://.../danfe-pedido.pdf" 
+                      value={nfeForm.nfeUrl} 
+                      onChange={(e) => {
+                        setNfeForm(prev => ({ ...prev, nfeUrl: e.target.value }));
+                        if (nfeError) setNfeError('');
+                      }}
+                      style={{ flex: 1 }}
+                    />
+                    {nfeForm.nfeUrl.trim() && (
+                      <a 
+                        href={nfeForm.nfeUrl.trim()} 
+                        target="_blank" 
+                        rel="noopener noreferrer" 
+                        className={styles.refreshBtn}
+                        style={{ padding: '0 0.85rem', height: 'auto', textDecoration: 'none' }}
+                        title="Testar abertura do link em nova aba"
+                      >
+                        <ExternalLink size={13} />
+                        <span>Testar PDF</span>
+                      </a>
+                    )}
+                  </div>
+                </div>
+
+                <div className={styles.fieldGroup}>
+                  <label>CHAVE DE ACESSO NF-E (44 DÍGITOS)</label>
+                  <input 
+                    type="text" 
+                    placeholder="Ex: 4126 0900 0000 0001 0055 0010 0000 0001 2345 6789" 
+                    maxLength={54}
+                    value={nfeForm.nfeKey} 
+                    onChange={(e) => setNfeForm(prev => ({ ...prev, nfeKey: e.target.value }))}
+                  />
+                </div>
+
+                <div className={styles.dispatchModalFooter} style={{ padding: 0, border: 'none', background: 'transparent', marginTop: '0.5rem' }}>
+                  {nfeTargetOrder.nfeUrl && (
+                    <button 
+                      type="button" 
+                      onClick={handleRemoveNfe} 
+                      disabled={savingNfe}
+                      style={{ marginRight: 'auto', background: 'transparent', border: '1px solid rgba(248, 113, 113, 0.4)', color: '#f87171', padding: '0.65rem 1rem', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}
+                    >
+                      Desanexar NF-e
+                    </button>
+                  )}
+
                   <button 
                     type="button" 
-                    onClick={handleRemoveNfe} 
-                    disabled={savingNfe}
-                    style={{ marginRight: 'auto', background: 'transparent', border: '1px solid rgba(248, 113, 113, 0.4)', color: '#f87171', padding: '0.65rem 1rem', fontSize: '0.72rem', fontWeight: 700, cursor: 'pointer' }}
+                    onClick={() => setNfeModalOpen(false)} 
+                    className={styles.cancelModalBtn}
                   >
-                    Desanexar NF-e
+                    Fechar
                   </button>
-                )}
-
-                <button 
-                  type="button" 
-                  onClick={() => setNfeModalOpen(false)} 
-                  className={styles.cancelModalBtn}
-                >
-                  Cancelar
-                </button>
-                <button 
-                  type="submit" 
-                  disabled={savingNfe} 
-                  className={styles.confirmDispatchBtn}
-                  style={{ backgroundColor: '#a855f7', color: '#ffffff' }}
-                >
-                  <Save size={13} />
-                  <span>{savingNfe ? 'Salvando...' : 'Salvar e Anexar NF-e'}</span>
-                </button>
-              </div>
-            </form>
+                  <button 
+                    type="submit" 
+                    disabled={savingNfe} 
+                    className={styles.confirmDispatchBtn}
+                    style={{ backgroundColor: '#a855f7', color: '#ffffff' }}
+                  >
+                    <Save size={13} />
+                    <span>{savingNfe ? 'Salvando...' : 'Salvar Alterações'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
       )}

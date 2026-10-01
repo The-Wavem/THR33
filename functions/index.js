@@ -20,12 +20,9 @@ const {
   onRequest,
   HttpsError,
 } = require("firebase-functions/v2/https");
-const { onDocumentUpdated } = require("firebase-functions/v2/firestore");
-const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
 const { FieldValue } = require("firebase-admin/firestore");
-const { getStorage } = require("firebase-admin/storage");
 const axios = require("axios");
 const crypto = require("crypto");
 const cors = require("cors")({ origin: true });
@@ -58,40 +55,27 @@ function getDb() {
   return _db;
 }
 
-// Secret oficial do PagBank protegido no Google Secret Manager
-const PAGBANK_TOKEN = defineSecret("PAGBANK_TOKEN");
-
 /**
- * Helper para obter o token seguro em qualquer contexto (producao ou fallback local)
+ * Helper para obter o token do PagBank em qualquer contexto (producao ou homologacao local)
+ * Le diretamente das variaveis de ambiente (.env) nativas do Firebase Functions v2
  */
 function getSecretToken() {
-  try {
-    if (typeof PAGBANK_TOKEN.value === "function") {
-      const val = PAGBANK_TOKEN.value();
-      if (val && val.trim() !== "") return val;
-    }
-  } catch (e) {
-    // Se invocado fora de contexto com secret ativo
-  }
   return process.env.PAGBANK_TOKEN || "";
 }
 
-// Secret da API Fiscal (Nuvem Fiscal / Focus NFe) protegido no Google Secret Manager
-const FISCAL_API_KEY = defineSecret("FISCAL_API_KEY");
-
 /**
- * Helper para obter a chave da API fiscal em qualquer ambiente
+ * Helper centralizado para verificar o modo do PagBank.
+ * Suporta o toggle booleano PAGBANK_SANDBOX ("true" / "false") e PAGBANK_ENV ("sandbox" / "production").
  */
-function getFiscalApiKey() {
-  try {
-    if (typeof FISCAL_API_KEY.value === "function") {
-      const val = FISCAL_API_KEY.value();
-      if (val && val.trim() !== "") return val;
-    }
-  } catch (e) {
-    // Fora de contexto do Secret Manager
+function isSandboxMode() {
+  if (process.env.PAGBANK_SANDBOX === "false" || process.env.PAGBANK_ENV === "production") {
+    return false;
   }
-  return process.env.FISCAL_API_KEY || "";
+  return true;
+}
+
+function getPagBankBaseUrl() {
+  return isSandboxMode() ? "https://sandbox.api.pagseguro.com" : "https://api.pagseguro.com";
 }
 
 /**
@@ -99,7 +83,7 @@ function getFiscalApiKey() {
  * O front-end precisa dessa chave para criptografar os dados do cartao do cliente antes do envio (PCI-Free).
  */
 exports.getPublicKey = onRequest(
-  { region: FUNCTION_REGION, secrets: [PAGBANK_TOKEN], cors: true },
+  { region: FUNCTION_REGION, cors: true },
   (req, res) => {
     cors(req, res, async () => {
       if (req.method !== "POST") {
@@ -107,10 +91,7 @@ exports.getPublicKey = onRequest(
       }
 
       const token = getSecretToken();
-      const isProduction = process.env.PAGBANK_ENV === "production";
-      const BASE_URL = isProduction
-        ? "https://api.pagseguro.com"
-        : "https://sandbox.api.pagseguro.com";
+      const BASE_URL = getPagBankBaseUrl();
 
       const HEADERS = {
         Authorization: `Bearer ${token}`,
@@ -155,7 +136,7 @@ exports.getPublicKey = onRequest(
  * Suporta Pix, Boleto ou Cartao de Credito com token criptografado.
  */
 exports.createOrder = onRequest(
-  { region: FUNCTION_REGION, secrets: [PAGBANK_TOKEN], cors: true },
+  { region: FUNCTION_REGION, cors: true },
   (req, res) => {
     cors(req, res, async () => {
       if (req.method !== "POST") {
@@ -169,10 +150,7 @@ exports.createOrder = onRequest(
       }
 
       const token = getSecretToken();
-      const isProduction = process.env.PAGBANK_ENV === "production";
-      const BASE_URL = isProduction
-        ? "https://api.pagseguro.com"
-        : "https://sandbox.api.pagseguro.com";
+      const BASE_URL = getPagBankBaseUrl();
 
       const HEADERS = {
         Authorization: `Bearer ${token}`,
@@ -327,7 +305,7 @@ exports.createOrder = onRequest(
  * Callable Function com autoridade server-side, validacao de precos em Firestore e itens fiscais.
  */
 exports.createPagBankOrder = onCall(
-  { region: FUNCTION_REGION, secrets: [PAGBANK_TOKEN], cors: true },
+  { region: FUNCTION_REGION, cors: true },
   async (request) => {
     // 1. Identifica usuario autenticado ou visitante
     const userId = request.auth
@@ -351,10 +329,7 @@ exports.createPagBankOrder = onCall(
       );
     }
 
-    const isSandbox = process.env.PAGBANK_ENV !== "production";
-    const baseUrl = isSandbox
-      ? "https://sandbox.api.pagseguro.com"
-      : "https://api.pagseguro.com";
+    const baseUrl = getPagBankBaseUrl();
 
     // 2. Recalcula precos server-side via Firestore (colecao products)
     const db = getDb();
@@ -407,44 +382,35 @@ exports.createPagBankOrder = onCall(
       calculatedTotal - totalDeductionInCents,
     );
 
-    // 3. Montar objeto Charge de acordo com o metodo de pagamento
+    // 3. Montar objeto Charge para Cartao de Credito (se aplicavel)
     const referenceId = `THR-${Date.now()}-${userId.slice(0, 5)}`;
-    let chargePayload = {
-      reference_id: referenceId,
-      amount: {
-        value: finalAmountInCents,
-        currency: "BRL",
-      },
-    };
+    let chargePayload = null;
 
-    if (paymentMethod.type === "PIX") {
-      chargePayload.payment_method = {
-        type: "PIX",
-      };
-      // Expiracao do Pix: 24 horas no padrao PagBank
-      const expirationDate = new Date();
-      expirationDate.setHours(expirationDate.getHours() + 24);
-      chargePayload.payment_method.pix = {
-        expiration_date: expirationDate.toISOString(),
-      };
-    } else if (paymentMethod.type === "CREDIT_CARD") {
-      chargePayload.payment_method = {
-        type: "CREDIT_CARD",
-        installments: Number(paymentMethod.installments || 1),
-        capture: true,
-        soft_descriptor: "THR33",
-        card: {
-          encrypted: paymentMethod.cardEncrypted,
-          holder: {
-            name: (
-              paymentMethod.holderName ||
-              customer.name ||
-              "CLIENTE THR33"
-            ).toUpperCase(),
+    if (paymentMethod.type === "CREDIT_CARD") {
+      chargePayload = {
+        reference_id: `CHAR-${referenceId}`,
+        amount: {
+          value: finalAmountInCents,
+          currency: "BRL",
+        },
+        payment_method: {
+          type: "CREDIT_CARD",
+          installments: Number(paymentMethod.installments || 1),
+          capture: true,
+          soft_descriptor: "THR33",
+          card: {
+            encrypted: paymentMethod.cardEncrypted,
+            holder: {
+              name: (
+                paymentMethod.holderName ||
+                customer.name ||
+                "CLIENTE THR33"
+              ).toUpperCase(),
+            },
           },
         },
       };
-    } else {
+    } else if (paymentMethod.type !== "PIX") {
       throw new HttpsError(
         "invalid-argument",
         "Metodo de pagamento invalido.",
@@ -503,9 +469,24 @@ exports.createPagBankOrder = onCall(
           postal_code: cleanCep.padEnd(8, "0").slice(0, 8),
         },
       },
-      charges: [chargePayload],
       notification_urls: [webhookUrl],
     };
+
+    // No PagBank v4: PIX utiliza array de qr_codes na raiz; Cartao de Credito utiliza charges
+    if (paymentMethod.type === "PIX") {
+      const expirationDate = new Date();
+      expirationDate.setHours(expirationDate.getHours() + 24);
+      orderPayload.qr_codes = [
+        {
+          amount: {
+            value: finalAmountInCents,
+          },
+          expiration_date: expirationDate.toISOString(),
+        },
+      ];
+    } else if (paymentMethod.type === "CREDIT_CARD" && chargePayload) {
+      orderPayload.charges = [chargePayload];
+    }
 
     // 5. Chamar a API PagBank Orders
     let pagbankOrder = null;
@@ -546,29 +527,15 @@ exports.createPagBankOrder = onCall(
       pagbankOrder = {
         id: `ORDE_${Date.now()}`,
         reference_id: referenceId,
-        charges: [
+        charges: paymentMethod.type === "CREDIT_CARD" ? [
           {
             id: `CHAR_${Date.now()}`,
             reference_id: referenceId,
-            status: paymentMethod.type === "PIX" ? "WAITING" : "PAID",
+            status: "PAID",
             amount: { value: finalAmountInCents, currency: "BRL" },
-            payment_method: chargePayload.payment_method,
-            qr_codes:
-              paymentMethod.type === "PIX"
-                ? [
-                    {
-                      text: `00020126580014br.gov.bcb.pix0136pagbank-thr33-${referenceId}`,
-                      links: [
-                        {
-                          rel: "QRCODE.PNG",
-                          href: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=THR33-PIX-${referenceId}`,
-                        },
-                      ],
-                    },
-                  ]
-                : null,
-          },
-        ],
+            payment_method: chargePayload?.payment_method,
+          }
+        ] : [],
         qr_codes:
           paymentMethod.type === "PIX"
             ? [
@@ -584,18 +551,17 @@ exports.createPagBankOrder = onCall(
               ]
             : null,
       };
-      charge = pagbankOrder.charges[0];
+      charge = pagbankOrder.charges?.[0] || null;
     }
 
-    // 6. Persistir no Firestore com estrutura preparada para NF-e
+    // 6. Persistir no Firestore
     const orderRef = db.collection("orders").doc(referenceId);
-    const initialStatus =
-      charge.status === "PAID" || charge.status === "AUTHORIZED"
-        ? "pagamento_aprovado"
-        : "aguardando_pagamento";
+    const chargeObj = charge || pagbankOrder.charges?.[0] || null;
+    const isPaid = chargeObj?.status === "PAID" || chargeObj?.status === "AUTHORIZED";
+    const initialStatus = isPaid ? "pagamento_aprovado" : "aguardando_pagamento";
 
     const qrCodeObj =
-      charge.qr_codes?.[0] || pagbankOrder.qr_codes?.[0] || null;
+      pagbankOrder.qr_codes?.[0] || chargeObj?.qr_codes?.[0] || null;
     const pixQrCodeUrl =
       qrCodeObj?.links?.find(
         (l) => l.rel === "QRCODE.PNG" || l.media === "image/png",
@@ -605,17 +571,14 @@ exports.createPagBankOrder = onCall(
     await orderRef.set({
       orderId: referenceId,
       pagbankOrderId: pagbankOrder.id,
-      pagbankChargeId: charge.id || null,
+      pagbankChargeId: chargeObj?.id || null,
       userId: userId,
       clientName: customer.name,
       clientEmail: customer.email,
       clientCpf: cleanTaxId,
       clientPhone: cleanPhone,
       status: initialStatus,
-      paidAt:
-        charge.status === "PAID" || charge.status === "AUTHORIZED"
-          ? FieldValue.serverTimestamp()
-          : null,
+      paidAt: isPaid ? FieldValue.serverTimestamp() : null,
       paymentMethod:
         paymentMethod.type === "CREDIT_CARD"
           ? "Cartão de Crédito"
@@ -654,7 +617,7 @@ exports.createPagBankOrder = onCall(
     return {
       success: true,
       orderId: referenceId,
-      status: charge.status,
+      status: chargeObj?.status || (paymentMethod.type === "PIX" ? "WAITING" : "WAITING"),
       qrCode: qrCodeObj,
     };
   },
@@ -682,10 +645,7 @@ exports.createSecureOrder = onRequest(
         let pagbankData = null;
 
         if (token && token.trim() !== "" && !token.includes("SEU_TOKEN")) {
-          const isSandbox = process.env.PAGBANK_ENV !== "production";
-          const baseUrl = isSandbox
-            ? "https://sandbox.api.pagseguro.com"
-            : "https://api.pagseguro.com";
+          const baseUrl = getPagBankBaseUrl();
           const response = await axios.post(`${baseUrl}/orders`, orderPayload, {
             headers: {
               Authorization: `Bearer ${token}`,
@@ -694,13 +654,12 @@ exports.createSecureOrder = onRequest(
           });
           pagbankData = response.data;
         } else {
-          data = {
+          pagbankData = {
             id: `ORDE_${Date.now()}`,
             reference_id: referenceId,
             qr_codes: orderPayload.qr_codes || null,
             charges: orderPayload.charges || null,
           };
-          pagbankData = data;
         }
 
         const db = getDb();
@@ -749,7 +708,6 @@ exports.pagbankWebhook = onRequest(
     cors: false,
     timeoutSeconds: 60,
     memory: "256MiB",
-    secrets: [PAGBANK_TOKEN],
   },
   async (req, res) => {
     if (req.method !== "POST") {
@@ -830,6 +788,30 @@ exports.pagbankWebhook = onRequest(
         }
       }
 
+      // Fallback 1: Localiza pelo ID do pedido PagBank (ordens Pix criadas sem chargeId imediato)
+      if (!orderDoc && orderId) {
+        const queryOrdersByPagbankId = await db
+          .collection("orders")
+          .where("pagbankOrderId", "==", orderId)
+          .limit(1)
+          .get();
+        if (!queryOrdersByPagbankId.empty) {
+          orderDoc = queryOrdersByPagbankId.docs[0];
+          orderRef = orderDoc.ref;
+        } else {
+          const queryPedidosByPagbankId = await db
+            .collection("pedidos")
+            .where("pagbankOrderId", "==", orderId)
+            .limit(1)
+            .get();
+          if (!queryPedidosByPagbankId.empty) {
+            orderDoc = queryPedidosByPagbankId.docs[0];
+            orderRef = orderDoc.ref;
+          }
+        }
+      }
+
+      // Fallback 2: Localiza pelo ID da cobranca (Cartao de Credito)
       if (!orderDoc && charge?.id) {
         const queryOrders = await db
           .collection("orders")
@@ -860,7 +842,20 @@ exports.pagbankWebhook = onRequest(
 
       const orderData = orderDoc.data();
 
-      // 3. Idempotencia: evita reprocessar pedidos ja finalizados com o mesmo status
+      // 3. Idempotencia estrita: se o pedido ja estiver pago ou em estados posteriores, responde 200 imediatamente
+      const isAlreadyPaid =
+        orderData.status === "pagamento_aprovado" ||
+        orderData.status === "pago" ||
+        orderData.status === "paid" ||
+        orderData.status === "em_producao" ||
+        orderData.status === "saiu_para_entrega" ||
+        orderData.status === "entregue";
+
+      if (isAlreadyPaid && (pagbankStatus === "PAID" || pagbankStatus === "AUTHORIZED")) {
+        logger.info(`Pedido ${referenceId || orderId} ja esta com pagamento confirmado (${orderData.status}). Respondendo 200 imediatamente.`);
+        return res.status(200).json({ received: true, alreadyPaid: true });
+      }
+
       const currentPagbankStatus = orderData.pagbank?.status || orderData["pagbank.status"];
       if (
         orderData.status === internalStatus &&
@@ -876,6 +871,18 @@ exports.pagbankWebhook = onRequest(
         if (!freshSnap.exists) return;
         const freshData = freshSnap.data() || {};
 
+        const freshIsAlreadyPaid =
+          freshData.status === "pagamento_aprovado" ||
+          freshData.status === "pago" ||
+          freshData.status === "paid" ||
+          freshData.status === "em_producao" ||
+          freshData.status === "saiu_para_entrega" ||
+          freshData.status === "entregue";
+
+        if (freshIsAlreadyPaid && (pagbankStatus === "PAID" || pagbankStatus === "AUTHORIZED")) {
+          return;
+        }
+
         const updateData = {
           status: internalStatus,
           pagbank: {
@@ -889,10 +896,6 @@ exports.pagbankWebhook = onRequest(
 
         if (pagbankStatus === "PAID" || pagbankStatus === "AUTHORIZED") {
           updateData.paidAt = FieldValue.serverTimestamp();
-          updateData.nfe = {
-            ...(freshData.nfe || {}),
-            status: "READY_FOR_EMISSION",
-          };
 
           // Baixa de estoque transacional se itens estiverem presentes
           const itemsList = freshData.items || orderData.items;
@@ -937,216 +940,3 @@ exports.pagbankWebhook = onRequest(
     }
   },
 );
-
-/**
- * 6. CONEXAO COM O FLUXO DE NF-E (onOrderPaidEmitNFe)
- * Trigger no Firestore v2 acionado no momento da transicao para pagamento_aprovado ou quando sinalizado READY_FOR_EMISSION.
- * Suporta integracao com API Fiscal REST (Nuvem Fiscal / Focus NFe) e fallback seguro em homologacao/mock.
- */
-exports.onOrderPaidEmitNFe = onDocumentUpdated(
-  {
-    document: "orders/{orderId}",
-    region: FUNCTION_REGION,
-    secrets: [FISCAL_API_KEY],
-  },
-  async (event) => {
-    const beforeData = event.data.before?.data() || {};
-    const afterData = event.data.after?.data() || {};
-    const orderId = event.params.orderId;
-    const orderRef = event.data.after.ref;
-
-    const wasNotPaid =
-      beforeData.status !== "pagamento_aprovado" &&
-      beforeData.status !== "PAID" &&
-      beforeData.status !== "pago" &&
-      beforeData.status !== "Aprovado";
-
-    const isNowPaid =
-      afterData.status === "pagamento_aprovado" ||
-      afterData.status === "PAID" ||
-      afterData.status === "pago" ||
-      afterData.status === "Aprovado";
-
-    const isPaidTransition = wasNotPaid && isNowPaid;
-    const isReadyForEmission = afterData.nfe?.status === "READY_FOR_EMISSION";
-
-    // Idempotencia estrita: impede execucao concorrente ou reemissao
-    if (!isPaidTransition && !isReadyForEmission) return null;
-    if (
-      afterData.nfe?.status === "ISSUED" ||
-      afterData.nfe?.status === "PROCESSING" ||
-      afterData.nfeIssued === true
-    ) {
-      return null;
-    }
-
-    // Bloqueio atomico de status para evitar duplicacao em caso de retry
-    await orderRef.update({
-      "nfe.status": "PROCESSING",
-      "nfe.processingAt": FieldValue.serverTimestamp(),
-    });
-
-    try {
-      const isPR = (afterData.shippingAddress?.state || "PR").toUpperCase() === "PR";
-      const cfopPadrao = isPR ? "5102" : "6102";
-
-      // 1. Mapeamento dos Itens do Pedido para o Padrao Fiscal de Vestuario
-      const itemsPayload = (afterData.items || []).map((item, index) => ({
-        numero_item: index + 1,
-        codigo_produto: item.id || item.reference_id || `PROD-${index + 1}`,
-        descricao: item.title || item.name || "Vestuario Streetwear THR33",
-        codigo_ncm: item.ncm || "6109.10.00", // Camisetas de malha de algodao
-        cfop: item.cfop || cfopPadrao,
-        unidade_comercial: "UN",
-        quantidade_comercial: Number(item.quantity || 1),
-        valor_unitario_comercial: Number(item.price || 0),
-        valor_bruto: Number(((item.price || 0) * (item.quantity || 1)).toFixed(2)),
-        unidade_tributavel: "UN",
-        quantidade_tributavel: Number(item.quantity || 1),
-        valor_unitario_tributavel: Number(item.price || 0),
-        origem: 0, // Nacional
-        icms: {
-          csosn: "102", // Simples Nacional sem permissao de credito
-        },
-        pis: { situacao_tributaria: "99" },
-        cofins: { situacao_tributaria: "99" },
-      }));
-
-      // 2. Payload da NF-e Modelo 55
-      const nfePayload = {
-        natureza_operacao: "Venda de mercadoria",
-        tipo_documento: 1, // Saida
-        finalidade_emissao: 1, // Normal
-        consumidor_final: 1, // Consumidor final
-        presenca_comprador: 2, // Internet
-        destinatario: {
-          cpf: (afterData.customer?.cpf || afterData.clientCpf || "12345678909").replace(/\D/g, ""),
-          nome: afterData.customer?.name || afterData.clientName || "Consumidor Final",
-          indicador_inscricao_estadual: 9, // Nao contribuinte
-          endereco: {
-            logradouro: afterData.shippingAddress?.street || "Rua Comendador Araujo",
-            numero: afterData.shippingAddress?.number || "333",
-            bairro: afterData.shippingAddress?.neighborhood || "Centro",
-            codigo_municipio: afterData.shippingAddress?.ibgeCode || "4106902", // Curitiba como fallback
-            nome_municipio: afterData.shippingAddress?.city || "Curitiba",
-            uf: afterData.shippingAddress?.state || "PR",
-            cep: (afterData.shippingAddress?.cep || "80420000").replace(/\D/g, ""),
-          },
-        },
-        itens: itemsPayload,
-        pagamento: {
-          formas_pagamento: [
-            {
-              meio_pagamento: (afterData.paymentMethod || "").toLowerCase().includes("pix") ? "17" : "03",
-              valor: Number(afterData.total || afterData.totalAmount || afterData.amount || 0),
-            },
-          ],
-        },
-        informacoes_adicionais_fisco: "Documento emitido por ME ou EPP optante pelo Simples Nacional. Nao gera direito a credito fiscal de IPI.",
-      };
-
-      const fiscalKey = getFiscalApiKey();
-      let fiscalResult = null;
-      let danfeUrl = "";
-      let xmlUrl = "";
-
-      if (fiscalKey && fiscalKey.trim() !== "" && !fiscalKey.includes("SEU_TOKEN") && !fiscalKey.includes("sua_chave")) {
-        const fiscalBaseUrl = process.env.FISCAL_ENV === "producao"
-          ? "https://api.nuvemfiscal.com.br/v2"
-          : "https://api.sandbox.nuvemfiscal.com.br/v2";
-
-        const apiResponse = await fetch(`${fiscalBaseUrl}/nfe`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${fiscalKey}`,
-          },
-          body: JSON.stringify(nfePayload),
-        });
-
-        fiscalResult = await apiResponse.json();
-
-        if (!apiResponse.ok || fiscalResult.status === "rejeitado") {
-          throw new Error(fiscalResult.mensagem || JSON.stringify(fiscalResult.erros || fiscalResult));
-        }
-
-        // Upload para Firebase Storage se houver URLs retornadas
-        try {
-          const bucket = getStorage().bucket();
-          if (fiscalResult.danfe_url) {
-            const danfePdfBuffer = await fetch(fiscalResult.danfe_url).then((r) => r.arrayBuffer());
-            const pdfFile = bucket.file(`nfe/${orderId}/danfe.pdf`);
-            await pdfFile.save(Buffer.from(danfePdfBuffer), { contentType: "application/pdf" });
-            const [signedPdf] = await pdfFile.getSignedUrl({ action: "read", expires: "03-01-2035" });
-            danfeUrl = signedPdf;
-          } else {
-            danfeUrl = fiscalResult.danfe_url || "";
-          }
-
-          if (fiscalResult.xml_url) {
-            const xmlBuffer = await fetch(fiscalResult.xml_url).then((r) => r.arrayBuffer());
-            const xmlFile = bucket.file(`nfe/${orderId}/nfe.xml`);
-            await xmlFile.save(Buffer.from(xmlBuffer), { contentType: "application/xml" });
-            const [signedXml] = await xmlFile.getSignedUrl({ action: "read", expires: "03-01-2035" });
-            xmlUrl = signedXml;
-          } else {
-            xmlUrl = fiscalResult.xml_url || "";
-          }
-        } catch (storageErr) {
-          logger.warn(`Storage upload fallback para links diretos da API Fiscal: ${storageErr.message}`);
-          danfeUrl = fiscalResult.danfe_url || danfeUrl;
-          xmlUrl = fiscalResult.xml_url || xmlUrl;
-        }
-      } else {
-        // Mock seguro para desenvolvimento local e homologacao (Sem custo de chave externa)
-        const year = new Date().getFullYear().toString().slice(-2);
-        const month = String(new Date().getMonth() + 1).padStart(2, "0");
-        const cnpjEmitente = (process.env.EMISSOR_CNPJ || "00000000000100").replace(/\D/g, "").padStart(14, "0");
-        const randomCode = Math.floor(100000000 + Math.random() * 900000000);
-        const generatedKey = `41${year}${month}${cnpjEmitente}55001${String(randomCode).slice(0, 9)}1${String(randomCode).slice(-8)}`;
-
-        const storageBucket = admin.app().options.storageBucket || "thr33-streetwear.firebasestorage.app";
-        danfeUrl = `https://storage.googleapis.com/${storageBucket}/nfe/${orderId}/danfe.pdf`;
-        xmlUrl = `https://storage.googleapis.com/${storageBucket}/nfe/${orderId}/nfe.xml`;
-
-        fiscalResult = {
-          chave_acesso: generatedKey,
-          numero: String(Math.floor(1000 + Math.random() * 9000)),
-          serie: "1",
-        };
-      }
-
-      await orderRef.update({
-        nfeIssued: true,
-        nfeKey: fiscalResult.chave_acesso,
-        nfeUrl: danfeUrl,
-        nfeXmlUrl: xmlUrl,
-        nfeIssuedAt: FieldValue.serverTimestamp(),
-        "nfe.status": "ISSUED",
-        "nfe.issued": true,
-        "nfe.key": fiscalResult.chave_acesso,
-        "nfe.number": fiscalResult.numero || null,
-        "nfe.series": fiscalResult.serie || "1",
-        "nfe.danfeUrl": danfeUrl,
-        "nfe.xmlUrl": xmlUrl,
-        "nfe.issuedAt": FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-
-      logger.info(`NF-e emitida e vinculada com sucesso ao pedido ${orderId}: Chave ${fiscalResult.chave_acesso}`);
-    } catch (error) {
-      logger.error(`[NFe Engine] Falha na emissao da NF-e para pedido ${orderId}:`, error);
-      await orderRef.update({
-        "nfe.status": "ERROR",
-        "nfe.errorMessage": error.message,
-        "nfe.failedAt": FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    }
-
-    return null;
-  }
-);
-
-// Alias para manter compatibilidade retroativa
-exports.onOrderPaidTrigger = exports.onOrderPaidEmitNFe;

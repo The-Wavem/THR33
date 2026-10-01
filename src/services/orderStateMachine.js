@@ -52,7 +52,7 @@ export function normalizeOrderStatus(status) {
   if (s.includes('aguardando') || s.includes('pendente') || s.includes('waiting')) {
     return ORDER_STATUSES.AGUARDANDO_PAGAMENTO;
   }
-  if (s.includes('aprovado') || s.includes('paid') || s.includes('authorized') || s.includes('confirmado')) {
+  if (s.includes('aprovado') || s.includes('pago') || s.includes('paid') || s.includes('authorized') || s.includes('confirmado')) {
     return ORDER_STATUSES.PAGAMENTO_APROVADO;
   }
   if (s.includes('produ') || s.includes('separ') || s.includes('confecc')) {

@@ -278,7 +278,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
         <span className={styles.breadcrumbSeparator}>/</span>
         <Link to="/catalogo" className={styles.breadcrumbLink}>CATÁLOGO</Link>
         <span className={styles.breadcrumbSeparator}>/</span>
-        <span className={styles.breadcrumbActive}>{product.name.toUpperCase()}</span>
+        <span className={styles.breadcrumbActive}>{String(product?.name || product?.title || 'PRODUTO').toUpperCase()}</span>
       </nav>
 
       {/* GRADE PRINCIPAL: GALERIA + INFOS DE COMPRA */}
@@ -291,7 +291,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
             </button>
             <img 
               src={images[selectedImageIndex] || images[0]} 
-              alt={`${product.name} - Foto ${selectedImageIndex + 1}`} 
+              alt={`${product?.name || product?.title || 'Produto'} - Foto ${selectedImageIndex + 1}`} 
               className={styles.mainImage}
             />
             <button onClick={handleNextImage} className={`${styles.navArrow} ${styles.nextArrow}`} aria-label="Próxima imagem">
@@ -317,10 +317,10 @@ export function ProdutoDetalhe({ onAddToCart }) {
         <section className={styles.infoSection}>
           <div className={styles.headerInfo}>
             <div className={styles.badgeRow}>
-              <span className={styles.fitBadge}>{(product.fit || 'boxy').toUpperCase()} FIT</span>
-              <span className={styles.dropBadge}>{product.drop === 'leak-two' ? 'LEAK TWO' : (product.drop?.toUpperCase() || 'DROP EXCLUSIVO')}</span>
+              <span className={styles.fitBadge}>{String(product?.fit || 'boxy').toUpperCase()} FIT</span>
+              <span className={styles.dropBadge}>{product?.drop === 'leak-two' ? 'LEAK TWO' : String(product?.drop || 'DROP EXCLUSIVO').toUpperCase()}</span>
             </div>
-            <h1 className={styles.title}>{product.name}</h1>
+            <h1 className={styles.title}>{product?.name || product?.title || 'Produto THR33'}</h1>
             
             {/* Bloco de Preços */}
             <div className={styles.priceContainer}>
@@ -351,14 +351,14 @@ export function ProdutoDetalhe({ onAddToCart }) {
           <div className={styles.colorSelector}>
             <div className={styles.selectorHeader}>
               <span className={styles.selectorLabel}>COR:</span>
-              <span className={styles.selectedValue}>{selectedColor.name}</span>
+              <span className={styles.selectedValue}>{selectedColor?.name || selectedColor?.id || 'Preto Piano'}</span>
             </div>
             <div className={styles.colorSwatches}>
               {colors.map((c) => (
                 <button
                   key={c.id}
                   type="button"
-                  className={`${styles.colorBtn} ${selectedColor.id === c.id ? styles.activeColor : ''}`}
+                  className={`${styles.colorBtn} ${selectedColor?.id === c.id ? styles.activeColor : ''}`}
                   onClick={() => setSelectedColor(c)}
                   style={{ backgroundColor: c.hex }}
                   title={c.name}

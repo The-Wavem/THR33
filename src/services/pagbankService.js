@@ -44,7 +44,15 @@ export const detectCardBrand = (number = '') => {
 };
 
 const PAGBANK_TOKEN = import.meta.env.VITE_PAGBANK_TOKEN || '';
-const IS_SANDBOX = import.meta.env.VITE_PAGBANK_ENV !== 'production';
+
+export const isSandboxMode = () => {
+  if (import.meta.env.VITE_PAGBANK_SANDBOX === 'false' || import.meta.env.VITE_PAGBANK_ENV === 'production') {
+    return false;
+  }
+  return true;
+};
+
+const IS_SANDBOX = isSandboxMode();
 
 /**
  * PASSO 2: Helper de Criptografia Client-Side (PCI-Free)

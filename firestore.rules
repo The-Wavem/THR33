@@ -14,20 +14,24 @@ service cloud.firestore {
     function isAdmin() {
       return isAuthenticated() && (
         request.auth.token.admin == true ||
-        request.auth.token.email in ['admin@thr33.com', 'sac@thr33.com', 'contato@thr33.com']
+        request.auth.token.email in [
+          'contato.thewavem@gmail.com',
+          'thewavem@gmail.com',
+          'admin@thr33.com',
+          'sac@thr33.com',
+          'contato@thr33.com'
+        ] ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true))
       );
     }
 
     // Colecao principal de pedidos da THR33 ('orders')
-    // Leitura permitida apenas para o cliente proprietario ou administradores
-    // Criacao permitida apenas com status inicial seguro (aguardando_pagamento / pendente)
-    // Atualizacao de status, pagamentos e NF-e blindada contra alteracoes no cliente (exclusivo Backend Admin SDK)
     match /orders/{orderId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && 
-        (request.resource.data.userId == request.auth.uid) &&
-        (request.resource.data.status in ['aguardando_pagamento', 'pendente']) &&
-        (!('nfe' in request.resource.data) || request.resource.data.nfe.issued == false);
+      allow read: if (isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin())) || resource.data.userId == 'guest';
+      allow create: if (isAuthenticated() && request.resource.data.userId == request.auth.uid) ||
+        (request.resource.data.userId == 'guest' || !('userId' in request.resource.data) || request.resource.data.userId == null);
       allow update: if isAdmin() || (
         isAuthenticated() && 
         resource.data.userId == request.auth.uid &&
@@ -54,8 +58,8 @@ service cloud.firestore {
 
     // Colecao de fallback de pedidos ('pedidos')
     match /pedidos/{orderId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
-      allow create: if isAuthenticated() && (request.resource.data.status in ['aguardando_pagamento', 'pendente']);
+      allow read: if (isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin())) || resource.data.userId == 'guest';
+      allow create: if true;
       allow update: if isAdmin();
       allow delete: if isAdmin();
 
@@ -65,10 +69,28 @@ service cloud.firestore {
       }
     }
 
-    // Catalogo de produtos: leitura publica e edicao exclusiva para admin
+    // Catalogo de produtos: leitura publica; criacao e remocao restrita a admin;
+    // atualizacao permitida para admin OU incremento de metricas de telemetria publica
     match /products/{productId} {
       allow read: if true;
-      allow write: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'views', 'lastViewedAt', 'addedToCart', 'lastAddedToCartAt', 
+          'removedFromCart', 'lastRemovedFromCartAt', 'purchases', 'lastSoldAt'
+        ])
+      );
+    }
+
+    // Campanhas de marketing e UTMs
+    match /campaigns/{campaignId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'cartAdds', 'purchases', 'revenue', 'lastCartAddAt', 'lastPurchaseAt'
+        ])
+      );
     }
 
     // Cupons de desconto: leitura publica e gerenciamento por admin
@@ -77,13 +99,29 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    // Configuracoes da vitrine e da loja (Bento Grid, Carrossel Hero)
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /storefront/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Sessoes ativas do checkout (recuperacao de carrinho e telemetria)
+    match /checkout_sessions/{sessionId} {
+      allow read, write: if true;
+    }
+
     // Perfis de usuarios: leitura e escrita apenas pelo titular da conta ou admin
     match /users/{userId} {
       allow read, write: if isOwner(userId) || isAdmin();
     }
 
-    // Sessões de telemetria anonima e analitica
-    match /analytics/{docId} {
+    // Sessoes de telemetria anonima e analitica
+    match /analytics/{docId=**} {
       allow read, write: if true;
     }
   }

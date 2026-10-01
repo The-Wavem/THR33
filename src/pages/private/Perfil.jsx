@@ -252,7 +252,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
             carrier: data.carrier || null,
             trackingUrl: data.trackingUrl || null,
             nfeUrl: data.nfe?.danfeUrl || data.nfeUrl || null,
-            nfeKey: data.nfe?.key || data.nfeKey || null,
+            nfeKey: data.nfe?.chave || data.nfe?.key || data.nfeKey || null,
             nfeXmlUrl: data.nfe?.xmlUrl || data.nfeXmlUrl || null,
             nfeIssued: Boolean(data.nfeIssued || data.nfe?.issued),
             nfeIssuedAt: data.nfe?.issuedAt || data.nfeIssuedAt || null,
