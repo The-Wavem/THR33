@@ -826,12 +826,23 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
     let finalDocId = pagbankRes?.orderId || null;
 
+    const chargeObj = pagbankData?.charges?.[0];
+    const pixQrCodeUrl =
+      chargeObj?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      pagbankData?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      (paymentMethod === 'PIX' ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=THR33-PIX-${orderRefId}` : null);
+
+    const pixCopiaECola =
+      chargeObj?.qr_code?.text ||
+      pagbankData?.qr_codes?.[0]?.text ||
+      (paymentMethod === 'PIX' ? `00020126580014br.gov.bcb.pix0136pagbank-thr33-${orderRefId}` : null);
+
     const orderData = {
       ...baseOrderData,
       status: initialStatus,
       paidAt,
-      pixQrCodeUrl: pagbankData?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href || (paymentMethod === 'PIX' ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=THR33-PIX-${orderRefId}` : null),
-      pixCopiaECola: pagbankData?.qr_codes?.[0]?.text || (paymentMethod === 'PIX' ? `00020126580014br.gov.bcb.pix0136pagbank-thr33-${orderRefId}` : null),
+      pixQrCodeUrl,
+      pixCopiaECola,
       pixExpiresAt: paymentMethod === 'PIX' ? new Date(Date.now() + 30 * 60 * 1000).toISOString() : null,
       pagbank: pagbankData ? {
         orderId: pagbankData.id || null,
@@ -1030,8 +1041,26 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     }
   };
 
+  const getLivePixCopiaECola = () => {
+    return (
+      pagbankResult?.charges?.[0]?.qr_code?.text ||
+      pagbankResult?.qr_codes?.[0]?.text ||
+      pagbankResult?.pix?.text ||
+      "00020101021226850014br.gov.bcb.pix2563api-h.pagseguro.com/pix/v2/mock-thr335204899953039865802BR5921Pagseguro Internet SA6009SAO PAULO62070503***63045677"
+    );
+  };
+
+  const getLivePixQrCodeUrl = () => {
+    return (
+      pagbankResult?.charges?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      pagbankResult?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      pagbankResult?.pix?.qrCodeUrl ||
+      null
+    );
+  };
+
   const handleCopyPix = () => {
-    const pixCode = pagbankResult?.qr_codes?.[0]?.text || pagbankResult?.pix?.text || "00020126580014br.gov.bcb.pix0136thr33-sandbox-pagbank@thr33.com5204000053039865405189.905802BR5915THR33 ATELIE STREETWEAR6008CURITIBA62070503***6304E2CA";
+    const pixCode = getLivePixCopiaECola();
     navigator.clipboard.writeText(pixCode);
     setCopiedPix(true);
     setTimeout(() => setCopiedPix(false), 2500);
@@ -1105,9 +1134,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 </p>
                 
                 <div className={styles.qrCodeContainer}>
-                  {Boolean(pagbankResult?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href || pagbankResult?.pix?.qrCodeUrl) ? (
+                  {Boolean(getLivePixQrCodeUrl()) ? (
                     <img 
-                      src={pagbankResult?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href || pagbankResult?.pix?.qrCodeUrl} 
+                      src={getLivePixQrCodeUrl()} 
                       alt="QR Code Pix PagBank" 
                       className={styles.qrCodeLiveImage} 
                     />
@@ -1126,7 +1155,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                   <input 
                     type="text" 
                     readOnly 
-                    value={pagbankResult?.qr_codes?.[0]?.text || pagbankResult?.pix?.text || "00020126580014br.gov.bcb.pix0136thr33-sandbox-pagbank@thr33.com..."} 
+                    value={getLivePixCopiaECola()} 
                     className={styles.pixInput} 
                   />
                   <button type="button" onClick={handleCopyPix} className={styles.copyBtn}>

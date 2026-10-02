@@ -242,15 +242,23 @@ exports.createOrder = onRequest(
           },
         };
       } else if (paymentMethod.type === "PIX") {
-        delete orderPayload.charges;
-        orderPayload.qr_codes = [
+        // Estrutura oficial PagBank Orders v2: charges[0].payment_method.type = "PIX"
+        orderPayload.charges = [
           {
+            reference_id: `CHAR_${cleanRefId}`,
+            description: `Cobranca Pix pedido ${cleanRefId}`,
             amount: {
               value: Math.round(Number(paymentMethod.amount || 0) * 100),
+              currency: "BRL",
             },
-            expiration_date: new Date(
-              Date.now() + 24 * 60 * 60 * 1000,
-            ).toISOString(),
+            payment_method: {
+              type: "PIX",
+              pix: {
+                expiration_date: new Date(
+                  Date.now() + 30 * 60 * 1000,
+                ).toISOString(),
+              },
+            },
           },
         ];
       }
@@ -276,41 +284,44 @@ exports.createOrder = onRequest(
             return res.status(response.status).json(data);
           }
         } else {
-          // Mock para homologacao local
+          // Mock estruturado v2 para homologacao local
+          const mockPixText = `00020101021226850014br.gov.bcb.pix2563api-h.pagseguro.com/pix/v2/mock-${cleanRefId}5204899953039865802BR5921Pagseguro Internet SA6009SAO PAULO62070503***63045677`;
+          const mockChargeId = `CHAR_${Date.now()}`;
           data = {
             id: `ORDE_${Date.now()}`,
             reference_id: cleanRefId,
-            charges:
-              paymentMethod.type === "CREDIT_CARD"
-                ? [
-                    {
-                      id: `CHAR_${Date.now()}`,
-                      reference_id: cleanRefId,
-                      status: "PAID",
-                      amount: {
-                        value: Math.round(
-                          Number(paymentMethod.amount || 0) * 100,
-                        ),
-                        currency: "BRL",
-                      },
-                      payment_method: orderPayload.charges[0].payment_method,
-                    },
-                  ]
-                : null,
-            qr_codes:
-              paymentMethod.type === "PIX"
-                ? [
-                    {
-                      text: `00020126580014br.gov.bcb.pix0136pagbank-thr33-${cleanRefId}`,
-                      links: [
-                        {
-                          rel: "QRCODE.PNG",
-                          href: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=THR33-PIX-${cleanRefId}`,
-                        },
-                      ],
-                    },
-                  ]
-                : null,
+            charges: [
+              {
+                id: mockChargeId,
+                reference_id: `CHAR_${cleanRefId}`,
+                status: paymentMethod.type === "CREDIT_CARD" ? "PAID" : "WAITING",
+                amount: {
+                  value: Math.round(
+                    Number(paymentMethod.amount || 0) * 100,
+                  ),
+                  currency: "BRL",
+                },
+                payment_method: orderPayload.charges?.[0]?.payment_method || {},
+                links: [
+                  {
+                    rel: "SELF",
+                    href: `${BASE_URL}/charges/${mockChargeId}`,
+                    media: "application/json",
+                    type: "GET",
+                  },
+                  {
+                    rel: "QRCODE.PNG",
+                    href: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(mockPixText)}`,
+                    media: "image/png",
+                    type: "GET",
+                  },
+                ],
+                qr_code: paymentMethod.type === "PIX" ? {
+                  id: `QRCO_${Date.now()}`,
+                  text: mockPixText,
+                } : undefined,
+              },
+            ],
           };
         }
 
@@ -321,6 +332,20 @@ exports.createOrder = onRequest(
             paymentMethod.type === "PIX"
               ? "aguardando_pagamento"
               : "pagamento_aprovado";
+          const firstCharge = data.charges?.[0];
+          const pixQrCodeUrl =
+            firstCharge?.links?.find(
+              (l) => l.rel === "QRCODE.PNG" || l.media === "image/png",
+            )?.href ||
+            data.qr_codes?.[0]?.links?.find(
+              (l) => l.rel === "QRCODE.PNG" || l.media === "image/png",
+            )?.href ||
+            null;
+          const pixCopiaECola =
+            firstCharge?.qr_code?.text ||
+            data.qr_codes?.[0]?.text ||
+            null;
+
           await db
             .collection("orders")
             .doc(cleanRefId)
@@ -337,11 +362,8 @@ exports.createOrder = onRequest(
                   paymentMethod.type === "CREDIT_CARD"
                     ? "Cartão de Crédito"
                     : "PIX",
-                pixQrCodeUrl:
-                  data.qr_codes?.[0]?.links?.find(
-                    (l) => l.rel === "QRCODE.PNG" || l.media === "image/png",
-                  )?.href || null,
-                pixCopiaECola: data.qr_codes?.[0]?.text || null,
+                pixQrCodeUrl,
+                pixCopiaECola,
                 createdAt: FieldValue.serverTimestamp(),
                 updatedAt: FieldValue.serverTimestamp(),
                 nfe: {
@@ -725,21 +747,29 @@ exports.createPagBankOrder = onCall(
     let stockReserved = true;
 
     let chargePayload = null;
-    let qrCodesPayload = null;
     let pixExpirationDate = null;
 
     if (paymentMethod.type === "PIX") {
       // Expiracao do Pix: 30 minutos (padrao de e-commerce sincronizado com a rotina cron agendada)
+      // Conforme especificacao oficial PagBank Orders v2 (charges.payment_method.type = 'PIX')
       pixExpirationDate = new Date(Date.now() + 30 * 60 * 1000);
-      qrCodesPayload = [
-        {
-          amount: { value: finalAmountInCents },
-          expiration_date: pixExpirationDate.toISOString(),
+      chargePayload = {
+        reference_id: `CHAR_${referenceId}`,
+        description: `Pedido THR33 ${referenceId}`,
+        amount: {
+          value: finalAmountInCents,
+          currency: "BRL",
         },
-      ];
+        payment_method: {
+          type: "PIX",
+          pix: {
+            expiration_date: pixExpirationDate.toISOString(),
+          },
+        },
+      };
     } else if (paymentMethod.type === "CREDIT_CARD") {
       chargePayload = {
-        reference_id: referenceId,
+        reference_id: `CHAR_${referenceId}`,
         amount: {
           value: finalAmountInCents,
           currency: "BRL",
@@ -823,15 +853,9 @@ exports.createPagBankOrder = onCall(
           postal_code: cleanCep.padEnd(8, "0").slice(0, 8),
         },
       },
+      charges: [chargePayload],
       notification_urls: [webhookUrl],
     };
-
-    if (qrCodesPayload) {
-      orderPayload.qr_codes = qrCodesPayload;
-    }
-    if (chargePayload) {
-      orderPayload.charges = [chargePayload];
-    }
 
     // 5. Chamar a API PagBank Orders
     let pagbankOrder = null;
@@ -894,38 +918,49 @@ exports.createPagBankOrder = onCall(
         throw new HttpsError("internal", errorString);
       }
     } else {
-      // Mock estruturado de homologacao quando executado localmente sem token ativo
+      // Mock estruturado v2 de homologacao quando executado localmente sem token ativo
+      const mockChargeId = `CHAR_${Date.now()}`;
+      const mockPixText = `00020101021226850014br.gov.bcb.pix2563api-h.pagseguro.com/pix/v2/mock-${referenceId}5204899953039865802BR5921Pagseguro Internet SA6009SAO PAULO62070503***63045677`;
       pagbankOrder = {
         id: `ORDE_${Date.now()}`,
         reference_id: referenceId,
-        charges:
-          paymentMethod.type === "CREDIT_CARD"
-            ? [
-                {
-                  id: `CHAR_${Date.now()}`,
-                  reference_id: referenceId,
-                  status: "PAID",
-                  amount: { value: finalAmountInCents, currency: "BRL" },
-                  payment_method: chargePayload?.payment_method,
-                },
-              ]
-            : null,
-        qr_codes:
-          paymentMethod.type === "PIX"
-            ? [
-                {
-                  text: `00020126580014br.gov.bcb.pix0136pagbank-thr33-${referenceId}`,
-                  links: [
-                    {
-                      rel: "QRCODE.PNG",
-                      href: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=THR33-PIX-${referenceId}`,
-                    },
-                  ],
-                },
-              ]
-            : null,
+        charges: [
+          {
+            id: mockChargeId,
+            reference_id: `CHAR_${referenceId}`,
+            status: paymentMethod.type === "CREDIT_CARD" ? "PAID" : "WAITING",
+            created_at: new Date().toISOString(),
+            description: `Pedido THR33 ${referenceId}`,
+            amount: { value: finalAmountInCents, currency: "BRL" },
+            payment_method: chargePayload?.payment_method,
+            links: [
+              {
+                rel: "SELF",
+                href: `${baseUrl}/charges/${mockChargeId}`,
+                media: "application/json",
+                type: "GET",
+              },
+              {
+                rel: "QRCODE.PNG",
+                href: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(mockPixText)}`,
+                media: "image/png",
+                type: "GET",
+              },
+              {
+                rel: "QRCODE.BASE64",
+                href: `${baseUrl}/qrcode/mock/base64`,
+                media: "text/plain",
+                type: "GET",
+              },
+            ],
+            qr_code: paymentMethod.type === "PIX" ? {
+              id: `QRCO_${Date.now()}`,
+              text: mockPixText,
+            } : undefined,
+          },
+        ],
       };
-      charge = pagbankOrder.charges?.[0] || null;
+      charge = pagbankOrder.charges[0];
     }
 
     // 6. Persistir no Firestore com estrutura preparada para NF-e
@@ -935,13 +970,26 @@ exports.createPagBankOrder = onCall(
         ? "pagamento_aprovado"
         : "aguardando_pagamento";
 
-    const qrCodeObj =
-      pagbankOrder.qr_codes?.[0] || charge?.qr_codes?.[0] || null;
+    // Suporte a especificacao oficial v2 (charges.qr_code e charges.links) com retrocompatibilidade v1
     const pixQrCodeUrl =
-      qrCodeObj?.links?.find(
+      charge?.links?.find(
         (l) => l.rel === "QRCODE.PNG" || l.media === "image/png",
-      )?.href || null;
-    const pixCopiaECola = qrCodeObj?.text || null;
+      )?.href ||
+      pagbankOrder.qr_codes?.[0]?.links?.find(
+        (l) => l.rel === "QRCODE.PNG" || l.media === "image/png",
+      )?.href ||
+      null;
+
+    const pixCopiaECola =
+      charge?.qr_code?.text ||
+      pagbankOrder.qr_codes?.[0]?.text ||
+      null;
+
+    const qrCodeObj = {
+      text: pixCopiaECola,
+      id: charge?.qr_code?.id || pagbankOrder.qr_codes?.[0]?.id || null,
+      links: charge?.links || pagbankOrder.qr_codes?.[0]?.links || [],
+    };
 
     await orderRef.set({
       orderId: referenceId,
@@ -1065,13 +1113,30 @@ exports.createSecureOrder = onRequest(
           });
           pagbankData = response.data;
         } else {
-          data = {
+          const mockPixText = `00020101021226850014br.gov.bcb.pix2563api-h.pagseguro.com/pix/v2/mock-${referenceId}5204899953039865802BR5921Pagseguro Internet SA6009SAO PAULO62070503***63045677`;
+          pagbankData = {
             id: `ORDE_${Date.now()}`,
             reference_id: referenceId,
-            qr_codes: orderPayload.qr_codes || null,
-            charges: orderPayload.charges || null,
+            charges: (orderPayload.charges || []).map((ch, idx) => ({
+              id: `CHAR_${Date.now()}_${idx}`,
+              reference_id: ch.reference_id || `CHAR_${referenceId}`,
+              status: ch.payment_method?.type === "PIX" ? "WAITING" : "PAID",
+              amount: ch.amount,
+              payment_method: ch.payment_method,
+              links: [
+                {
+                  rel: "QRCODE.PNG",
+                  href: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(mockPixText)}`,
+                  media: "image/png",
+                  type: "GET",
+                },
+              ],
+              qr_code: ch.payment_method?.type === "PIX" ? {
+                id: `QRCO_${Date.now()}`,
+                text: mockPixText,
+              } : undefined,
+            })),
           };
-          pagbankData = data;
         }
 
         const db = getDb();

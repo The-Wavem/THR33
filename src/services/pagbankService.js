@@ -211,6 +211,7 @@ export const pagbankService = {
 
           if (res?.data?.success) {
             const data = res.data;
+            const qrCodeObj = data.qrCode || null;
             return {
               success: true,
               orderId: data.orderId,
@@ -219,12 +220,14 @@ export const pagbankService = {
               data: {
                 id: data.orderId,
                 reference_id: data.orderId,
-                qr_codes: data.qrCode ? [data.qrCode] : null,
+                qr_codes: qrCodeObj ? [qrCodeObj] : null,
                 charges: [{
                   id: `CHAR_${data.orderId}`,
                   status: data.status,
+                  qr_code: qrCodeObj ? { text: qrCodeObj.text, id: qrCodeObj.id } : null,
+                  links: qrCodeObj?.links || [],
                   payment_response: {
-                    message: data.status === 'DECLINED' ? 'Transacao negada pelo banco emissor' : 'Sucesso'
+                    message: data.status === 'DECLINED' ? 'Transação negada pelo banco emissor' : 'Sucesso'
                   }
                 }]
               }
@@ -284,9 +287,17 @@ export const pagbankService = {
     };
 
     if (paymentMethod === 'PIX') {
-      orderPayload.qr_codes = [{
-        amount: { value: totalInCents },
-        expiration_date: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+      // Estrutura oficial PagBank Orders v2 (charges.payment_method.type = "PIX")
+      orderPayload.charges = [{
+        reference_id: `CHAR_${orderReference}`,
+        description: `Pedido THR33 ${orderReference}`,
+        amount: { value: totalInCents, currency: "BRL" },
+        payment_method: {
+          type: "PIX",
+          pix: {
+            expiration_date: new Date(Date.now() + 30 * 60 * 1000).toISOString()
+          }
+        }
       }];
     }
 
@@ -365,6 +376,8 @@ export const pagbankService = {
 
     const cleanNum = (cardData?.number || cardData?.lastDigits || '').replace(/\D/g, '');
     const isDeclined = cleanNum.startsWith('5105') || cardData?.cvv === '999';
+    const mockPixText = `00020101021226850014br.gov.bcb.pix2563api-h.pagseguro.com/pix/v2/mock-${orderReference}5204899953039865802BR5921Pagseguro Internet SA6009SAO PAULO62070503***63045677`;
+    const mockChargeId = `CHAR_${Date.now()}`;
 
     return {
       success: true,
@@ -373,16 +386,26 @@ export const pagbankService = {
       data: {
         id: `ORDE_${Date.now()}`,
         reference_id: orderReference,
-        qr_codes: paymentMethod === 'PIX' ? [{
-          text: `00020126580014br.gov.bcb.pix0136pagbank-sandbox-thr33-${orderReference}`,
-          links: [{ rel: "QRCODE.PNG", href: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=THR33-PIX-${orderReference}` }]
-        }] : null,
-        charges: paymentMethod === 'Cartão de Crédito' ? [{
-          id: `CHAR_${Date.now()}`,
-          status: isDeclined ? 'DECLINED' : 'PAID',
+        charges: [{
+          id: mockChargeId,
+          reference_id: `CHAR_${orderReference}`,
+          status: paymentMethod === 'PIX' ? 'WAITING' : (isDeclined ? 'DECLINED' : 'PAID'),
           payment_response: {
-            message: isDeclined ? 'Transacao negada pelo banco emissor' : 'Sucesso'
+            message: isDeclined ? 'Transação negada pelo banco emissor' : 'Sucesso'
           },
+          amount: { value: totalInCents, currency: "BRL" },
+          links: [
+            {
+              rel: "QRCODE.PNG",
+              href: `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=${encodeURIComponent(mockPixText)}`,
+              media: "image/png",
+              type: "GET"
+            }
+          ],
+          qr_code: paymentMethod === 'PIX' ? {
+            id: `QRCO_${Date.now()}`,
+            text: mockPixText
+          } : undefined,
           payment_method: {
             type: 'CREDIT_CARD',
             installments: Number(installments) || 1,
@@ -391,7 +414,7 @@ export const pagbankService = {
               last_digits: cleanNum.slice(-4) || '1111'
             }
           }
-        }] : null,
+        }],
         boleto: paymentMethod === 'Boleto Bancário' ? {
           barcode: "23793.38128 60000.123456 78900.123456 1 98760000035591",
           formatted_barcode: "23793.38128 60000.123456 78900.123456 1 98760000035591",
