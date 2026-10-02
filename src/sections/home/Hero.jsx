@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import Button from '../../components/ui/Button';
+import Container from '../../components/layout/Container';
 import styles from './Hero.module.css';
 
 const DEFAULT_HERO_SLIDES = [
@@ -225,24 +226,25 @@ export function Hero({ bannerData }) {
               <h1 className={styles.mainTitle}>{slide.title}</h1>
               {slide.subtitle && <p className={styles.subtitle}>{slide.subtitle}</p>}
 
-              {/* Botões de Ação do Slide */}
+              {/* Botões de Ação do Slide via Camada UI (Button) */}
               {Array.isArray(slide.buttons) && slide.buttons.length > 0 ? (
                 <div className={styles.actions}>
                   {slide.buttons.map((btn, bIdx) => (
-                    <Link 
+                    <Button 
                       key={btn.id || bIdx}
-                      className={btn.variant === 'secondary' ? styles.secondaryCta : styles.primaryCta}
+                      variant={btn.variant === 'secondary' ? 'secondary' : 'primary'}
+                      size="md"
                       to={btn.link || "/catalogo"}
                     >
                       {btn.text || "VER MAIS"}
-                    </Link>
+                    </Button>
                   ))}
                 </div>
               ) : slide.cta || slide.link ? (
                 <div className={styles.actions}>
-                  <Link className={styles.primaryCta} to={slide.link || "/catalogo"}>
+                  <Button variant="primary" size="md" to={slide.link || "/catalogo"}>
                     {slide.cta || "VER LANÇAMENTOS"}
-                  </Link>
+                  </Button>
                 </div>
               ) : null}
             </motion.div>

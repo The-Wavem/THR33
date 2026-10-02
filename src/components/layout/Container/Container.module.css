@@ -1,0 +1,47 @@
+/* Container.module.css - Sistema de Grid e Envelopamento Estrutural */
+
+.container {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+  box-sizing: border-box;
+}
+
+@media (min-width: 640px) {
+  .container {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+/* Tamanhos de Largura Maxima */
+.sm {
+  max-width: 768px;
+}
+
+.default {
+  max-width: 1280px;
+}
+
+.lg {
+  max-width: 1440px;
+}
+
+.full {
+  max-width: 100%;
+}
+
+/* Modificadores */
+.noPadding {
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
