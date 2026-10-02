@@ -43,7 +43,10 @@ export async function fetchAddressByCep(cep) {
         street: data.logradouro || '',
         neighborhood: data.bairro || '',
         city: data.localidade || '',
-        state: data.uf || '',
+        state: (data.uf || '').toUpperCase(),
+        uf: (data.uf || '').toUpperCase(),
+        ibge: data.ibge || '',
+        ddd: data.ddd || '',
         complement: data.complemento || ''
       }
     };

@@ -185,18 +185,22 @@ export const pagbankService = {
               name: customer.name || 'Cliente THR33',
               email: customer.email || 'cliente@thr33.com',
               taxId: (customer.cpf || customer.taxId || '').replace(/\D/g, ''),
-              phone: (customer.phone || '').replace(/\D/g, '')
+              phone: (customer.phone || '').replace(/\D/g, ''),
+              isPj: Boolean(customer.isPj),
+              ie: customer.ie || null,
+              isentoIE: Boolean(customer.isentoIE)
             },
             shipping: {
               cost: Number(shippingCost) || 0,
               address: {
                 street: shippingAddress.street || 'Rua',
-                number: shippingAddress.number || '0',
+                number: shippingAddress.number || 'S/N',
                 complement: shippingAddress.complement || '',
                 neighborhood: shippingAddress.neighborhood || shippingAddress.locality || 'Centro',
                 city: shippingAddress.city || 'Curitiba',
                 state: shippingAddress.state || 'PR',
-                cep: (shippingAddress.cep || '80000000').replace(/\D/g, '')
+                cep: (shippingAddress.cep || '80000000').replace(/\D/g, ''),
+                ibge: shippingAddress.ibge || ''
               }
             },
             paymentMethod: paymentMethodPayload,
@@ -230,10 +234,14 @@ export const pagbankService = {
       }
     } catch (callErr) {
       console.error("Erro na Cloud Function createPagBankOrder:", callErr);
+      const errMsg = String(callErr.message || callErr.details || "");
+      if (errMsg.includes("Estoque insuficiente") || errMsg.includes("não encontrado no catálogo")) {
+        throw new Error(errMsg);
+      }
       if (!isSandboxMode()) {
         const details = String(callErr.details || callErr.message || "");
-        if (details.includes("whitelist access required")) {
-          throw new Error("Sua conta PagBank requer liberação de Whitelist em Produção para a API de Pedidos. Solicite a homologação no PagBank Developers.");
+        if (details.toLowerCase().includes("whitelist")) {
+          throw new Error("Sua conta PagBank requer liberação de Whitelist em Produção para a API de Pedidos. Conclua a solicitação de homologação no portal PagBank Developers ou ative o Sandbox para testes.");
         }
         throw new Error(callErr.message || "Erro ao conectar ao gateway PagBank");
       }

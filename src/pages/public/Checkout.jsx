@@ -31,18 +31,25 @@ import {
 import { useCart } from '../../context/CartContext';
 import { 
   validateCPF, 
+  validateCNPJ,
+  validateCPForCNPJ,
+  validateAddressNumber,
+  normalizeAddressNumber,
+  validateStateRegistration,
   validateEmail, 
   validatePhone, 
   validateCEP,
   validateCardNumber,
   validateCardExpiry,
   maskCPF, 
+  maskCNPJ,
+  maskCPForCNPJ,
   maskPhone, 
   maskCEP
 } from '../../utils/validators';
 import { fetchAddressByCep } from '../../services/viaCepService';
 import { useAuth } from '../../context/AuthContext';
-import { doc, getDoc, setDoc, collection, addDoc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc, onSnapshot, runTransaction } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
 import { couponService } from '../../services/couponService';
 import { analyticsService } from '../../services/analyticsService';
@@ -121,7 +128,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     name: user?.name || user?.displayName || '',
     email: user?.email || '',
     cpf: user?.cpf || '',
-    phone: user?.phone || ''
+    phone: user?.phone || '',
+    isPj: false,
+    ie: '',
+    isentoIE: true
   });
   const [isEditingAccountData, setIsEditingAccountData] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -139,10 +149,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     cep: '',
     street: '',
     number: '',
+    noNumber: false,
     neighborhood: '',
     complement: '',
     city: 'Curitiba',
-    state: 'PR'
+    state: 'PR',
+    ibge: '4106902'
   });
   const [addressErrors, setAddressErrors] = useState({});
 
@@ -157,7 +169,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   }, [clientData.email]);
 
   const isCpfValid = useMemo(() => {
-    return validateCPF(clientData.cpf);
+    return validateCPForCNPJ(clientData.cpf);
   }, [clientData.cpf]);
 
   const isPhoneValid = useMemo(() => {
@@ -359,10 +371,25 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   // HANDLERS ETAPA 1: DADOS PESSOAIS
   // -------------------------------------------------------------
   const handleClientChange = (e) => {
-    const { name, value } = e.target;
-    let formatted = value;
-    if (name === 'cpf') formatted = maskCPF(value);
+    const { name, value, type, checked } = e.target;
+    let formatted = type === 'checkbox' ? checked : value;
+
+    if (name === 'cpf') {
+      formatted = maskCPForCNPJ(value);
+      const clean = formatted.replace(/\D/g, '');
+      setClientData(prev => ({
+        ...prev,
+        isPj: clean.length > 11,
+        [name]: formatted
+      }));
+      if (clientErrors[name]) {
+        setClientErrors(prev => ({ ...prev, [name]: null }));
+      }
+      return;
+    }
+
     if (name === 'phone') formatted = maskPhone(value);
+    if (name === 'ie') formatted = value.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 16);
 
     setClientData(prev => ({ ...prev, [name]: formatted }));
     if (clientErrors[name]) {
@@ -372,17 +399,30 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
   const validateStep1 = () => {
     const errors = {};
+    const cleanDoc = (clientData.cpf || '').replace(/\D/g, '');
+    const isPj = clientData.isPj || cleanDoc.length === 14;
+
     if (!clientData.name.trim() || clientData.name.trim().split(' ').length < 2) {
-      errors.name = 'Informe seu nome completo (nome e sobrenome).';
+      errors.name = isPj 
+        ? 'Informe a Razão Social completa da empresa.' 
+        : 'Informe seu nome completo (nome e sobrenome).';
     }
     if (!validateEmail(clientData.email)) {
-      errors.email = 'Informe um e-mail válido.';
+      errors.email = 'Informe um e-mail válido para envio da NF-e.';
     }
-    if (!validateCPF(clientData.cpf)) {
-      errors.cpf = 'CPF inválido.';
+    if (!validateCPForCNPJ(clientData.cpf)) {
+      errors.cpf = cleanDoc.length > 11 
+        ? 'CNPJ inválido (dígitos verificadores incorretos).' 
+        : 'CPF inválido (dígitos verificadores incorretos).';
     }
     if (!validatePhone(clientData.phone)) {
       errors.phone = 'Telefone celular com DDD inválido.';
+    }
+
+    if (isPj && !clientData.isentoIE) {
+      if (!validateStateRegistration(clientData.ie, false)) {
+        errors.ie = 'Informe uma Inscrição Estadual válida ou selecione "Isento".';
+      }
     }
 
     setClientErrors(errors);
@@ -443,8 +483,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   // HANDLERS ETAPA 2: ENDEREÇO & FRETE
   // -------------------------------------------------------------
   const handleAddressChange = (e) => {
-    const { name, value } = e.target;
-    let formatted = value;
+    const { name, value, type, checked } = e.target;
+    let formatted = type === 'checkbox' ? checked : value;
+
     if (name === 'cep') {
       formatted = maskCEP(value);
       const clean = formatted.replace(/\D/g, '');
@@ -453,7 +494,14 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       }
     }
     if (name === 'state') formatted = value.toUpperCase().slice(0, 2);
-    if (name === 'number') formatted = value.slice(0, 10);
+    if (name === 'number') {
+      formatted = value.slice(0, 15);
+      if (formatted.toUpperCase() === 'S/N' || formatted.toUpperCase() === 'SN') {
+        setAddressForm(prev => ({ ...prev, number: 'S/N', noNumber: true }));
+        if (addressErrors.number) setAddressErrors(errs => ({ ...errs, number: null }));
+        return;
+      }
+    }
 
     setAddressForm(prev => ({ ...prev, [name]: formatted }));
     if (addressErrors[name]) {
@@ -475,9 +523,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         neighborhood: res.data.neighborhood || prev.neighborhood,
         city: res.data.city || prev.city,
         state: res.data.state || prev.state,
+        ibge: res.data.ibge || prev.ibge || '',
         complement: res.data.complement || prev.complement
       }));
-      setCepApiMessage({ type: 'success', text: 'Endereço localizado com sucesso via Correios.' });
+      setCepApiMessage({ type: 'success', text: `Endereço localizado: ${res.data.city}/${res.data.state} (IBGE: ${res.data.ibge || 'OK'})` });
 
       const isCuritiba = cleanCep.startsWith('80') || cleanCep.startsWith('81') || cleanCep.startsWith('82') || cleanCep.startsWith('83');
       setShippingOptions([
@@ -494,7 +543,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     const errors = {};
     if (!validateCEP(addressForm.cep)) errors.cep = 'CEP deve ter 8 dígitos.';
     if (!addressForm.street.trim()) errors.street = 'Informe a rua / logradouro.';
-    if (!addressForm.number.trim()) errors.number = 'Informe o número.';
+
+    const rawNumber = addressForm.noNumber ? 'S/N' : addressForm.number.trim();
+    if (!validateAddressNumber(rawNumber)) {
+      errors.number = 'Informe o número ou marque "Sem número (S/N)".';
+    }
+
     if (!addressForm.neighborhood.trim()) errors.neighborhood = 'Informe o bairro.';
     if (!addressForm.city.trim()) errors.city = 'Informe a cidade.';
     if (!addressForm.state.trim() || addressForm.state.trim().length !== 2) errors.state = 'Informe o estado (UF).';
@@ -507,6 +561,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     if (e) e.preventDefault();
     if (!validateNewAddress()) return;
 
+    const normalizedNum = addressForm.noNumber ? 'S/N' : normalizeAddressNumber(addressForm.number);
     const newId = `addr_${Date.now()}`;
     const newAddrObj = {
       id: newId,
@@ -514,11 +569,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       label: `Endereço (${addressForm.neighborhood || 'Entrega'})`,
       cep: addressForm.cep,
       street: addressForm.street,
-      number: addressForm.number,
+      number: normalizedNum,
       complement: addressForm.complement || '',
       neighborhood: addressForm.neighborhood,
       city: addressForm.city,
       state: addressForm.state,
+      ibge: addressForm.ibge || '',
       isDefault: savedAddresses.length === 0
     };
 
@@ -615,12 +671,17 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     const cleanCardNumber = (cardData.number || '').replace(/\D/g, '');
     const lastDigits = cleanCardNumber ? `•••• ${cleanCardNumber.slice(-4)}` : null;
 
+    const isClientPj = Boolean(clientData.isPj || (clientData.cpf && clientData.cpf.replace(/\D/g, '').length === 14));
+
     const baseOrderData = {
       userId: user?.uid || 'guest',
       clientName: clientData.name || user?.displayName || user?.name || 'Cliente THR33',
       clientEmail: clientData.email || user?.email || '',
       clientCpf: clientData.cpf || user?.cpf || '',
       clientPhone: clientData.phone || user?.phone || '',
+      isPj: isClientPj,
+      ie: isClientPj ? (clientData.isentoIE ? 'ISENTO' : (clientData.ie || '')) : null,
+      isentoIE: Boolean(clientData.isentoIE),
       items: cartItems.map(item => ({
         id: String(item.id || item.slug || `item_${Date.now()}`),
         name: item.name || 'Produto THR33',
@@ -654,6 +715,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         neighborhood: addressToSave.neighborhood || '',
         city: addressToSave.city || 'Curitiba',
         state: addressToSave.state || 'PR',
+        ibge: addressToSave.ibge || '',
         complement: addressToSave.complement || ''
       },
       trackingCode: null,
@@ -697,7 +759,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             name: clientData.name || user?.displayName || user?.name || 'Cliente THR33',
             email: clientData.email || user?.email || 'cliente@thr33.com',
             cpf: clientData.cpf || '',
-            phone: clientData.phone || ''
+            phone: clientData.phone || '',
+            isPj: isClientPj,
+            ie: isClientPj ? (clientData.isentoIE ? 'ISENTO' : (clientData.ie || '')) : null,
+            isentoIE: Boolean(clientData.isentoIE)
           },
           items: cartItems,
           shippingAddress: addressToSave,
@@ -767,7 +832,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       paidAt,
       pixQrCodeUrl: pagbankData?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href || (paymentMethod === 'PIX' ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=THR33-PIX-${orderRefId}` : null),
       pixCopiaECola: pagbankData?.qr_codes?.[0]?.text || (paymentMethod === 'PIX' ? `00020126580014br.gov.bcb.pix0136pagbank-thr33-${orderRefId}` : null),
-      pixExpiresAt: paymentMethod === 'PIX' ? new Date(Date.now() + 45 * 60 * 1000).toISOString() : null,
+      pixExpiresAt: paymentMethod === 'PIX' ? new Date(Date.now() + 30 * 60 * 1000).toISOString() : null,
       pagbank: pagbankData ? {
         orderId: pagbankData.id || null,
         referenceId: pagbankData.reference_id || orderRefId,
@@ -786,10 +851,61 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     }));
 
     try {
-      // 1. Grava o pedido no Firestore caso a Function backend não tenha criado
+      // 1. Grava o pedido no Firestore com Reserva Atômica caso a Function backend não tenha criado
       if (!finalDocId) {
-        const orderRef = await addDoc(collection(db, 'orders'), cleanPayload);
-        finalDocId = orderRef.id;
+        await runTransaction(db, async (transaction) => {
+          const prodSnaps = [];
+          for (const item of (cleanPayload.items || [])) {
+            const pRef = doc(db, 'products', String(item.id));
+            const pSnap = await transaction.get(pRef);
+            prodSnaps.push({ pRef, pSnap, item });
+          }
+
+          for (const { pSnap, item } of prodSnaps) {
+            if (!pSnap.exists()) continue;
+            const pData = pSnap.data();
+            const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+            const size = String(item.size || 'M').toUpperCase();
+
+            let avail = 0;
+            if (pData.stock && typeof pData.stock === 'object') {
+              avail = Number(pData.stock[size] ?? pData.stock[item.size] ?? 0);
+            } else if (typeof pData.stock === 'number') {
+              avail = Number(pData.stock);
+            }
+
+            if (avail < qty) {
+              throw new Error(`Estoque insuficiente para "${pData.name || item.name}" no tamanho ${size}. Disponível: ${avail}`);
+            }
+          }
+
+          for (const { pRef, pSnap, item } of prodSnaps) {
+            if (!pSnap.exists()) continue;
+            const pData = pSnap.data();
+            const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+            const size = String(item.size || 'M').toUpperCase();
+            const updates = { updatedAt: new Date().toISOString() };
+
+            if (pData.stock && typeof pData.stock === 'object') {
+              const cur = Number(pData.stock[size] ?? pData.stock[item.size] ?? 0);
+              const newStk = { ...pData.stock, [size]: Math.max(0, cur - qty) };
+              updates.stock = newStk;
+              updates.sizes = Object.keys(newStk).filter(s => (newStk[s] || 0) > 0);
+            } else if (typeof pData.stock === 'number') {
+              updates.stock = Math.max(0, pData.stock - qty);
+            }
+
+            transaction.update(pRef, updates);
+          }
+
+          const newOrderRef = doc(collection(db, 'orders'));
+          transaction.set(newOrderRef, {
+            ...cleanPayload,
+            stockReserved: true,
+            stockReleased: false
+          });
+          finalDocId = newOrderRef.id;
+        });
       } else {
         // Enriquece o pedido já gravado no backend com metadados complementares (UTMs e detalhes visuais)
         try {
@@ -1276,15 +1392,15 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                   <div className={styles.fieldsRow}>
                     <div className={styles.fieldWrapper}>
                       <div className={styles.labelWithBadge}>
-                        <label className={styles.fieldLabel}>CPF DO TITULAR DA COMPRA *</label>
-                        <span className={styles.requiredBadge}>NF / PagBank</span>
+                        <label className={styles.fieldLabel}>{clientData.isPj ? 'CNPJ DA EMPRESA *' : 'CPF OU CNPJ DO TITULAR *'}</label>
+                        <span className={styles.requiredBadge}>NF / SEFAZ</span>
                       </div>
                       <div className={styles.inputWithCheckWrapper}>
                         <input 
                           type="text" 
                           name="cpf" 
-                          placeholder="000.000.000-00" 
-                          maxLength={14}
+                          placeholder="000.000.000-00 ou CNPJ" 
+                          maxLength={18}
                           value={clientData.cpf} 
                           onChange={handleClientChange} 
                           disabled={Boolean(user && !isEditingAccountData)}
@@ -1324,6 +1440,35 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                       {clientErrors.phone && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.phone}</span>}
                     </div>
                   </div>
+
+                  {/* CAMPO DE INSCRIÇÃO ESTADUAL SE PESSOA JURÍDICA (CNPJ) */}
+                  {(clientData.isPj || (clientData.cpf && clientData.cpf.replace(/\D/g, '').length === 14)) && (
+                    <div className={styles.fieldWrapper} style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'rgba(255,255,255,0.02)', border: '1px solid #262626', borderRadius: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <label className={styles.fieldLabel} style={{ margin: 0 }}>INSCRIÇÃO ESTADUAL (IE)</label>
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#a3a3a3', cursor: 'pointer' }}>
+                          <input 
+                            type="checkbox"
+                            checked={clientData.isentoIE}
+                            onChange={(e) => setClientData(prev => ({ ...prev, isentoIE: e.target.checked, ie: e.target.checked ? '' : prev.ie }))}
+                          />
+                          Isento de Inscrição Estadual (Não Contribuinte)
+                        </label>
+                      </div>
+                      {!clientData.isentoIE && (
+                        <input 
+                          type="text"
+                          name="ie"
+                          placeholder="Número da IE (ex: 90812345-67)"
+                          maxLength={16}
+                          value={clientData.ie}
+                          onChange={handleClientChange}
+                          className={clientErrors.ie ? styles.inputError : ''}
+                        />
+                      )}
+                      {clientErrors.ie && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.ie}</span>}
+                    </div>
+                  )}
                 </div>
 
                 <div className={styles.stepActions}>
@@ -1471,12 +1616,31 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
                       <div className={styles.fieldsRow}>
                         <div className={styles.fieldWrapper}>
-                          <label className={styles.fieldLabel}>Número *</label>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                            <label className={styles.fieldLabel} style={{ margin: 0 }}>Número *</label>
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.72rem', color: '#a3a3a3', cursor: 'pointer' }}>
+                              <input 
+                                type="checkbox" 
+                                checked={addressForm.noNumber || addressForm.number === 'S/N'} 
+                                onChange={(e) => {
+                                  const isChecked = e.target.checked;
+                                  setAddressForm(prev => ({
+                                    ...prev,
+                                    noNumber: isChecked,
+                                    number: isChecked ? 'S/N' : ''
+                                  }));
+                                  if (addressErrors.number) setAddressErrors(errs => ({ ...errs, number: null }));
+                                }}
+                              />
+                              Sem número (S/N)
+                            </label>
+                          </div>
                           <input 
                             type="text" 
                             name="number" 
-                            placeholder="123"
+                            placeholder={addressForm.noNumber ? "S/N" : "123"}
                             value={addressForm.number} 
+                            disabled={addressForm.noNumber}
                             onChange={handleAddressChange} 
                             className={addressErrors.number ? styles.inputError : ''}
                           />

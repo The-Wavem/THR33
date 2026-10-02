@@ -20,6 +20,7 @@ const {
   onRequest,
   HttpsError,
 } = require("firebase-functions/v2/https");
+const { onSchedule } = require("firebase-functions/v2/scheduler");
 const { defineSecret } = require("firebase-functions/params");
 const logger = require("firebase-functions/logger");
 const admin = require("firebase-admin");
@@ -35,7 +36,9 @@ if (process.env.FUNCTIONS_EMULATOR === "true") {
 }
 
 if (!admin.apps.length) {
-  admin.initializeApp();
+  admin.initializeApp({
+    projectId: process.env.GCLOUD_PROJECT || "thr33-streetwear",
+  });
 }
 
 // Regiao padrao do Cloud Functions v2 (Sao Paulo)
@@ -368,11 +371,181 @@ exports.createOrder = onRequest(
 );
 
 /**
+ * Reserva atomicamente o estoque de produtos dentro de uma transacao Firestore.
+ * Previne condicoes de corrida (Race Conditions) quando multiplos compradores
+ * tentam adquirir a ultima peca simultaneamente.
+ * 
+ * Regra do Firestore: Todas as leituras ocorrem antes de quaisquer gravacoes.
+ */
+async function reserveStockAtomic(db, items, orderRefId) {
+  if (!items || !items.length) return true;
+
+  return await db.runTransaction(async (transaction) => {
+    // 1. Fase de leitura: ler todos os documentos primeiro
+    const productSnapshots = [];
+    for (const item of items) {
+      const prodId = String(item.id || item.reference_id);
+      if (!prodId) continue;
+      const prodRef = db.collection("products").doc(prodId);
+      const snap = await transaction.get(prodRef);
+      productSnapshots.push({ prodRef, snap, item, prodId });
+    }
+
+    // 2. Fase de validacao: verificar integridade e estoque suficiente
+    for (const { snap, item, prodId } of productSnapshots) {
+      if (!snap.exists) {
+        throw new HttpsError(
+          "not-found",
+          `Produto "${item.name || prodId}" não foi encontrado no catálogo oficial.`
+        );
+      }
+
+      const data = snap.data();
+      const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+      const size = String(item.size || "M").toUpperCase();
+
+      let available = 0;
+      if (data.stock && typeof data.stock === "object") {
+        available = Number(data.stock[size] ?? data.stock[item.size] ?? 0);
+      } else if (typeof data.stock === "number") {
+        available = Number(data.stock);
+      } else if (Array.isArray(data.variants) && data.variants.length > 0) {
+        const v = data.variants.find(
+          (variant) => String(variant.size || "").toUpperCase() === size
+        );
+        available = v ? Number(v.stock_quantity ?? v.stock ?? 0) : 0;
+      }
+
+      if (available < qty) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Estoque insuficiente para "${data.name || item.name}" no tamanho ${size}. Disponível: ${available}, solicitado: ${qty}.`
+        );
+      }
+    }
+
+    // 3. Fase de gravacao: aplicar deducoes de estoque
+    for (const { prodRef, snap, item } of productSnapshots) {
+      const data = snap.data();
+      const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+      const size = String(item.size || "M").toUpperCase();
+      const updates = {
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      if (data.stock && typeof data.stock === "object") {
+        const currentQty = Number(data.stock[size] ?? data.stock[item.size] ?? 0);
+        const newStock = {
+          ...data.stock,
+          [size]: Math.max(0, currentQty - qty),
+        };
+        updates.stock = newStock;
+        updates.sizes = Object.keys(newStock).filter(
+          (s) => (newStock[s] || 0) > 0
+        );
+      } else if (typeof data.stock === "number") {
+        updates.stock = Math.max(0, data.stock - qty);
+      }
+
+      if (Array.isArray(data.variants) && data.variants.length > 0) {
+        updates.variants = data.variants.map((v) => {
+          if (String(v.size || "").toUpperCase() === size) {
+            const currentVarQty = Number(v.stock_quantity ?? v.stock ?? 0);
+            return {
+              ...v,
+              stock_quantity: Math.max(0, currentVarQty - qty),
+            };
+          }
+          return v;
+        });
+      }
+
+      transaction.update(prodRef, updates);
+    }
+
+    logger.info(
+      `Estoque reservado atomicamente para o pedido ${orderRefId}: ${items.length} itens.`
+    );
+    return true;
+  });
+}
+
+/**
+ * Devolve atomicamente itens ao estoque dentro de uma transacao Firestore.
+ * Chamado quando cartao e recusado, pedido cancelado ou PIX expirado.
+ */
+async function restoreStockAtomic(db, items, orderRefId, reason = "Cancelamento") {
+  if (!items || !items.length) return false;
+
+  return await db.runTransaction(async (transaction) => {
+    // 1. Leituras
+    const productSnapshots = [];
+    for (const item of items) {
+      const prodId = String(item.id || item.reference_id);
+      if (!prodId) continue;
+      const prodRef = db.collection("products").doc(prodId);
+      const snap = await transaction.get(prodRef);
+      productSnapshots.push({ prodRef, snap, item, prodId });
+    }
+
+    // 2. Gravacoes
+    for (const { prodRef, snap, item } of productSnapshots) {
+      if (!snap.exists) continue;
+      const data = snap.data();
+      const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+      const size = String(item.size || "M").toUpperCase();
+      const updates = {
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      if (data.stock && typeof data.stock === "object") {
+        const currentQty = Number(data.stock[size] ?? data.stock[item.size] ?? 0);
+        const newStock = {
+          ...data.stock,
+          [size]: currentQty + qty,
+        };
+        updates.stock = newStock;
+        updates.sizes = Object.keys(newStock).filter(
+          (s) => (newStock[s] || 0) > 0
+        );
+      } else if (typeof data.stock === "number") {
+        updates.stock = data.stock + qty;
+      }
+
+      if (Array.isArray(data.variants) && data.variants.length > 0) {
+        updates.variants = data.variants.map((v) => {
+          if (String(v.size || "").toUpperCase() === size) {
+            const currentVarQty = Number(v.stock_quantity ?? v.stock ?? 0);
+            return {
+              ...v,
+              stock_quantity: currentVarQty + qty,
+            };
+          }
+          return v;
+        });
+      }
+
+      transaction.update(prodRef, updates);
+    }
+
+    logger.info(
+      `Estoque devolvido com sucesso para pedido ${orderRefId}. Motivo: ${reason}`
+    );
+    return true;
+  });
+}
+
+/**
  * 3. CLOUD FUNCTION DE CRIACAO DO PEDIDO SERVER-SIDE (createPagBankOrder)
  * Callable Function com autoridade server-side, validacao de precos em Firestore e itens fiscais.
  */
 exports.createPagBankOrder = onCall(
-  { region: FUNCTION_REGION, secrets: [PAGBANK_TOKEN], cors: true },
+  {
+    region: FUNCTION_REGION,
+    secrets: [PAGBANK_TOKEN],
+    cors: true,
+    serviceAccount: "thr33-streetwear@appspot.gserviceaccount.com",
+  },
   async (request) => {
     // 1. Identifica usuario autenticado ou visitante
     const userId = request.auth
@@ -401,70 +574,167 @@ exports.createPagBankOrder = onCall(
       ? "https://sandbox.api.pagseguro.com"
       : "https://api.pagseguro.com";
 
-    // 2. Recalcula precos server-side via Firestore (colecao products)
+    // 2. Blindagem de Seguranca: Recalcula precos 100% server-side via Firestore
     const db = getDb();
-    let calculatedTotal = 0;
+    let subtotalInCents = 0;
     const sanitizedItems = [];
 
+    // Determina CFOP fiscal para NF-e (TD-132 / SEFAZ)
+    // 5102 = Venda de mercadoria adquirida de terceiros dentro do estado (PR)
+    // 6102 = Venda de mercadoria para outros estados (Interestadual)
+    const clientState = (shipping?.address?.region_code || shipping?.address?.state || "PR").toUpperCase().slice(0, 2);
+    const isStatePR = clientState === "PR";
+    const cfopCode = isStatePR ? "5102" : "6102";
+
     for (const item of items) {
-      let prodData = null;
-      try {
-        const prodDoc = await db.collection("products").doc(item.id).get();
-        if (prodDoc.exists) {
-          prodData = prodDoc.data();
-        }
-      } catch (err) {
-        console.warn("Aviso ao buscar produto no Firestore:", err.message);
+      if (!item.id) {
+        throw new HttpsError("invalid-argument", "Item sem identificador válido.");
       }
 
-      const unitAmountInCents = prodData?.price
-        ? Math.round(Number(prodData.price) * 100)
-        : Math.round(Number(item.price || 0) * 100);
+      const prodDoc = await db.collection("products").doc(String(item.id)).get();
+      if (!prodDoc.exists) {
+        throw new HttpsError(
+          "not-found",
+          `Produto "${item.name || item.id}" não foi encontrado no catálogo oficial da THR33.`
+        );
+      }
 
-      const qty = Number(item.quantity || 1);
+      const prodData = prodDoc.data();
+      const realPrice = Number(prodData.price);
+      if (isNaN(realPrice) || realPrice <= 0) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Preço inválido cadastrado para o produto "${prodData.name || item.id}".`
+        );
+      }
+
+      const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+
+      // A validacao real e reserva atomica de estoque por tamanho ocorrem via reserveStockAtomic(db, sanitizedItems, referenceId)
+
+      const unitAmountInCents = Math.round(realPrice * 100);
+      const itemTotalInCents = unitAmountInCents * qty;
 
       sanitizedItems.push({
         reference_id: String(item.id),
-        name: String(prodData?.name || item.name || "Camiseta THR33").slice(
-          0,
-          64,
-        ),
+        name: String(prodData.name || item.name || "Camiseta THR33").slice(0, 64),
         quantity: qty,
         unit_amount: unitAmountInCents,
-        ncm: prodData?.ncm || "61091000",
-        sku: prodData?.sku || item.id,
-        size: item.size || "M",
+        total_amount: itemTotalInCents,
+        ncm: String(prodData.ncm || "61091000").replace(/\D/g, "").slice(0, 8),
+        cfop: cfopCode,
+        sku: String(prodData.sku || item.id).slice(0, 32),
+        size: String(item.size || "M").slice(0, 10),
       });
 
-      calculatedTotal += unitAmountInCents * qty;
+      subtotalInCents += itemTotalInCents;
     }
 
-    // Adiciona frete (em centavos)
-    const shippingFeeInCents = Math.round(Number(shipping?.cost || 0) * 100);
-    calculatedTotal += shippingFeeInCents;
+    // 2.1 Validacao e recalculo de Cupom de Desconto server-side
+    let serverDiscountInCents = 0;
+    let validatedCouponData = null;
 
-    // Abate de cupom e saldo de carteira (se houver)
-    const totalDeductionInCents = Math.round(
-      (Number(discountAmount || 0) + Number(walletDeduction || 0)) * 100,
-    );
+    if (couponCode && typeof couponCode === "string" && couponCode.trim()) {
+      const cleanCoupon = couponCode.trim().toUpperCase();
+      const couponQuery = await db
+        .collection("coupons")
+        .where("code", "==", cleanCoupon)
+        .limit(1)
+        .get();
+
+      if (!couponQuery.empty) {
+        const couponDoc = couponQuery.docs[0];
+        const cData = couponDoc.data();
+
+        const isActive = cData.active !== false;
+        const todayStr = new Date().toISOString().split("T")[0];
+        const isNotExpired = !cData.validUntil || todayStr <= cData.validUntil;
+        const subtotalInReais = subtotalInCents / 100;
+        const meetsMinOrder =
+          !cData.minOrderValue || subtotalInReais >= Number(cData.minOrderValue);
+
+        if (isActive && isNotExpired && meetsMinOrder) {
+          validatedCouponData = { id: couponDoc.id, ...cData };
+          if (cData.discountPercent) {
+            const pct = Number(cData.discountPercent);
+            serverDiscountInCents = Math.round((subtotalInCents * pct) / 100);
+          } else if (cData.discountValue) {
+            serverDiscountInCents = Math.round(Number(cData.discountValue) * 100);
+          }
+          serverDiscountInCents = Math.min(serverDiscountInCents, subtotalInCents);
+        } else {
+          logger.warn(`Cupom ${cleanCoupon} rejeitado por regras de negócio:`, {
+            isActive,
+            isNotExpired,
+            meetsMinOrder,
+          });
+        }
+      }
+    }
+
+    // 2.2 Validacao e recalculo de Frete oficial server-side
+    // Metodos: 'padrao' = R$ 24,90 (2490 centavos) | 'expresso' = R$ 38,50 (3850 centavos)
+    const shippingMethodId = String(shipping?.method || shipping?.shippingMethod || "padrao").toLowerCase();
+    let officialShippingFeeInCents = shippingMethodId === "expresso" ? 3850 : 2490;
+
+    // Regra de Frete Gratis da THR33: compras a partir de R$ 299,00 ou cupom de frete gratis
+    if (subtotalInCents >= 29900 || validatedCouponData?.freeShipping === true) {
+      officialShippingFeeInCents = 0;
+    }
+
+    // 2.3 Validacao de Saldo de Carteira Digital server-side
+    let serverWalletDeductionInCents = 0;
+    if (walletDeduction && Number(walletDeduction) > 0) {
+      if (!userId || userId === "guest") {
+        throw new HttpsError(
+          "unauthenticated",
+          "Apenas usuários autenticados podem utilizar saldo de carteira digital."
+        );
+      }
+
+      const userDoc = await db.collection("users").doc(userId).get();
+      if (!userDoc.exists) {
+        throw new HttpsError("not-found", "Perfil do usuário não encontrado para débito de carteira.");
+      }
+
+      const userData = userDoc.data();
+      const realWalletBalance = Number(userData.walletBalance || userData.wallet || 0);
+      const maxPossibleDeduction = Math.round(realWalletBalance * 100);
+      const requestedDeductionInCents = Math.round(Number(walletDeduction) * 100);
+
+      const maxAllowedForOrder = subtotalInCents + officialShippingFeeInCents - serverDiscountInCents;
+      serverWalletDeductionInCents = Math.max(
+        0,
+        Math.min(requestedDeductionInCents, maxPossibleDeduction, maxAllowedForOrder)
+      );
+    }
+
+    // 2.4 Total oficial auditado (Imutavel)
+    const calculatedTotalInCents = subtotalInCents + officialShippingFeeInCents;
     const finalAmountInCents = Math.max(
       0,
-      calculatedTotal - totalDeductionInCents,
+      calculatedTotalInCents - serverDiscountInCents - serverWalletDeductionInCents
     );
 
     // 3. Montar objeto de cobranca conforme o metodo de pagamento
     const referenceId = `THR-${Date.now()}-${userId.slice(0, 5)}`;
+
+    // 3.1 Reserva Atomica de Estoque via Firestore runTransaction
+    // Previne condicoes de corrida (Race Conditions) quando compradores adquirem a ultima peca simultaneamente
+    await reserveStockAtomic(db, sanitizedItems, referenceId);
+    let stockReserved = true;
+
     let chargePayload = null;
     let qrCodesPayload = null;
+    let pixExpirationDate = null;
 
     if (paymentMethod.type === "PIX") {
-      // Expiracao do Pix: 24 horas no padrao PagBank
-      const expirationDate = new Date();
-      expirationDate.setHours(expirationDate.getHours() + 24);
+      // Expiracao do Pix: 30 minutos (padrao de e-commerce sincronizado com a rotina cron agendada)
+      pixExpirationDate = new Date(Date.now() + 30 * 60 * 1000);
       qrCodesPayload = [
         {
           amount: { value: finalAmountInCents },
-          expiration_date: expirationDate.toISOString(),
+          expiration_date: pixExpirationDate.toISOString(),
         },
       ];
     } else if (paymentMethod.type === "CREDIT_CARD") {
@@ -500,6 +770,11 @@ exports.createPagBankOrder = onCall(
       /\D/g,
       "",
     );
+    const isPj = cleanTaxId.length === 14 || Boolean(customer.isPj);
+    const formattedTaxId = isPj
+      ? cleanTaxId.slice(0, 14)
+      : cleanTaxId.padEnd(11, "0").slice(0, 11);
+
     const cleanPhone = String(customer.phone || "").replace(/\D/g, "");
     const phoneArea = cleanPhone.length >= 10 ? cleanPhone.slice(0, 2) : "41";
     const phoneNumber =
@@ -520,7 +795,7 @@ exports.createPagBankOrder = onCall(
       customer: {
         name: customer.name || "Cliente THR33",
         email: customer.email || "cliente@thr33.com",
-        tax_id: cleanTaxId.padEnd(11, "0").slice(0, 11),
+        tax_id: formattedTaxId,
         phones: [
           {
             country: "55",
@@ -534,7 +809,7 @@ exports.createPagBankOrder = onCall(
       shipping: {
         address: {
           street: shipping?.address?.street || "Rua",
-          number: shipping?.address?.number || "0",
+          number: String(shipping?.address?.number || "S/N").trim().slice(0, 15),
           complement: shipping?.address?.complement || "",
           locality:
             shipping?.address?.neighborhood ||
@@ -579,18 +854,44 @@ exports.createPagBankOrder = onCall(
         });
         pagbankOrder = response.data;
         charge = pagbankOrder.charges?.[0] || null;
+
+        // Se o cartao foi recusado pelo banco emissor, devolve o estoque imediatamente
+        if (charge && charge.status === "DECLINED") {
+          await restoreStockAtomic(
+            db,
+            sanitizedItems,
+            referenceId,
+            "Cartão recusado pelo banco emissor",
+          );
+          stockReserved = false;
+        }
       } catch (error) {
         console.error(
           "Erro na API PagBank Orders:",
           error.response?.data || error.message,
         );
+        // Se a chamada do gateway falhar, reverte o estoque reservado atomicamente!
+        await restoreStockAtomic(
+          db,
+          sanitizedItems,
+          referenceId,
+          "Falha na chamada da API PagBank",
+        );
+        stockReserved = false;
         const pagbankError = error.response?.data || error.message;
-        throw new HttpsError(
-          "internal",
+        const errorString =
           typeof pagbankError === "object"
             ? JSON.stringify(pagbankError)
-            : String(pagbankError),
-        );
+            : String(pagbankError);
+
+        if (errorString.includes("whitelist access required")) {
+          throw new HttpsError(
+            "failed-precondition",
+            "Sua conta PagBank requer liberação de Whitelist em Produção para a API de Pedidos. Conclua a solicitação de homologação enviada ao PagBank ou ative o Sandbox para testes.",
+          );
+        }
+
+        throw new HttpsError("internal", errorString);
       }
     } else {
       // Mock estruturado de homologacao quando executado localmente sem token ativo
@@ -664,11 +965,18 @@ exports.createPagBankOrder = onCall(
             : "Boleto Bancário",
       total: finalAmountInCents / 100,
       amountInCents: finalAmountInCents,
-      originalTotal: calculatedTotal / 100,
-      discountAmount: Number(discountAmount || 0),
-      couponCode: couponCode || null,
-      walletDeduction: Number(walletDeduction || 0),
-      shippingCost: Number(shipping?.cost || 0),
+      subtotal: subtotalInCents / 100,
+      subtotalInCents,
+      originalTotal: calculatedTotalInCents / 100,
+      discountAmount: serverDiscountInCents / 100,
+      discountInCents: serverDiscountInCents,
+      couponCode: validatedCouponData?.code || null,
+      couponId: validatedCouponData?.id || null,
+      walletDeduction: serverWalletDeductionInCents / 100,
+      walletDeductionInCents: serverWalletDeductionInCents,
+      shippingCost: officialShippingFeeInCents / 100,
+      shippingCostInCents: officialShippingFeeInCents,
+      shippingMethod: shippingMethodId,
       shippingAddress: orderPayload.shipping.address,
       items: sanitizedItems,
       trackingCode: null,
@@ -676,15 +984,38 @@ exports.createPagBankOrder = onCall(
       trackingUrl: null,
       pixQrCodeUrl,
       pixCopiaECola,
+      stockReserved: stockReserved,
+      stockReleased: !stockReserved,
       pixExpiresAt:
         paymentMethod.type === "PIX"
-          ? new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+          ? (pixExpirationDate
+              ? pixExpirationDate.toISOString()
+              : new Date(Date.now() + 30 * 60 * 1000).toISOString())
           : null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
       nfe: {
         status: "PENDING_EMISSION",
         issued: false,
+        cfopDefault: cfopCode,
+        subtotalInCents,
+        shippingInCents: officialShippingFeeInCents,
+        discountInCents: serverDiscountInCents,
+        totalInCents: finalAmountInCents,
+        destinatario: {
+          tipoPessoa: isPj ? "PJ" : "PF",
+          cpf_cnpj: cleanTaxId,
+          nome: customer.name,
+          ie: isPj ? (customer.isentoIE ? "ISENTO" : String(customer.ie || "").trim().toUpperCase()) : null,
+          indIEDest: isPj ? (customer.isentoIE ? "2" : (customer.ie ? "1" : "9")) : "9",
+          uf: clientState,
+          codigoMunicipio: String(shipping?.address?.ibge || "4106902").replace(/\D/g, "").slice(0, 7),
+          municipio: shipping?.address?.city || "Curitiba",
+          bairro: shipping?.address?.neighborhood || shipping?.address?.locality || "Centro",
+          logradouro: shipping?.address?.street || "Rua",
+          numero: String(shipping?.address?.number || "S/N").trim(),
+          cep: cleanCep,
+        },
       },
       nfeIssued: false,
       nfeKey: null,
@@ -982,20 +1313,48 @@ exports.pagbankWebhook = onRequest(
 
         if (pagbankStatus === "PAID" || pagbankStatus === "AUTHORIZED") {
           updateData.paidAt = FieldValue.serverTimestamp();
+          updateData.stockDeducted = true;
 
-          // Baixa de estoque transacional se itens estiverem presentes
-          const itemsList = freshData.items || orderData.items;
-          if (Array.isArray(itemsList)) {
-            for (const item of itemsList) {
-              const prodId = item.reference_id || item.id;
-              if (prodId) {
+          // Se o estoque NAO havia sido pre-reservado no checkout, deduz agora com seguranca por tamanho
+          if (!freshData.stockReserved) {
+            const itemsList = freshData.items || orderData.items;
+            if (Array.isArray(itemsList) && itemsList.length > 0) {
+              const prodSnaps = [];
+              for (const item of itemsList) {
+                const prodId = item.reference_id || item.id;
+                if (!prodId) continue;
                 const productRef = db.collection("products").doc(prodId);
                 const prodSnap = await transaction.get(productRef);
-                if (prodSnap.exists) {
-                  transaction.update(productRef, {
-                    stock: FieldValue.increment(-Number(item.quantity || 1)),
+                prodSnaps.push({ productRef, prodSnap, item });
+              }
+
+              for (const { productRef, prodSnap, item } of prodSnaps) {
+                if (!prodSnap.exists) continue;
+                const pData = prodSnap.data();
+                const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+                const size = String(item.size || "M").toUpperCase();
+                const updates = { updatedAt: FieldValue.serverTimestamp() };
+
+                if (pData.stock && typeof pData.stock === "object") {
+                  const current = Number(pData.stock[size] ?? pData.stock[item.size] ?? 0);
+                  const newStock = { ...pData.stock, [size]: Math.max(0, current - qty) };
+                  updates.stock = newStock;
+                  updates.sizes = Object.keys(newStock).filter((s) => (newStock[s] || 0) > 0);
+                } else if (typeof pData.stock === "number") {
+                  updates.stock = Math.max(0, pData.stock - qty);
+                }
+
+                if (Array.isArray(pData.variants) && pData.variants.length > 0) {
+                  updates.variants = pData.variants.map((v) => {
+                    if (String(v.size || "").toUpperCase() === size) {
+                      const curVar = Number(v.stock_quantity ?? v.stock ?? 0);
+                      return { ...v, stock_quantity: Math.max(0, curVar - qty) };
+                    }
+                    return v;
                   });
                 }
+
+                transaction.update(productRef, updates);
               }
             }
           }
@@ -1006,6 +1365,53 @@ exports.pagbankWebhook = onRequest(
           updateData.declinedReason =
             charge?.payment_response?.message ||
             "Negado pelo emissor do cartao";
+
+          // Se o estoque estava reservado e ainda nao foi liberado, devolve ao catalogo
+          if (freshData.stockReserved && !freshData.stockReleased) {
+            updateData.stockReleased = true;
+            updateData.stockReserved = false;
+
+            const itemsList = freshData.items || orderData.items;
+            if (Array.isArray(itemsList) && itemsList.length > 0) {
+              const prodSnaps = [];
+              for (const item of itemsList) {
+                const prodId = item.reference_id || item.id;
+                if (!prodId) continue;
+                const productRef = db.collection("products").doc(prodId);
+                const prodSnap = await transaction.get(productRef);
+                prodSnaps.push({ productRef, prodSnap, item });
+              }
+
+              for (const { productRef, prodSnap, item } of prodSnaps) {
+                if (!prodSnap.exists) continue;
+                const pData = prodSnap.data();
+                const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+                const size = String(item.size || "M").toUpperCase();
+                const updates = { updatedAt: FieldValue.serverTimestamp() };
+
+                if (pData.stock && typeof pData.stock === "object") {
+                  const current = Number(pData.stock[size] ?? pData.stock[item.size] ?? 0);
+                  const newStock = { ...pData.stock, [size]: current + qty };
+                  updates.stock = newStock;
+                  updates.sizes = Object.keys(newStock).filter((s) => (newStock[s] || 0) > 0);
+                } else if (typeof pData.stock === "number") {
+                  updates.stock = pData.stock + qty;
+                }
+
+                if (Array.isArray(pData.variants) && pData.variants.length > 0) {
+                  updates.variants = pData.variants.map((v) => {
+                    if (String(v.size || "").toUpperCase() === size) {
+                      const curVar = Number(v.stock_quantity ?? v.stock ?? 0);
+                      return { ...v, stock_quantity: curVar + qty };
+                    }
+                    return v;
+                  });
+                }
+
+                transaction.update(productRef, updates);
+              }
+            }
+          }
         }
 
         transaction.update(orderRef, updateData);
@@ -1030,3 +1436,327 @@ exports.pagbankWebhook = onRequest(
     }
   },
 );
+
+/**
+ * 6. ROTINA AGENDADA: CANCELAMENTO DE PEDIDOS PIX EXPIRADOS E DEVOLUCAO DE ESTOQUE
+ * Executa a cada 15 minutos (cron: every 15 minutes) em southamerica-east1.
+ * Localiza pedidos com status 'aguardando_pagamento' ou 'awaiting_payment'
+ * cuja data limite de expiracao (pixExpiresAt) ja tenha sido ultrapassada.
+ * Devolve o estoque de forma atomica via runTransaction e marca o pedido como 'cancelado'.
+ */
+exports.cancelExpiredPixOrders = onSchedule(
+  {
+    schedule: "every 15 minutes",
+    timeZone: "America/Sao_Paulo",
+    region: FUNCTION_REGION,
+    memory: "256MiB",
+    timeoutSeconds: 120,
+    serviceAccount: "thr33-streetwear@appspot.gserviceaccount.com",
+  },
+  async (event) => {
+    const db = getDb();
+    const now = new Date();
+    logger.info(`Iniciando cron cancelExpiredPixOrders: ${now.toISOString()}`);
+
+    try {
+      const statusList = ["aguardando_pagamento", "awaiting_payment"];
+      const snapshot = await db
+        .collection("orders")
+        .where("status", "in", statusList)
+        .get();
+
+      if (snapshot.empty) {
+        logger.info("Nenhum pedido pendente aguardando pagamento.");
+        return;
+      }
+
+      let canceledCount = 0;
+
+      for (const orderDoc of snapshot.docs) {
+        const orderData = orderDoc.data();
+
+        const isPix =
+          orderData.paymentMethod === "PIX" ||
+          orderData.payment_method === "PIX" ||
+          Boolean(orderData.pixExpiresAt);
+
+        if (!isPix) continue;
+
+        let isExpired = false;
+        if (orderData.pixExpiresAt) {
+          isExpired = new Date(orderData.pixExpiresAt) <= now;
+        } else if (orderData.createdAt) {
+          const createdDate = orderData.createdAt.toDate
+            ? orderData.createdAt.toDate()
+            : new Date(orderData.createdAt);
+          const diffMinutes =
+            (now.getTime() - createdDate.getTime()) / (1000 * 60);
+          if (diffMinutes >= 30) {
+            isExpired = true;
+          }
+        }
+
+        if (!isExpired) continue;
+        if (orderData.stockReleased === true) continue;
+
+        await db.runTransaction(async (transaction) => {
+          const freshSnap = await transaction.get(orderDoc.ref);
+          if (!freshSnap.exists) return;
+          const freshData = freshSnap.data();
+
+          const paidStatuses = [
+            "pagamento_aprovado",
+            "pago",
+            "paid",
+            "em_producao",
+            "saiu_para_entrega",
+            "entregue",
+          ];
+          if (
+            paidStatuses.includes(freshData.status) ||
+            freshData.status === "cancelado" ||
+            freshData.stockReleased === true
+          ) {
+            return;
+          }
+
+          const items = freshData.items || [];
+          const prodSnapshots = [];
+
+          // 1. Leituras de todos os produtos do pedido
+          for (const item of items) {
+            const prodId = String(item.id || item.reference_id);
+            if (!prodId) continue;
+            const prodRef = db.collection("products").doc(prodId);
+            const pSnap = await transaction.get(prodRef);
+            prodSnapshots.push({ prodRef, pSnap, item });
+          }
+
+          // 2. Gravacoes de devolucao de estoque
+          for (const { prodRef, pSnap, item } of prodSnapshots) {
+            if (!pSnap.exists) continue;
+            const pData = pSnap.data();
+            const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+            const size = String(item.size || "M").toUpperCase();
+            const updates = { updatedAt: FieldValue.serverTimestamp() };
+
+            if (pData.stock && typeof pData.stock === "object") {
+              const current =
+                Number(pData.stock[size] ?? pData.stock[item.size] ?? 0);
+              const newStock = { ...pData.stock, [size]: current + qty };
+              updates.stock = newStock;
+              updates.sizes = Object.keys(newStock).filter(
+                (s) => (newStock[s] || 0) > 0
+              );
+            } else if (typeof pData.stock === "number") {
+              updates.stock = pData.stock + qty;
+            }
+
+            if (Array.isArray(pData.variants) && pData.variants.length > 0) {
+              updates.variants = pData.variants.map((v) => {
+                if (String(v.size || "").toUpperCase() === size) {
+                  const curVar = Number(v.stock_quantity ?? v.stock ?? 0);
+                  return { ...v, stock_quantity: curVar + qty };
+                }
+                return v;
+              });
+            }
+
+            transaction.update(prodRef, updates);
+          }
+
+          // 3. Atualizacao do pedido para cancelado
+          transaction.update(orderDoc.ref, {
+            status: "cancelado",
+            cancelReason: "PIX expirado sem confirmação de pagamento",
+            stockReserved: false,
+            stockReleased: true,
+            canceledAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          });
+
+          // 4. Auditoria
+          const histRef = orderDoc.ref.collection("historico_pagamento").doc();
+          transaction.set(histRef, {
+            eventDate: FieldValue.serverTimestamp(),
+            internalStatus: "cancelado",
+            reason:
+              "PIX expirado - estoque devolvido automaticamente ao catalogo pela rotina agendada",
+          });
+        });
+
+        canceledCount++;
+        logger.info(
+          `Pedido ${orderDoc.id} cancelado e estoque devolvido com sucesso.`,
+        );
+      }
+
+      logger.info(
+        `Rotina agendada finalizada. Total de pedidos cancelados: ${canceledCount}`,
+      );
+    } catch (err) {
+      logger.error("Erro na execucao da rotina cancelExpiredPixOrders:", err);
+    }
+  },
+);
+
+/**
+ * 7. ENDPOINT HTTP PARA ACIONAMENTO MANUAL OU DE TESTE DA LIMPEZA DE PIX EXPIRADOS
+ */
+exports.cleanupExpiredPixOrdersManual = onRequest(
+  { region: FUNCTION_REGION, cors: true, serviceAccount: "thr33-streetwear@appspot.gserviceaccount.com" },
+  async (req, res) => {
+    cors(req, res, async () => {
+      const db = getDb();
+      const now = new Date();
+      logger.info("PROJECT_INFO", {
+        gcloud: process.env.GCLOUD_PROJECT,
+        google_cloud: process.env.GOOGLE_CLOUD_PROJECT,
+        firebase_config: process.env.FIREBASE_CONFIG,
+        adminOptions: admin.app().options,
+      });
+
+      try {
+        const statusList = ["aguardando_pagamento", "awaiting_payment"];
+        const snapshot = await db
+          .collection("orders")
+          .where("status", "in", statusList)
+          .get();
+
+        if (snapshot.empty) {
+          return res.status(200).json({
+            success: true,
+            canceledCount: 0,
+            message: "Nenhum pedido pendente aguardando pagamento.",
+          });
+        }
+
+        let canceledCount = 0;
+        const canceledOrders = [];
+
+        for (const orderDoc of snapshot.docs) {
+          const orderData = orderDoc.data();
+          const isPix =
+            orderData.paymentMethod === "PIX" ||
+            orderData.payment_method === "PIX" ||
+            Boolean(orderData.pixExpiresAt);
+
+          if (!isPix) continue;
+
+          let isExpired = false;
+          if (orderData.pixExpiresAt) {
+            isExpired = new Date(orderData.pixExpiresAt) <= now;
+          } else if (orderData.createdAt) {
+            const createdDate = orderData.createdAt.toDate
+              ? orderData.createdAt.toDate()
+              : new Date(orderData.createdAt);
+            const diffMinutes =
+              (now.getTime() - createdDate.getTime()) / (1000 * 60);
+            if (diffMinutes >= 30) {
+              isExpired = true;
+            }
+          }
+
+          if (!isExpired) continue;
+          if (orderData.stockReleased === true) continue;
+
+          await db.runTransaction(async (transaction) => {
+            const freshSnap = await transaction.get(orderDoc.ref);
+            if (!freshSnap.exists) return;
+            const freshData = freshSnap.data();
+
+            const paidStatuses = [
+              "pagamento_aprovado",
+              "pago",
+              "paid",
+              "em_producao",
+              "saiu_para_entrega",
+              "entregue",
+            ];
+            if (
+              paidStatuses.includes(freshData.status) ||
+              freshData.status === "cancelado" ||
+              freshData.stockReleased === true
+            ) {
+              return;
+            }
+
+            const items = freshData.items || [];
+            const prodSnapshots = [];
+
+            for (const item of items) {
+              const prodId = String(item.id || item.reference_id);
+              if (!prodId) continue;
+              const prodRef = db.collection("products").doc(prodId);
+              const pSnap = await transaction.get(prodRef);
+              prodSnapshots.push({ prodRef, pSnap, item });
+            }
+
+            for (const { prodRef, pSnap, item } of prodSnapshots) {
+              if (!pSnap.exists) continue;
+              const pData = pSnap.data();
+              const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+              const size = String(item.size || "M").toUpperCase();
+              const updates = { updatedAt: FieldValue.serverTimestamp() };
+
+              if (pData.stock && typeof pData.stock === "object") {
+                const current =
+                  Number(pData.stock[size] ?? pData.stock[item.size] ?? 0);
+                const newStock = { ...pData.stock, [size]: current + qty };
+                updates.stock = newStock;
+                updates.sizes = Object.keys(newStock).filter(
+                  (s) => (newStock[s] || 0) > 0
+                );
+              } else if (typeof pData.stock === "number") {
+                updates.stock = pData.stock + qty;
+              }
+
+              if (Array.isArray(pData.variants) && pData.variants.length > 0) {
+                updates.variants = pData.variants.map((v) => {
+                  if (String(v.size || "").toUpperCase() === size) {
+                    const curVar = Number(v.stock_quantity ?? v.stock ?? 0);
+                    return { ...v, stock_quantity: curVar + qty };
+                  }
+                  return v;
+                });
+              }
+
+              transaction.update(prodRef, updates);
+            }
+
+            transaction.update(orderDoc.ref, {
+              status: "cancelado",
+              cancelReason: "PIX expirado sem confirmação de pagamento",
+              stockReserved: false,
+              stockReleased: true,
+              canceledAt: FieldValue.serverTimestamp(),
+              updatedAt: FieldValue.serverTimestamp(),
+            });
+
+            const histRef = orderDoc.ref.collection("historico_pagamento").doc();
+            transaction.set(histRef, {
+              eventDate: FieldValue.serverTimestamp(),
+              internalStatus: "cancelado",
+              reason:
+                "PIX expirado - estoque devolvido automaticamente sob demanda",
+            });
+          });
+
+          canceledCount++;
+          canceledOrders.push(orderDoc.id);
+        }
+
+        return res.status(200).json({
+          success: true,
+          canceledCount,
+          canceledOrders,
+          timestamp: now.toISOString(),
+        });
+      } catch (err) {
+        logger.error("Erro em cleanupExpiredPixOrdersManual:", err);
+        return res.status(500).json({ error: err.message });
+      }
+    });
+  },
+);
+

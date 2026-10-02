@@ -36,6 +36,13 @@
         }
       },
       {
+        "source": "/api/cleanupExpiredPixOrders",
+        "function": {
+          "functionId": "cleanupExpiredPixOrdersManual",
+          "region": "southamerica-east1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
