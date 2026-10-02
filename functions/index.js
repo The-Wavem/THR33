@@ -229,16 +229,15 @@ exports.createOrder = onRequest(
           soft_descriptor: "THR33",
           card: {
             encrypted: paymentMethod.cardEncrypted,
-            security_code: paymentMethod.cvv
-              ? String(paymentMethod.cvv)
-              : undefined,
-            holder: {
-              name: (
-                paymentMethod.holderName ||
-                customer.name ||
-                "TITULAR DO CARTAO"
-              ).toUpperCase(),
-            },
+            store: false,
+          },
+          holder: {
+            name: (
+              paymentMethod.holderName ||
+              customer.name ||
+              "TITULAR DO CARTAO"
+            ).toUpperCase(),
+            tax_id: cleanTaxId,
           },
         };
       } else if (paymentMethod.type === "PIX") {
@@ -294,11 +293,10 @@ exports.createOrder = onRequest(
               {
                 id: mockChargeId,
                 reference_id: `CHAR_${cleanRefId}`,
-                status: paymentMethod.type === "CREDIT_CARD" ? "PAID" : "WAITING",
+                status:
+                  paymentMethod.type === "CREDIT_CARD" ? "PAID" : "WAITING",
                 amount: {
-                  value: Math.round(
-                    Number(paymentMethod.amount || 0) * 100,
-                  ),
+                  value: Math.round(Number(paymentMethod.amount || 0) * 100),
                   currency: "BRL",
                 },
                 payment_method: orderPayload.charges?.[0]?.payment_method || {},
@@ -316,10 +314,13 @@ exports.createOrder = onRequest(
                     type: "GET",
                   },
                 ],
-                qr_code: paymentMethod.type === "PIX" ? {
-                  id: `QRCO_${Date.now()}`,
-                  text: mockPixText,
-                } : undefined,
+                qr_code:
+                  paymentMethod.type === "PIX"
+                    ? {
+                        id: `QRCO_${Date.now()}`,
+                        text: mockPixText,
+                      }
+                    : undefined,
               },
             ],
           };
@@ -342,9 +343,7 @@ exports.createOrder = onRequest(
             )?.href ||
             null;
           const pixCopiaECola =
-            firstCharge?.qr_code?.text ||
-            data.qr_codes?.[0]?.text ||
-            null;
+            firstCharge?.qr_code?.text || data.qr_codes?.[0]?.text || null;
 
           await db
             .collection("orders")
@@ -396,7 +395,7 @@ exports.createOrder = onRequest(
  * Reserva atomicamente o estoque de produtos dentro de uma transacao Firestore.
  * Previne condicoes de corrida (Race Conditions) quando multiplos compradores
  * tentam adquirir a ultima peca simultaneamente.
- * 
+ *
  * Regra do Firestore: Todas as leituras ocorrem antes de quaisquer gravacoes.
  */
 async function reserveStockAtomic(db, items, orderRefId) {
@@ -418,7 +417,7 @@ async function reserveStockAtomic(db, items, orderRefId) {
       if (!snap.exists) {
         throw new HttpsError(
           "not-found",
-          `Produto "${item.name || prodId}" não foi encontrado no catálogo oficial.`
+          `Produto "${item.name || prodId}" não foi encontrado no catálogo oficial.`,
         );
       }
 
@@ -433,7 +432,7 @@ async function reserveStockAtomic(db, items, orderRefId) {
         available = Number(data.stock);
       } else if (Array.isArray(data.variants) && data.variants.length > 0) {
         const v = data.variants.find(
-          (variant) => String(variant.size || "").toUpperCase() === size
+          (variant) => String(variant.size || "").toUpperCase() === size,
         );
         available = v ? Number(v.stock_quantity ?? v.stock ?? 0) : 0;
       }
@@ -441,7 +440,7 @@ async function reserveStockAtomic(db, items, orderRefId) {
       if (available < qty) {
         throw new HttpsError(
           "failed-precondition",
-          `Estoque insuficiente para "${data.name || item.name}" no tamanho ${size}. Disponível: ${available}, solicitado: ${qty}.`
+          `Estoque insuficiente para "${data.name || item.name}" no tamanho ${size}. Disponível: ${available}, solicitado: ${qty}.`,
         );
       }
     }
@@ -456,14 +455,16 @@ async function reserveStockAtomic(db, items, orderRefId) {
       };
 
       if (data.stock && typeof data.stock === "object") {
-        const currentQty = Number(data.stock[size] ?? data.stock[item.size] ?? 0);
+        const currentQty = Number(
+          data.stock[size] ?? data.stock[item.size] ?? 0,
+        );
         const newStock = {
           ...data.stock,
           [size]: Math.max(0, currentQty - qty),
         };
         updates.stock = newStock;
         updates.sizes = Object.keys(newStock).filter(
-          (s) => (newStock[s] || 0) > 0
+          (s) => (newStock[s] || 0) > 0,
         );
       } else if (typeof data.stock === "number") {
         updates.stock = Math.max(0, data.stock - qty);
@@ -486,7 +487,7 @@ async function reserveStockAtomic(db, items, orderRefId) {
     }
 
     logger.info(
-      `Estoque reservado atomicamente para o pedido ${orderRefId}: ${items.length} itens.`
+      `Estoque reservado atomicamente para o pedido ${orderRefId}: ${items.length} itens.`,
     );
     return true;
   });
@@ -496,7 +497,12 @@ async function reserveStockAtomic(db, items, orderRefId) {
  * Devolve atomicamente itens ao estoque dentro de uma transacao Firestore.
  * Chamado quando cartao e recusado, pedido cancelado ou PIX expirado.
  */
-async function restoreStockAtomic(db, items, orderRefId, reason = "Cancelamento") {
+async function restoreStockAtomic(
+  db,
+  items,
+  orderRefId,
+  reason = "Cancelamento",
+) {
   if (!items || !items.length) return false;
 
   return await db.runTransaction(async (transaction) => {
@@ -521,14 +527,16 @@ async function restoreStockAtomic(db, items, orderRefId, reason = "Cancelamento"
       };
 
       if (data.stock && typeof data.stock === "object") {
-        const currentQty = Number(data.stock[size] ?? data.stock[item.size] ?? 0);
+        const currentQty = Number(
+          data.stock[size] ?? data.stock[item.size] ?? 0,
+        );
         const newStock = {
           ...data.stock,
           [size]: currentQty + qty,
         };
         updates.stock = newStock;
         updates.sizes = Object.keys(newStock).filter(
-          (s) => (newStock[s] || 0) > 0
+          (s) => (newStock[s] || 0) > 0,
         );
       } else if (typeof data.stock === "number") {
         updates.stock = data.stock + qty;
@@ -551,7 +559,7 @@ async function restoreStockAtomic(db, items, orderRefId, reason = "Cancelamento"
     }
 
     logger.info(
-      `Estoque devolvido com sucesso para pedido ${orderRefId}. Motivo: ${reason}`
+      `Estoque devolvido com sucesso para pedido ${orderRefId}. Motivo: ${reason}`,
     );
     return true;
   });
@@ -604,20 +612,32 @@ exports.createPagBankOrder = onCall(
     // Determina CFOP fiscal para NF-e (TD-132 / SEFAZ)
     // 5102 = Venda de mercadoria adquirida de terceiros dentro do estado (PR)
     // 6102 = Venda de mercadoria para outros estados (Interestadual)
-    const clientState = (shipping?.address?.region_code || shipping?.address?.state || "PR").toUpperCase().slice(0, 2);
+    const clientState = (
+      shipping?.address?.region_code ||
+      shipping?.address?.state ||
+      "PR"
+    )
+      .toUpperCase()
+      .slice(0, 2);
     const isStatePR = clientState === "PR";
     const cfopCode = isStatePR ? "5102" : "6102";
 
     for (const item of items) {
       if (!item.id) {
-        throw new HttpsError("invalid-argument", "Item sem identificador válido.");
+        throw new HttpsError(
+          "invalid-argument",
+          "Item sem identificador válido.",
+        );
       }
 
-      const prodDoc = await db.collection("products").doc(String(item.id)).get();
+      const prodDoc = await db
+        .collection("products")
+        .doc(String(item.id))
+        .get();
       if (!prodDoc.exists) {
         throw new HttpsError(
           "not-found",
-          `Produto "${item.name || item.id}" não foi encontrado no catálogo oficial da THR33.`
+          `Produto "${item.name || item.id}" não foi encontrado no catálogo oficial da THR33.`,
         );
       }
 
@@ -626,7 +646,7 @@ exports.createPagBankOrder = onCall(
       if (isNaN(realPrice) || realPrice <= 0) {
         throw new HttpsError(
           "failed-precondition",
-          `Preço inválido cadastrado para o produto "${prodData.name || item.id}".`
+          `Preço inválido cadastrado para o produto "${prodData.name || item.id}".`,
         );
       }
 
@@ -639,11 +659,16 @@ exports.createPagBankOrder = onCall(
 
       sanitizedItems.push({
         reference_id: String(item.id),
-        name: String(prodData.name || item.name || "Camiseta THR33").slice(0, 64),
+        name: String(prodData.name || item.name || "Camiseta THR33").slice(
+          0,
+          64,
+        ),
         quantity: qty,
         unit_amount: unitAmountInCents,
         total_amount: itemTotalInCents,
-        ncm: String(prodData.ncm || "61091000").replace(/\D/g, "").slice(0, 8),
+        ncm: String(prodData.ncm || "61091000")
+          .replace(/\D/g, "")
+          .slice(0, 8),
         cfop: cfopCode,
         sku: String(prodData.sku || item.id).slice(0, 32),
         size: String(item.size || "M").slice(0, 10),
@@ -673,7 +698,8 @@ exports.createPagBankOrder = onCall(
         const isNotExpired = !cData.validUntil || todayStr <= cData.validUntil;
         const subtotalInReais = subtotalInCents / 100;
         const meetsMinOrder =
-          !cData.minOrderValue || subtotalInReais >= Number(cData.minOrderValue);
+          !cData.minOrderValue ||
+          subtotalInReais >= Number(cData.minOrderValue);
 
         if (isActive && isNotExpired && meetsMinOrder) {
           validatedCouponData = { id: couponDoc.id, ...cData };
@@ -681,9 +707,14 @@ exports.createPagBankOrder = onCall(
             const pct = Number(cData.discountPercent);
             serverDiscountInCents = Math.round((subtotalInCents * pct) / 100);
           } else if (cData.discountValue) {
-            serverDiscountInCents = Math.round(Number(cData.discountValue) * 100);
+            serverDiscountInCents = Math.round(
+              Number(cData.discountValue) * 100,
+            );
           }
-          serverDiscountInCents = Math.min(serverDiscountInCents, subtotalInCents);
+          serverDiscountInCents = Math.min(
+            serverDiscountInCents,
+            subtotalInCents,
+          );
         } else {
           logger.warn(`Cupom ${cleanCoupon} rejeitado por regras de negócio:`, {
             isActive,
@@ -696,11 +727,17 @@ exports.createPagBankOrder = onCall(
 
     // 2.2 Validacao e recalculo de Frete oficial server-side
     // Metodos: 'padrao' = R$ 24,90 (2490 centavos) | 'expresso' = R$ 38,50 (3850 centavos)
-    const shippingMethodId = String(shipping?.method || shipping?.shippingMethod || "padrao").toLowerCase();
-    let officialShippingFeeInCents = shippingMethodId === "expresso" ? 3850 : 2490;
+    const shippingMethodId = String(
+      shipping?.method || shipping?.shippingMethod || "padrao",
+    ).toLowerCase();
+    let officialShippingFeeInCents =
+      shippingMethodId === "expresso" ? 3850 : 2490;
 
     // Regra de Frete Gratis da THR33: compras a partir de R$ 299,00 ou cupom de frete gratis
-    if (subtotalInCents >= 29900 || validatedCouponData?.freeShipping === true) {
+    if (
+      subtotalInCents >= 29900 ||
+      validatedCouponData?.freeShipping === true
+    ) {
       officialShippingFeeInCents = 0;
     }
 
@@ -710,24 +747,36 @@ exports.createPagBankOrder = onCall(
       if (!userId || userId === "guest") {
         throw new HttpsError(
           "unauthenticated",
-          "Apenas usuários autenticados podem utilizar saldo de carteira digital."
+          "Apenas usuários autenticados podem utilizar saldo de carteira digital.",
         );
       }
 
       const userDoc = await db.collection("users").doc(userId).get();
       if (!userDoc.exists) {
-        throw new HttpsError("not-found", "Perfil do usuário não encontrado para débito de carteira.");
+        throw new HttpsError(
+          "not-found",
+          "Perfil do usuário não encontrado para débito de carteira.",
+        );
       }
 
       const userData = userDoc.data();
-      const realWalletBalance = Number(userData.walletBalance || userData.wallet || 0);
+      const realWalletBalance = Number(
+        userData.walletBalance || userData.wallet || 0,
+      );
       const maxPossibleDeduction = Math.round(realWalletBalance * 100);
-      const requestedDeductionInCents = Math.round(Number(walletDeduction) * 100);
+      const requestedDeductionInCents = Math.round(
+        Number(walletDeduction) * 100,
+      );
 
-      const maxAllowedForOrder = subtotalInCents + officialShippingFeeInCents - serverDiscountInCents;
+      const maxAllowedForOrder =
+        subtotalInCents + officialShippingFeeInCents - serverDiscountInCents;
       serverWalletDeductionInCents = Math.max(
         0,
-        Math.min(requestedDeductionInCents, maxPossibleDeduction, maxAllowedForOrder)
+        Math.min(
+          requestedDeductionInCents,
+          maxPossibleDeduction,
+          maxAllowedForOrder,
+        ),
       );
     }
 
@@ -735,7 +784,9 @@ exports.createPagBankOrder = onCall(
     const calculatedTotalInCents = subtotalInCents + officialShippingFeeInCents;
     const finalAmountInCents = Math.max(
       0,
-      calculatedTotalInCents - serverDiscountInCents - serverWalletDeductionInCents
+      calculatedTotalInCents -
+        serverDiscountInCents -
+        serverWalletDeductionInCents,
     );
 
     // 3. Montar objeto de cobranca conforme o metodo de pagamento
@@ -781,13 +832,15 @@ exports.createPagBankOrder = onCall(
           soft_descriptor: "THR33",
           card: {
             encrypted: paymentMethod.cardEncrypted,
-            holder: {
-              name: (
-                paymentMethod.holderName ||
-                customer.name ||
-                "CLIENTE THR33"
-              ).toUpperCase(),
-            },
+            store: false,
+          },
+          holder: {
+            name: (
+              paymentMethod.holderName ||
+              customer.name ||
+              "CLIENTE THR33"
+            ).toUpperCase(),
+            tax_id: formattedTaxId,
           },
         },
       };
@@ -839,7 +892,9 @@ exports.createPagBankOrder = onCall(
       shipping: {
         address: {
           street: shipping?.address?.street || "Rua",
-          number: String(shipping?.address?.number || "S/N").trim().slice(0, 15),
+          number: String(shipping?.address?.number || "S/N")
+            .trim()
+            .slice(0, 15),
           complement: shipping?.address?.complement || "",
           locality:
             shipping?.address?.neighborhood ||
@@ -953,10 +1008,13 @@ exports.createPagBankOrder = onCall(
                 type: "GET",
               },
             ],
-            qr_code: paymentMethod.type === "PIX" ? {
-              id: `QRCO_${Date.now()}`,
-              text: mockPixText,
-            } : undefined,
+            qr_code:
+              paymentMethod.type === "PIX"
+                ? {
+                    id: `QRCO_${Date.now()}`,
+                    text: mockPixText,
+                  }
+                : undefined,
           },
         ],
       };
@@ -981,9 +1039,7 @@ exports.createPagBankOrder = onCall(
       null;
 
     const pixCopiaECola =
-      charge?.qr_code?.text ||
-      pagbankOrder.qr_codes?.[0]?.text ||
-      null;
+      charge?.qr_code?.text || pagbankOrder.qr_codes?.[0]?.text || null;
 
     const qrCodeObj = {
       text: pixCopiaECola,
@@ -1036,9 +1092,9 @@ exports.createPagBankOrder = onCall(
       stockReleased: !stockReserved,
       pixExpiresAt:
         paymentMethod.type === "PIX"
-          ? (pixExpirationDate
-              ? pixExpirationDate.toISOString()
-              : new Date(Date.now() + 30 * 60 * 1000).toISOString())
+          ? pixExpirationDate
+            ? pixExpirationDate.toISOString()
+            : new Date(Date.now() + 30 * 60 * 1000).toISOString()
           : null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -1054,12 +1110,29 @@ exports.createPagBankOrder = onCall(
           tipoPessoa: isPj ? "PJ" : "PF",
           cpf_cnpj: cleanTaxId,
           nome: customer.name,
-          ie: isPj ? (customer.isentoIE ? "ISENTO" : String(customer.ie || "").trim().toUpperCase()) : null,
-          indIEDest: isPj ? (customer.isentoIE ? "2" : (customer.ie ? "1" : "9")) : "9",
+          ie: isPj
+            ? customer.isentoIE
+              ? "ISENTO"
+              : String(customer.ie || "")
+                  .trim()
+                  .toUpperCase()
+            : null,
+          indIEDest: isPj
+            ? customer.isentoIE
+              ? "2"
+              : customer.ie
+                ? "1"
+                : "9"
+            : "9",
           uf: clientState,
-          codigoMunicipio: String(shipping?.address?.ibge || "4106902").replace(/\D/g, "").slice(0, 7),
+          codigoMunicipio: String(shipping?.address?.ibge || "4106902")
+            .replace(/\D/g, "")
+            .slice(0, 7),
           municipio: shipping?.address?.city || "Curitiba",
-          bairro: shipping?.address?.neighborhood || shipping?.address?.locality || "Centro",
+          bairro:
+            shipping?.address?.neighborhood ||
+            shipping?.address?.locality ||
+            "Centro",
           logradouro: shipping?.address?.street || "Rua",
           numero: String(shipping?.address?.number || "S/N").trim(),
           cep: cleanCep,
@@ -1073,7 +1146,9 @@ exports.createPagBankOrder = onCall(
     return {
       success: true,
       orderId: referenceId,
-      status: charge?.status || (paymentMethod.type === "PIX" ? "WAITING" : "PENDING"),
+      status:
+        charge?.status ||
+        (paymentMethod.type === "PIX" ? "WAITING" : "PENDING"),
       qrCode: qrCodeObj,
     };
   },
@@ -1131,10 +1206,13 @@ exports.createSecureOrder = onRequest(
                   type: "GET",
                 },
               ],
-              qr_code: ch.payment_method?.type === "PIX" ? {
-                id: `QRCO_${Date.now()}`,
-                text: mockPixText,
-              } : undefined,
+              qr_code:
+                ch.payment_method?.type === "PIX"
+                  ? {
+                      id: `QRCO_${Date.now()}`,
+                      text: mockPixText,
+                    }
+                  : undefined,
             })),
           };
         }
@@ -1401,19 +1479,32 @@ exports.pagbankWebhook = onRequest(
                 const updates = { updatedAt: FieldValue.serverTimestamp() };
 
                 if (pData.stock && typeof pData.stock === "object") {
-                  const current = Number(pData.stock[size] ?? pData.stock[item.size] ?? 0);
-                  const newStock = { ...pData.stock, [size]: Math.max(0, current - qty) };
+                  const current = Number(
+                    pData.stock[size] ?? pData.stock[item.size] ?? 0,
+                  );
+                  const newStock = {
+                    ...pData.stock,
+                    [size]: Math.max(0, current - qty),
+                  };
                   updates.stock = newStock;
-                  updates.sizes = Object.keys(newStock).filter((s) => (newStock[s] || 0) > 0);
+                  updates.sizes = Object.keys(newStock).filter(
+                    (s) => (newStock[s] || 0) > 0,
+                  );
                 } else if (typeof pData.stock === "number") {
                   updates.stock = Math.max(0, pData.stock - qty);
                 }
 
-                if (Array.isArray(pData.variants) && pData.variants.length > 0) {
+                if (
+                  Array.isArray(pData.variants) &&
+                  pData.variants.length > 0
+                ) {
                   updates.variants = pData.variants.map((v) => {
                     if (String(v.size || "").toUpperCase() === size) {
                       const curVar = Number(v.stock_quantity ?? v.stock ?? 0);
-                      return { ...v, stock_quantity: Math.max(0, curVar - qty) };
+                      return {
+                        ...v,
+                        stock_quantity: Math.max(0, curVar - qty),
+                      };
                     }
                     return v;
                   });
@@ -1455,15 +1546,22 @@ exports.pagbankWebhook = onRequest(
                 const updates = { updatedAt: FieldValue.serverTimestamp() };
 
                 if (pData.stock && typeof pData.stock === "object") {
-                  const current = Number(pData.stock[size] ?? pData.stock[item.size] ?? 0);
+                  const current = Number(
+                    pData.stock[size] ?? pData.stock[item.size] ?? 0,
+                  );
                   const newStock = { ...pData.stock, [size]: current + qty };
                   updates.stock = newStock;
-                  updates.sizes = Object.keys(newStock).filter((s) => (newStock[s] || 0) > 0);
+                  updates.sizes = Object.keys(newStock).filter(
+                    (s) => (newStock[s] || 0) > 0,
+                  );
                 } else if (typeof pData.stock === "number") {
                   updates.stock = pData.stock + qty;
                 }
 
-                if (Array.isArray(pData.variants) && pData.variants.length > 0) {
+                if (
+                  Array.isArray(pData.variants) &&
+                  pData.variants.length > 0
+                ) {
                   updates.variants = pData.variants.map((v) => {
                     if (String(v.size || "").toUpperCase() === size) {
                       const curVar = Number(v.stock_quantity ?? v.stock ?? 0);
@@ -1606,12 +1704,13 @@ exports.cancelExpiredPixOrders = onSchedule(
             const updates = { updatedAt: FieldValue.serverTimestamp() };
 
             if (pData.stock && typeof pData.stock === "object") {
-              const current =
-                Number(pData.stock[size] ?? pData.stock[item.size] ?? 0);
+              const current = Number(
+                pData.stock[size] ?? pData.stock[item.size] ?? 0,
+              );
               const newStock = { ...pData.stock, [size]: current + qty };
               updates.stock = newStock;
               updates.sizes = Object.keys(newStock).filter(
-                (s) => (newStock[s] || 0) > 0
+                (s) => (newStock[s] || 0) > 0,
               );
             } else if (typeof pData.stock === "number") {
               updates.stock = pData.stock + qty;
@@ -1669,7 +1768,11 @@ exports.cancelExpiredPixOrders = onSchedule(
  * 7. ENDPOINT HTTP PARA ACIONAMENTO MANUAL OU DE TESTE DA LIMPEZA DE PIX EXPIRADOS
  */
 exports.cleanupExpiredPixOrdersManual = onRequest(
-  { region: FUNCTION_REGION, cors: true, serviceAccount: "thr33-streetwear@appspot.gserviceaccount.com" },
+  {
+    region: FUNCTION_REGION,
+    cors: true,
+    serviceAccount: "thr33-streetwear@appspot.gserviceaccount.com",
+  },
   async (req, res) => {
     cors(req, res, async () => {
       const db = getDb();
@@ -1765,12 +1868,13 @@ exports.cleanupExpiredPixOrdersManual = onRequest(
               const updates = { updatedAt: FieldValue.serverTimestamp() };
 
               if (pData.stock && typeof pData.stock === "object") {
-                const current =
-                  Number(pData.stock[size] ?? pData.stock[item.size] ?? 0);
+                const current = Number(
+                  pData.stock[size] ?? pData.stock[item.size] ?? 0,
+                );
                 const newStock = { ...pData.stock, [size]: current + qty };
                 updates.stock = newStock;
                 updates.sizes = Object.keys(newStock).filter(
-                  (s) => (newStock[s] || 0) > 0
+                  (s) => (newStock[s] || 0) > 0,
                 );
               } else if (typeof pData.stock === "number") {
                 updates.stock = pData.stock + qty;
@@ -1798,7 +1902,9 @@ exports.cleanupExpiredPixOrdersManual = onRequest(
               updatedAt: FieldValue.serverTimestamp(),
             });
 
-            const histRef = orderDoc.ref.collection("historico_pagamento").doc();
+            const histRef = orderDoc.ref
+              .collection("historico_pagamento")
+              .doc();
             transaction.set(histRef, {
               eventDate: FieldValue.serverTimestamp(),
               internalStatus: "cancelado",
@@ -1824,4 +1930,3 @@ exports.cleanupExpiredPixOrdersManual = onRequest(
     });
   },
 );
-
