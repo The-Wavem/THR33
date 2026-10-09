@@ -8,6 +8,7 @@ import ProductCardSkeleton from '../../components/catalog/ProductCardSkeleton';
 import { catalogService } from '../../services/catalogService';
 import { seedService } from '../../services/seedService';
 import { analyticsService } from '../../services/analyticsService';
+import { normalizeFitSlug, formatFitLabel } from '../../utils/fitUtils';
 import styles from './Catalogo.module.css';
 
 // Variantes de animação staggered para a grade de cards
@@ -187,7 +188,8 @@ export function Catalogo() {
   };
 
   const removeFit = (fit) => {
-    const updated = (filters.fits || []).filter(f => f !== fit);
+    const norm = normalizeFitSlug(fit);
+    const updated = (filters.fits || []).filter(f => normalizeFitSlug(f) !== norm && f !== fit);
     const newFilters = { ...filters, fits: updated };
     setFilters(newFilters);
     applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
@@ -236,9 +238,19 @@ export function Catalogo() {
       if (filters.categories && filters.categories.length > 0) {
         if (!filters.categories.includes(product.category?.toLowerCase())) return false;
       }
-      // 3. Modelagens (Multi-Seleção: OR)
+      // 3. Modelagens Dinâmicas (Multi-Seleção: OR)
       if (filters.fits && filters.fits.length > 0) {
-        if (!filters.fits.includes(product.fit?.toLowerCase())) return false;
+        const prodFitNorm = normalizeFitSlug(product.fit);
+        const matchFit = filters.fits.some(f => {
+          const filterNorm = normalizeFitSlug(f);
+          return (
+            filterNorm === prodFitNorm || 
+            product.fit?.toLowerCase() === f.toLowerCase() ||
+            product.fit?.toLowerCase().includes(f.toLowerCase()) ||
+            f.toLowerCase().includes(product.fit?.toLowerCase())
+          );
+        });
+        if (!matchFit) return false;
       }
       // 4. Drops (Multi-Seleção: OR)
       if (filters.drops && filters.drops.length > 0) {
@@ -322,7 +334,7 @@ export function Catalogo() {
               <>
                 <span className={styles.breadcrumbSeparator}>/</span>
                 <span className={styles.breadcrumbActive}>
-                  {selectedFits[0] === 'boxy' ? 'BOXY FIT' : 'OVERSIZED'}
+                  {formatFitLabel(selectedFits[0])}
                 </span>
               </>
             )}
@@ -335,7 +347,7 @@ export function Catalogo() {
       {/* TOOLBAR MOBILE COMPACTA: FILTROS */}
       <div className={styles.mobileToolbar}>
         <button 
-          type="button"
+          type="button" 
           onClick={() => setIsMobileFilterOpen(true)} 
           className={styles.mobileFilterBtn}
           aria-label="Abrir filtros"
@@ -362,7 +374,7 @@ export function Catalogo() {
           )}
           {selectedFits.map(fit => (
             <span key={fit} className={styles.filterChip}>
-              MODELAGEM: {fit === 'boxy' ? 'BOXY FIT' : 'OVERSIZED (HEAVY & CLÁSSICA)'}
+              MODELAGEM: {formatFitLabel(fit)}
               <button onClick={() => removeFit(fit)} aria-label={`Remover modelagem ${fit}`}>
                 <X size={12} />
               </button>

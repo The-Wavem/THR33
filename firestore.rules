@@ -34,7 +34,7 @@ service cloud.firestore {
         (request.resource.data.userId == 'guest' || !('userId' in request.resource.data) || request.resource.data.userId == null);
       allow update: if isAdmin() || (
         isAuthenticated() && 
-        resource.data.userId == request.auth.uid &&
+        (resource.data.userId == request.auth.uid || resource.data.clientEmail == request.auth.token.email) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny([
           'status', 
           'paidAt', 
@@ -123,6 +123,21 @@ service cloud.firestore {
     // Sessoes de telemetria anonima e analitica
     match /analytics/{docId=**} {
       allow read, write: if true;
+    }
+
+    // Chamados e tickets de suporte da loja ('support_tickets')
+    match /support_tickets/{ticketId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.customerEmail == request.auth.token.email ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated();
+      allow update: if isAdmin() || (
+        isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || resource.data.customerEmail == request.auth.token.email)
+      );
+      allow delete: if isAdmin();
     }
   }
 }

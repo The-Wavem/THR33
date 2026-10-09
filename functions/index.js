@@ -574,7 +574,6 @@ exports.createPagBankOrder = onCall(
     region: FUNCTION_REGION,
     secrets: [PAGBANK_TOKEN],
     cors: true,
-    serviceAccount: "thr33-streetwear@appspot.gserviceaccount.com",
   },
   async (request) => {
     // 1. Identifica usuario autenticado ou visitante
@@ -1614,7 +1613,6 @@ exports.cancelExpiredPixOrders = onSchedule(
     region: FUNCTION_REGION,
     memory: "256MiB",
     timeoutSeconds: 120,
-    serviceAccount: "thr33-streetwear@appspot.gserviceaccount.com",
   },
   async (event) => {
     const db = getDb();
@@ -1771,7 +1769,6 @@ exports.cleanupExpiredPixOrdersManual = onRequest(
   {
     region: FUNCTION_REGION,
     cors: true,
-    serviceAccount: "thr33-streetwear@appspot.gserviceaccount.com",
   },
   async (req, res) => {
     cors(req, res, async () => {
@@ -1930,3 +1927,6 @@ exports.cleanupExpiredPixOrdersManual = onRequest(
     });
   },
 );
+
+
+

@@ -119,7 +119,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       setGiftRedeemCode('');
       setRedeemFeedback({
         type: 'success',
-        text: `Vale-presente resgatado com sucesso! Saldo creditado: R$ ${creditedAmount.toFixed(2)}`
+        text: `Vale-presente resgatado com sucesso! Saldo creditado: R$ ${Number(creditedAmount || 0).toFixed(2)}`
       });
     } catch (err) {
       setRedeemFeedback({
@@ -233,7 +233,35 @@ export function Perfil({ defaultTab = 'pedidos' }) {
         const fetched = [];
         querySnapshot.forEach((docSnap) => {
           const data = docSnap.data();
-          const dateStr = data.createdAt ? new Date(data.createdAt).toLocaleDateString('pt-BR') : 'Hoje';
+
+          let parsedTimestamp = 0;
+          if (data.createdAt) {
+            if (typeof data.createdAt.toDate === 'function') {
+              parsedTimestamp = data.createdAt.toDate().getTime();
+            } else if (data.createdAt.seconds) {
+              parsedTimestamp = data.createdAt.seconds * 1000;
+            } else if (!isNaN(new Date(data.createdAt).getTime())) {
+              parsedTimestamp = new Date(data.createdAt).getTime();
+            }
+          } else if (data.updatedAt) {
+            if (typeof data.updatedAt.toDate === 'function') {
+              parsedTimestamp = data.updatedAt.toDate().getTime();
+            } else if (!isNaN(new Date(data.updatedAt).getTime())) {
+              parsedTimestamp = new Date(data.updatedAt).getTime();
+            }
+          }
+
+          if (!parsedTimestamp || isNaN(parsedTimestamp)) {
+            const match = docSnap.id.match(/(\d{10,13})/);
+            if (match) {
+              const num = Number(match[1]);
+              parsedTimestamp = num < 10000000000 ? num * 1000 : num;
+            }
+          }
+
+          const dateStr = parsedTimestamp
+            ? new Date(parsedTimestamp).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : 'Hoje';
 
           const normStatus = normalizeOrderStatus(data.status);
           const statusMeta = getOrderStatusMeta(normStatus);
@@ -241,6 +269,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
           fetched.push({
             id: `THR-${docSnap.id.slice(0, 6).toUpperCase()}`,
             rawId: docSnap.id,
+            createdAtTimestamp: parsedTimestamp || 0,
             date: dateStr,
             status: statusMeta.label,
             statusCode: normStatus,
@@ -266,11 +295,11 @@ export function Perfil({ defaultTab = 'pedidos' }) {
               : data.paymentMethod === 'credit' || data.paymentMethod === 'Cartão de Crédito'
                 ? 'Cartão de Crédito PagBank' 
                 : (data.paymentMethod || 'Boleto Bancário'),
-            coupon: data.discountAmount ? { code: data.couponCode || "DESCONTO", discount: data.discountAmount } : null,
-            subtotal: data.subtotal || data.total,
+            coupon: data.discountAmount ? { code: data.couponCode || "DESCONTO", discount: Number(data.discountAmount || 0) } : null,
+            subtotal: Number(data.subtotal ?? data.total ?? 0),
             shippingMethod: data.shippingMethod === 'pac' ? 'PAC Correios (3 a 7 dias úteis)' : 'SEDEX Expresso (1 a 2 dias úteis)',
-            shippingCost: data.shippingCost || 0,
-            total: data.total,
+            shippingCost: Number(data.shippingCost || 0),
+            total: Number(data.total || 0),
             address: data.shippingAddress ? {
               name: data.clientName || 'Cliente THR33',
               street: data.shippingAddress.street || 'Rua',
@@ -281,16 +310,22 @@ export function Perfil({ defaultTab = 'pedidos' }) {
               state: data.shippingAddress.state || 'PR',
               cep: data.shippingAddress.cep || ''
             } : null,
-            items: (data.items || []).map((item, idx) => ({
-              id: item.id || `item-${idx}`,
-              name: item.name,
-              size: item.size || 'M',
-              price: item.price,
-              image: item.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop',
-              evaluated: item.evaluated || false
-            }))
+            items: (data.items || []).map((item, idx) => {
+              const rawPrice = item.price ?? item.unitPrice ?? (item.unit_amount ? (item.unit_amount > 1000 ? item.unit_amount / 100 : item.unit_amount) : 0);
+              return {
+                id: item.id || `item-${idx}`,
+                name: item.name || item.title || 'Produto THR33',
+                size: item.size || 'M',
+                price: Number(rawPrice || 0),
+                image: item.image || item.imageUrl || item.thumbnail || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop',
+                evaluated: item.evaluated || false
+              };
+            })
           });
         });
+
+        // Ordena do mais recente para o mais antigo (decrescente)
+        fetched.sort((a, b) => (b.createdAtTimestamp || 0) - (a.createdAtTimestamp || 0));
 
         setOrders(fetched);
       } catch (err) {
@@ -349,7 +384,10 @@ export function Perfil({ defaultTab = 'pedidos' }) {
           tkt = await supportService.getTicketByOrderId(order.rawId || order.id);
         }
         if (!tkt && order.lastTicketId) {
-          tkt = await supportService.getTicketById(order.lastTicketId);
+          tkt = await supportService.getTicketById(order.lastTicketId, order.rawId || order.id);
+        }
+        if (!tkt && order.supportTicket) {
+          tkt = order.supportTicket;
         }
         setActiveTicketData(tkt);
       } catch (err) {
@@ -394,7 +432,21 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       alert("Solicitação enviada com sucesso! O andamento pode ser acompanhado diretamente neste painel.");
       setIsNewTicketModalOpen(false);
       setOrders(prev => prev.map(o => (o.id === selectedOrderForSupport.id || o.rawId === selectedOrderForSupport.rawId) 
-        ? { ...o, hasOpenTicket: true, lastTicketId: res.ticketId, lastTicketStatus: 'ABERTO' } 
+        ? { 
+            ...o, 
+            hasOpenTicket: true, 
+            lastTicketId: res.ticketId, 
+            lastTicketStatus: 'ABERTO',
+            supportTicket: res.payload || {
+              id: res.ticketId,
+              orderId: targetOrderId,
+              reason: supportReason,
+              message: supportMessage,
+              status: 'ABERTO',
+              productName: selectedProd?.name || 'Geral do Pedido',
+              createdAt: new Date().toISOString()
+            }
+          } 
         : o
       ));
     } catch (err) {
@@ -1467,7 +1519,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                             <img src={item.image} alt={item.name} className={styles.itemThumb} />
                             <div className={styles.itemInfo}>
                               <strong className={styles.itemTitle}>{item.name}</strong>
-                              <span className={styles.itemMetaText}>Tamanho: {item.size} | R$ {item.price.toFixed(2)}</span>
+                              <span className={styles.itemMetaText}>Tamanho: {item.size} | R$ {Number(item.price || 0).toFixed(2)}</span>
                             </div>
                             
                             <button 
@@ -1546,7 +1598,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                       <footer className={styles.orderFooter}>
                         <div className={styles.orderFooterLeft}>
                           <span>Total do Pedido:</span>
-                          <strong className={styles.orderTotalValue}>R$ {order.total.toFixed(2)}</strong>
+                          <strong className={styles.orderTotalValue}>R$ {Number(order.total || 0).toFixed(2)}</strong>
                         </div>
 
                         <div className={styles.orderFooterActions}>
@@ -1743,7 +1795,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                       <img src={item.image} alt={item.name} />
                       <div className={styles.modalItemInfo}>
                         <strong>{item.name}</strong>
-                        <span>Tamanho: <strong>{item.size}</strong> • R$ {item.price.toFixed(2)}</span>
+                        <span>Tamanho: <strong>{item.size}</strong> • R$ {Number(item.price || 0).toFixed(2)}</span>
                       </div>
                       
                       <button 
@@ -1803,24 +1855,24 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
                     <div className={styles.finRow}>
                       <span>Subtotal:</span>
-                      <span>R$ {selectedOrderDetails.subtotal.toFixed(2)}</span>
+                      <span>R$ {Number(selectedOrderDetails.subtotal || 0).toFixed(2)}</span>
                     </div>
 
                     {selectedOrderDetails.coupon && (
                       <div className={`${styles.finRow} ${styles.finDiscount}`}>
                         <span>Cupom ({selectedOrderDetails.coupon.code}):</span>
-                        <span>- R$ {selectedOrderDetails.coupon.discount.toFixed(2)}</span>
+                        <span>- R$ {Number(selectedOrderDetails.coupon.discount || 0).toFixed(2)}</span>
                       </div>
                     )}
 
                     <div className={styles.finRow}>
                       <span>Frete:</span>
-                      <span>{selectedOrderDetails.shippingCost === 0 ? 'GRÁTIS' : `R$ ${selectedOrderDetails.shippingCost.toFixed(2)}`}</span>
+                      <span>{Number(selectedOrderDetails.shippingCost || 0) === 0 ? 'GRÁTIS' : `R$ ${Number(selectedOrderDetails.shippingCost || 0).toFixed(2)}`}</span>
                     </div>
 
                     <div className={`${styles.finRow} ${styles.finTotal}`}>
                       <span>TOTAL PAGO:</span>
-                      <strong>R$ {selectedOrderDetails.total.toFixed(2)}</strong>
+                      <strong>R$ {Number(selectedOrderDetails.total || 0).toFixed(2)}</strong>
                     </div>
                   </div>
                 </div>
@@ -1941,7 +1993,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
               </div>
 
               <p className={styles.modalDesc}>
-                Tem certeza que deseja cancelar este pedido? Se aprovado, o estorno do valor de <strong>R$ {cancelingOrder.total.toFixed(2)}</strong> será processado automaticamente pelo PagBank.
+                Tem certeza que deseja cancelar este pedido? Se aprovado, o estorno do valor de <strong>R$ {Number(cancelingOrder.total || 0).toFixed(2)}</strong> será processado automaticamente pelo PagBank.
               </p>
 
               <form onSubmit={handleConfirmCancelOrder} className={styles.reviewForm}>

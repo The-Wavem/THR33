@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, X, SlidersHorizontal } from 'lucide-react';
 import { analyticsService } from '../../services/analyticsService';
+import { extractAvailableFits, normalizeFitSlug } from '../../utils/fitUtils';
 import styles from './FilterSidebar.module.css';
 
 export function FilterSidebar({ 
@@ -20,6 +21,11 @@ export function FilterSidebar({
   totalResults
 }) {
   const [searchTerm, setSearchTerm] = useState(searchQuery);
+
+  // Modelagens dinâmicas computadas a partir do catálogo e CMS
+  const availableFits = useMemo(() => {
+    return extractAvailableFits(products);
+  }, [products]);
 
   // Bloqueio de scroll do body quando o drawer mobile estiver aberto
   useEffect(() => {
@@ -51,16 +57,18 @@ export function FilterSidebar({
     if (onSearchClear) onSearchClear();
   };
 
-  const toggleFit = (fit) => {
+  const toggleFit = (fitId) => {
     const current = filters.fits || [];
-    const isSelecting = !current.includes(fit);
-    if (isSelecting) analyticsService.trackFilterUse('modelagem', fit);
+    const isAlreadySelected = current.some(f => normalizeFitSlug(f) === fitId || f === fitId);
+    if (!isAlreadySelected) {
+      analyticsService.trackFilterUse('modelagem', fitId);
+    }
 
     setFilters(prev => {
       const prevFits = prev.fits || [];
-      const updated = prevFits.includes(fit)
-        ? prevFits.filter(f => f !== fit)
-        : [...prevFits, fit];
+      const updated = isAlreadySelected
+        ? prevFits.filter(f => normalizeFitSlug(f) !== fitId && f !== fitId)
+        : [...prevFits, fitId];
       return { ...prev, fits: updated };
     });
   };
@@ -129,15 +137,12 @@ export function FilterSidebar({
         </div>
       </form>
 
-      {/* 3. MODELAGEM (EXCLUSIVAS DE CAMISETAS CONFORME PLANILHA) */}
+      {/* 3. MODELAGEM (DINÂMICA CONFORME ITENS DO CMS/CATÁLOGO) */}
       <div className={styles.filterGroup}>
         <span className={styles.groupLabel}>MODELAGEM OFICIAL</span>
         <div className={styles.optionsList}>
-          {[
-            { id: 'boxy', label: 'BOXY FIT' },
-            { id: 'oversized', label: 'OVERSIZED (HEAVY & CLÁSSICA)' }
-          ].map(fit => {
-            const isSelected = selectedFits.includes(fit.id);
+          {availableFits.map(fit => {
+            const isSelected = selectedFits.some(f => normalizeFitSlug(f) === fit.id || f === fit.id);
             return (
               <button
                 key={fit.id}
