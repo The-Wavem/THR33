@@ -918,6 +918,10 @@
     display: none !important;
   }
 
+  .instagramHeaderLink {
+    display: none !important;
+  }
+
   .actions {
     gap: 0.25rem;
   }

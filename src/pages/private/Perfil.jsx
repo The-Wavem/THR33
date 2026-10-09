@@ -58,6 +58,12 @@ import {
 } from '../../services/orderStateMachine';
 import styles from './Perfil.module.css';
 
+const parseItemPrice = (item) => {
+  if (!item) return 0;
+  const val = item.price ?? item.unitPrice ?? (item.unit_amount ? (item.unit_amount > 1000 ? item.unit_amount / 100 : item.unit_amount) : 0);
+  return Number(val) || 0;
+};
+
 export function Perfil({ defaultTab = 'pedidos' }) {
   const { user, currentUser, updateUser, logout, changePassword } = useAuth();
   const [activeTab, setActiveTab] = useState(() => {
@@ -311,7 +317,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
               cep: data.shippingAddress.cep || ''
             } : null,
             items: (data.items || []).map((item, idx) => {
-              const rawPrice = item.price ?? item.unitPrice ?? (item.unit_amount ? (item.unit_amount > 1000 ? item.unit_amount / 100 : item.unit_amount) : 0);
+              const rawPrice = parseItemPrice(item);
               return {
                 id: item.id || `item-${idx}`,
                 name: item.name || item.title || 'Produto THR33',
@@ -1514,12 +1520,14 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
                       {/* ITENS DO PEDIDO */}
                       <div className={styles.orderItems}>
-                        {order.items.map((item) => (
-                          <div key={item.id} className={styles.orderItemRow}>
+                        {(order.items || []).map((item, idx) => (
+                          <div key={item.id || idx} className={styles.orderItemRow}>
                             <img src={item.image} alt={item.name} className={styles.itemThumb} />
                             <div className={styles.itemInfo}>
                               <strong className={styles.itemTitle}>{item.name}</strong>
-                              <span className={styles.itemMetaText}>Tamanho: {item.size} | R$ {Number(item.price || 0).toFixed(2)}</span>
+                              <span className={styles.itemMetaText}>
+                                Tamanho: {item.size || 'M'} | R$ {parseItemPrice(item).toFixed(2)}
+                              </span>
                             </div>
                             
                             <button 
@@ -1788,14 +1796,14 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
               {/* LISTAGEM DOS ITENS */}
               <div className={styles.modalItemsSection}>
-                <span className={styles.sectionLabel}>ITENS INCLUSOS ({selectedOrderDetails.items.length}):</span>
+                <span className={styles.sectionLabel}>ITENS INCLUSOS ({selectedOrderDetails.items?.length || 0}):</span>
                 <div className={styles.modalItemsList}>
-                  {selectedOrderDetails.items.map((item) => (
-                    <div key={item.id} className={styles.modalItemRow}>
+                  {(selectedOrderDetails.items || []).map((item, idx) => (
+                    <div key={item.id || idx} className={styles.modalItemRow}>
                       <img src={item.image} alt={item.name} />
                       <div className={styles.modalItemInfo}>
                         <strong>{item.name}</strong>
-                        <span>Tamanho: <strong>{item.size}</strong> • R$ {Number(item.price || 0).toFixed(2)}</span>
+                        <span>Tamanho: <strong>{item.size || 'M'}</strong> • R$ {parseItemPrice(item).toFixed(2)}</span>
                       </div>
                       
                       <button 
@@ -2317,7 +2325,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     <option value="">Geral do Pedido (Todos os Itens)</option>
                     {selectedOrderForSupport.items?.map(item => (
                       <option key={item.id} value={item.id}>
-                        {item.name} (Tamanho: {item.size}) - R$ {Number(item.price || 0).toFixed(2)}
+                        {item.name} (Tamanho: {item.size || 'M'}) - R$ {parseItemPrice(item).toFixed(2)}
                       </option>
                     ))}
                   </select>

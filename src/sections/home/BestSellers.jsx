@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowRight, Package } from 'lucide-react';
 import { catalogService } from '../../services/catalogService';
 import { seedService } from '../../services/seedService';
+import ProductCard from '../../components/catalog/ProductCard';
 import styles from './BestSellers.module.css';
 
 export function BestSellers({ products: initialProducts }) {
@@ -59,26 +60,9 @@ export function BestSellers({ products: initialProducts }) {
       </div>
 
       <div className={styles.productsGrid}>
-        {products.map((product) => {
-          const priceNum = Number(product.price || 0);
-          const imgSrc = product.image || (product.images && product.images[0]) || '';
-
-          return (
-            <div key={product.id} className={styles.productCard}>
-              <div className={styles.imageWrapper}>
-                <img src={imgSrc} alt={product.name} />
-                <Link className={styles.quickViewBtn} to={`/produto/${product.slug || product.id}`}>
-                  VER DETALHES
-                </Link>
-              </div>
-              <div className={styles.productInfo}>
-                <span className={styles.fitTag}>{(product.fit || 'boxy').toUpperCase()} FIT</span>
-                <h3 className={styles.productName}>{product.name}</h3>
-                <p className={styles.productPrice}>R$ {priceNum.toFixed(2)}</p>
-              </div>
-            </div>
-          );
-        })}
+        {products.map((product) => (
+          <ProductCard key={product.id || product.slug} product={product} />
+        ))}
       </div>
     </section>
   );

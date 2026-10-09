@@ -105,8 +105,28 @@
 @media (max-width: 900px) {
   .grid {
     grid-template-columns: 1fr;
+    gap: 1rem;
   }
   .cardLarge {
     grid-column: span 1;
+  }
+  .card {
+    height: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .section {
+    margin: 3rem auto;
+    padding: 0 0.85rem;
+  }
+  .header {
+    margin-bottom: 1.5rem;
+  }
+  .card {
+    height: 260px;
+  }
+  .cardCaption {
+    font-size: 0.95rem;
   }
 }

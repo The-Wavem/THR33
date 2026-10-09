@@ -902,3 +902,94 @@
     justify-content: flex-start;
   }
 }
+
+@media (max-width: 768px) {
+  .container {
+    padding: 1.25rem 0.85rem calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .breadcrumb {
+    font-size: 0.7rem;
+    margin-bottom: 1.25rem;
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .breadcrumb::-webkit-scrollbar {
+    display: none;
+  }
+
+  .productGrid {
+    gap: 1.5rem;
+  }
+
+  .title {
+    font-size: clamp(1.5rem, 5.5vw, 2rem);
+  }
+
+  .thumbBtn {
+    width: 68px;
+  }
+
+  .thumbnailsList {
+    gap: 0.6rem;
+  }
+
+  .actionsRow {
+    gap: 8px;
+    margin-top: 16px;
+  }
+
+  .quantityControl {
+    min-width: 80px;
+    height: 48px;
+  }
+
+  .addToBagButton {
+    height: 48px;
+    font-size: 0.82rem;
+    letter-spacing: 0.5px;
+    padding: 0 0.75rem;
+  }
+
+  .wishlistButton {
+    width: 48px;
+    height: 48px;
+  }
+
+  .reviewsSection {
+    padding-top: 2.5rem;
+    gap: 1.75rem;
+  }
+
+  .reviewsGrid {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .reviewCardItem {
+    padding: 1.2rem;
+  }
+}
+
+@media (max-width: 420px) {
+  .container {
+    padding-left: 0.65rem;
+    padding-right: 0.65rem;
+  }
+
+  .quantityControl {
+    min-width: 74px;
+    padding: 0 4px;
+  }
+
+  .quantityControl button {
+    padding: 0 0.25rem;
+  }
+
+  .addToBagButton {
+    font-size: 0.76rem;
+  }
+}

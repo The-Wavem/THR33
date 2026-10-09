@@ -272,6 +272,18 @@
 }
 
 @media (max-width: 850px) {
-  .channelsGrid { grid-template-columns: 1fr; }
-  .inputRow { grid-template-columns: 1fr; }
+  .container {
+    padding: 1.5rem 0.85rem calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+  .header {
+    margin-bottom: 2rem;
+  }
+  .channelsGrid { 
+    grid-template-columns: 1fr; 
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+  }
+  .inputRow { 
+    grid-template-columns: 1fr; 
+  }
 }

@@ -7,6 +7,7 @@ import { seedService } from '../../services/seedService';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { analyticsService } from '../../services/analyticsService';
+import { formatFitBadgeLabel } from '../../utils/fitUtils';
 import styles from './ProdutoDetalhe.module.css';
 
 const DEFAULT_SIZE_CHART = [
@@ -317,8 +318,12 @@ export function ProdutoDetalhe({ onAddToCart }) {
         <section className={styles.infoSection}>
           <div className={styles.headerInfo}>
             <div className={styles.badgeRow}>
-              <span className={styles.fitBadge}>{String(product?.fit || 'boxy').toUpperCase()} FIT</span>
-              <span className={styles.dropBadge}>{product?.drop === 'leak-two' ? 'LEAK TWO' : String(product?.drop || 'DROP EXCLUSIVO').toUpperCase()}</span>
+              <span className={styles.fitBadge}>{formatFitBadgeLabel(product?.fit)}</span>
+              <span className={styles.dropBadge}>
+                {product?.drop === 'leak-two' 
+                  ? 'LEAK TWO' 
+                  : (product?.drop ? product.drop.toUpperCase().replace(/[-_]/g, ' ') : 'DROP EXCLUSIVO')}
+              </span>
             </div>
             <h1 className={styles.title}>{product?.name || product?.title || 'Produto THR33'}</h1>
             

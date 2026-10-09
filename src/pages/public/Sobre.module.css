@@ -266,8 +266,19 @@
 }
 
 @media (max-width: 850px) {
+  .container {
+    padding: 1.5rem 0.85rem calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+  .heroSection {
+    margin-bottom: 2.5rem;
+  }
   .gridSection {
     grid-template-columns: 1fr;
+    gap: 2rem;
+    margin-bottom: 3rem;
+  }
+  .specsSection {
+    margin-bottom: 3rem;
   }
   .specsGrid {
     grid-template-columns: 1fr;

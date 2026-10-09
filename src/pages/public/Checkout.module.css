@@ -1604,6 +1604,13 @@
 }
 
 @media (max-width: 600px) {
+  .container {
+    padding: 1.25rem 0.85rem calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+  .header {
+    margin-bottom: 1.5rem;
+    padding-bottom: 1rem;
+  }
   .fieldsRow {
     grid-template-columns: 1fr;
   }
@@ -1615,5 +1622,12 @@
   }
   .stepName {
     display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .container {
+    padding-left: 0.6rem;
+    padding-right: 0.6rem;
   }
 }

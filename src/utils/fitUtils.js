@@ -67,6 +67,29 @@ export const formatFitLabel = (fitKey) => {
 };
 
 /**
+ * Formata o rotulo compacto do card de produto (tag visual concisa sem textos longos).
+ */
+export const formatFitBadgeLabel = (fitKey) => {
+  if (!fitKey) return 'BOXY FIT';
+  const key = normalizeFitSlug(fitKey);
+  if (key === 'oversized') return 'OVERSIZED FIT';
+  if (key === 'boxy') return 'BOXY FIT';
+  if (key === 'normal' || key === 'regular') return 'REGULAR FIT';
+  if (key === 'regata') return 'REGATA ATHLETIC';
+  if (key === 'slim') return 'SLIM FIT';
+  if (key === 'wide_leg') return 'WIDE LEG';
+  if (key === 'cargo') return 'CARGO FIT';
+  if (key === 'cropped') return 'CROPPED';
+  if (key === 'drop_shoulder') return 'DROP SHOULDER';
+
+  const clean = String(fitKey).replace(/[-_]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (clean.toLowerCase().endsWith('fit')) {
+    return clean.toUpperCase();
+  }
+  return `${clean.toUpperCase()} FIT`;
+};
+
+/**
  * Extrai a lista de modelagens ativas a partir dos produtos cadastrados no catálogo/CMS.
  * 
  * @param {Array} products Lista de produtos vindos do Firestore

@@ -150,7 +150,21 @@
 }
 
 @media (max-width: 800px) {
+  .container {
+    padding: 1.5rem 0.85rem calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+  .header {
+    margin-bottom: 2rem;
+  }
   .stepsSection {
     grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 2.5rem;
+  }
+  .noticeSection {
+    margin-bottom: 2.5rem;
+  }
+  .noticeBox {
+    padding: 1.25rem 1rem;
   }
 }

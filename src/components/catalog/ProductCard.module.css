@@ -92,39 +92,40 @@
   transform: scale(1.05);
 }
 
-/* BOTÃO DE FAVORITO NO TOPO DIREITO (TOUCH TARGET >= 44PX) */
+/* BOTÃO DE FAVORITO NO TOPO DIREITO */
 .favoriteBtn {
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;
-  width: 44px;
-  height: 44px;
-  min-width: 44px;
-  min-height: 44px;
-  background-color: rgba(10, 10, 10, 0.75);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  width: 40px;
+  height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  background-color: rgba(10, 10, 10, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   transition: all var(--transition-fast);
   z-index: 4;
-  border-radius: 2px;
+  border-radius: 50%;
 }
 
 .favoriteBtn:hover {
   border-color: var(--border-active);
-  background-color: rgba(26, 26, 26, 0.95);
-  transform: scale(1.05);
+  background-color: rgba(22, 22, 22, 0.95);
+  transform: scale(1.08);
 }
 
 .favoriteActive {
-  border-color: rgba(239, 68, 68, 0.6);
-  background-color: rgba(239, 68, 68, 0.2);
+  border-color: rgba(239, 68, 68, 0.55);
+  background-color: rgba(10, 10, 10, 0.82);
   color: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.25);
 }
 
 /* OVERLAY ACTIONS APENAS DESKTOP */
@@ -252,25 +253,34 @@
 /* RESPONSIVIDADE MOBILE STRICT */
 @media (max-width: 768px) {
   .details {
-    padding: 0.75rem 0.65rem;
+    padding: 0.65rem 0.55rem;
     gap: 0.25rem;
   }
 
   .tagsRow {
     font-size: 0.58rem;
     gap: 0.35rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    line-height: 1.2;
   }
 
   .fitTag, .dropTag {
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    max-width: 100%;
   }
 
   .productName {
     font-size: 0.82rem;
-    min-height: 2.3em;
+    line-height: 1.35;
+    min-height: 2.7em;
     letter-spacing: 0.2px;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    padding-bottom: 2px;
   }
 
   .badge, .promoBadge {
@@ -283,10 +293,10 @@
   .favoriteBtn {
     top: 0.35rem;
     right: 0.35rem;
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
+    width: 36px;
+    height: 36px;
+    min-width: 36px;
+    min-height: 36px;
   }
 
   .oldPrice {

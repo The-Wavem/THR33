@@ -13,7 +13,9 @@
   width: 100%;
   max-width: 440px;
   height: 100vh;
+  height: 100dvh;
   max-height: 100vh;
+  max-height: 100dvh;
   background-color: var(--bg-primary);
   border-left: 1px solid var(--border-color);
   display: flex;
@@ -468,4 +470,25 @@
 
 .continueBtn:hover {
   color: var(--text-primary);
+}
+
+@media (max-width: 480px) {
+  .drawer {
+    width: 100vw;
+    max-width: 100vw;
+    border-left: none;
+  }
+
+  .header {
+    padding: 1rem 1.15rem;
+  }
+
+  .itemsList {
+    padding: 1rem 1.15rem;
+    gap: 1rem;
+  }
+
+  .footer {
+    padding: 1rem 1.15rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
 }

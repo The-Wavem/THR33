@@ -335,7 +335,7 @@ export function Navbar({ onOpenCart }) {
             href="https://www.instagram.com/madebythr33" 
             target="_blank" 
             rel="noreferrer" 
-            className={styles.actionBtn}
+            className={`${styles.actionBtn} ${styles.instagramHeaderLink}`}
             aria-label="Instagram Oficial da THR33"
             title="Instagram Oficial"
           >
