@@ -272,8 +272,18 @@ export function Perfil({ defaultTab = 'pedidos' }) {
           const normStatus = normalizeOrderStatus(data.status);
           const statusMeta = getOrderStatusMeta(normStatus);
 
+          const rawDocId = String(docSnap.id || '').trim();
+          let cleanDisplayId = rawDocId;
+          if (cleanDisplayId.toUpperCase().startsWith('THR-THR-')) {
+            cleanDisplayId = `THR-${cleanDisplayId.slice(8).toUpperCase()}`;
+          } else if (cleanDisplayId.toUpperCase().startsWith('THR-')) {
+            cleanDisplayId = cleanDisplayId.toUpperCase();
+          } else {
+            cleanDisplayId = `THR-${cleanDisplayId.toUpperCase()}`;
+          }
+
           fetched.push({
-            id: `THR-${docSnap.id.slice(0, 6).toUpperCase()}`,
+            id: cleanDisplayId,
             rawId: docSnap.id,
             createdAtTimestamp: parsedTimestamp || 0,
             date: dateStr,
@@ -1438,13 +1448,13 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                 </div>
               ) : (
                 <div className={styles.ordersList}>
-                {orders.map((order) => {
+                {orders.map((order, orderIdx) => {
                   const isDelivered = order.statusCode === 'delivered';
                   const isPreparing = order.statusCode === 'preparing' || order.statusCode === 'waiting_payment';
                   const isCanceled = order.statusCode === 'canceled';
 
                   return (
-                    <article key={order.id} className={styles.orderCard}>
+                    <article key={order.rawId || `${order.id}-${orderIdx}`} className={styles.orderCard}>
                       <header className={styles.orderMeta}>
                         <div>
                           <span className={styles.orderId}>PEDIDO #{order.id}</span>
@@ -1521,7 +1531,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                       {/* ITENS DO PEDIDO */}
                       <div className={styles.orderItems}>
                         {(order.items || []).map((item, idx) => (
-                          <div key={item.id || idx} className={styles.orderItemRow}>
+                          <div key={item.id ? `${order.rawId || order.id}-${item.id}` : `${order.rawId || order.id}-item-${idx}`} className={styles.orderItemRow}>
                             <img src={item.image} alt={item.name} className={styles.itemThumb} />
                             <div className={styles.itemInfo}>
                               <strong className={styles.itemTitle}>{item.name}</strong>
@@ -1799,7 +1809,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                 <span className={styles.sectionLabel}>ITENS INCLUSOS ({selectedOrderDetails.items?.length || 0}):</span>
                 <div className={styles.modalItemsList}>
                   {(selectedOrderDetails.items || []).map((item, idx) => (
-                    <div key={item.id || idx} className={styles.modalItemRow}>
+                    <div key={item.id ? `detail-${selectedOrderDetails.rawId || selectedOrderDetails.id}-${item.id}` : `detail-item-${idx}`} className={styles.modalItemRow}>
                       <img src={item.image} alt={item.name} />
                       <div className={styles.modalItemInfo}>
                         <strong>{item.name}</strong>

@@ -26,7 +26,8 @@ import {
   Copy,
   Send
 } from 'lucide-react';
-import { db } from '../../services/firebaseConfig';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../../services/firebaseConfig';
 import { maskCPF } from '../../utils/validators';
 import { 
   ORDER_STATUSES, 
@@ -106,6 +107,14 @@ export function CmsPedidos() {
   const [copiedKey, setCopiedKey] = useState(false);
   const [nfeError, setNfeError] = useState('');
   const [nfeSuccess, setNfeSuccess] = useState('');
+
+  // Modal de Estorno / Reembolso PagBank
+  const [refundModalOpen, setRefundModalOpen] = useState(false);
+  const [refundTargetOrder, setRefundTargetOrder] = useState(null);
+  const [refundReason, setRefundReason] = useState('Devolução por arrependimento (CDC 7 dias)');
+  const [savingRefund, setSavingRefund] = useState(false);
+  const [refundError, setRefundError] = useState('');
+  const [refundSuccess, setRefundSuccess] = useState('');
 
   useEffect(() => {
     if (selectedOrder) {
@@ -298,10 +307,62 @@ export function CmsPedidos() {
     }
   };
 
+  const handleOpenRefundModal = (order) => {
+    if (!order) return;
+    setRefundTargetOrder(order);
+    setRefundReason('Devolução solicitada pelo cliente / atendimento');
+    setRefundError('');
+    setRefundSuccess('');
+    setRefundModalOpen(true);
+  };
+
+  const handleConfirmRefund = async (e) => {
+    e.preventDefault();
+    if (!refundTargetOrder) return;
+    setSavingRefund(true);
+    setRefundError('');
+    setRefundSuccess('');
+    try {
+      const refundFn = httpsCallable(functions, 'refundPagBankOrder');
+      const res = await refundFn({
+        orderId: refundTargetOrder.id,
+        reason: refundReason
+      });
+
+      if (res?.data?.success) {
+        setRefundSuccess(res.data.message || 'Estorno concluído com sucesso!');
+        const updates = {
+          status: ORDER_STATUSES.CANCELADO,
+          financialStatus: 'reembolsado',
+          canceledAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+        setOrders(prev => prev.map(o => o.id === refundTargetOrder.id ? { ...o, ...updates } : o));
+        if (selectedOrder?.id === refundTargetOrder.id) {
+          setSelectedOrder(prev => ({ ...prev, ...updates }));
+        }
+        setTimeout(() => {
+          setRefundModalOpen(false);
+          setRefundTargetOrder(null);
+        }, 1800);
+      }
+    } catch (err) {
+      console.error("Erro ao estornar pedido via PagBank:", err);
+      setRefundError(err.message || "Falha ao processar estorno. Verifique o painel do PagBank.");
+    } finally {
+      setSavingRefund(false);
+    }
+  };
+
   // 2. Atualizar Status do Pedido no Firestore
   const handleStatusChange = async (orderId, newStatus) => {
     const currentOrder = orders.find(o => o.id === orderId);
     if (!currentOrder) return;
+
+    if (newStatus === ORDER_STATUSES.CANCELADO) {
+      handleOpenRefundModal(currentOrder);
+      return;
+    }
 
     if (newStatus === ORDER_STATUSES.SAIU_PARA_ENTREGA) {
       handleOpenDispatchModal(currentOrder);
@@ -1116,6 +1177,29 @@ export function CmsPedidos() {
                           <span>Marcar como Entregue</span>
                         </button>
                       )}
+
+                      {normStatus !== ORDER_STATUSES.CANCELADO && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenRefundModal(selectedOrder)}
+                          style={{
+                            margin: 0,
+                            padding: '0.5rem 0.85rem',
+                            fontSize: '0.72rem',
+                            fontWeight: 700,
+                            border: '1px solid rgba(248, 113, 113, 0.4)',
+                            backgroundColor: 'rgba(248, 113, 113, 0.08)',
+                            color: '#f87171',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.35rem'
+                          }}
+                        >
+                          <AlertCircle size={13} />
+                          <span>Estornar no PagBank</span>
+                        </button>
+                      )}
                     </div>
 
                     {selectedOrder.trackingCode && (
@@ -1628,6 +1712,101 @@ export function CmsPedidos() {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DEDICADO: ESTORNO / REEMBOLSO PAGBANK */}
+      {refundModalOpen && refundTargetOrder && (
+        <div className={styles.dispatchModalBackdrop} onClick={() => !savingRefund && setRefundModalOpen(false)}>
+          <div className={styles.dispatchModal} onClick={(e) => e.stopPropagation()}>
+            <div className={styles.dispatchModalHeader} style={{ borderBottomColor: 'rgba(248, 113, 113, 0.3)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <AlertCircle size={18} color="#f87171" />
+                <h3>SOLICITAR ESTORNO (PAGBANK) • #{refundTargetOrder.id.slice(0, 8).toUpperCase()}</h3>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => !savingRefund && setRefundModalOpen(false)} 
+                className={styles.closeBtn}
+                aria-label="Fechar"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmRefund}>
+              <div className={styles.dispatchModalBody}>
+                <div className={styles.dispatchOrderSummary} style={{ borderColor: 'rgba(248, 113, 113, 0.3)', backgroundColor: 'rgba(248, 113, 113, 0.05)' }}>
+                  <div>
+                    <strong>{refundTargetOrder.clientName || 'Cliente'}</strong>
+                    <span style={{ display: 'block', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Valor da Compra: R$ {Number(refundTargetOrder.total || 0).toFixed(2)} • {refundTargetOrder.paymentMethod || 'PagBank'}
+                    </span>
+                    {(refundTargetOrder.pagbankChargeId || refundTargetOrder.pagbank?.charges?.[0]?.id) && (
+                      <span style={{ display: 'block', fontSize: '0.7rem', color: '#a3a3a3', marginTop: '0.2rem' }}>
+                        Cobrança PagBank: <code>{refundTargetOrder.pagbankChargeId || refundTargetOrder.pagbank?.charges?.[0]?.id}</code>
+                      </span>
+                    )}
+                  </div>
+                  <span className={styles.statusDotSmall} style={{ backgroundColor: '#f87171' }} />
+                </div>
+
+                {refundError && (
+                  <div className={styles.dispatchErrorNotice}>
+                    <AlertCircle size={14} />
+                    <span>{refundError}</span>
+                  </div>
+                )}
+
+                {refundSuccess && (
+                  <div style={{ backgroundColor: 'rgba(74, 222, 128, 0.12)', border: '1px solid rgba(74, 222, 128, 0.4)', color: '#4ade80', padding: '0.65rem 0.85rem', fontSize: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <CheckCircle2 size={14} />
+                    <span>{refundSuccess}</span>
+                  </div>
+                )}
+
+                <div className={styles.fieldGroup}>
+                  <label>MOTIVO DO ESTORNO / DEVOLUÇÃO</label>
+                  <select
+                    value={refundReason}
+                    onChange={(e) => setRefundReason(e.target.value)}
+                    style={{ backgroundColor: 'var(--bg-primary)', border: '1px solid var(--border-color)', color: 'var(--text-primary)', padding: '0.75rem', fontSize: '0.8rem' }}
+                  >
+                    <option value="Devolução por arrependimento (CDC 7 dias)">Devolução por arrependimento (CDC 7 dias)</option>
+                    <option value="Troca / Devolução solicitada pelo cliente">Troca / Devolução solicitada pelo cliente</option>
+                    <option value="Cancelamento antes do despacho">Cancelamento antes do despacho</option>
+                    <option value="Produto devolvido ao remetente">Produto devolvido ao remetente</option>
+                    <option value="Avaria / Defeito de fabricação">Avaria / Defeito de fabricação</option>
+                    <option value="Outro motivo acordado no suporte">Outro motivo acordado no suporte</option>
+                  </select>
+                </div>
+
+                <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.03)', border: '1px solid var(--border-color)', padding: '0.75rem 1rem', fontSize: '0.72rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
+                  Ao confirmar, o sistema enviará a chamada à API do PagBank para cancelamento da transação (cartão ou Pix). O estoque das peças será automaticamente devolvido ao catálogo e o pedido passará para o status <strong>Cancelado / Reembolsado</strong>.
+                </div>
+              </div>
+
+              <div className={styles.dispatchModalFooter}>
+                <button
+                  type="button"
+                  onClick={() => setRefundModalOpen(false)}
+                  disabled={savingRefund}
+                  className={styles.cancelModalBtn}
+                >
+                  CANCELAR
+                </button>
+                <button
+                  type="submit"
+                  disabled={savingRefund}
+                  className={styles.confirmDispatchBtn}
+                  style={{ backgroundColor: '#ef4444', color: '#ffffff' }}
+                >
+                  <RotateCw size={13} className={savingRefund ? styles.spinIcon : ''} />
+                  <span>{savingRefund ? 'PROCESSANDO ESTORNO...' : 'CONFIRMAR ESTORNO PAGBANK'}</span>
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

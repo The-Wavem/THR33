@@ -1,0 +1,183 @@
+{
+  "endpoints": {
+    "getPublicKey": {
+      "availableMemoryMb": null,
+      "timeoutSeconds": null,
+      "minInstances": null,
+      "maxInstances": null,
+      "ingressSettings": null,
+      "concurrency": null,
+      "serviceAccountEmail": null,
+      "vpc": null,
+      "platform": "gcfv2",
+      "region": [
+        "southamerica-east1"
+      ],
+      "secretEnvironmentVariables": [
+        {
+          "key": "PAGBANK_TOKEN"
+        }
+      ],
+      "labels": {},
+      "httpsTrigger": {},
+      "entryPoint": "getPublicKey"
+    },
+    "createOrder": {
+      "availableMemoryMb": null,
+      "timeoutSeconds": null,
+      "minInstances": null,
+      "maxInstances": null,
+      "ingressSettings": null,
+      "concurrency": null,
+      "serviceAccountEmail": null,
+      "vpc": null,
+      "platform": "gcfv2",
+      "region": [
+        "southamerica-east1"
+      ],
+      "secretEnvironmentVariables": [
+        {
+          "key": "PAGBANK_TOKEN"
+        }
+      ],
+      "labels": {},
+      "httpsTrigger": {},
+      "entryPoint": "createOrder"
+    },
+    "createPagBankOrder": {
+      "availableMemoryMb": null,
+      "timeoutSeconds": null,
+      "minInstances": null,
+      "maxInstances": null,
+      "ingressSettings": null,
+      "concurrency": null,
+      "serviceAccountEmail": null,
+      "vpc": null,
+      "platform": "gcfv2",
+      "region": [
+        "southamerica-east1"
+      ],
+      "secretEnvironmentVariables": [
+        {
+          "key": "PAGBANK_TOKEN"
+        }
+      ],
+      "labels": {},
+      "callableTrigger": {},
+      "entryPoint": "createPagBankOrder"
+    },
+    "createSecureOrder": {
+      "availableMemoryMb": null,
+      "timeoutSeconds": null,
+      "minInstances": null,
+      "maxInstances": null,
+      "ingressSettings": null,
+      "concurrency": null,
+      "serviceAccountEmail": null,
+      "vpc": null,
+      "platform": "gcfv2",
+      "region": [
+        "southamerica-east1"
+      ],
+      "labels": {},
+      "httpsTrigger": {},
+      "entryPoint": "createSecureOrder"
+    },
+    "pagbankWebhook": {
+      "availableMemoryMb": 256,
+      "timeoutSeconds": 60,
+      "minInstances": null,
+      "maxInstances": null,
+      "ingressSettings": null,
+      "concurrency": null,
+      "serviceAccountEmail": null,
+      "vpc": null,
+      "platform": "gcfv2",
+      "region": [
+        "southamerica-east1"
+      ],
+      "secretEnvironmentVariables": [
+        {
+          "key": "PAGBANK_TOKEN"
+        }
+      ],
+      "labels": {},
+      "httpsTrigger": {},
+      "entryPoint": "pagbankWebhook"
+    },
+    "cancelExpiredPixOrders": {
+      "availableMemoryMb": 256,
+      "timeoutSeconds": 120,
+      "minInstances": null,
+      "maxInstances": null,
+      "ingressSettings": null,
+      "concurrency": null,
+      "serviceAccountEmail": null,
+      "vpc": null,
+      "platform": "gcfv2",
+      "region": [
+        "southamerica-east1"
+      ],
+      "labels": {},
+      "scheduleTrigger": {
+        "schedule": "every 15 minutes",
+        "retryConfig": {},
+        "timeZone": "America/Sao_Paulo"
+      },
+      "entryPoint": "cancelExpiredPixOrders"
+    },
+    "cleanupExpiredPixOrdersManual": {
+      "availableMemoryMb": null,
+      "timeoutSeconds": null,
+      "minInstances": null,
+      "maxInstances": null,
+      "ingressSettings": null,
+      "concurrency": null,
+      "serviceAccountEmail": null,
+      "vpc": null,
+      "platform": "gcfv2",
+      "region": [
+        "southamerica-east1"
+      ],
+      "labels": {},
+      "httpsTrigger": {},
+      "entryPoint": "cleanupExpiredPixOrdersManual"
+    },
+    "refundPagBankOrder": {
+      "availableMemoryMb": null,
+      "timeoutSeconds": null,
+      "minInstances": null,
+      "maxInstances": null,
+      "ingressSettings": null,
+      "concurrency": null,
+      "serviceAccountEmail": null,
+      "vpc": null,
+      "platform": "gcfv2",
+      "region": [
+        "southamerica-east1"
+      ],
+      "secretEnvironmentVariables": [
+        {
+          "key": "PAGBANK_TOKEN"
+        }
+      ],
+      "labels": {},
+      "callableTrigger": {},
+      "entryPoint": "refundPagBankOrder"
+    }
+  },
+  "specVersion": "v1alpha1",
+  "requiredAPIs": [
+    {
+      "api": "cloudscheduler.googleapis.com",
+      "reason": "Needed for scheduled functions."
+    }
+  ],
+  "extensions": {},
+  "params": [
+    {
+      "type": "secret",
+      "name": "PAGBANK_TOKEN"
+    }
+  ]
+}

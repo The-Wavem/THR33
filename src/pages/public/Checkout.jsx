@@ -930,7 +930,15 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           console.warn("Aviso ao enriquecer documento do pedido:", syncDocErr.message);
         }
       }
-      const generatedOrder = `THR-${finalDocId.slice(0, 6).toUpperCase()}`;
+      const rawFinalId = String(finalDocId || '').trim();
+      let generatedOrder = rawFinalId;
+      if (generatedOrder.toUpperCase().startsWith('THR-THR-')) {
+        generatedOrder = `THR-${generatedOrder.slice(8).toUpperCase()}`;
+      } else if (generatedOrder.toUpperCase().startsWith('THR-')) {
+        generatedOrder = generatedOrder.toUpperCase();
+      } else {
+        generatedOrder = `THR-${generatedOrder.toUpperCase()}`;
+      }
       setOrderNumber(generatedOrder);
       setCreatedOrderId(finalDocId);
       setCreatedOrderStatus(initialStatus);

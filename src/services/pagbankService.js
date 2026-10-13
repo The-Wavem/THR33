@@ -76,8 +76,8 @@ export const encryptCardData = async ({
 
   let publicKey = import.meta.env.VITE_PAGBANK_PUBLIC_KEY || '';
 
-  // Se a chave publica nao estiver definida no .env, tenta obter dinamicamente da Cloud Function getPublicKey
-  if (!publicKey || publicKey.includes('sua_chave') || publicKey.includes('mock')) {
+  // Se a chave publica nao estiver definida no .env ou for uma URL invalida, busca via Cloud Function
+  if (!publicKey || publicKey.startsWith('http') || publicKey.includes('sua_chave') || publicKey.includes('mock') || publicKey.length < 50) {
     try {
       const pkRes = await fetch('/api/getPublicKey', { method: 'POST' });
       if (pkRes.ok) {
@@ -98,8 +98,10 @@ export const encryptCardData = async ({
     pagSeguroSdk &&
     typeof pagSeguroSdk.encryptCard === 'function' &&
     publicKey &&
+    !publicKey.startsWith('http') &&
     !publicKey.includes('sua_chave') &&
-    !publicKey.includes('mock')
+    !publicKey.includes('mock') &&
+    publicKey.length >= 50
   ) {
     try {
       const result = pagSeguroSdk.encryptCard({
@@ -121,15 +123,20 @@ export const encryptCardData = async ({
 
       if (result && result.hasErrors && Array.isArray(result.errors) && result.errors.length) {
         const errorMsg = result.errors.map(err => err.message || err.code).join('; ');
-        throw new Error(`Falha na criptografia do cartao: ${errorMsg}`);
+        throw new Error(`Dados do cartão inválidos para criptografia: ${errorMsg}`);
       }
     } catch (sdkError) {
-      console.warn("Aviso na execucao do SDK PagBank:", sdkError.message);
+      console.error("Falha ao criptografar cartão com SDK PagBank:", sdkError);
       throw sdkError;
     }
   }
 
-  // Fallback seguro de homologacao local (para testes offline ou sem chaves de producao)
+  // Em modo de producao, NUNCA permite mock de cartao nem prosseguir sem criptografia
+  if (!isSandboxMode()) {
+    throw new Error('Não foi possível inicializar a criptografia segura do PagBank. Verifique a conexão com a internet e tente novamente.');
+  }
+
+  // Fallback seguro APENAS de homologacao local (para testes offline sem chaves de producao)
   const mockToken = `MOCK_ENC_${cleanNumber.slice(-4) || '1111'}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   return {
     success: true,
@@ -306,6 +313,10 @@ export const pagbankService = {
         ? `20${cardData.expYear}` 
         : String(cardData?.expYear || '');
 
+      if (!cardEncrypted) {
+        throw new Error('O cartão de crédito precisa ser criptografado no navegador antes do envio (PCI-Free).');
+      }
+
       orderPayload.charges = [{
         reference_id: `charge_${orderReference}`,
         description: "Pedido THR33 Streetwear",
@@ -314,14 +325,8 @@ export const pagbankService = {
           type: "CREDIT_CARD",
           installments: Number(installments) || 1,
           capture: true,
-          card: cardEncrypted ? {
+          card: {
             encrypted: cardEncrypted,
-            holder: { name: (cardData?.holder || customer.name || 'TITULAR DO CARTAO').toUpperCase() }
-          } : {
-            number: (cardData?.number || '').replace(/\D/g, ''),
-            exp_month: String(cardData?.expMonth || '').padStart(2, '0'),
-            exp_year: expYear,
-            security_code: String(cardData?.cvv || cardData?.securityCode || ''),
             holder: { name: (cardData?.holder || customer.name || 'TITULAR DO CARTAO').toUpperCase() }
           }
         }

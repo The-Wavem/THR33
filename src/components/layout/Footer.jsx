@@ -199,11 +199,6 @@ export function Footer() {
             <span>ENDEREÇO: RUA COMENDADOR ARAÚJO, 333 - BATEL, CURITIBA - PR, CEP: 80420-000</span>
             <span>ATENDIMENTO AO CONSUMIDOR: SAC@THR33.COM • WHATSAPP: (41) 99542-4186</span>
           </div>
-          <div className={styles.legalBadgesBlock}>
-            <span className={styles.legalBadge}>LEI DO E-COMMERCE</span>
-            <span className={styles.legalBadge}>LGPD COMPLIANT</span>
-            <span className={styles.legalBadge}>PAGBANK PROTECTED</span>
-          </div>
         </div>
 
         <div className={styles.bottomBar}>
@@ -237,13 +232,6 @@ export function Footer() {
                 <ArrowUpRight size={12} />
               </motion.span>
             </MotionAnchor>
-          </div>
-
-          <div className={styles.paymentMethods}>
-            <span className={styles.paymentBadge}>PIX</span>
-            <span className={styles.paymentBadge}>CARTÃO</span>
-            <span className={styles.paymentBadge}>BOLETO</span>
-            <span className={styles.paymentBadge}>PAGBANK</span>
           </div>
         </div>
       </div>

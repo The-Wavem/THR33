@@ -222,6 +222,11 @@ exports.createOrder = onRequest(
 
       // Configura os detalhes conforme a forma de pagamento escolhida
       if (paymentMethod.type === "CREDIT_CARD") {
+        if (!paymentMethod.cardEncrypted || typeof paymentMethod.cardEncrypted !== "string") {
+          return res.status(400).json({
+            error: "Dados do cartão devem ser criptografados via Chave Pública (PCI-Free). Não é permitido envio em texto aberto."
+          });
+        }
         orderPayload.charges[0].payment_method = {
           type: "CREDIT_CARD",
           installments: Number(paymentMethod.installments) || 1,
@@ -791,6 +796,24 @@ exports.createPagBankOrder = onCall(
     // 3. Montar objeto de cobranca conforme o metodo de pagamento
     const referenceId = `THR-${Date.now()}-${userId.slice(0, 5)}`;
 
+    const cleanTaxId = String(customer.taxId || customer.cpf || "").replace(
+      /\D/g,
+      "",
+    );
+    const isPj = cleanTaxId.length === 14 || Boolean(customer.isPj);
+    const formattedTaxId = isPj
+      ? cleanTaxId.slice(0, 14)
+      : cleanTaxId.padEnd(11, "0").slice(0, 11);
+
+    const cleanPhone = String(customer.phone || "").replace(/\D/g, "");
+    const phoneArea = cleanPhone.length >= 10 ? cleanPhone.slice(0, 2) : "41";
+    const phoneNumber =
+      cleanPhone.length >= 10 ? cleanPhone.slice(2) : "999999999";
+    const cleanCep = String(shipping?.address?.cep || "80420000").replace(
+      /\D/g,
+      "",
+    );
+
     // 3.1 Reserva Atomica de Estoque via Firestore runTransaction
     // Previne condicoes de corrida (Race Conditions) quando compradores adquirem a ultima peca simultaneamente
     await reserveStockAtomic(db, sanitizedItems, referenceId);
@@ -818,6 +841,12 @@ exports.createPagBankOrder = onCall(
         },
       };
     } else if (paymentMethod.type === "CREDIT_CARD") {
+      if (!paymentMethod.cardEncrypted || typeof paymentMethod.cardEncrypted !== "string") {
+        throw new HttpsError(
+          "invalid-argument",
+          "Dados do cartão não foram criptografados no navegador. O PagBank exige criptografia client-side (PCI-Free).",
+        );
+      }
       chargePayload = {
         reference_id: `CHAR_${referenceId}`,
         amount: {
@@ -848,23 +877,6 @@ exports.createPagBankOrder = onCall(
     }
 
     // 4. Montar o payload final da Orders API do PagBank
-    const cleanTaxId = String(customer.taxId || customer.cpf || "").replace(
-      /\D/g,
-      "",
-    );
-    const isPj = cleanTaxId.length === 14 || Boolean(customer.isPj);
-    const formattedTaxId = isPj
-      ? cleanTaxId.slice(0, 14)
-      : cleanTaxId.padEnd(11, "0").slice(0, 11);
-
-    const cleanPhone = String(customer.phone || "").replace(/\D/g, "");
-    const phoneArea = cleanPhone.length >= 10 ? cleanPhone.slice(0, 2) : "41";
-    const phoneNumber =
-      cleanPhone.length >= 10 ? cleanPhone.slice(2) : "999999999";
-    const cleanCep = String(shipping?.address?.cep || "80420000").replace(
-      /\D/g,
-      "",
-    );
 
     const webhookUrl =
       process.env.PAGBANK_WEBHOOK_URL ||
@@ -1168,6 +1180,24 @@ exports.createSecureOrder = onRequest(
         const { orderPayload, rawOrderData } = req.body || {};
         if (!orderPayload || !rawOrderData) {
           return res.status(400).json({ error: "Payload invalido" });
+        }
+
+        // Validação estrita PCI-DSS: Cartão de Crédito SEMPRE criptografado via SDK
+        if (Array.isArray(orderPayload.charges)) {
+          for (const ch of orderPayload.charges) {
+            if (ch.payment_method?.type === "CREDIT_CARD") {
+              if (!ch.payment_method?.card?.encrypted) {
+                return res.status(400).json({
+                  error: "Dados do cartão devem ser criptografados via Chave Pública (PCI-Free). Não é permitido envio em texto aberto."
+                });
+              }
+              // Elimina qualquer campo aberto residual para conformidade estrita
+              delete ch.payment_method.card.number;
+              delete ch.payment_method.card.security_code;
+              delete ch.payment_method.card.exp_month;
+              delete ch.payment_method.card.exp_year;
+            }
+          }
         }
 
         const referenceId = orderPayload.reference_id || `THR-${Date.now()}`;
@@ -1925,6 +1955,177 @@ exports.cleanupExpiredPixOrdersManual = onRequest(
         return res.status(500).json({ error: err.message });
       }
     });
+  },
+);
+
+/**
+ * 8. ESTORNO / REEMBOLSO DE PEDIDO VIA API PAGBANK (refundPagBankOrder)
+ * Callable Function exclusiva para administradores da THR33.
+ * Executa estorno financeiro seguro na API PagBank e devolve estoque ao catalogo.
+ */
+exports.refundPagBankOrder = onCall(
+  {
+    region: FUNCTION_REGION,
+    secrets: [PAGBANK_TOKEN],
+    cors: true,
+  },
+  async (request) => {
+    // 1. Validacao de Administrador
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Requer autenticação de administrador.");
+    }
+
+    const db = getDb();
+    const callerUid = request.auth.uid;
+    const callerEmail = (request.auth.token?.email || "").toLowerCase();
+
+    const adminEmails = (process.env.ADMIN_EMAILS || "contato.thewavem@gmail.com,eduianbf@gmail.com")
+      .split(",")
+      .map((e) => e.trim().toLowerCase());
+
+    let isAdmin = adminEmails.includes(callerEmail);
+
+    if (!isAdmin) {
+      const adminDoc = await db.collection("adminUsers").doc(callerUid).get();
+      if (adminDoc.exists && adminDoc.data()?.role === "admin") {
+        isAdmin = true;
+      }
+    }
+
+    if (!isAdmin) {
+      throw new HttpsError("permission-denied", "Apenas administradores podem solicitar estornos.");
+    }
+
+    const { orderId, reason = "Solicitação de cancelamento/estorno administrativo" } = request.data || {};
+    if (!orderId) {
+      throw new HttpsError("invalid-argument", "ID do pedido não informado.");
+    }
+
+    // 2. Localiza o pedido no Firestore
+    const orderRef = db.collection("orders").doc(orderId);
+    const orderSnap = await orderRef.get();
+    if (!orderSnap.exists) {
+      throw new HttpsError("not-found", `Pedido ${orderId} não foi encontrado.`);
+    }
+
+    const orderData = orderSnap.data();
+
+    // Se já estiver cancelado e reembolsado
+    if (orderData.status === "cancelado" && orderData.financialStatus === "reembolsado") {
+      return {
+        success: true,
+        message: "O pedido já se encontra cancelado e estornado.",
+        alreadyRefunded: true,
+      };
+    }
+
+    const token = getSecretToken();
+    const isSandbox = process.env.PAGBANK_ENV !== "production";
+    const baseUrl = isSandbox
+      ? "https://sandbox.api.pagseguro.com"
+      : "https://api.pagseguro.com";
+
+    const chargeId =
+      orderData.pagbankChargeId ||
+      orderData.pagbank?.charges?.[0]?.id ||
+      orderData.charges?.[0]?.id;
+    const pagbankOrderId = orderData.pagbankOrderId || orderData.pagbank?.id;
+
+    let gatewayResponse = null;
+
+    // 3. Comunicacao com a API de Cancelamento/Estorno PagBank
+    if (token && !token.includes("SEU_TOKEN") && (chargeId || pagbankOrderId)) {
+      try {
+        if (chargeId) {
+          // POST /charges/{charge_id}/cancel (estorno total da cobranca)
+          const cancelRes = await axios.post(
+            `${baseUrl}/charges/${chargeId}/cancel`,
+            {},
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+            },
+          );
+          gatewayResponse = cancelRes.data;
+          logger.info(`Cobranca ${chargeId} cancelada no PagBank:`, gatewayResponse);
+        } else if (pagbankOrderId) {
+          // Fallback para estorno de pedido
+          const cancelRes = await axios.post(
+            `${baseUrl}/orders/${pagbankOrderId}/refund`,
+            {},
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+            },
+          );
+          gatewayResponse = cancelRes.data;
+          logger.info(`Pedido ${pagbankOrderId} estornado no PagBank:`, gatewayResponse);
+        }
+      } catch (apiErr) {
+        logger.error("Erro na API de estorno do PagBank:", apiErr.response?.data || apiErr.message);
+        const errDetail =
+          apiErr.response?.data?.error_messages?.[0]?.description ||
+          apiErr.response?.data?.message ||
+          apiErr.message;
+        throw new HttpsError(
+          "failed-precondition",
+          `Falha ao processar estorno no PagBank: ${errDetail}`,
+        );
+      }
+    } else {
+      // Mock para homologacao local ou pedidos legados sem chargeId
+      gatewayResponse = {
+        status: "CANCELED",
+        mock: true,
+        canceledAt: new Date().toISOString(),
+      };
+    }
+
+    // 4. Devolve o estoque de forma atomica se ainda nao tiver sido liberado
+    if (orderData.items && Array.isArray(orderData.items) && !orderData.stockReleased) {
+      await restoreStockAtomic(db, orderData.items, orderId, reason);
+    }
+
+    // 5. Atualiza o pedido no Firestore
+    await orderRef.update({
+      status: "cancelado",
+      financialStatus: "reembolsado",
+      stockReleased: true,
+      stockReserved: false,
+      canceledAt: FieldValue.serverTimestamp(),
+      refund: {
+        refundedAt: FieldValue.serverTimestamp(),
+        reason,
+        refundedBy: callerEmail || callerUid,
+        gatewayStatus: gatewayResponse?.status || "CANCELED",
+        chargeId: chargeId || null,
+      },
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+
+    // 6. Grava evento no historico de pagamento
+    await orderRef.collection("historico_pagamento").add({
+      eventDate: FieldValue.serverTimestamp(),
+      internalStatus: "cancelado",
+      financialStatus: "reembolsado",
+      reason: `Estorno realizado pelo administrador: ${reason}`,
+      chargeId: chargeId || null,
+      operator: callerEmail || callerUid,
+    });
+
+    return {
+      success: true,
+      orderId,
+      message: "Estorno concluído com sucesso e estoque reintegrado ao catálogo.",
+      status: "cancelado",
+      financialStatus: "reembolsado",
+    };
   },
 );
 
