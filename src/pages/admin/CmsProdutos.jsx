@@ -21,7 +21,6 @@ import {
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { catalogService } from '../../services/catalogService';
-import { seedService } from '../../services/seedService';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsProdutos.module.css';
 
@@ -104,7 +103,6 @@ export function CmsProdutos() {
   const fetchProducts = async () => {
     setLoading(true);
     try {
-      await seedService.seedCatalogIfEmpty();
       const list = await catalogService.getAllProducts();
       setProducts(list);
     } catch (err) {

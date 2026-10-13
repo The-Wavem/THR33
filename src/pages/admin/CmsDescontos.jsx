@@ -26,7 +26,6 @@ import {
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
 import { catalogService } from '../../services/catalogService';
-import { seedService } from '../../services/seedService';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsDescontos.module.css';
 
@@ -57,7 +56,6 @@ export function CmsDescontos() {
     setLoading(true);
     setRefreshing(true);
     try {
-      await seedService.seedCatalogIfEmpty();
       const all = await catalogService.getAllProducts();
       setProducts(all);
     } catch (err) {

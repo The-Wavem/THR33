@@ -40,6 +40,7 @@ const CmsDescontos = lazyWithRetry(() => import('./pages/admin/CmsDescontos').th
 const CmsVitrine = lazyWithRetry(() => import('./pages/admin/CmsVitrine').then(m => ({ default: m.CmsVitrine || m.default })));
 const CmsPedidos = lazyWithRetry(() => import('./pages/admin/CmsPedidos').then(m => ({ default: m.CmsPedidos || m.default })));
 const CmsSuporte = lazyWithRetry(() => import('./pages/admin/CmsSuporte').then(m => ({ default: m.CmsSuporte || m.default })));
+const CmsAvaliacoes = lazyWithRetry(() => import('./pages/admin/CmsAvaliacoes').then(m => ({ default: m.CmsAvaliacoes || m.default })));
 
 export function AppRoutes() {
   const navigate = useNavigate();
@@ -152,6 +153,7 @@ export function AppRoutes() {
             <Route path="vitrine" element={<CmsVitrine />} />
             <Route path="pedidos" element={<CmsPedidos />} />
             <Route path="suporte" element={<CmsSuporte />} />
+            <Route path="avaliacoes" element={<CmsAvaliacoes />} />
           </Route>
 
           {/* ALIAS DE CONVENIÊNCIA PARA /admin */}
@@ -172,6 +174,7 @@ export function AppRoutes() {
             <Route path="vitrine" element={<CmsVitrine />} />
             <Route path="pedidos" element={<CmsPedidos />} />
             <Route path="suporte" element={<CmsSuporte />} />
+            <Route path="avaliacoes" element={<CmsAvaliacoes />} />
           </Route>
         </Routes>
       </Suspense>

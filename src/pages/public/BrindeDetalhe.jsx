@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Check, ShoppingBag, ShieldCheck, ArrowLeft, Package } from 'lucide-react';
 import { catalogService } from '../../services/catalogService';
-import { seedService } from '../../services/seedService';
 import { useCart } from '../../context/CartContext';
 import styles from './BrindeDetalhe.module.css';
 
@@ -44,7 +43,6 @@ export function BrindeDetalhe() {
     async function loadGift() {
       setLoading(true);
       try {
-        await seedService.seedCatalogIfEmpty();
         let item = await catalogService.getProductById(id);
         if (!item) {
           const all = await catalogService.getAllProducts();

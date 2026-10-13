@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Package } from 'lucide-react';
 import { catalogService } from '../../services/catalogService';
-import { seedService } from '../../services/seedService';
 import ProductCard from '../../components/catalog/ProductCard';
 import styles from './BestSellers.module.css';
 
@@ -20,7 +19,6 @@ export function BestSellers({ products: initialProducts }) {
     async function loadBestSellers() {
       setLoading(true);
       try {
-        await seedService.seedCatalogIfEmpty();
         const all = await catalogService.getFeaturedProducts(4);
         const vestuario = all.filter(p => p.type !== 'brinde' && p.category !== 'gift-card');
         setProducts(vestuario.slice(0, 4));

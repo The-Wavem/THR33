@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Gift, Sparkles, ArrowRight, Package } from 'lucide-react';
 import { catalogService } from '../../services/catalogService';
-import { seedService } from '../../services/seedService';
 import styles from './Brindes.module.css';
 
 export function Brindes() {
@@ -14,7 +13,6 @@ export function Brindes() {
     async function loadGifts() {
       setLoading(true);
       try {
-        await seedService.seedCatalogIfEmpty();
         const all = await catalogService.getAllProducts();
         const gifts = all.filter(p => p.type === 'brinde' || p.category === 'brinde' || p.category === 'gift-card');
         setGiftsList(gifts);

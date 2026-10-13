@@ -398,14 +398,6 @@ export function CmsSuporte() {
                   <Save size={15} />
                   <span>{saving ? 'GRAVANDO RESOLUÇÃO NO FIRESTORE...' : 'SALVAR RESOLUÇÃO DO SAC'}</span>
                 </button>
-
-                <button 
-                  type="button" 
-                  onClick={handleRefundToWallet} 
-                  className={styles.walletRefundBtn}
-                >
-                  APROVAR ESTORNO EM CARTEIRA
-                </button>
               </form>
             </div>
           </div>

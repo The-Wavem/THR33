@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { currentDropConfig } from '../../data/dropConfig';
 import { catalogService } from '../../services/catalogService';
-import { seedService } from '../../services/seedService';
 import { buttonTactile } from '../../utils/motionVariants';
 import { SocialCommunityGrid } from '../../components/common/SocialCommunityGrid';
 import { DropFaq } from '../../components/common/DropFaq';
@@ -49,7 +48,6 @@ export function Lancamentos() {
   useEffect(() => {
     async function loadReleases() {
       try {
-        await seedService.seedCatalogIfEmpty();
         const releases = await catalogService.getReleases();
         if (releases.length > 0) {
           setReleaseProducts(releases);

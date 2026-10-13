@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getVitrineSettings, getFeaturedProducts } from '../services/catalogService';
-import { seedService } from '../services/seedService';
 
 /**
  * Hook customizado para gerenciar a camada de dados da Home (Fase 2)
@@ -20,14 +19,7 @@ export function useHomeData(limitProducts = 8) {
     setError(null);
 
     try {
-      // 1. Inicializa catalogo inicial se Firestore estiver vazio
-      try {
-        await seedService.seedCatalogIfEmpty();
-      } catch (seedErr) {
-        console.warn('Aviso no seed automatico da vitrine:', seedErr.message);
-      }
-
-      // 2. Busca simultanea das configuracoes da vitrine e produtos em destaque
+      // Busca simultanea das configuracoes da vitrine e produtos em destaque reais
       const [vitrineData, productsData] = await Promise.all([
         getVitrineSettings().catch(err => {
           console.warn('Aviso ao carregar configuracoes da vitrine:', err.message);

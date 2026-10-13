@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -48,6 +48,7 @@ import {
 } from '../../utils/validators';
 import { fetchAddressByCep } from '../../services/viaCepService';
 import { supportService } from '../../services/supportService';
+import { reviewService } from '../../services/reviewService';
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
 import { 
@@ -60,9 +61,205 @@ import styles from './Perfil.module.css';
 
 const parseItemPrice = (item) => {
   if (!item) return 0;
-  const val = item.price ?? item.unitPrice ?? (item.unit_amount ? (item.unit_amount > 1000 ? item.unit_amount / 100 : item.unit_amount) : 0);
-  return Number(val) || 0;
+  if (typeof item.price === 'number' && !isNaN(item.price)) {
+    return item.price;
+  }
+  if (typeof item.unitPrice === 'number' && !isNaN(item.unitPrice)) {
+    return item.unitPrice;
+  }
+  if (typeof item.unit_amount === 'number' && !isNaN(item.unit_amount)) {
+    // PagBank armazena unit_amount sempre em centavos (ex: 100 centavos = R$ 1,00)
+    return item.unit_amount / 100;
+  }
+  if (typeof item.total_amount === 'number' && !isNaN(item.total_amount)) {
+    const qty = Number(item.quantity) || 1;
+    return (item.total_amount / 100) / qty;
+  }
+  return 0;
 };
+
+// ============================================================
+// COMPONENTE ISOLADO DE AVALIAÇÃO DE PRODUTO
+// Mantém estado interno próprio para garantir digitação 100% fluida
+// sem disparar renderizações de toda a árvore do Perfil em cada tecla.
+// ============================================================
+const ReviewModal = React.memo(function ReviewModal({ item, onClose, onReviewSuccess, user }) {
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewSuccessModal, setReviewSuccessModal] = useState(false);
+  const [reviewErrorMessage, setReviewErrorMessage] = useState(null);
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!item || submittingReview) return;
+
+    if (!reviewComment.trim()) {
+      setReviewErrorMessage('Por favor, informe seu comentário sobre a peça.');
+      return;
+    }
+
+    setSubmittingReview(true);
+    setReviewErrorMessage(null);
+
+    try {
+      await reviewService.createReview({
+        orderId: item.orderId,
+        orderNumber: item.orderNumber || item.orderId,
+        productId: item.id,
+        productName: item.name,
+        productSlug: item.slug || null,
+        productImage: item.image,
+        rating: reviewRating,
+        comment: reviewComment,
+        size: item.size || 'M',
+        color: item.color || '',
+        user: user
+      });
+
+      if (onReviewSuccess) {
+        onReviewSuccess(item);
+      }
+      setReviewSuccessModal(true);
+    } catch (err) {
+      console.error("Erro ao registrar avaliação:", err);
+      setReviewErrorMessage("Não foi possível registrar a avaliação no momento. Tente novamente.");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  return (
+    <div className={styles.modalBackdrop} onClick={onClose}>
+      <motion.div 
+        className={styles.modalCard}
+        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.2 }}
+      >
+        {reviewSuccessModal ? (
+          <div className={styles.reviewSuccessContent}>
+            <div className={styles.reviewSuccessIconCircle}>
+              <CheckCircle2 size={32} color="#4ade80" />
+            </div>
+            <span className={styles.reviewSuccessBadge}>FEEDBACK REGISTRADO</span>
+            <h3 className={styles.reviewSuccessTitle}>OBRIGADO PELA SUA AVALIAÇÃO!</h3>
+            <p className={styles.reviewSuccessText}>
+              Seu feedback apoia o desenvolvimento das peças da THR33. Sua avaliação passará por moderação da nossa equipe e em breve estará visível na página do produto.
+            </p>
+
+            <div className={styles.reviewSuccessSummary}>
+              <div className={styles.reviewSuccessSummaryTop}>
+                <strong>{item.name} ({item.size})</strong>
+                <div className={styles.reviewSuccessStars}>
+                  {[...Array(reviewRating)].map((_, i) => (
+                    <Star key={i} size={13} fill="#ffffff" color="#ffffff" />
+                  ))}
+                </div>
+              </div>
+              <p className={styles.reviewSuccessComment}>"{reviewComment}"</p>
+            </div>
+
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className={styles.saveBtn}
+              style={{ width: '100%', marginTop: '0.5rem' }}
+            >
+              CONCLUIR
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className={styles.modalHeader}>
+              <h3 className={styles.modalTitle}>AVALIAR PRODUTO</h3>
+              <button type="button" onClick={onClose} className={styles.closeModalBtn}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className={styles.modalItemPreview}>
+              <img src={item.image} alt={item.name} />
+              <div>
+                <strong>{item.name}</strong>
+                <span>Tamanho: {item.size}</span>
+              </div>
+            </div>
+
+            {reviewErrorMessage && (
+              <div className={styles.reviewErrorBanner}>
+                <AlertCircle size={14} />
+                <span>{reviewErrorMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitReview} className={styles.reviewForm}>
+              <div className={styles.ratingPicker}>
+                <label>Sua Nota (1 a 5 estrelas):</label>
+                <div className={styles.starsSelectRow}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReviewRating(star)}
+                      className={styles.starBtn}
+                    >
+                      <Star 
+                        size={24} 
+                        fill={star <= reviewRating ? "#ffffff" : "none"} 
+                        color={star <= reviewRating ? "#ffffff" : "#525252"} 
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.inputField}>
+                <label>Seu Comentário sobre o caimento, tecido e acabamento:</label>
+                <textarea 
+                  rows={4}
+                  placeholder="Ex: O tecido heavyweight é impressionante e a modelagem Boxy veste perfeitamente..."
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  required
+                  disabled={submittingReview}
+                  autoFocus
+                />
+              </div>
+
+              <div className={styles.modalActions}>
+                <button 
+                  type="button" 
+                  onClick={onClose} 
+                  className={styles.cancelBtn}
+                  disabled={submittingReview}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className={styles.saveBtn}
+                  disabled={submittingReview}
+                >
+                  {submittingReview ? (
+                    <>
+                      <Loader2 size={14} className={styles.spinner} />
+                      <span>ENVIANDO...</span>
+                    </>
+                  ) : (
+                    <span>PUBLICAR AVALIAÇÃO</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
+      </motion.div>
+    </div>
+  );
+});
 
 export function Perfil({ defaultTab = 'pedidos' }) {
   const { user, currentUser, updateUser, logout, changePassword } = useAuth();
@@ -236,6 +433,24 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       try {
         const q = query(collection(db, 'orders'), where('userId', '==', activeUid));
         const querySnapshot = await getDocs(q);
+
+        // Mapa de consulta do catálogo para associar fotos reais a pedidos legados ou com imagens vazias
+        const catalogMap = new Map();
+        try {
+          const prodsSnap = await getDocs(collection(db, 'products'));
+          prodsSnap.forEach(p => {
+            const pData = p.data();
+            const pImg = pData.image || (Array.isArray(pData.images) && pData.images[0]) || '';
+            if (pImg) {
+              catalogMap.set(p.id, pImg);
+              if (pData.slug) catalogMap.set(pData.slug, pImg);
+              if (pData.name) catalogMap.set(String(pData.name).toLowerCase().trim(), pImg);
+            }
+          });
+        } catch (e) {
+          // Fallback silencioso
+        }
+
         const fetched = [];
         querySnapshot.forEach((docSnap) => {
           const data = docSnap.data();
@@ -328,12 +543,20 @@ export function Perfil({ defaultTab = 'pedidos' }) {
             } : null,
             items: (data.items || []).map((item, idx) => {
               const rawPrice = parseItemPrice(item);
+              const lookupKey = String(item.id || item.reference_id || '');
+              const nameKey = item.name ? String(item.name).toLowerCase().trim() : '';
+              const catalogImg = catalogMap.get(lookupKey) || catalogMap.get(nameKey) || null;
+              const hasCustomImg = item.image && !item.image.includes('photo-1521572267360-ee0c2909d518');
+              const finalImg = hasCustomImg 
+                ? item.image 
+                : (catalogImg || item.image || item.imageUrl || item.thumbnail || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop');
+
               return {
                 id: item.id || `item-${idx}`,
                 name: item.name || item.title || 'Produto THR33',
                 size: item.size || 'M',
                 price: Number(rawPrice || 0),
-                image: item.image || item.imageUrl || item.thumbnail || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop',
+                image: finalImg,
                 evaluated: item.evaluated || false
               };
             })
@@ -485,8 +708,6 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
   // MODAL DE AVALIAÇÃO DE PRODUTO
   const [evaluatingItem, setEvaluatingItem] = useState(null);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState('');
 
   // BLOQUEIO DO SCROLL DA PÁGINA (EIXO Y E RODA DO MOUSE) QUANDO QUALQUER MODAL ESTIVER ABERTO
   const isAnyModalOpen = Boolean(
@@ -740,37 +961,30 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   // -------------------------------------------------------------
   // HANDLERS: AVALIAÇÃO DE PRODUTO
   // -------------------------------------------------------------
-  const handleOpenReviewModal = (item, orderId) => {
-    setEvaluatingItem({ ...item, orderId });
-    setReviewRating(5);
-    setReviewComment('');
-  };
+  const handleOpenReviewModal = useCallback((item, orderId, orderNumber) => {
+    setEvaluatingItem({ ...item, orderId, orderNumber });
+  }, []);
 
-  const handleSubmitReview = (e) => {
-    e.preventDefault();
-    if (!evaluatingItem) return;
-
+  const handleReviewSuccess = useCallback((item) => {
+    // Atualiza o estado local para marcar a peça como avaliada
     setOrders(prevOrders => prevOrders.map(ord => {
-      if (ord.id === evaluatingItem.orderId) {
+      if (ord.id === item.orderId || ord.rawId === item.orderId) {
         return {
           ...ord,
-          items: ord.items.map(it => it.id === evaluatingItem.id ? { ...it, evaluated: true } : it)
+          items: ord.items.map(it => it.id === item.id ? { ...it, evaluated: true } : it)
         };
       }
       return ord;
     }));
 
     // Se estiver no modal de detalhes, atualiza também
-    if (selectedOrderDetails && selectedOrderDetails.id === evaluatingItem.orderId) {
+    if (selectedOrderDetails && (selectedOrderDetails.id === item.orderId || selectedOrderDetails.rawId === item.orderId)) {
       setSelectedOrderDetails(prev => ({
         ...prev,
-        items: prev.items.map(it => it.id === evaluatingItem.id ? { ...it, evaluated: true } : it)
+        items: prev.items.map(it => it.id === item.id ? { ...it, evaluated: true } : it)
       }));
     }
-
-    setEvaluatingItem(null);
-    alert('Obrigado pela sua avaliação! Seu feedback apoia o desenvolvimento da THR33.');
-  };
+  }, [selectedOrderDetails]);
 
   // -------------------------------------------------------------
   // HANDLERS: CANCELAMENTO DE PEDIDO (EM PREPARAÇÃO)
@@ -1449,7 +1663,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
               ) : (
                 <div className={styles.ordersList}>
                 {orders.map((order, orderIdx) => {
-                  const isDelivered = order.statusCode === 'delivered';
+                  const isDelivered = order.statusCode === ORDER_STATUSES.ENTREGUE || order.statusCode === 'delivered' || normalizeOrderStatus(order.status) === ORDER_STATUSES.ENTREGUE;
                   const isPreparing = order.statusCode === 'preparing' || order.statusCode === 'waiting_payment';
                   const isCanceled = order.statusCode === 'canceled';
 
@@ -1540,24 +1754,33 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                               </span>
                             </div>
                             
-                            <button 
-                              type="button"
-                              className={`${styles.reviewBtn} ${item.evaluated ? styles.evaluatedBtn : ''}`}
-                              onClick={() => !item.evaluated && handleOpenReviewModal(item, order.id)}
-                              disabled={item.evaluated || isCanceled}
-                            >
-                              {item.evaluated ? (
-                                <>
-                                  <Check size={12} />
-                                  <span>AVALIADO</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Star size={12} />
-                                  <span>AVALIAR PRODUTO</span>
-                                </>
-                              )}
-                            </button>
+                            {isDelivered ? (
+                              <button 
+                                type="button"
+                                className={`${styles.reviewBtn} ${item.evaluated ? styles.evaluatedBtn : ''}`}
+                                onClick={() => !item.evaluated && handleOpenReviewModal(item, order.rawId || order.id, order.id)}
+                                disabled={item.evaluated || isCanceled}
+                              >
+                                {item.evaluated ? (
+                                  <>
+                                    <Check size={12} />
+                                    <span>AVALIADO</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Star size={12} />
+                                    <span>AVALIAR PRODUTO</span>
+                                  </>
+                                )}
+                              </button>
+                            ) : (
+                              <span 
+                                className={styles.reviewPendingBadge} 
+                                title="A avaliação de cada peça fica disponível após a entrega ser confirmada."
+                              >
+                                Disponível após entrega
+                              </span>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -1816,24 +2039,33 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                         <span>Tamanho: <strong>{item.size || 'M'}</strong> • R$ {parseItemPrice(item).toFixed(2)}</span>
                       </div>
                       
-                      <button 
-                        type="button"
-                        className={`${styles.reviewBtn} ${item.evaluated ? styles.evaluatedBtn : ''}`}
-                        onClick={() => !item.evaluated && handleOpenReviewModal(item, selectedOrderDetails.id)}
-                        disabled={item.evaluated || selectedOrderDetails.statusCode === 'canceled'}
-                      >
-                        {item.evaluated ? (
-                          <>
-                            <Check size={12} />
-                            <span>AVALIADO</span>
-                          </>
-                        ) : (
-                          <>
-                            <Star size={12} />
-                            <span>AVALIAR</span>
-                          </>
-                        )}
-                      </button>
+                      {(selectedOrderDetails.statusCode === ORDER_STATUSES.ENTREGUE || selectedOrderDetails.statusCode === 'delivered' || normalizeOrderStatus(selectedOrderDetails.status) === ORDER_STATUSES.ENTREGUE) ? (
+                        <button 
+                          type="button"
+                          className={`${styles.reviewBtn} ${item.evaluated ? styles.evaluatedBtn : ''}`}
+                          onClick={() => !item.evaluated && handleOpenReviewModal(item, selectedOrderDetails.rawId || selectedOrderDetails.id, selectedOrderDetails.id)}
+                          disabled={item.evaluated || selectedOrderDetails.statusCode === 'canceled'}
+                        >
+                          {item.evaluated ? (
+                            <>
+                              <Check size={12} />
+                              <span>AVALIADO</span>
+                            </>
+                          ) : (
+                            <>
+                              <Star size={12} />
+                              <span>AVALIAR</span>
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <span 
+                          className={styles.reviewPendingBadge} 
+                          title="A avaliação de cada peça fica disponível após a entrega ser confirmada."
+                        >
+                          Disponível após entrega
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -2125,77 +2357,16 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       </AnimatePresence>
 
       {/* ============================================================
-          MODAL 4: AVALIAÇÃO DE PRODUTO
+          MODAL 4: AVALIAÇÃO DE PRODUTO (ISOLADO PARA DIGITAÇÃO ULTRA-FLUIDA)
           ============================================================ */}
       <AnimatePresence>
         {evaluatingItem && (
-          <div className={styles.modalBackdrop} onClick={() => setEvaluatingItem(null)}>
-            <motion.div 
-              className={styles.modalCard}
-              onClick={(e) => e.stopPropagation()}
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ duration: 0.2 }}
-            >
-              <div className={styles.modalHeader}>
-                <h3 className={styles.modalTitle}>AVALIAR PRODUTO</h3>
-                <button type="button" onClick={() => setEvaluatingItem(null)} className={styles.closeModalBtn}>
-                  <X size={18} />
-                </button>
-              </div>
-
-              <div className={styles.modalItemPreview}>
-                <img src={evaluatingItem.image} alt={evaluatingItem.name} />
-                <div>
-                  <strong>{evaluatingItem.name}</strong>
-                  <span>Tamanho: {evaluatingItem.size}</span>
-                </div>
-              </div>
-
-              <form onSubmit={handleSubmitReview} className={styles.reviewForm}>
-                <div className={styles.ratingPicker}>
-                  <label>Sua Nota (1 a 5 estrelas):</label>
-                  <div className={styles.starsSelectRow}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => setReviewRating(star)}
-                        className={styles.starBtn}
-                      >
-                        <Star 
-                          size={24} 
-                          fill={star <= reviewRating ? "#ffffff" : "none"} 
-                          color={star <= reviewRating ? "#ffffff" : "#525252"} 
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className={styles.inputField}>
-                  <label>Seu Comentário sobre o caimento, tecido e acabamento:</label>
-                  <textarea 
-                    rows={4}
-                    placeholder="Ex: O tecido heavyweight é impressionante e a modelagem Boxy veste perfeitamente..."
-                    value={reviewComment}
-                    onChange={(e) => setReviewComment(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <div className={styles.modalActions}>
-                  <button type="button" onClick={() => setEvaluatingItem(null)} className={styles.cancelBtn}>
-                    Cancelar
-                  </button>
-                  <button type="submit" className={styles.saveBtn}>
-                    PUBLICAR AVALIAÇÃO
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
+          <ReviewModal 
+            item={evaluatingItem}
+            onClose={() => setEvaluatingItem(null)}
+            onReviewSuccess={handleReviewSuccess}
+            user={currentUser || user}
+          />
         )}
       </AnimatePresence>
 

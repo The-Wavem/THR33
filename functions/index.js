@@ -660,8 +660,14 @@ exports.createPagBankOrder = onCall(
 
       const unitAmountInCents = Math.round(realPrice * 100);
       const itemTotalInCents = unitAmountInCents * qty;
+      const itemImage =
+        item.image ||
+        prodData.image ||
+        (Array.isArray(prodData.images) && prodData.images[0]) ||
+        "";
 
       sanitizedItems.push({
+        id: String(item.id),
         reference_id: String(item.id),
         name: String(prodData.name || item.name || "Camiseta THR33").slice(
           0,
@@ -669,6 +675,8 @@ exports.createPagBankOrder = onCall(
         ),
         quantity: qty,
         unit_amount: unitAmountInCents,
+        price: realPrice,
+        image: itemImage,
         total_amount: itemTotalInCents,
         ncm: String(prodData.ncm || "61091000")
           .replace(/\D/g, "")
@@ -676,6 +684,7 @@ exports.createPagBankOrder = onCall(
         cfop: cfopCode,
         sku: String(prodData.sku || item.id).slice(0, 32),
         size: String(item.size || "M").slice(0, 10),
+        evaluated: false,
       });
 
       subtotalInCents += itemTotalInCents;
@@ -899,7 +908,12 @@ exports.createPagBankOrder = onCall(
           },
         ],
       },
-      items: sanitizedItems.map(({ ncm, sku, size, ...rest }) => rest),
+      items: sanitizedItems.map((i) => ({
+        reference_id: String(i.reference_id || i.id),
+        name: String(i.name).slice(0, 64),
+        quantity: Number(i.quantity) || 1,
+        unit_amount: Number(i.unit_amount) || 0,
+      })),
       shipping: {
         address: {
           street: shipping?.address?.street || "Rua",
@@ -978,6 +992,13 @@ exports.createPagBankOrder = onCall(
           throw new HttpsError(
             "failed-precondition",
             "Sua conta PagBank requer liberação de Whitelist em Produção para a API de Pedidos. Conclua a solicitação de homologação enviada ao PagBank ou ative o Sandbox para testes.",
+          );
+        }
+
+        if (errorString.includes("buyer email must not be equals to merchant email") || errorString.includes("40002")) {
+          throw new HttpsError(
+            "invalid-argument",
+            "O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista (contato.thewavem@gmail.com). Para testar compras ou realizar pedidos, informe um e-mail diferente.",
           );
         }
 

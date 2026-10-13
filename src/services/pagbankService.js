@@ -248,6 +248,9 @@ export const pagbankService = {
       if (errMsg.includes("Estoque insuficiente") || errMsg.includes("não encontrado no catálogo")) {
         throw new Error(errMsg);
       }
+      if (errMsg.includes("buyer email must not be equals to merchant email") || errMsg.includes("40002")) {
+        throw new Error("O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista (contato.thewavem@gmail.com). Por favor, informe outro e-mail na Etapa 1.");
+      }
       if (!isSandboxMode()) {
         const details = String(callErr.details || callErr.message || "");
         if (details.toLowerCase().includes("whitelist")) {

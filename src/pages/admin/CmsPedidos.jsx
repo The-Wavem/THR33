@@ -60,6 +60,72 @@ const formatDateBR = (isoStr) => {
   return `${day}/${month}/${year}`;
 };
 
+// Helper robusto para extrair timestamp numerico em ms de qualquer formato de pedido
+const parseOrderTimestamp = (orderOrData) => {
+  if (!orderOrData) return 0;
+  const createdAt = orderOrData.createdAt;
+  if (createdAt) {
+    if (typeof createdAt.toDate === 'function') {
+      const ms = createdAt.toDate().getTime();
+      if (!isNaN(ms)) return ms;
+    }
+    if (typeof createdAt.seconds === 'number') {
+      return createdAt.seconds * 1000;
+    }
+    if (typeof createdAt === 'number' && !isNaN(createdAt)) {
+      return createdAt < 10000000000 ? createdAt * 1000 : createdAt;
+    }
+    if (typeof createdAt === 'string') {
+      const ms = new Date(createdAt).getTime();
+      if (!isNaN(ms)) return ms;
+    }
+  }
+
+  const updatedAt = orderOrData.updatedAt;
+  if (updatedAt) {
+    if (typeof updatedAt.toDate === 'function') {
+      const ms = updatedAt.toDate().getTime();
+      if (!isNaN(ms)) return ms;
+    }
+    if (typeof updatedAt.seconds === 'number') {
+      return updatedAt.seconds * 1000;
+    }
+    if (typeof updatedAt === 'string') {
+      const ms = new Date(updatedAt).getTime();
+      if (!isNaN(ms)) return ms;
+    }
+  }
+
+  const idStr = String(orderOrData.id || orderOrData.rawId || '');
+  const match = idStr.match(/(\d{10,13})/);
+  if (match) {
+    const num = Number(match[1]);
+    if (!isNaN(num)) {
+      return num < 10000000000 ? num * 1000 : num;
+    }
+  }
+
+  return 0;
+};
+
+// Helper para converter a data do pedido em YYYY-MM-DD com seguranca estrita contra Invalid Date
+const getOrderDateISO = (order) => {
+  const ms = parseOrderTimestamp(order);
+  if (!ms) return null;
+  const d = new Date(ms);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString().split('T')[0];
+};
+
+// Helper para exibicao de data em formato pt-BR amigavel
+const formatOrderDate = (order) => {
+  const ms = parseOrderTimestamp(order);
+  if (!ms) return 'Hoje';
+  const d = new Date(ms);
+  if (isNaN(d.getTime())) return 'Hoje';
+  return d.toLocaleDateString('pt-BR');
+};
+
 export function CmsPedidos() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
@@ -133,7 +199,7 @@ export function CmsPedidos() {
       if (!snap.empty) {
         const list = [];
         snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-        list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
+        list.sort((a, b) => parseOrderTimestamp(b) - parseOrderTimestamp(a));
         setOrders(list);
       } else {
         setOrders([]);
@@ -573,11 +639,11 @@ export function CmsPedidos() {
 
   // Filtragem Geral (Por Data, Status e Busca Textual/CPF)
   const filteredOrders = useMemo(() => {
-    return orders.filter(order => {
+    const result = orders.filter(order => {
       // 1. Filtro por Período de Datas
       if (startDate || endDate) {
-        if (!order.createdAt) return false;
-        const orderDateStr = new Date(order.createdAt).toISOString().split('T')[0];
+        const orderDateStr = getOrderDateISO(order);
+        if (!orderDateStr) return false;
         if (startDate && endDate) {
           if (orderDateStr < startDate || orderDateStr > endDate) return false;
         } else if (startDate && orderDateStr < startDate) {
@@ -615,6 +681,11 @@ export function CmsPedidos() {
 
       return true;
     });
+
+    // Garante que os pedidos mais recentes sempre sejam exibidos primeiro (decrescente)
+    result.sort((a, b) => parseOrderTimestamp(b) - parseOrderTimestamp(a));
+
+    return result;
   }, [orders, startDate, endDate, statusFilter, searchTerm]);
 
   // Métricas Calculadas sobre os Pedidos Filtrados por Período
@@ -622,8 +693,8 @@ export function CmsPedidos() {
     // Calcula métricas sobre os pedidos dentro do período selecionado
     const ordersInPeriod = orders.filter(order => {
       if (!startDate && !endDate) return true;
-      if (!order.createdAt) return false;
-      const orderDateStr = new Date(order.createdAt).toISOString().split('T')[0];
+      const orderDateStr = getOrderDateISO(order);
+      if (!orderDateStr) return false;
       if (startDate && endDate) {
         return orderDateStr >= startDate && orderDateStr <= endDate;
       }
@@ -666,7 +737,7 @@ export function CmsPedidos() {
       order.items?.forEach(item => {
         csvRows.push([
           order.id,
-          new Date(order.createdAt).toLocaleDateString('pt-BR'),
+          formatOrderDate(order),
           `"${order.clientName || order.customerName || 'Cliente'}"`,
           order.clientPhone || order.customerPhone || '',
           addr,
@@ -869,8 +940,8 @@ export function CmsPedidos() {
           {STATUS_OPTIONS.map(st => {
             const countForStatus = orders.filter(o => {
               if (startDate || endDate) {
-                if (!o.createdAt) return false;
-                const dStr = new Date(o.createdAt).toISOString().split('T')[0];
+                const dStr = getOrderDateISO(o);
+                if (!dStr) return false;
                 if (startDate && endDate && (dStr < startDate || dStr > endDate)) return false;
                 if (startDate && dStr < startDate) return false;
                 if (endDate && dStr > endDate) return false;
@@ -935,7 +1006,7 @@ export function CmsPedidos() {
                   <tr key={order.id} className={styles.tableRow}>
                     <td>
                       <div className={styles.orderCodeWrapper}>
-                        <strong className={styles.orderCode}>#{order.id.slice(0, 8).toUpperCase()}</strong>
+                        <strong className={styles.orderCode}>#{order.id.toUpperCase().startsWith('THR-') ? order.id.toUpperCase() : order.id.slice(0, 8).toUpperCase()}</strong>
                         {order.hasOpenTicket && (
                           <span className={styles.openTicketPulseTag} title="Cliente abriu chamado de suporte para este pedido">
                             <Headphones size={10} />
@@ -977,7 +1048,7 @@ export function CmsPedidos() {
                     </td>
                     <td>
                       <span className={styles.dateText}>
-                        {order.createdAt ? new Date(order.createdAt).toLocaleDateString('pt-BR') : 'Hoje'}
+                        {formatOrderDate(order)}
                       </span>
                     </td>
                     <td>

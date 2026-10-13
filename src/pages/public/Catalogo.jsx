@@ -6,7 +6,6 @@ import FilterSidebar from '../../components/catalog/FilterSidebar';
 import ProductCard from '../../components/catalog/ProductCard';
 import ProductCardSkeleton from '../../components/catalog/ProductCardSkeleton';
 import { catalogService } from '../../services/catalogService';
-import { seedService } from '../../services/seedService';
 import { analyticsService } from '../../services/analyticsService';
 import { normalizeFitSlug, formatFitLabel } from '../../utils/fitUtils';
 import styles from './Catalogo.module.css';
@@ -68,7 +67,6 @@ export function Catalogo() {
     async function loadCatalog() {
       setLoadingProducts(true);
       try {
-        await seedService.seedCatalogIfEmpty();
         const data = await catalogService.getAllProducts();
         setProducts(data);
       } catch (err) {

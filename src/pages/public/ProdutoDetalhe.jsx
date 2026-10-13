@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Truck, Star, Plus, Heart, ShoppingBag, ArrowLeft, Check, Package } from 'lucide-react';
+import { Truck, Star, Plus, Heart, ShoppingBag, ArrowLeft, Check, Package, ShieldCheck, Flame, HelpCircle } from 'lucide-react';
+import ProductCard from '../../components/catalog/ProductCard';
 import { catalogService } from '../../services/catalogService';
-import { seedService } from '../../services/seedService';
+import { reviewService } from '../../services/reviewService';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { analyticsService } from '../../services/analyticsService';
@@ -24,39 +25,14 @@ const DEFAULT_CARE_INSTRUCTIONS = [
   "Passar do avesso em temperatura média evitando a estampa."
 ];
 
-const DEFAULT_REVIEWS = [
-  { 
-    id: 1, 
-    author: "Lucas M.", 
-    rating: 5, 
-    date: "02/08/2026", 
-    variant: "Tamanho: M • Cor: Preto Piano",
-    comment: "Caimento impecável! O tecido é realmente pesado (heavyweight) e a gola é bem grossa, não deforma de jeito nenhum." 
-  },
-  { 
-    id: 2, 
-    author: "Gabriel S.", 
-    rating: 5, 
-    date: "28/07/2026", 
-    variant: "Tamanho: G • Cor: Off-White",
-    comment: "Modelagem Boxy autêntica. Ombros bem posicionados e entrega rápida aqui em Curitiba." 
-  },
-  { 
-    id: 3, 
-    author: "Matheus K.", 
-    rating: 5, 
-    date: "15/07/2026", 
-    variant: "Tamanho: M • Cor: Preto Piano",
-    comment: "Qualidade do algodão é absurda, muito superior a outras marcas nacionais. Vale cada centavo do investimento." 
-  }
-];
-
 export function ProdutoDetalhe({ onAddToCart }) {
   const { slug, id } = useParams();
   const currentParam = slug || id;
+  const navigate = useNavigate();
 
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [suggestedProducts, setSuggestedProducts] = useState([]);
 
   // Contextos
   const { addToCart } = useCart();
@@ -76,39 +52,97 @@ export function ProdutoDetalhe({ onAddToCart }) {
   const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
   const [shippingError, setShippingError] = useState(null);
 
+  // Avaliações Reais do Produto (Firestore)
+  const [approvedReviews, setApprovedReviews] = useState([]);
+  const [reviewsStats, setReviewsStats] = useState({
+    totalReviews: 0,
+    averageRating: 5.0,
+    recommendPercentage: 100
+  });
+  const [loadingReviews, setLoadingReviews] = useState(true);
+
+  // Carrega avaliações aprovadas reais do Firestore para o produto
   useEffect(() => {
+    async function loadApprovedReviews() {
+      if (!product?.id) return;
+      setLoadingReviews(true);
+      try {
+        const result = await reviewService.getApprovedReviewsByProduct(product.id, product.slug);
+        setApprovedReviews(result.reviews || []);
+        setReviewsStats({
+          totalReviews: result.totalReviews || 0,
+          averageRating: result.averageRating || 5.0,
+          recommendPercentage: result.recommendPercentage || 100
+        });
+      } catch (err) {
+        console.warn("Aviso ao carregar avaliações do produto:", err.message);
+        setApprovedReviews([]);
+      } finally {
+        setLoadingReviews(false);
+      }
+    }
+    loadApprovedReviews();
+  }, [product?.id, product?.slug]);
+
+  useEffect(() => {
+    let isMounted = true;
     async function loadProduct() {
       setLoading(true);
       try {
-        await seedService.seedCatalogIfEmpty();
+        // 1. Busca direta pelo produto por ID ou Slug
         let data = await catalogService.getProductById(currentParam);
         
+        // 2. Fallback buscando no catálogo completo caso slug ou ID seja variante
         if (!data) {
-          // Tenta carregar catálogo completo e encontrar por slug/id
           const all = await catalogService.getAllProducts();
           data = all.find(p => p.id === currentParam || p.slug === currentParam) || null;
         }
 
+        if (!isMounted) return;
+
         if (data) {
           setProduct(data);
-          // Determina tamanho padrão disponível
           let defaultSize = 'M';
           if (data.stock && typeof data.stock === 'object') {
             const firstAvail = ['PP', 'P', 'M', 'G', 'GG'].find(sz => Number(data.stock[sz] ?? 0) > 0);
             if (firstAvail) defaultSize = firstAvail;
           }
           setSelectedSize(defaultSize);
-          // Telemetria detalhada da peça
           analyticsService.trackProductView(data.id, data.name, data.category || 'camisa', data.fit || 'boxy', data.slug);
           analyticsService.trackPageView('produto_detalhe');
+        } else {
+          setProduct(null);
+          // Busca sugestões em destaque para exibir na tela 404
+          try {
+            const suggestions = await catalogService.getFeaturedProducts(4);
+            if (isMounted) setSuggestedProducts(suggestions || []);
+          } catch (featErr) {
+            console.warn("Aviso ao carregar sugestões 404:", featErr);
+          }
         }
       } catch (err) {
         console.error("Erro ao carregar produto:", err);
+        if (isMounted) {
+          setProduct(null);
+          try {
+            const suggestions = await catalogService.getFeaturedProducts(4);
+            if (isMounted) setSuggestedProducts(suggestions || []);
+          } catch (featErr) {
+            // Silencia erro secundário
+          }
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
+
     loadProduct();
+
+    return () => {
+      isMounted = false;
+    };
   }, [currentParam]);
 
   // Consolidação da grade de estoque
@@ -147,9 +181,21 @@ export function ProdutoDetalhe({ onAddToCart }) {
   if (loading) {
     return (
       <main className={styles.container}>
-        <div style={{ textAlign: 'center', padding: '6rem 1rem', color: 'var(--text-secondary)' }}>
-          <Package size={32} style={{ animation: 'spin 1.5s linear infinite', margin: '0 auto 1rem' }} />
-          <p>Carregando detalhes da peça no Firestore...</p>
+        <div className={styles.loadingWrapper} aria-live="polite">
+          <div className={styles.loadingCard}>
+            <div className={styles.loadingSpinnerContainer}>
+              <div className={styles.loadingSpinnerRing} />
+              <Package size={24} className={styles.loadingIcon} />
+            </div>
+            <div className={styles.loadingBadge}>
+              <span className={styles.loadingDot} />
+              <span>THR33 // ATELIÊ STREETWEAR</span>
+            </div>
+            <h2 className={styles.loadingTitle}>CONSULTANDO ACERVO</h2>
+            <p className={styles.loadingSubtitle}>
+              Sincronizando especificações técnicas, grade de medidas e disponibilidade em estoque.
+            </p>
+          </div>
         </div>
       </main>
     );
@@ -158,13 +204,81 @@ export function ProdutoDetalhe({ onAddToCart }) {
   if (!product) {
     return (
       <main className={styles.container}>
-        <div style={{ textAlign: 'center', padding: '6rem 1rem' }}>
-          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', marginBottom: '1rem' }}>PEÇA NÃO ENCONTRADA</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>O produto que você procura não está disponível no estoque ou foi descontinuado.</p>
-          <Link to="/catalogo" style={{ background: 'var(--text-primary)', color: 'var(--bg-primary)', padding: '0.8rem 1.5rem', fontWeight: 800, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-            <ArrowLeft size={16} />
-            <span>VOLTAR AO CATÁLOGO</span>
-          </Link>
+        <div className={styles.notFoundWrapper}>
+          <motion.div 
+            className={styles.notFoundCard}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+          >
+            <div className={styles.notFoundBadgeRow}>
+              <span className={styles.notFoundBadge}>
+                <span className={styles.notFoundDot} />
+                PEÇA NÃO LOCALIZADA // ACERVO THR33
+              </span>
+            </div>
+
+            <h1 className={styles.notFoundCode}>404</h1>
+
+            <h2 className={styles.notFoundTitle}>PEÇA NÃO ENCONTRADA OU FORA DE CATÁLOGO</h2>
+
+            {currentParam && (
+              <div className={styles.notFoundParamBadge}>
+                <span className={styles.paramLabel}>REFERÊNCIA BUSCADA:</span>
+                <code className={styles.paramValue}>/produto/{currentParam}</code>
+              </div>
+            )}
+
+            <p className={styles.notFoundText}>
+              A peça que você tentou acessar não foi localizada em nosso acervo ativo. Ela pode pertencer a um drop anterior já encerrado, ter tido seu link atualizado ou estar temporariamente indisponível. Nossas coleções contam com tiragens limitadas e cortes exclusivos.
+            </p>
+
+            <div className={styles.notFoundActions}>
+              <button 
+                type="button" 
+                onClick={() => navigate(-1)} 
+                className={styles.notFoundBackBtn}
+                title="Voltar à página anterior"
+              >
+                <ArrowLeft size={16} />
+                <span>VOLTAR</span>
+              </button>
+
+              <Link to="/catalogo" className={styles.notFoundPrimaryBtn}>
+                <ShoppingBag size={16} />
+                <span>EXPLORAR CATÁLOGO</span>
+              </Link>
+
+              <Link to="/lancamentos" className={styles.notFoundSecondaryBtn}>
+                <Flame size={16} />
+                <span>LANÇAMENTOS VIP</span>
+              </Link>
+            </div>
+
+            <div className={styles.notFoundSupport}>
+              <span>Procurava uma edição específica ou modelo sob demanda?</span>
+              <Link to="/suporte" className={styles.notFoundSupportLink}>
+                <HelpCircle size={14} />
+                <span>Fale com o Ateliê</span>
+              </Link>
+            </div>
+          </motion.div>
+
+          {/* GRADE DE RECOMENDAÇÕES DA VITRINE PARA RECUPERAÇÃO DO CLIENTE */}
+          {suggestedProducts.length > 0 && (
+            <section className={styles.suggestionsSection} aria-label="Peças recomendadas">
+              <header className={styles.suggestionsHeader}>
+                <span className={styles.suggestionsSuperTitle}>RECOMENDAÇÕES // FOR THE FEW</span>
+                <h3 className={styles.suggestionsTitle}>OUTRAS PEÇAS EM DESTAQUE NO ATELIÊ</h3>
+              </header>
+
+              <div className={styles.suggestionsGrid}>
+                {suggestedProducts.map((suggested) => (
+                  <ProductCard key={suggested.id} product={suggested} />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       </main>
     );
@@ -183,7 +297,6 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
   const sizeChart = product.sizeChart || DEFAULT_SIZE_CHART;
   const careInstructions = product.careInstructions || DEFAULT_CARE_INSTRUCTIONS;
-  const reviews = product.reviews || DEFAULT_REVIEWS;
 
   const priceNum = Number(product.price || 0);
   const discountPriceNum = Number(product.discountPrice || 0);
@@ -646,7 +759,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
         </section>
       </div>
 
-      {/* SEÇÃO DEDICADA DE AVALIAÇÕES */}
+      {/* SEÇÃO DEDICADA DE AVALIAÇÕES REAIS (SEM MOCKS) */}
       <section className={styles.reviewsSection} aria-label="Avaliações dos clientes">
         <header className={styles.reviewsHeader}>
           <div className={styles.reviewsTitleGroup}>
@@ -654,43 +767,74 @@ export function ProdutoDetalhe({ onAddToCart }) {
             <h2 className={styles.reviewsMainTitle}>AVALIAÇÕES DA COMUNIDADE</h2>
           </div>
 
-          <div className={styles.ratingSummaryCard}>
-            <div className={styles.ratingScore}>5.0</div>
-            <div className={styles.ratingMeta}>
-              <div className={styles.starsRow} aria-label="Nota 5 de 5 estrelas">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} size={15} fill="#ffffff" color="#ffffff" />
-                ))}
+          {approvedReviews.length > 0 && (
+            <div className={styles.ratingSummaryCard}>
+              <div className={styles.ratingScore}>{reviewsStats.averageRating.toFixed(1)}</div>
+              <div className={styles.ratingMeta}>
+                <div className={styles.starsRow} aria-label={`Nota ${reviewsStats.averageRating} de 5 estrelas`}>
+                  {[...Array(5)].map((_, i) => (
+                    <Star 
+                      key={i} 
+                      size={15} 
+                      fill={i < Math.round(reviewsStats.averageRating) ? "#ffffff" : "none"} 
+                      color={i < Math.round(reviewsStats.averageRating) ? "#ffffff" : "#525252"} 
+                    />
+                  ))}
+                </div>
+                <span className={styles.recommendText}>
+                  {reviewsStats.recommendPercentage}% dos compradores recomendam ({reviewsStats.totalReviews} {reviewsStats.totalReviews === 1 ? 'avaliação' : 'avaliações'})
+                </span>
               </div>
-              <span className={styles.recommendText}>100% dos compradores recomendam</span>
             </div>
-          </div>
+          )}
         </header>
 
         {/* GRADE DE COMENTÁRIOS DOS CLIENTES */}
         <div className={styles.reviewsGrid}>
-          {reviews.map((rev) => (
-            <article key={rev.id} className={styles.reviewCardItem}>
-              <div className={styles.reviewCardTop}>
-                <strong className={styles.reviewAuthor}>{rev.author}</strong>
-                <span className={styles.reviewDate}>{rev.date}</span>
-              </div>
+          {approvedReviews.length > 0 ? (
+            approvedReviews.map((rev) => (
+              <article key={rev.id} className={styles.reviewCardItem}>
+                <div className={styles.reviewCardTop}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <strong className={styles.reviewAuthor}>{rev.author}</strong>
+                    <span className={styles.verifiedBuyerTag}>
+                      <ShieldCheck size={11} />
+                      COMPRADOR VERIFICADO
+                    </span>
+                  </div>
+                  <span className={styles.reviewDate}>
+                    {rev.createdAt ? new Date(rev.createdAt).toLocaleDateString('pt-BR') : 'Recente'}
+                  </span>
+                </div>
 
-              <div className={styles.reviewStars}>
-                {[...Array(rev.rating || 5)].map((_, i) => (
-                  <Star key={i} size={12} fill="#ffffff" color="#ffffff" />
-                ))}
-              </div>
+                <div className={styles.reviewStars}>
+                  {[...Array(5)].map((_, i) => (
+                    <Star 
+                      key={i} 
+                      size={12} 
+                      fill={i < (rev.rating || 5) ? "#ffffff" : "none"} 
+                      color={i < (rev.rating || 5) ? "#ffffff" : "#525252"} 
+                    />
+                  ))}
+                </div>
 
-              {rev.variant && (
-                <span className={styles.reviewVariantTag}>{rev.variant}</span>
-              )}
+                {rev.variant && (
+                  <span className={styles.reviewVariantTag}>{rev.variant}</span>
+                )}
 
-              <blockquote className={styles.reviewText}>
-                "{rev.comment}"
-              </blockquote>
-            </article>
-          ))}
+                <blockquote className={styles.reviewText}>
+                  "{rev.comment}"
+                </blockquote>
+              </article>
+            ))
+          ) : (
+            <div className={styles.emptyReviewsBox}>
+              <h3 className={styles.emptyReviewsTitle}>NENHUMA AVALIAÇÃO AINDA</h3>
+              <p className={styles.emptyReviewsText}>
+                Esta peça é produzida sob demanda com alto padrão têxtil. Seja um dos primeiros clientes a adquirir e avaliar o caimento após a entrega confirmada.
+              </p>
+            </div>
+          )}
         </div>
       </section>
     </main>

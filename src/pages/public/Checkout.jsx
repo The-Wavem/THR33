@@ -249,6 +249,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   // PROCESSAMENTO FINAL E SUCESSO
   const [paymentMethod, setPaymentMethod] = useState('PIX');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paidTotalAmount, setPaidTotalAmount] = useState(0);
   const [copiedPix, setCopiedPix] = useState(false);
   const [couponInput, setCouponInput] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
@@ -619,6 +620,14 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   const handleProceedToPagBank = async (e) => {
     e.preventDefault();
     setPaymentError(null);
+    setPaidTotalAmount(finalAmountToPay);
+
+    // Validação preventiva contra erro 40002 da PagBank (buyer email must not be equals to merchant email)
+    const buyerEmail = (clientData.email || user?.email || '').trim().toLowerCase();
+    if (buyerEmail === 'contato.thewavem@gmail.com') {
+      setPaymentError('O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista (contato.thewavem@gmail.com). Para testar compras ou realizar pedidos, retorne à Etapa 1 e informe outro e-mail (por exemplo, um e-mail pessoal).');
+      return;
+    }
 
     // Validação de cartão de crédito quando houver cobrança financeira
     if (finalAmountToPay > 0 && paymentMethod === 'Cartão de Crédito') {
@@ -799,7 +808,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         setPagbankResult(pagbankRes.data);
       } catch (gatewayErr) {
         console.warn("Aviso ao processar gateway PagBank:", gatewayErr.message);
-        setPaymentError(gatewayErr.message || 'Erro temporário de conexão com o PagBank. Tente novamente em instantes.');
+        let userMessage = gatewayErr.message || 'Erro temporário de conexão com o PagBank. Tente novamente em instantes.';
+        if (userMessage.includes("40002") || userMessage.includes("buyer email must not be equals to merchant email")) {
+          userMessage = "O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista (contato.thewavem@gmail.com). Por favor, retorne à Etapa 1 e utilize outro e-mail (por exemplo, seu e-mail pessoal).";
+        }
+        setPaymentError(userMessage);
         setIsProcessing(false);
         return;
       }
@@ -924,7 +937,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             utm_source: utmSource,
             utm_medium: utmMedium,
             utm_campaign: utmCampaign,
-            paymentDetails: cleanPayload.paymentDetails
+            paymentDetails: cleanPayload.paymentDetails,
+            items: cleanPayload.items
           }, { merge: true });
         } catch (syncDocErr) {
           console.warn("Aviso ao enriquecer documento do pedido:", syncDocErr.message);
@@ -1074,14 +1088,6 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     setTimeout(() => setCopiedPix(false), 2500);
   };
 
-  const [copiedBoleto, setCopiedBoleto] = useState(false);
-  const handleCopyBoleto = () => {
-    const barcode = pagbankResult?.boleto?.barcode || pagbankResult?.charges?.[0]?.payment_method?.boleto?.barcode || "23793.38128 60000.123456 78900.123456 1 98760000035591";
-    navigator.clipboard.writeText(barcode);
-    setCopiedBoleto(true);
-    setTimeout(() => setCopiedBoleto(false), 2500);
-  };
-
   const handleApplyCouponInline = async (e) => {
     e.preventDefault();
     if (couponInput.trim()) {
@@ -1091,6 +1097,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       }
     }
   };
+
+  const displayPaidAmount = paidTotalAmount > 0 
+    ? paidTotalAmount 
+    : (pagbankResult?.charges?.[0]?.amount?.value 
+        ? pagbankResult.charges[0].amount.value / 100 
+        : finalAmountToPay);
 
   // -------------------------------------------------------------
   // ETAPA 4: SUCESSO / PEDIDO CONFIRMADO VIA PAGBANK
@@ -1154,7 +1166,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                       <div className={styles.qrCornerTopRight} />
                       <div className={styles.qrCornerBottomLeft} />
                       <span className={styles.qrCodeText}>[ QR CODE PAGBANK ]</span>
-                      <span className={styles.qrCodeValue}>R$ {finalAmountToPay.toFixed(2)}</span>
+                      <span className={styles.qrCodeValue}>R$ {displayPaidAmount.toFixed(2)}</span>
                     </div>
                   )}
                 </div>
@@ -1182,13 +1194,13 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 <CreditCard size={20} color="#4ade80" />
                 <div>
                   <strong>PAGAMENTO PROCESSADO COM SUCESSO</strong>
-                  <small>Gateway Seguro PagBank Sandbox 256-Bit</small>
+                  <small>Gateway Seguro PagBank</small>
                 </div>
               </div>
               <div className={styles.cardSuccessBody}>
                 <div className={styles.cardSuccessRow}>
                   <span>Total Cobrado:</span>
-                  <strong>R$ {finalAmountToPay.toFixed(2)}</strong>
+                  <strong>R$ {displayPaidAmount.toFixed(2)}</strong>
                 </div>
                 <div className={styles.cardSuccessRow}>
                   <span>Cartão Utilizado:</span>
@@ -1199,7 +1211,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 <div className={styles.cardSuccessRow}>
                   <span>Condição:</span>
                   <span>
-                    {(pagbankResult?.charges?.[0]?.payment_method?.installments || pagbankResult?.creditCard?.installments || installments)}x de R$ {(finalAmountToPay / (pagbankResult?.charges?.[0]?.payment_method?.installments || pagbankResult?.creditCard?.installments || installments)).toFixed(2)} sem juros
+                    {(pagbankResult?.charges?.[0]?.payment_method?.installments || pagbankResult?.creditCard?.installments || installments)}x de R$ {(displayPaidAmount / (pagbankResult?.charges?.[0]?.payment_method?.installments || pagbankResult?.creditCard?.installments || installments)).toFixed(2)} sem juros
                   </span>
                 </div>
                 <div className={styles.cardSuccessRow}>
@@ -1215,47 +1227,6 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                   </div>
                 )}
               </div>
-            </div>
-          )}
-
-          {paymentMethod === 'Boleto Bancário' && (
-            <div className={styles.boletoSuccessBox}>
-              <div className={styles.boletoHeader}>
-                <FileText size={20} />
-                <div>
-                  <strong>BOLETO BANCÁRIO GERADO</strong>
-                  <small>Vencimento em 3 dias úteis</small>
-                </div>
-              </div>
-              <p className={styles.pixInstruction}>
-                Utilize a linha digitável abaixo no aplicativo do seu banco para pagar:
-              </p>
-              <div className={styles.pixCopyArea}>
-                <input 
-                  type="text" 
-                  readOnly 
-                  value={pagbankResult?.boleto?.barcode || pagbankResult?.boleto?.formatted_barcode || pagbankResult?.charges?.[0]?.payment_method?.boleto?.barcode || "23793.38128 60000.123456 78900.123456 1 98760000035591"} 
-                  className={styles.pixInput} 
-                />
-                <button type="button" onClick={handleCopyBoleto} className={styles.copyBtn}>
-                  {copiedBoleto ? <Check size={14} /> : <Copy size={14} />}
-                  <span>{copiedBoleto ? 'COPIADO!' : 'COPIAR CÓDIGO'}</span>
-                </button>
-              </div>
-              {(pagbankResult?.charges?.[0]?.links?.find(l => l.rel === 'BOLETO_PDF')?.href || pagbankResult?.boleto?.pdfUrl) && (
-                <div style={{ marginTop: '1rem', textAlign: 'center' }}>
-                  <a 
-                    href={pagbankResult?.charges?.[0]?.links?.find(l => l.rel === 'BOLETO_PDF')?.href || pagbankResult?.boleto?.pdfUrl} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className={styles.secondaryBtn}
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem', textDecoration: 'none' }}
-                  >
-                    <span>VISUALIZAR BOLETO (PDF)</span>
-                    <ExternalLink size={14} />
-                  </a>
-                </div>
-              )}
             </div>
           )}
 
@@ -1896,18 +1867,6 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                           <span><strong>Cartão de Crédito</strong> (em até 3x)</span>
                         </div>
                         {paymentMethod === 'Cartão de Crédito' && <CheckCircle2 size={15} className={styles.methodCheck} />}
-                      </button>
-
-                      <button 
-                        type="button" 
-                        onClick={() => setPaymentMethod('Boleto Bancário')}
-                        className={`${styles.methodPillBtn} ${paymentMethod === 'Boleto Bancário' ? styles.activeMethodPill : ''}`}
-                      >
-                        <div className={styles.methodContent}>
-                          <FileText size={15} />
-                          <span><strong>Boleto Bancário</strong></span>
-                        </div>
-                        {paymentMethod === 'Boleto Bancário' && <CheckCircle2 size={15} className={styles.methodCheck} />}
                       </button>
                     </div>
 
