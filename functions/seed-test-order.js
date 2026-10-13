@@ -41,7 +41,6 @@ async function seed() {
   await db.collection('orders').doc(orderId).set(orderData, { merge: true });
   await db.collection('pedidos').doc(orderId).set(orderData, { merge: true });
 
-  console.log(`Documento ${orderId} criado com sucesso em 'orders' e 'pedidos' com status inicial 'pendente'!`);
   await admin.app().delete();
 }
 

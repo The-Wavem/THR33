@@ -8,7 +8,6 @@ async function generate() {
   const wire = stackToWire(stack);
   const targetPath = path.join(__dirname, 'functions.yaml');
   fs.writeFileSync(targetPath, JSON.stringify(wire, null, 2), 'utf8');
-  console.log(`functions.yaml gerado com sucesso (${Object.keys(wire.endpoints).length} endpoints)`);
 }
 
 generate().catch(err => {
