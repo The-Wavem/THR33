@@ -195,12 +195,18 @@
   letter-spacing: 1px;
 }
 
+.categoryTag {
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
 .fitTag {
   color: var(--text-muted);
+  text-transform: uppercase;
 }
 
 .dropTag {
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 
 .productName {

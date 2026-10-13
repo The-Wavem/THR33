@@ -776,9 +776,554 @@
   cursor: not-allowed;
 }
 
+/* GALERIA DE FOTOS & FIREBASE STORAGE */
+.galleryFormSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.1rem;
+}
+
+.gallerySectionHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.galleryHeaderTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-primary);
+}
+
+.uploadDropzone {
+  border: 2px dashed var(--border-color);
+  padding: 1.5rem 1rem;
+  text-align: center;
+  background-color: rgba(255, 255, 255, 0.015);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.uploadDropzone:hover {
+  border-color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.04);
+}
+
+.uploadInputHidden {
+  display: none;
+}
+
+.uploadDropzoneLabel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+}
+
+.uploadIcon {
+  color: #60a5fa;
+  margin-bottom: 0.2rem;
+}
+
+.uploadDropzoneLabel strong {
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+  color: var(--text-primary);
+}
+
+.uploadDropzoneLabel span {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+
+.uploadProgressBar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #60a5fa;
+  background-color: rgba(96, 165, 250, 0.1);
+  padding: 0.6rem 0.8rem;
+  border: 1px solid rgba(96, 165, 250, 0.3);
+}
+
+.externalUrlRow {
+  display: flex;
+  align-items: center;
+}
+
+.addUrlToggleBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  padding: 0.2rem 0;
+  transition: color var(--transition-fast);
+}
+
+.addUrlToggleBtn:hover {
+  color: var(--text-primary);
+}
+
+.urlInputBox {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+}
+
+.urlInputField {
+  flex: 1;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.45rem 0.65rem;
+  font-size: 0.75rem;
+  font-family: var(--font-body);
+}
+
+.confirmUrlBtn {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border: none;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+}
+
+.cancelUrlBtn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 0.45rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
+
+/* GRADE DE CARDS DE IMAGENS */
+.imagesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 0.85rem;
+  margin-top: 0.5rem;
+}
+
+.imageCard {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: all var(--transition-fast);
+  cursor: grab;
+}
+
+.imageCard:active {
+  cursor: grabbing;
+}
+
+.imageCardDragging {
+  opacity: 0.4;
+  border-style: dashed;
+}
+
+.coverCard {
+  border-color: #facc15;
+  box-shadow: 0 0 10px rgba(250, 204, 21, 0.15);
+}
+
+.imageCardThumbWrap {
+  width: 100%;
+  aspect-ratio: 3/4;
+  background-color: #0d0d0d;
+  position: relative;
+  overflow: hidden;
+}
+
+.imageCardThumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.coverBadge {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background-color: #facc15;
+  color: #000000;
+  font-size: 0.6rem;
+  font-weight: 900;
+  letter-spacing: 0.5px;
+  padding: 0.2rem 0.45rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.5);
+}
+
+.setCoverBtn {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  background-color: rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.2rem 0.45rem;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.setCoverBtn:hover {
+  background-color: #facc15;
+  color: #000000;
+  border-color: #facc15;
+}
+
+.dragHandle {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: var(--text-secondary);
+  padding: 0.2rem;
+  display: flex;
+  align-items: center;
+  border-radius: 2px;
+}
+
+.imageCardDetails {
+  padding: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.imageColorPickerRow {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.paletteIcon {
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.imageColorSelect {
+  width: 100%;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  font-size: 0.68rem;
+  padding: 0.3rem 0.4rem;
+  font-family: var(--font-body);
+}
+
+.linkedColorPill {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background-color: rgba(255, 255, 255, 0.04);
+  padding: 0.15rem 0.35rem;
+}
+
+.colorPillDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  flex-shrink: 0;
+}
+
+.imageCardControls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.4rem;
+  margin-top: 0.2rem;
+}
+
+.reorderBtnsGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.moveBtn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-muted);
+  padding: 0.2rem 0.35rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: all var(--transition-fast);
+}
+
+.moveBtn:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+}
+
+.moveBtn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.imageIndexBadge {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--text-muted);
+  padding: 0 0.2rem;
+}
+
+.removeImageBtn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: #f87171;
+  padding: 0.25rem 0.4rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: all var(--transition-fast);
+}
+
+.removeImageBtn:hover {
+  background-color: rgba(248, 113, 113, 0.15);
+  border-color: #f87171;
+}
+
+.noImagesNotice {
+  padding: 1rem;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-surface);
+}
+
+/* SEÇÃO GESTÃO DE CORES */
+.colorsManagerSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.1rem;
+}
+
+.colorPresetsRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.presetsLabel {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+.presetChipsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.presetChip {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+  font-weight: 600;
+  padding: 0.3rem 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.presetChip:hover {
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+}
+
+.addColorInlineRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.colorPickerInput {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--border-color);
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.colorNameInput {
+  flex: 1;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.55rem 0.75rem;
+  font-size: 0.8rem;
+  font-family: var(--font-body);
+}
+
+.addColorBtn {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border: none;
+  padding: 0.55rem 0.95rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.addColorBtn:hover {
+  opacity: 0.9;
+}
+
+.activeColorsTagsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.activeColorTag {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 0.35rem 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.colorTagDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.colorTagName {
+  font-size: 0.75rem;
+  color: var(--text-primary);
+}
+
+.removeColorBtn {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 0.1rem;
+}
+
+.removeColorBtn:hover {
+  color: #f87171;
+}
+
+.colorStockCheckboxWrapper {
+  border-top: 1px solid var(--border-color);
+  padding-top: 0.75rem;
+}
+
+/* ABAS DE ESTOQUE POR COR */
+.colorStockTabsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.colorStockTabsList {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.colorStockTabBtn {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.45rem 0.8rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.colorStockTabBtn small {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.activeStockTab {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+}
+
+.activeStockTab small {
+  color: var(--bg-primary);
+}
+
+.activeColorStockBox {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 0.85rem;
+}
+
 @media (max-width: 850px) {
   .controlBar { flex-direction: column; align-items: stretch; }
   .gridTwo { grid-template-columns: 1fr; }
   .header { flex-direction: column; align-items: flex-start; gap: 1rem; }
   .drawer { max-width: 100%; }
+  .imagesGrid { grid-template-columns: repeat(2, 1fr); }
 }

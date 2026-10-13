@@ -8,7 +8,7 @@ import { reviewService } from '../../services/reviewService';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { analyticsService } from '../../services/analyticsService';
-import { formatFitBadgeLabel } from '../../utils/fitUtils';
+import { formatFitBadgeLabel, formatCategoryBadgeLabel } from '../../utils/fitUtils';
 import styles from './ProdutoDetalhe.module.css';
 
 const DEFAULT_SIZE_CHART = [
@@ -40,7 +40,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
   // Estados de Interação
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [selectedColor, setSelectedColor] = useState({ id: "preto", name: "Preto Piano", hex: "#0a0a0a" });
+  const [selectedColor, setSelectedColor] = useState(null);
   const [selectedSize, setSelectedSize] = useState('M');
   const [quantity, setQuantity] = useState(1);
   const [openAccordion, setOpenAccordion] = useState('measures');
@@ -108,6 +108,19 @@ export function ProdutoDetalhe({ onAddToCart }) {
             if (firstAvail) defaultSize = firstAvail;
           }
           setSelectedSize(defaultSize);
+
+          if (Array.isArray(data.colors) && data.colors.length > 0) {
+            setSelectedColor(data.colors[0]);
+          } else {
+            setSelectedColor(null);
+          }
+
+          if (Array.isArray(data.imagesGallery) && data.imagesGallery.length > 0) {
+            const coverIdx = data.imagesGallery.findIndex(img => img.isCover);
+            setSelectedImageIndex(coverIdx >= 0 ? coverIdx : 0);
+          } else {
+            setSelectedImageIndex(0);
+          }
           analyticsService.trackProductView(data.id, data.name, data.category || 'camisa', data.fit || 'boxy', data.slug);
           analyticsService.trackPageView('produto_detalhe');
         } else {
@@ -145,8 +158,18 @@ export function ProdutoDetalhe({ onAddToCart }) {
     };
   }, [currentParam]);
 
-  // Consolidação da grade de estoque
+  // Consolidação da grade de estoque (com suporte a estoque individual por cor)
   const parsedStock = useMemo(() => {
+    if (product?.hasColorStock && product?.colorStock && selectedColor?.id && product.colorStock[selectedColor.id]) {
+      const cStock = product.colorStock[selectedColor.id];
+      return {
+        PP: Number(cStock.PP ?? 0),
+        P: Number(cStock.P ?? 0),
+        M: Number(cStock.M ?? 0),
+        G: Number(cStock.G ?? 0),
+        GG: Number(cStock.GG ?? 0)
+      };
+    }
     if (product?.stock && typeof product.stock === 'object') {
       return {
         PP: Number(product.stock.PP ?? 0),
@@ -159,8 +182,9 @@ export function ProdutoDetalhe({ onAddToCart }) {
     if (Array.isArray(product?.variants) && product.variants.length > 0) {
       const s = { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
       product.variants.forEach(v => {
+        if (selectedColor?.id && v.colorId && v.colorId !== selectedColor.id) return;
         const sz = String(v.size || '').toUpperCase();
-        if (s[sz] !== undefined) s[sz] = Number(v.stock ?? v.inventory ?? 0);
+        if (s[sz] !== undefined) s[sz] = Number(v.stock_quantity ?? v.stock ?? v.inventory ?? 0);
       });
       return s;
     }
@@ -172,11 +196,152 @@ export function ProdutoDetalhe({ onAddToCart }) {
       });
       return s;
     }
-    return { PP: 2, P: 8, M: 12, G: 8, GG: 4 };
-  }, [product]);
+    return { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
+  }, [product, selectedColor]);
 
   const availableStock = parsedStock[selectedSize] ?? 0;
   const isAllOutOfStock = Object.values(parsedStock).every(q => q <= 0);
+
+  // Dados consolidados do produto e galeria com suporte a vínculos de cor
+  const imagesGallery = useMemo(() => {
+    if (Array.isArray(product?.imagesGallery) && product.imagesGallery.length > 0) {
+      return product.imagesGallery;
+    }
+    if (Array.isArray(product?.images) && product.images.length > 0) {
+      return product.images.map((url, idx) => ({
+        id: `img_${idx}`,
+        url,
+        colorId: ''
+      }));
+    }
+    if (product?.image) {
+      return [{ id: 'img_0', url: product.image, colorId: '' }];
+    }
+    return [{ id: 'img_0', url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=800', colorId: '' }];
+  }, [product]);
+
+  const images = useMemo(() => imagesGallery.map(img => img.url), [imagesGallery]);
+  
+  const colors = Array.isArray(product?.colors) && product.colors.length > 0
+    ? product.colors
+    : null;
+
+  const handleSelectColor = (color) => {
+    setSelectedColor(color);
+    if (!color) return;
+
+    // Vinculação de imagem à cor: busca no carrossel a foto atrelada a esta cor
+    const linkedImageIdx = imagesGallery.findIndex(img => img.colorId === color.id);
+    if (linkedImageIdx >= 0) {
+      setSelectedImageIndex(linkedImageIdx);
+    }
+
+    // Se o produto gerencia estoque individual por cor, recalcula disponibilidade
+    if (product?.hasColorStock && product?.colorStock?.[color.id]) {
+      const colorSizes = product.colorStock[color.id];
+      if (Number(colorSizes[selectedSize] ?? 0) <= 0) {
+        const firstAvailable = ['PP', 'P', 'M', 'G', 'GG'].find(sz => Number(colorSizes[sz] ?? 0) > 0);
+        if (firstAvailable) {
+          setSelectedSize(firstAvailable);
+        }
+      }
+    }
+  };
+
+  const sizeChart = product?.sizeChart || DEFAULT_SIZE_CHART;
+  const careInstructions = product?.careInstructions || DEFAULT_CARE_INSTRUCTIONS;
+
+  const priceNum = Number(product?.price || 0);
+  const discountPriceNum = Number(product?.discountPrice || 0);
+  const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product?.discountActive !== false);
+  const effectivePrice = hasDiscount ? discountPriceNum : priceNum;
+  const discountPercentage = hasDiscount ? Math.round(((priceNum - discountPriceNum) / priceNum) * 100) : 0;
+
+  const installmentsCount = product?.installments || 3;
+  const installmentValue = (effectivePrice / installmentsCount).toFixed(2).replace('.', ',');
+
+  const isFavorite = product?.id ? isInWishlist(product.id) : false;
+
+  const handlePrevImage = () => {
+    setSelectedImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+  };
+
+  const handleNextImage = () => {
+    setSelectedImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+  };
+
+  const handleCepChange = (e) => {
+    const raw = e.target.value.replace(/\D/g, '').slice(0, 8);
+    const formatted = raw.length > 5 ? `${raw.slice(0, 5)}-${raw.slice(5)}` : raw;
+    setCepInput(formatted);
+  };
+
+  const handleCalculateShipping = (e) => {
+    e.preventDefault();
+    const cleanCep = cepInput.replace(/\D/g, '');
+    
+    if (cleanCep.length !== 8) {
+      setShippingError('Digite um CEP válido com 8 dígitos.');
+      setShippingOptions(null);
+      return;
+    }
+
+    setShippingError(null);
+    setIsCalculatingShipping(true);
+
+    setTimeout(() => {
+      setIsCalculatingShipping(false);
+      const isCuritiba = cleanCep.startsWith('80') || cleanCep.startsWith('81') || cleanCep.startsWith('82') || cleanCep.startsWith('83');
+      
+      setShippingOptions([
+        {
+          id: 'sedex',
+          name: 'SEDEX EXPRESSO',
+          deadline: isCuritiba ? 'Chega amanhã' : '1 a 3 dias úteis',
+          price: isCuritiba ? 14.90 : 28.50
+        },
+        {
+          id: 'pac',
+          name: 'PAC STANDARD',
+          deadline: isCuritiba ? '2 a 3 dias úteis' : '5 a 8 dias úteis',
+          price: isCuritiba ? 9.90 : 18.90
+        },
+        {
+          id: 'retirada',
+          name: 'RETIRADA ATELIÊ (CURITIBA)',
+          deadline: 'Disponível em 24h',
+          price: 0
+        }
+      ]);
+    }, 400);
+  };
+
+  const handleAddToCart = () => {
+    if (availableStock <= 0) return;
+    
+    const linkedImg = selectedColor?.id 
+      ? imagesGallery.find(img => img.colorId === selectedColor.id)?.url 
+      : null;
+    const currentImg = linkedImg || images[selectedImageIndex] || product?.image;
+
+    const cartProduct = {
+      ...product,
+      price: effectivePrice,
+      originalPrice: priceNum,
+      image: currentImg,
+      color: selectedColor || (colors && colors[0]) || { id: 'padrao', name: 'Padrão' },
+      category: product?.category || 'camisa'
+    };
+
+    if (onAddToCart) {
+      onAddToCart(cartProduct, selectedSize, quantity, selectedColor);
+    } else {
+      addToCart(cartProduct, selectedSize, quantity, selectedColor);
+    }
+
+    setIsAddedFeedback(true);
+    setTimeout(() => setIsAddedFeedback(false), 2500);
+  };
 
   if (loading) {
     return (
@@ -284,106 +449,6 @@ export function ProdutoDetalhe({ onAddToCart }) {
     );
   }
 
-  // Dados consolidados do produto
-  const images = product.images && product.images.length > 0 
-    ? product.images 
-    : [product.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=800'];
-  
-  const colors = product.colors || [
-    { id: "preto", name: "Preto Piano", hex: "#0a0a0a" },
-    { id: "off-white", name: "Off-White", hex: "#f2f0eb" },
-    { id: "grafite", name: "Grafite Mineral", hex: "#262626" }
-  ];
-
-  const sizeChart = product.sizeChart || DEFAULT_SIZE_CHART;
-  const careInstructions = product.careInstructions || DEFAULT_CARE_INSTRUCTIONS;
-
-  const priceNum = Number(product.price || 0);
-  const discountPriceNum = Number(product.discountPrice || 0);
-  const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product.discountActive !== false);
-  const effectivePrice = hasDiscount ? discountPriceNum : priceNum;
-  const discountPercentage = hasDiscount ? Math.round(((priceNum - discountPriceNum) / priceNum) * 100) : 0;
-
-  const installmentsCount = product.installments || 3;
-  const installmentValue = (effectivePrice / installmentsCount).toFixed(2).replace('.', ',');
-
-  const isFavorite = isInWishlist(product.id);
-
-  const handlePrevImage = () => {
-    setSelectedImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
-  };
-
-  const handleNextImage = () => {
-    setSelectedImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
-  };
-
-  const handleCepChange = (e) => {
-    const raw = e.target.value.replace(/\D/g, '').slice(0, 8);
-    const formatted = raw.length > 5 ? `${raw.slice(0, 5)}-${raw.slice(5)}` : raw;
-    setCepInput(formatted);
-  };
-
-  const handleCalculateShipping = (e) => {
-    e.preventDefault();
-    const cleanCep = cepInput.replace(/\D/g, '');
-    
-    if (cleanCep.length !== 8) {
-      setShippingError('Digite um CEP válido com 8 dígitos.');
-      setShippingOptions(null);
-      return;
-    }
-
-    setShippingError(null);
-    setIsCalculatingShipping(true);
-
-    setTimeout(() => {
-      setIsCalculatingShipping(false);
-      const isCuritiba = cleanCep.startsWith('80') || cleanCep.startsWith('81') || cleanCep.startsWith('82') || cleanCep.startsWith('83');
-      
-      setShippingOptions([
-        {
-          id: 'sedex',
-          name: 'SEDEX EXPRESSO',
-          deadline: isCuritiba ? 'Chega amanhã' : '1 a 3 dias úteis',
-          price: isCuritiba ? 14.90 : 28.50
-        },
-        {
-          id: 'pac',
-          name: 'PAC STANDARD',
-          deadline: isCuritiba ? '2 a 3 dias úteis' : '5 a 8 dias úteis',
-          price: isCuritiba ? 9.90 : 18.90
-        },
-        {
-          id: 'retirada',
-          name: 'RETIRADA ATELIÊ (CURITIBA)',
-          deadline: 'Disponível em 24h',
-          price: 0
-        }
-      ]);
-    }, 400);
-  };
-
-  const handleAddToCart = () => {
-    if (availableStock <= 0) return;
-    
-    const cartProduct = {
-      ...product,
-      price: effectivePrice,
-      originalPrice: priceNum,
-      color: selectedColor || product.color || 'Preto Piano',
-      category: product.category || 'camisa'
-    };
-
-    if (onAddToCart) {
-      onAddToCart(cartProduct, selectedSize, quantity, selectedColor);
-    } else {
-      addToCart(cartProduct, selectedSize, quantity, selectedColor);
-    }
-
-    setIsAddedFeedback(true);
-    setTimeout(() => setIsAddedFeedback(false), 2500);
-  };
-
   return (
     <main className={styles.container}>
       {/* NAVEGAÇÃO BREADCRUMB */}
@@ -431,12 +496,10 @@ export function ProdutoDetalhe({ onAddToCart }) {
         <section className={styles.infoSection}>
           <div className={styles.headerInfo}>
             <div className={styles.badgeRow}>
-              <span className={styles.fitBadge}>{formatFitBadgeLabel(product?.fit)}</span>
-              <span className={styles.dropBadge}>
-                {product?.drop === 'leak-two' 
-                  ? 'LEAK TWO' 
-                  : (product?.drop ? product.drop.toUpperCase().replace(/[-_]/g, ' ') : 'DROP EXCLUSIVO')}
-              </span>
+              <span className={styles.categoryBadge}>{formatCategoryBadgeLabel(product?.category)}</span>
+              {formatFitBadgeLabel(product?.fit) && (
+                <span className={styles.fitBadge}>{formatFitBadgeLabel(product?.fit)}</span>
+              )}
             </div>
             <h1 className={styles.title}>{product?.name || product?.title || 'Produto THR33'}</h1>
             
@@ -466,32 +529,34 @@ export function ProdutoDetalhe({ onAddToCart }) {
           </div>
 
           {/* SELETOR DE COR */}
-          <div className={styles.colorSelector}>
-            <div className={styles.selectorHeader}>
-              <span className={styles.selectorLabel}>COR:</span>
-              <span className={styles.selectedValue}>{selectedColor?.name || selectedColor?.id || 'Preto Piano'}</span>
+          {colors && colors.length > 0 && (
+            <div className={styles.colorSelector}>
+              <div className={styles.selectorHeader}>
+                <span className={styles.selectorLabel}>COR:</span>
+                <span className={styles.selectedValue}>{selectedColor?.name || selectedColor?.id || 'Padrão'}</span>
+              </div>
+              <div className={styles.colorSwatches}>
+                {colors.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={`${styles.colorBtn} ${selectedColor?.id === c.id ? styles.activeColor : ''}`}
+                    onClick={() => handleSelectColor(c)}
+                    style={{ backgroundColor: c.hex }}
+                    title={c.name}
+                    aria-label={`Cor ${c.name}`}
+                  />
+                ))}
+              </div>
             </div>
-            <div className={styles.colorSwatches}>
-              {colors.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={`${styles.colorBtn} ${selectedColor?.id === c.id ? styles.activeColor : ''}`}
-                  onClick={() => setSelectedColor(c)}
-                  style={{ backgroundColor: c.hex }}
-                  title={c.name}
-                  aria-label={`Cor ${c.name}`}
-                />
-              ))}
-            </div>
-          </div>
+          )}
 
           {/* SELETOR DE TAMANHO */}
           <div className={styles.sizeSelector}>
             <div className={styles.selectorHeader}>
               <span className={styles.selectorLabel}>TAMANHO:</span>
               <span className={styles.selectedValue}>
-                TAM {selectedSize} {availableStock <= 0 ? '(ESGOTADO)' : ''}
+                {selectedSize} {availableStock <= 0 ? '(ESGOTADO)' : ''}
               </span>
             </div>
             <div className={styles.sizeOptions}>

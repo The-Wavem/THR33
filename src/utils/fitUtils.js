@@ -70,8 +70,9 @@ export const formatFitLabel = (fitKey) => {
  * Formata o rotulo compacto do card de produto (tag visual concisa sem textos longos).
  */
 export const formatFitBadgeLabel = (fitKey) => {
-  if (!fitKey) return 'BOXY FIT';
+  if (!fitKey) return '';
   const key = normalizeFitSlug(fitKey);
+  if (key === 'unico' || key === 'padrao') return '';
   if (key === 'oversized') return 'OVERSIZED FIT';
   if (key === 'boxy') return 'BOXY FIT';
   if (key === 'normal' || key === 'regular') return 'REGULAR FIT';
@@ -87,6 +88,50 @@ export const formatFitBadgeLabel = (fitKey) => {
     return clean.toUpperCase();
   }
   return `${clean.toUpperCase()} FIT`;
+};
+
+/**
+ * Formata o rótulo compacto da categoria para exibição em badges e tags.
+ */
+export const formatCategoryBadgeLabel = (category) => {
+  if (!category) return 'VESTUÁRIO';
+  const clean = String(category).trim().toLowerCase();
+  
+  const map = {
+    'camisa': 'CAMISETA',
+    'camiseta': 'CAMISETA',
+    'camisas': 'CAMISETAS',
+    't-shirt': 'CAMISETA',
+    'tshirt': 'CAMISETA',
+    'jaqueta': 'JAQUETA',
+    'jaquetas': 'JAQUETAS',
+    'moletom': 'MOLETOM',
+    'moletons': 'MOLETONS',
+    'hoodie': 'HOODIE',
+    'hoodies': 'HOODIES',
+    'calca': 'CALÇA',
+    'calças': 'CALÇAS',
+    'calcas': 'CALÇAS',
+    'short': 'BERMUDA',
+    'shorts': 'BERMUDAS',
+    'bermuda': 'BERMUDA',
+    'bermudas': 'BERMUDAS',
+    'bone': 'BONÉ',
+    'bones': 'BONÉS',
+    'acessorios': 'ACESSÓRIOS',
+    'acessorio': 'ACESSÓRIOS',
+    'brinde': 'BRINDE',
+    'brindes': 'BRINDES',
+    'gift-card': 'VALE-PRESENTE',
+    'vestuario': 'VESTUÁRIO'
+  };
+
+  if (map[clean]) return map[clean];
+
+  return String(category)
+    .replace(/[-_]/g, ' ')
+    .trim()
+    .toUpperCase();
 };
 
 /**

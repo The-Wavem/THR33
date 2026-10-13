@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { 
   Plus, 
   Search, 
@@ -17,9 +18,17 @@ import {
   RotateCw,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Upload,
+  Image as ImageIcon,
+  Star,
+  Palette,
+  GripVertical,
+  ChevronLeft,
+  ChevronRight,
+  Link as LinkIcon
 } from 'lucide-react';
-import { db } from '../../services/firebaseConfig';
+import { db, storage } from '../../services/firebaseConfig';
 import { catalogService } from '../../services/catalogService';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsProdutos.module.css';
@@ -96,8 +105,28 @@ export function CmsProdutos() {
       M: 20,
       G: 15,
       GG: 5
+    },
+    colors: [
+      { id: 'preto', name: 'Preto', hex: '#000000' }
+    ],
+    hasColorStock: false,
+    colorStock: {
+      preto: { PP: 5, P: 15, M: 20, G: 15, GG: 5 }
     }
   });
+
+  // Gestão de Múltiplas Imagens & Firebase Storage
+  const [imagesList, setImagesList] = useState([]);
+  const [isUploadingImages, setIsUploadingImages] = useState(false);
+  const [uploadStatusText, setUploadStatusText] = useState('');
+  const [draggedImageIndex, setDraggedImageIndex] = useState(null);
+  const [urlInput, setUrlInput] = useState('');
+  const [showUrlInput, setShowUrlInput] = useState(false);
+
+  // Gestão de Cores Inline
+  const [newColorName, setNewColorName] = useState('');
+  const [newColorHex, setNewColorHex] = useState('#000000');
+  const [activeColorStockTab, setActiveColorStockTab] = useState('preto');
 
   // 1. Carrega produtos 100% do Firestore via catalogService
   const fetchProducts = async () => {
@@ -193,6 +222,18 @@ export function CmsProdutos() {
     }));
   };
 
+  const COLOR_PRESETS = [
+    { name: 'Preto', hex: '#0a0a0a' },
+    { name: 'Branco', hex: '#ffffff' },
+    { name: 'Off-White', hex: '#f2f0eb' },
+    { name: 'Grafite', hex: '#262626' },
+    { name: 'Cinza Mescla', hex: '#8a8d8f' },
+    { name: 'Marrom Terra', hex: '#4a2e18' },
+    { name: 'Bege Areia', hex: '#d2b48c' },
+    { name: 'Azul Noite', hex: '#1e3a8a' },
+    { name: 'Verde Militar', hex: '#3f4e3a' }
+  ];
+
   const handleOpenCreate = () => {
     setEditingId(null);
     setFormData({
@@ -207,13 +248,70 @@ export function CmsProdutos() {
       isFeatured: false,
       image: '',
       description: '',
-      stock: { PP: 10, P: 15, M: 20, G: 15, GG: 5 }
+      stock: { PP: 10, P: 15, M: 20, G: 15, GG: 5 },
+      colors: [
+        { id: 'preto', name: 'Preto', hex: '#000000' }
+      ],
+      hasColorStock: false,
+      colorStock: {
+        preto: { PP: 10, P: 15, M: 20, G: 15, GG: 5 }
+      }
     });
+    setImagesList([]);
+    setNewColorName('');
+    setNewColorHex('#000000');
+    setActiveColorStockTab('preto');
+    setUrlInput('');
+    setShowUrlInput(false);
     setIsFormOpen(true);
   };
 
   const handleOpenEdit = (product) => {
     setEditingId(product.id);
+
+    // Converte e normaliza lista de imagens existentes
+    let initialImages = [];
+    if (Array.isArray(product.imagesGallery) && product.imagesGallery.length > 0) {
+      initialImages = product.imagesGallery.map((img, idx) => ({
+        id: img.id || `img_${idx}`,
+        url: img.url,
+        name: img.name || `Foto ${idx + 1}`,
+        isCover: img.isCover ?? (idx === 0 || img.url === product.image),
+        colorId: img.colorId || ''
+      }));
+    } else if (Array.isArray(product.images) && product.images.length > 0) {
+      initialImages = product.images.map((url, idx) => ({
+        id: `img_${idx}`,
+        url,
+        name: `Foto ${idx + 1}`,
+        isCover: idx === 0 || url === product.image,
+        colorId: ''
+      }));
+    } else if (product.image) {
+      initialImages = [{
+        id: 'img_0',
+        url: product.image,
+        name: 'Foto Principal',
+        isCover: true,
+        colorId: ''
+      }];
+    }
+
+    if (initialImages.length > 0 && !initialImages.some(img => img.isCover)) {
+      initialImages[0].isCover = true;
+    }
+
+    const initialColors = Array.isArray(product.colors) && product.colors.length > 0
+      ? product.colors
+      : [{ id: 'preto', name: 'Preto', hex: '#000000' }];
+
+    const initialColorStock = product.colorStock || {};
+    initialColors.forEach(c => {
+      if (!initialColorStock[c.id]) {
+        initialColorStock[c.id] = product.stock || { PP: 5, P: 10, M: 15, G: 10, GG: 5 };
+      }
+    });
+
     setFormData({
       name: product.name || product.title || '',
       type: product.type || (product.category === 'brinde' ? 'brinde' : 'vestuario'),
@@ -224,11 +322,230 @@ export function CmsProdutos() {
       customBadge: product.customBadge || '',
       isRelease: product.isRelease ?? false,
       isFeatured: product.isFeatured ?? false,
-      image: product.image || '',
+      image: product.image || initialImages[0]?.url || '',
       description: product.description || '',
-      stock: product.stock || { PP: 0, P: 0, M: 0, G: 0, GG: 0 }
+      stock: product.stock || { PP: 0, P: 0, M: 0, G: 0, GG: 0 },
+      colors: initialColors,
+      hasColorStock: product.hasColorStock ?? false,
+      colorStock: initialColorStock
     });
+
+    setImagesList(initialImages);
+    setNewColorName('');
+    setNewColorHex('#000000');
+    setActiveColorStockTab(initialColors[0]?.id || 'preto');
+    setUrlInput('');
+    setShowUrlInput(false);
     setIsFormOpen(true);
+  };
+
+  // Upload de Imagens no Firebase Storage
+  const handleUploadFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    setIsUploadingImages(true);
+    setUploadStatusText(`Enviando ${files.length} imagem(ns) ao Firebase Storage...`);
+
+    const uploaded = [];
+    const prodRefId = editingId || generateSlug(formData.name) || `temp_${Date.now()}`;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      try {
+        setUploadStatusText(`Enviando ${i + 1}/${files.length}: ${file.name}`);
+        const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+        const fileRef = ref(storage, `products/${prodRefId}/${Date.now()}_${safeName}`);
+        await uploadBytesResumable(fileRef, file);
+        const downloadUrl = await getDownloadURL(fileRef);
+
+        uploaded.push({
+          id: `img_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+          url: downloadUrl,
+          name: file.name,
+          isCover: false,
+          colorId: ''
+        });
+      } catch (err) {
+        console.error(`Erro ao subir imagem ${file.name}:`, err);
+      }
+    }
+
+    setImagesList(prev => {
+      const combined = [...prev, ...uploaded];
+      if (!combined.some(img => img.isCover) && combined.length > 0) {
+        combined[0].isCover = true;
+      }
+      return combined;
+    });
+
+    setIsUploadingImages(false);
+    setUploadStatusText('');
+    e.target.value = '';
+  };
+
+  const handleAddUrlImage = () => {
+    const trimmed = urlInput.trim();
+    if (!trimmed) return;
+    setImagesList(prev => {
+      const isFirst = prev.length === 0;
+      return [
+        ...prev,
+        {
+          id: `img_url_${Date.now()}`,
+          url: trimmed,
+          name: `Imagem Externa ${prev.length + 1}`,
+          isCover: isFirst,
+          colorId: ''
+        }
+      ];
+    });
+    setUrlInput('');
+    setShowUrlInput(false);
+  };
+
+  const handleSetCoverImage = (index) => {
+    setImagesList(prev => {
+      const target = { ...prev[index], isCover: true };
+      const others = prev.filter((_, i) => i !== index).map(img => ({ ...img, isCover: false }));
+      return [target, ...others];
+    });
+  };
+
+  const handleMoveImage = (fromIndex, toIndex) => {
+    if (toIndex < 0 || toIndex >= imagesList.length) return;
+    setImagesList(prev => {
+      const updated = [...prev];
+      const [moved] = updated.splice(fromIndex, 1);
+      updated.splice(toIndex, 0, moved);
+      return updated;
+    });
+  };
+
+  const handleImageColorChange = (index, colorId) => {
+    setImagesList(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], colorId };
+      return updated;
+    });
+  };
+
+  const handleRemoveImage = (index) => {
+    setImagesList(prev => {
+      const updated = prev.filter((_, i) => i !== index);
+      if (updated.length > 0 && !updated.some(img => img.isCover)) {
+        updated[0].isCover = true;
+      }
+      return updated;
+    });
+  };
+
+  // Drag and Drop
+  const handleDragStart = (e, index) => {
+    e.dataTransfer.setData('text/plain', String(index));
+    setDraggedImageIndex(index);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e, targetIndex) => {
+    e.preventDefault();
+    const sourceIndex = draggedImageIndex !== null ? draggedImageIndex : Number(e.dataTransfer.getData('text/plain'));
+    if (sourceIndex !== null && sourceIndex !== targetIndex && !isNaN(sourceIndex)) {
+      handleMoveImage(sourceIndex, targetIndex);
+    }
+    setDraggedImageIndex(null);
+  };
+
+  // Gestão de Cores
+  const handleAddColor = () => {
+    const raw = newColorName.trim();
+    if (!raw) return;
+    const slug = raw.toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+    if (formData.colors.some(c => c.id === slug)) return;
+
+    const newColor = { id: slug, name: raw, hex: newColorHex };
+    const updatedColors = [...formData.colors, newColor];
+
+    const updatedColorStock = { ...formData.colorStock };
+    if (!updatedColorStock[slug]) {
+      updatedColorStock[slug] = { PP: 5, P: 15, M: 20, G: 15, GG: 5 };
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      colors: updatedColors,
+      colorStock: updatedColorStock
+    }));
+
+    setActiveColorStockTab(slug);
+    setNewColorName('');
+  };
+
+  const handleApplyColorPreset = (preset) => {
+    const slug = preset.name.toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_+|_+$/g, "");
+
+    if (formData.colors.some(c => c.id === slug)) return;
+
+    const newColor = { id: slug, name: preset.name, hex: preset.hex };
+    const updatedColors = [...formData.colors, newColor];
+
+    const updatedColorStock = { ...formData.colorStock };
+    if (!updatedColorStock[slug]) {
+      updatedColorStock[slug] = { PP: 5, P: 15, M: 20, G: 15, GG: 5 };
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      colors: updatedColors,
+      colorStock: updatedColorStock
+    }));
+
+    setActiveColorStockTab(slug);
+  };
+
+  const handleRemoveColor = (colorId) => {
+    setFormData(prev => {
+      const updatedColors = prev.colors.filter(c => c.id !== colorId);
+      const updatedColorStock = { ...prev.colorStock };
+      delete updatedColorStock[colorId];
+      return {
+        ...prev,
+        colors: updatedColors,
+        colorStock: updatedColorStock
+      };
+    });
+
+    if (activeColorStockTab === colorId) {
+      const remaining = formData.colors.filter(c => c.id !== colorId);
+      setActiveColorStockTab(remaining[0]?.id || '');
+    }
+
+    setImagesList(prev => prev.map(img => img.colorId === colorId ? { ...img, colorId: '' } : img));
+  };
+
+  const handleColorStockChange = (colorId, size, value) => {
+    setFormData(prev => ({
+      ...prev,
+      colorStock: {
+        ...prev.colorStock,
+        [colorId]: {
+          ...(prev.colorStock[colorId] || {}),
+          [size]: Math.max(0, parseInt(value, 10) || 0)
+        }
+      }
+    }));
   };
 
   const handleSubmitProduct = async (e) => {
@@ -264,14 +581,49 @@ export function CmsProdutos() {
       : priceNum;
     const discountPercent = existingProd?.discount || 0;
 
-    // Constrói objeto de variantes com SKU
+    // Define imagem de capa e array consolidado
+    const coverItem = imagesList.find(img => img.isCover) || imagesList[0];
+    const finalCoverUrl = coverItem?.url || formData.image || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop";
+    const finalImagesUrls = imagesList.length > 0
+      ? imagesList.map(img => img.url)
+      : (formData.image ? [formData.image] : [finalCoverUrl]);
+
+    // Calcula estoque agregado e variantes com SKU
+    let aggregatedStock = { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
+    if (formData.hasColorStock && formData.colors.length > 0) {
+      ['PP', 'P', 'M', 'G', 'GG'].forEach(size => {
+        aggregatedStock[size] = formData.colors.reduce((total, col) => {
+          return total + (Number(formData.colorStock[col.id]?.[size]) || 0);
+        }, 0);
+      });
+    } else {
+      aggregatedStock = formData.stock;
+    }
+
     const catCode = (formData.category || 'XX').slice(0, 2).toUpperCase();
     const idSuffix = String(productId).slice(-4).toUpperCase().replace(/[^A-Z0-9]/g, 'X');
-    const variants = Object.entries(formData.stock).map(([size, quantity]) => ({
-      sku: `THR33-${catCode}-${size}-${idSuffix}`,
-      size,
-      stock_quantity: Number(quantity)
-    }));
+    
+    let variants = [];
+    if (formData.hasColorStock && formData.colors.length > 0) {
+      formData.colors.forEach(col => {
+        ['PP', 'P', 'M', 'G', 'GG'].forEach(size => {
+          const qty = Number(formData.colorStock[col.id]?.[size]) || 0;
+          variants.push({
+            sku: `THR33-${catCode}-${col.id.slice(0, 3).toUpperCase()}-${size}-${idSuffix}`,
+            size,
+            color: col.name,
+            colorId: col.id,
+            stock_quantity: qty
+          });
+        });
+      });
+    } else {
+      variants = Object.entries(aggregatedStock).map(([size, quantity]) => ({
+        sku: `THR33-${catCode}-${size}-${idSuffix}`,
+        size,
+        stock_quantity: Number(quantity)
+      }));
+    }
 
     const productPayload = {
       id: productId,
@@ -291,10 +643,15 @@ export function CmsProdutos() {
       customBadge: formData.customBadge.trim(),
       isRelease: formData.isRelease,
       isFeatured: formData.isFeatured,
-      image: formData.image || "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop",
+      image: finalCoverUrl,
+      images: finalImagesUrls,
+      imagesGallery: imagesList,
+      colors: formData.colors,
+      hasColorStock: formData.hasColorStock,
+      colorStock: formData.colorStock,
       description: formData.description.trim(),
-      stock: formData.stock,
-      sizes: Object.keys(formData.stock).filter(size => (formData.stock[size] || 0) > 0),
+      stock: aggregatedStock,
+      sizes: Object.keys(aggregatedStock).filter(size => (aggregatedStock[size] || 0) > 0),
       variants,
       createdAt: existingProd?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -306,7 +663,6 @@ export function CmsProdutos() {
       setIsFormOpen(false);
     } catch (err) {
       console.error("Erro ao salvar produto:", err);
-      // Fallback local se Firestore falhar
       setProducts(prev => {
         const exists = prev.some(p => p.id === productId);
         if (exists) {
@@ -1014,19 +1370,182 @@ export function CmsProdutos() {
                 )}
               </div>
 
-              <div className={styles.formGroup}>
-                <label>URL DA IMAGEM PRINCIPAL *</label>
-                <input 
-                  type="url" 
-                  name="image"
-                  placeholder="https://images.unsplash.com/photo-..."
-                  value={formData.image}
-                  onChange={handleInputChange}
-                  required
-                />
-                {formData.image && (
-                  <div className={styles.previewImage}>
-                    <img src={formData.image} alt="Preview" />
+              {/* SEÇÃO 1: GALERIA DE FOTOS (FIREBASE STORAGE) */}
+              <div className={styles.galleryFormSection}>
+                <div className={styles.gallerySectionHeader}>
+                  <div className={styles.galleryHeaderTitle}>
+                    <ImageIcon size={16} />
+                    <label>FOTOS DO PRODUTO & CAPA (FIREBASE STORAGE)</label>
+                  </div>
+                  <InfoTooltip 
+                    text="Envie quantas imagens quiser direto para o Firebase Storage. Defina a foto de capa e vincule cores a fotos específicas para o carrossel do cliente." 
+                    title="Galeria e Capa" 
+                  />
+                </div>
+
+                {/* DROPZONE DE UPLOAD */}
+                <div className={styles.uploadDropzone}>
+                  <input 
+                    type="file" 
+                    id="productImagesUpload"
+                    multiple 
+                    accept="image/*" 
+                    onChange={handleUploadFiles} 
+                    className={styles.uploadInputHidden}
+                    disabled={isUploadingImages}
+                  />
+                  <label htmlFor="productImagesUpload" className={styles.uploadDropzoneLabel}>
+                    <Upload size={22} className={styles.uploadIcon} />
+                    <strong>CLIQUE OU ARRASTE FOTOS AQUI</strong>
+                    <span>Envie quantas imagens quiser (.jpg, .png, .webp). Upload direto no Storage.</span>
+                  </label>
+                </div>
+
+                {isUploadingImages && (
+                  <div className={styles.uploadProgressBar}>
+                    <RotateCw size={14} className={styles.spinningIcon} />
+                    <span>{uploadStatusText || 'Enviando imagens para o Firebase Storage...'}</span>
+                  </div>
+                )}
+
+                {/* BOTÃO PARA INSERIR URL EXTERNA (OPCIONAL) */}
+                <div className={styles.externalUrlRow}>
+                  {!showUrlInput ? (
+                    <button 
+                      type="button" 
+                      onClick={() => setShowUrlInput(true)} 
+                      className={styles.addUrlToggleBtn}
+                    >
+                      <LinkIcon size={12} />
+                      <span>Inserir imagem por link externo (opcional)</span>
+                    </button>
+                  ) : (
+                    <div className={styles.urlInputBox}>
+                      <input 
+                        type="url" 
+                        placeholder="Cole a URL da imagem (https://...)" 
+                        value={urlInput}
+                        onChange={(e) => setUrlInput(e.target.value)}
+                        className={styles.urlInputField}
+                      />
+                      <button type="button" onClick={handleAddUrlImage} className={styles.confirmUrlBtn}>
+                        <Check size={13} />
+                        <span>Adicionar</span>
+                      </button>
+                      <button type="button" onClick={() => setShowUrlInput(false)} className={styles.cancelUrlBtn}>
+                        <X size={13} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* LISTAGEM E ORDENAÇÃO DE IMAGENS */}
+                {imagesList.length > 0 ? (
+                  <div className={styles.imagesGrid}>
+                    {imagesList.map((img, index) => {
+                      const linkedColor = formData.colors.find(c => c.id === img.colorId);
+
+                      return (
+                        <div 
+                          key={img.id || index}
+                          className={`${styles.imageCard} ${img.isCover ? styles.coverCard : ''} ${draggedImageIndex === index ? styles.imageCardDragging : ''}`}
+                          draggable={true}
+                          onDragStart={(e) => handleDragStart(e, index)}
+                          onDragOver={handleDragOver}
+                          onDrop={(e) => handleDrop(e, index)}
+                        >
+                          <div className={styles.imageCardThumbWrap}>
+                            <img src={img.url} alt={img.name || `Foto ${index + 1}`} className={styles.imageCardThumb} />
+                            
+                            {img.isCover ? (
+                              <span className={styles.coverBadge}>
+                                <Star size={10} />
+                                <span>FOTO DE CAPA</span>
+                              </span>
+                            ) : (
+                              <button 
+                                type="button" 
+                                onClick={() => handleSetCoverImage(index)}
+                                className={styles.setCoverBtn}
+                                title="Definir esta foto como capa principal"
+                              >
+                                <Star size={11} />
+                                <span>Definir Capa</span>
+                              </button>
+                            )}
+
+                            <span className={styles.dragHandle} title="Arraste para reposicionar">
+                              <GripVertical size={14} />
+                            </span>
+                          </div>
+
+                          <div className={styles.imageCardDetails}>
+                            {/* VÍNCULO COM COR */}
+                            <div className={styles.imageColorPickerRow}>
+                              <Palette size={12} className={styles.paletteIcon} />
+                              <select 
+                                value={img.colorId || ''} 
+                                onChange={(e) => handleImageColorChange(index, e.target.value)}
+                                className={styles.imageColorSelect}
+                                title="Vincular esta foto a uma cor específica para o carrossel do cliente"
+                              >
+                                <option value="">Todas as Cores (Neutra)</option>
+                                {formData.colors.map(col => (
+                                  <option key={col.id} value={col.id}>
+                                    Cor: {col.name}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {linkedColor && (
+                              <div className={styles.linkedColorPill}>
+                                <span className={styles.colorPillDot} style={{ backgroundColor: linkedColor.hex }} />
+                                <span>{linkedColor.name}</span>
+                              </div>
+                            )}
+
+                            {/* CONTROLES DE POSIÇÃO E EXCLUSÃO */}
+                            <div className={styles.imageCardControls}>
+                              <div className={styles.reorderBtnsGroup}>
+                                <button 
+                                  type="button" 
+                                  onClick={() => handleMoveImage(index, index - 1)}
+                                  disabled={index === 0}
+                                  className={styles.moveBtn}
+                                  title="Mover para a esquerda"
+                                >
+                                  <ChevronLeft size={13} />
+                                </button>
+                                <span className={styles.imageIndexBadge}>{index + 1}</span>
+                                <button 
+                                  type="button" 
+                                  onClick={() => handleMoveImage(index, index + 1)}
+                                  disabled={index === imagesList.length - 1}
+                                  className={styles.moveBtn}
+                                  title="Mover para a direita"
+                                >
+                                  <ChevronRight size={13} />
+                                </button>
+                              </div>
+
+                              <button 
+                                type="button" 
+                                onClick={() => handleRemoveImage(index)}
+                                className={styles.removeImageBtn}
+                                title="Remover imagem"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className={styles.noImagesNotice}>
+                    <span>Nenhuma foto adicionada ainda. Envie pelo menos 1 imagem para a capa.</span>
                   </div>
                 )}
               </div>
@@ -1212,28 +1731,174 @@ export function CmsProdutos() {
                 />
               </div>
 
+              {/* SEÇÃO 2: GESTÃO DE CORES */}
+              <div className={styles.colorsManagerSection}>
+                <div className={styles.gallerySectionHeader}>
+                  <div className={styles.galleryHeaderTitle}>
+                    <Palette size={16} />
+                    <label>CORES DO PRODUTO (GERENCIAMENTO & VÍNCULO)</label>
+                  </div>
+                  <InfoTooltip 
+                    text="Cadastre as variações de cor da peça. O cliente poderá selecionar a cor e o carrossel exibirá automaticamente a foto correspondente." 
+                    title="Cores da Peça" 
+                  />
+                </div>
+
+                {/* PRESETS RÁPIDOS */}
+                <div className={styles.colorPresetsRow}>
+                  <span className={styles.presetsLabel}>Sugestões Streetwear:</span>
+                  <div className={styles.presetChipsList}>
+                    {COLOR_PRESETS.map((p) => (
+                      <button
+                        key={p.name}
+                        type="button"
+                        onClick={() => handleApplyColorPreset(p)}
+                        className={styles.presetChip}
+                        title={`Adicionar cor ${p.name}`}
+                      >
+                        <span className={styles.colorPillDot} style={{ backgroundColor: p.hex }} />
+                        <span>{p.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* ADICIONAR NOVA COR CUSTOMIZADA */}
+                <div className={styles.addColorInlineRow}>
+                  <input 
+                    type="color" 
+                    value={newColorHex}
+                    onChange={(e) => setNewColorHex(e.target.value)}
+                    className={styles.colorPickerInput}
+                    title="Escolha a tonalidade da cor"
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Nome da cor (ex: Preto Piano, Off-White Heavy...)" 
+                    value={newColorName}
+                    onChange={(e) => setNewColorName(e.target.value)}
+                    className={styles.colorNameInput}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleAddColor();
+                      }
+                    }}
+                  />
+                  <button 
+                    type="button" 
+                    onClick={handleAddColor} 
+                    className={styles.addColorBtn}
+                  >
+                    <Plus size={13} />
+                    <span>Adicionar Cor</span>
+                  </button>
+                </div>
+
+                {/* LISTA DE CORES ATIVAS */}
+                <div className={styles.activeColorsTagsList}>
+                  {formData.colors.map((c) => (
+                    <div key={c.id} className={styles.activeColorTag}>
+                      <span className={styles.colorTagDot} style={{ backgroundColor: c.hex }} />
+                      <strong className={styles.colorTagName}>{c.name}</strong>
+                      {formData.colors.length > 1 && (
+                        <button 
+                          type="button" 
+                          onClick={() => handleRemoveColor(c.id)}
+                          className={styles.removeColorBtn}
+                          title={`Remover cor ${c.name}`}
+                        >
+                          <X size={12} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* CHECKBOX DE ESTOQUE POR COR */}
+                <div className={styles.colorStockCheckboxWrapper}>
+                  <label className={styles.checkboxLabel}>
+                    <input 
+                      type="checkbox" 
+                      name="hasColorStock" 
+                      checked={formData.hasColorStock}
+                      onChange={handleInputChange}
+                    />
+                    <strong>Controlar estoque individualmente por cor (cada cor com sua própria grade de tamanhos)</strong>
+                  </label>
+                </div>
+              </div>
+
               {/* GRADE DE ESTOQUE POR TAMANHO (SKUS) */}
               <div className={styles.stockSection}>
                 <div className={styles.stockHeader}>
                   <Package size={14} className={styles.stockIcon} />
                   <label>
-                    ESTOQUE POR TAMANHO (GRADE DE SKUs)
+                    {formData.hasColorStock 
+                      ? 'GRADE DE ESTOQUE POR COR & TAMANHO (SKUs)' 
+                      : 'ESTOQUE POR TAMANHO (GRADE COMPARTILHADA)'}
                     <InfoTooltip text="Define a quantidade disponível de cada tamanho. Se zerar, o botão de compra fica bloqueado." title="Inventário por SKU" />
                   </label>
                 </div>
-                <div className={styles.stockGrid}>
-                  {['PP', 'P', 'M', 'G', 'GG'].map(size => (
-                    <div key={size} className={styles.stockBox}>
-                      <span>{size}</span>
-                      <input 
-                        type="number"
-                        min="0"
-                        value={formData.stock[size] ?? 0}
-                        onChange={(e) => handleStockChange(size, e.target.value)}
-                      />
+
+                {formData.hasColorStock ? (
+                  <div className={styles.colorStockTabsContainer}>
+                    {/* ABAS POR COR */}
+                    <div className={styles.colorStockTabsList}>
+                      {formData.colors.map(col => {
+                        const colStock = formData.colorStock[col.id] || {};
+                        const colTotal = Object.values(colStock).reduce((a, b) => a + (Number(b) || 0), 0);
+                        const isTabActive = activeColorStockTab === col.id;
+
+                        return (
+                          <button
+                            key={col.id}
+                            type="button"
+                            onClick={() => setActiveColorStockTab(col.id)}
+                            className={`${styles.colorStockTabBtn} ${isTabActive ? styles.activeStockTab : ''}`}
+                          >
+                            <span className={styles.colorPillDot} style={{ backgroundColor: col.hex }} />
+                            <span>{col.name}</span>
+                            <small>({colTotal} un.)</small>
+                          </button>
+                        );
+                      })}
                     </div>
-                  ))}
-                </div>
+
+                    {/* GRADE DE TAMANHOS PARA A COR SELECIONADA */}
+                    {activeColorStockTab && (
+                      <div className={styles.activeColorStockBox}>
+                        <div className={styles.stockGrid}>
+                          {['PP', 'P', 'M', 'G', 'GG'].map(size => (
+                            <div key={size} className={styles.stockBox}>
+                              <span>{size}</span>
+                              <input 
+                                type="number"
+                                min="0"
+                                value={formData.colorStock[activeColorStockTab]?.[size] ?? 0}
+                                onChange={(e) => handleColorStockChange(activeColorStockTab, size, e.target.value)}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className={styles.stockGrid}>
+                    {['PP', 'P', 'M', 'G', 'GG'].map(size => (
+                      <div key={size} className={styles.stockBox}>
+                        <span>{size}</span>
+                        <input 
+                          type="number"
+                          min="0"
+                          value={formData.stock[size] ?? 0}
+                          onChange={(e) => handleStockChange(size, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* FLAGS DE DESTAQUE */}

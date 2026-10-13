@@ -160,7 +160,7 @@
   margin-bottom: 0.25rem;
 }
 
-.fitBadge, .dropBadge {
+.categoryBadge, .fitBadge, .dropBadge {
   font-size: 0.68rem;
   font-weight: 700;
   letter-spacing: 1.5px;
@@ -169,10 +169,15 @@
   border: 1px solid var(--border-color);
 }
 
-.fitBadge { 
+.categoryBadge { 
   color: var(--text-primary); 
   background-color: #000000;
   border-color: var(--border-active);
+}
+
+.fitBadge { 
+  color: var(--text-muted); 
+  background-color: var(--bg-card);
 }
 
 .dropBadge { 

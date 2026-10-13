@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
 import { analyticsService } from '../../services/analyticsService';
-import { formatFitBadgeLabel } from '../../utils/fitUtils';
+import { formatFitBadgeLabel, formatCategoryBadgeLabel } from '../../utils/fitUtils';
 import styles from './ProductCard.module.css';
 
 export function ProductCard({ product }) {
@@ -95,12 +95,10 @@ export function ProductCard({ product }) {
       >
         <div className={styles.details}>
           <div className={styles.tagsRow}>
-            <span className={styles.fitTag}>{formatFitBadgeLabel(product.fit)}</span>
-            <span className={styles.dropTag}>
-              {product.drop === 'leak-two' 
-                ? 'LEAK TWO' 
-                : (product.drop ? product.drop.toUpperCase().replace(/[-_]/g, ' ') : 'DROP REGULAR')}
-            </span>
+            <span className={styles.categoryTag}>{formatCategoryBadgeLabel(product.category)}</span>
+            {formatFitBadgeLabel(product.fit) && (
+              <span className={styles.fitTag}>{formatFitBadgeLabel(product.fit)}</span>
+            )}
           </div>
           
           <h3 className={styles.productName}>{product.name}</h3>
