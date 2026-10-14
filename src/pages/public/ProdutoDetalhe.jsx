@@ -117,7 +117,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
           if (Array.isArray(data.colors) && data.colors.length > 0) {
             setSelectedColor(data.colors[0]);
           } else {
-            setSelectedColor(null);
+            setSelectedColor({ id: 'preto', name: 'Preto', hex: '#000000' });
           }
 
           if (Array.isArray(data.imagesGallery) && data.imagesGallery.length > 0) {
@@ -351,20 +351,23 @@ export function ProdutoDetalhe({ onAddToCart }) {
       : null;
     const currentImg = linkedImg || images[selectedImageIndex] || product?.image;
 
+    const finalColor = selectedColor || (colors && colors[0]) || { id: 'preto', name: 'Preto', hex: '#000000' };
+
     const cartProduct = {
       ...product,
       price: effectivePrice,
       originalPrice: priceNum,
       image: currentImg,
-      color: selectedColor || (colors && colors[0]) || { id: 'padrao', name: 'Padrão' },
+      color: finalColor,
       category: product?.category || 'camisa'
     };
 
     if (onAddToCart) {
-      onAddToCart(cartProduct, selectedSize, quantity, selectedColor);
+      onAddToCart(cartProduct, selectedSize, quantity, finalColor);
     } else {
-      addToCart(cartProduct, selectedSize, quantity, selectedColor);
+      addToCart(cartProduct, selectedSize, quantity, finalColor);
     }
+
 
     setIsAddedFeedback(true);
     setTimeout(() => setIsAddedFeedback(false), 2500);

@@ -405,7 +405,7 @@ export function Navbar({ onOpenCart }) {
                           >
                             <div className={styles.adminHighlightLeft}>
                               <ShieldCheck size={14} className={styles.adminIconGlow} />
-                              <span>PAINEL CMS ENGINE</span>
+                              <span>WEM</span>
                             </div>
                             <span className={styles.adminBadgePill}>ADM</span>
                           </Link>

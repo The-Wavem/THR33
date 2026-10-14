@@ -128,9 +128,13 @@ export function CartProvider({ children }) {
   // Adicionar item ao carrinho
   const addToCart = (product, size = 'M', quantity = 1, color = null) => {
     const qty = typeof quantity === 'number' && quantity > 0 ? quantity : 1;
-    const colorObj = color || (product.colors && product.colors[0]) || { id: 'preto', name: 'Preto' };
+    let colorObj = color || (product.colors && product.colors[0]) || product.color || { id: 'preto', name: 'Preto', hex: '#000000' };
+    if (!colorObj || typeof colorObj !== 'object' || !colorObj.name || colorObj.name.toLowerCase() === 'padrão' || colorObj.name.toLowerCase() === 'padrao') {
+      colorObj = { id: 'preto', name: 'Preto', hex: '#000000' };
+    }
     const sizeStr = size || (product.sizes && product.sizes[0]) || 'M';
     const cleanPrice = parsePriceNumber(product.price || product.priceNum);
+
 
     const itemToAdd = {
       id: product.id,

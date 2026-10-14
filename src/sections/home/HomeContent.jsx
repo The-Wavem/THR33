@@ -80,19 +80,23 @@ export function HomeContent({ onOpenCatalogo, onAddToCart, onOpenCart }) {
 
   const handleQuickAdd = (prod) => {
     const size = selectedSizes[prod.id] || (prod.sizes && prod.sizes[0]) || 'M';
+    const color = (prod.colors && prod.colors[0]) || { id: 'preto', name: 'Preto', hex: '#000000' };
     if (onAddToCart) {
       onAddToCart({
         id: prod.id,
         title: prod.title,
+        name: prod.title || prod.name,
         selectedSize: size,
         price: prod.priceFormatted || prod.price,
         image: prod.images ? prod.images[0] : prod.image,
-        slug: prod.slug
-      });
+        slug: prod.slug,
+        color
+      }, size, 1, color);
     }
     if (onOpenCart) {
       onOpenCart();
     }
+
     setAddedFeedback(`${prod.title} (${size}) ADICIONADO!`);
     setTimeout(() => setAddedFeedback(null), 3000);
   };

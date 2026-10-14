@@ -1230,7 +1230,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                     <span>{copiedPix ? 'COPIADO!' : 'COPIAR CHAVE'}</span>
                   </button>
                 </div>
-                <span className={styles.pixTimerText}>O código Pix expira em 45 minutos.</span>
+                <span className={styles.pixTimerText}>O código Pix expira em 2 minutos.</span>
               </div>
             )
           )}
@@ -1767,17 +1767,6 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                     </button>
                   </div>
                 )}
-
-                {/* AVISO DE PRODUÇÃO SOB DEMANDA & DESPACHO DIRETO */}
-                <div className={styles.onDemandNoticeCard}>
-                  <Truck size={18} />
-                  <div>
-                    <strong>LOGÍSTICA SOB DEMANDA // FÁBRICA THR33</strong>
-                    <p>
-                      O envio é realizado diretamente do nosso polo de produção para o endereço informado. Você receberá o código de rastreamento assim que o pacote for despachado.
-                    </p>
-                  </div>
-                </div>
 
                 {/* SELEÇÃO DO MÉTODO DE FRETE */}
                 <div className={styles.shippingSelectionBlock}>

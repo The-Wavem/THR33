@@ -53,7 +53,7 @@ export function AdminLayout() {
             {!isCollapsed && (
               <Link className={styles.logo} to="/cms" title="THR33 CMS Engine">
                 <span className={styles.logoMain}>THR33</span>
-                <span className={styles.logoBadge}>CMS ENGINE</span>
+                <span className={styles.logoBadge}>WEM</span>
               </Link>
             )}
             <button 

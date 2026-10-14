@@ -24,17 +24,75 @@ import {
   ExternalLink,
   Link2,
   Copy,
-  Send
+  Send,
+  Printer,
+  Download,
+  CheckSquare,
+  Square,
+  FileSpreadsheet,
+  Layers,
+  Scissors,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../services/firebaseConfig';
 import { maskCPF } from '../../utils/validators';
+import { formatFitBadgeLabel } from '../../utils/fitUtils';
 import { 
   ORDER_STATUSES, 
   normalizeOrderStatus, 
   getOrderStatusMeta 
 } from '../../services/orderStateMachine';
 import styles from './CmsPedidos.module.css';
+
+// Helper robusto para identificação e normalização de cor de itens de vestuário
+export const extractItemColor = (item) => {
+  if (!item) return 'Preto';
+
+  let raw = '';
+  if (typeof item.color === 'object' && item.color !== null) {
+    raw = item.color.name || item.color.label || item.color.id || '';
+  } else if (typeof item.color === 'string') {
+    raw = item.color;
+  } else if (item.selectedColor) {
+    raw = typeof item.selectedColor === 'object' ? (item.selectedColor.name || item.selectedColor.id) : item.selectedColor;
+  } else if (item.colorName) {
+    raw = item.colorName;
+  }
+
+  const clean = String(raw || '').trim();
+  const isPlaceholder = !clean || ['padrao', 'padrão', 'default', 'standard', 'unica', 'única'].includes(clean.toLowerCase());
+
+  if (!isPlaceholder) {
+    const lower = clean.toLowerCase();
+    if (lower === 'preto' || lower === 'black') return 'Preto';
+    if (lower === 'branco' || lower === 'white') return 'Branco';
+    if (lower === 'off-white' || lower === 'offwhite' || lower === 'off white') return 'Off-White';
+    if (lower === 'grafite' || lower === 'graphite') return 'Grafite';
+    if (lower === 'cinza mescla' || lower === 'cinza' || lower === 'mescla') return 'Cinza Mescla';
+    if (lower === 'marrom terra' || lower === 'marrom') return 'Marrom Terra';
+    if (lower === 'bege areia' || lower === 'bege') return 'Bege Areia';
+    if (lower === 'azul noite' || lower === 'azul') return 'Azul Noite';
+    if (lower === 'verde militar' || lower === 'verde') return 'Verde Militar';
+    return clean.charAt(0).toUpperCase() + clean.slice(1);
+  }
+
+  // Tenta extrair a cor declarada no título ou nome do produto
+  const title = String(item.name || item.title || '').toLowerCase();
+  if (title.includes('off-white') || title.includes('off white')) return 'Off-White';
+  if (title.includes('preta') || title.includes('preto') || title.includes('black')) return 'Preto';
+  if (title.includes('branca') || title.includes('branco') || title.includes('white')) return 'Branco';
+  if (title.includes('grafite') || title.includes('graphite')) return 'Grafite';
+  if (title.includes('cinza') || title.includes('mescla') || title.includes('grey') || title.includes('gray')) return 'Cinza Mescla';
+  if (title.includes('marrom') || title.includes('brown')) return 'Marrom Terra';
+  if (title.includes('bege') || title.includes('sand')) return 'Bege Areia';
+  if (title.includes('azul') || title.includes('blue')) return 'Azul Noite';
+  if (title.includes('verde') || title.includes('green')) return 'Verde Militar';
+
+  // Padrão canônico do streetwear autoral THR33
+  return 'Preto';
+};
 
 const STATUS_OPTIONS = [
   { value: ORDER_STATUSES.AGUARDANDO_PAGAMENTO, label: 'Aguardando Pagamento', color: '#facc15' },
@@ -47,6 +105,7 @@ const STATUS_OPTIONS = [
 
 // Helper para obter datas formatadas no formato YYYY-MM-DD
 const getTodayISO = () => new Date().toISOString().split('T')[0];
+
 
 const getDaysAgoISO = (days) => {
   const d = new Date();
@@ -140,6 +199,11 @@ export function CmsPedidos() {
   const [endDate, setEndDate] = useState('');
   const todayStr = getTodayISO();
 
+  // Seleção múltipla e Ordem de Produção (PDF / Fábrica)
+  const [selectedOrderIds, setSelectedOrderIds] = useState([]);
+  const [productionModalOpen, setProductionModalOpen] = useState(false);
+  const [hideFinancials, setHideFinancials] = useState(false);
+
   // Modal de Detalhes & Logística Reversa
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [exchangeReason, setExchangeReason] = useState('tamanho-boxy-pequeno');
@@ -190,15 +254,39 @@ export function CmsPedidos() {
     }
   }, [selectedOrder]);
 
-  // 1. Busca os pedidos reais no Firestore
+  // 1. Busca os pedidos reais no Firestore e vincula histórico de chamados de suporte
   const fetchOrders = async () => {
     setLoading(true);
     setRefreshing(true);
     try {
+      // Busca tickets de suporte para vincular histórico com cada pedido
+      const ticketOrderIds = new Set();
+      try {
+        const tSnap = await getDocs(collection(db, 'support_tickets'));
+        tSnap.forEach(tDoc => {
+          const tData = tDoc.data();
+          if (tData.orderId) ticketOrderIds.add(tData.orderId);
+        });
+      } catch (tErr) {
+        console.warn("Aviso ao carregar chamados de suporte para métricas:", tErr.message);
+      }
+
       const snap = await getDocs(collection(db, 'orders'));
       if (!snap.empty) {
         const list = [];
-        snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+        snap.forEach(d => {
+          const oData = d.data();
+          const hasSupportRequest = Boolean(
+            oData.hasOpenTicket ||
+            oData.supportTicket ||
+            oData.lastTicketId ||
+            (Array.isArray(oData.supportHistory) && oData.supportHistory.length > 0) ||
+            ticketOrderIds.has(d.id) ||
+            oData.status === 'Troca Solicitada' ||
+            oData.status === 'Devolvido'
+          );
+          list.push({ id: d.id, ...oData, hasSupportRequest });
+        });
         list.sort((a, b) => parseOrderTimestamp(b) - parseOrderTimestamp(a));
         setOrders(list);
       } else {
@@ -705,28 +793,155 @@ export function CmsPedidos() {
 
     const total = ordersInPeriod.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
     const count = ordersInPeriod.length;
-    const exchanges = ordersInPeriod.filter(o => o.status === 'Troca Solicitada' || o.status === 'Devolvido').length;
-    const exchangeRate = count > 0 ? ((exchanges / count) * 100).toFixed(1) : '0.0';
+
+    // Pedidos que tiveram alguma requisição de suporte no período selecionado
+    const supportOrders = ordersInPeriod.filter(o => 
+      o.hasSupportRequest || 
+      o.hasOpenTicket || 
+      Boolean(o.supportTicket) || 
+      Boolean(o.lastTicketId) ||
+      o.status === 'Troca Solicitada' || 
+      o.status === 'Devolvido'
+    );
+    const supportCount = supportOrders.length;
+    const supportRate = count > 0 ? ((supportCount / count) * 100).toFixed(1) : '0.0';
+    const avgOrdersPerSupport = supportCount > 0 ? (count / supportCount).toFixed(1) : null;
     const averageTicket = count > 0 ? (total / count).toFixed(2) : '0.00';
 
-    return { total, count, exchanges, exchangeRate, averageTicket, ordersInPeriodCount: count };
+    // Mantém exchanges e exchangeRate para retrocompatibilidade
+    const exchanges = supportCount;
+    const exchangeRate = supportRate;
+
+    return { 
+      total, 
+      count, 
+      supportCount, 
+      supportRate, 
+      avgOrdersPerSupport, 
+      exchanges, 
+      exchangeRate, 
+      averageTicket, 
+      ordersInPeriodCount: count 
+    };
   }, [orders, startDate, endDate]);
 
-  // Exportação do Lote Semanal para a Fábrica (CSV)
-  const handleExportWeeklyBatch = () => {
-    // Filtra pedidos em fila para corte e produção
-    const batchOrders = orders.filter(o => {
+  // Pedidos selecionados ou em fila de produção para o Lote
+  const batchOrders = useMemo(() => {
+    if (selectedOrderIds.length > 0) {
+      return orders.filter(o => selectedOrderIds.includes(o.id));
+    }
+    const queueOrders = filteredOrders.filter(o => {
       const norm = normalizeOrderStatus(o.status);
       return norm === ORDER_STATUSES.PAGAMENTO_APROVADO || norm === ORDER_STATUSES.EM_PRODUCAO;
     });
+    return queueOrders.length > 0 ? queueOrders : filteredOrders;
+  }, [orders, selectedOrderIds, filteredOrders]);
 
+  // Resumo consolidado de grade e métricas para a fábrica e para o Edu
+  const productionSummary = useMemo(() => {
+    let totalPieces = 0;
+    let totalValue = 0;
+    const sizeTotals = { PP: 0, P: 0, M: 0, G: 0, GG: 0, XG: 0, OUTROS: 0 };
+    const colorTotals = {};
+    const groupedItems = {};
+
+    batchOrders.forEach(order => {
+      totalValue += Number(order.total || 0);
+
+      (order.items || []).forEach(item => {
+        const qty = Number(item.quantity || 1);
+        totalPieces += qty;
+
+        const name = (item.name || 'Camiseta').trim();
+        const fit = formatFitBadgeLabel(item.fit) || 'Boxy Fit';
+        const color = extractItemColor(item);
+        const rawSize = (item.size || 'M').trim().toUpperCase();
+        const sizeKey = ['PP', 'P', 'M', 'G', 'GG', 'XG'].includes(rawSize) ? rawSize : 'OUTROS';
+
+        sizeTotals[sizeKey] = (sizeTotals[sizeKey] || 0) + qty;
+        colorTotals[color] = (colorTotals[color] || 0) + qty;
+
+        const groupKey = `${name}:::${fit}:::${color}`;
+        if (!groupedItems[groupKey]) {
+          groupedItems[groupKey] = {
+            name,
+            fit,
+            color,
+            sizes: { PP: 0, P: 0, M: 0, G: 0, GG: 0, XG: 0, OUTROS: 0 },
+            total: 0
+          };
+        }
+        groupedItems[groupKey].sizes[sizeKey] = (groupedItems[groupKey].sizes[sizeKey] || 0) + qty;
+        groupedItems[groupKey].total += qty;
+      });
+    });
+
+    return {
+      orders: batchOrders,
+      totalOrders: batchOrders.length,
+      totalPieces,
+      totalValue,
+      sizeTotals,
+      colorTotals,
+      groupedItems: Object.values(groupedItems),
+      batchId: `LOTE-PROD-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(batchOrders.length).padStart(3, '0')}`,
+      generatedAt: new Date().toLocaleString('pt-BR')
+    };
+  }, [batchOrders]);
+
+
+  // Gestão de Seleção de Pedidos
+  const isAllSelected = useMemo(() => {
+    if (filteredOrders.length === 0) return false;
+    return filteredOrders.every(o => selectedOrderIds.includes(o.id));
+  }, [filteredOrders, selectedOrderIds]);
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedOrderIds(prev => prev.filter(id => !filteredOrders.some(o => o.id === id)));
+    } else {
+      const allFilteredIds = filteredOrders.map(o => o.id);
+      setSelectedOrderIds(prev => Array.from(new Set([...prev, ...allFilteredIds])));
+    }
+  };
+
+  const handleToggleOrder = (orderId) => {
+    setSelectedOrderIds(prev => 
+      prev.includes(orderId) ? prev.filter(id => id !== orderId) : [...prev, orderId]
+    );
+  };
+
+  const handleSelectApprovedAndProduction = () => {
+    const queueIds = filteredOrders
+      .filter(o => {
+        const norm = normalizeOrderStatus(o.status);
+        return norm === ORDER_STATUSES.PAGAMENTO_APROVADO || norm === ORDER_STATUSES.EM_PRODUCAO;
+      })
+      .map(o => o.id);
+
+    if (queueIds.length === 0) {
+      alert("Nenhum pedido com status 'Pagamento Aprovado' ou 'Em Produção' encontrado no período selecionado.");
+      return;
+    }
+    setSelectedOrderIds(queueIds);
+  };
+
+  const handleOpenProductionModal = () => {
     if (batchOrders.length === 0) {
-      alert("Nenhum pedido com status 'Pagamento Aprovado' ou 'Em Produção' para exportação no momento.");
+      alert("Nenhum pedido encontrado ou selecionado para gerar a ordem de produção.");
+      return;
+    }
+    setProductionModalOpen(true);
+  };
+
+  const handleExportBatchCsv = () => {
+    if (batchOrders.length === 0) {
+      alert("Nenhum pedido selecionado para exportação.");
       return;
     }
 
     const csvRows = [
-      ['ID PEDIDO', 'DATA', 'CLIENTE', 'TELEFONE', 'ENDERECO COMPLETO', 'ITEM', 'MODELAGEM', 'TAMANHO', 'QTD', 'VALOR UNITARIO']
+      ['ID PEDIDO', 'DATA', 'CLIENTE', 'TELEFONE', 'ENDERECO COMPLETO', 'ITEM', 'MODELAGEM', 'COR', 'TAMANHO', 'QTD', 'VALOR UNITARIO']
     ];
 
     batchOrders.forEach(order => {
@@ -741,11 +956,13 @@ export function CmsPedidos() {
           `"${order.clientName || order.customerName || 'Cliente'}"`,
           order.clientPhone || order.customerPhone || '',
           addr,
-          `"${item.name}"`,
-          item.fit || 'Padrão',
+          `"${item.name || 'Camiseta'}"`,
+          formatFitBadgeLabel(item.fit) || 'Boxy Fit',
+          extractItemColor(item),
           item.size || 'M',
           item.quantity || 1,
           Number(item.price || 0).toFixed(2)
+
         ]);
       });
     });
@@ -754,11 +971,190 @@ export function CmsPedidos() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `LOTE_FABRICA_THR33_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.setAttribute("download", `LOTE_PRODUCAO_THR33_${new Date().toISOString().slice(0, 10)}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
+
+  const handlePrintProductionOrder = () => {
+    const printArea = document.getElementById('production-order-print-area');
+    if (!printArea) {
+      window.print();
+      return;
+    }
+
+    // Remove qualquer frame de impressao residual
+    const prevFrame = document.getElementById('thr33-production-print-frame');
+    if (prevFrame) prevFrame.remove();
+
+    const iframe = document.createElement('iframe');
+    iframe.id = 'thr33-production-print-frame';
+    iframe.setAttribute('style', 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;');
+    document.body.appendChild(iframe);
+
+    // Coleta todas as tags de estilo e links de stylesheet do documento para manter a fidelidade visual exata
+    const styleTags = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map(node => node.outerHTML)
+      .join('\n');
+
+    const iframeDoc = iframe.contentWindow.document;
+    iframeDoc.open();
+    iframeDoc.write(`
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Ordem_Producao_${productionSummary.batchId}</title>
+        ${styleTags}
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 10mm 10mm 12mm 10mm;
+          }
+          * {
+            box-sizing: border-box !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            background: #ffffff !important;
+            color: #09090b !important;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
+            font-size: 11px !important;
+            line-height: 1.4 !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+          [class*="productionDocContainer"], #production-order-print-area {
+            display: block !important;
+            background: #ffffff !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+            overflow: visible !important;
+          }
+          [class*="productionDocSheet"] {
+            display: block !important;
+            background: #ffffff !important;
+            color: #09090b !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            height: auto !important;
+          }
+          [class*="pageBreakBefore"] {
+            page-break-before: always !important;
+            break-before: page !important;
+            margin-top: 10mm !important;
+          }
+          [class*="pageBreakAvoid"] {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          [class*="docOrderCard"] {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            border: 1px solid #a1a1aa !important;
+            margin-bottom: 12px !important;
+            background-color: #fafafa !important;
+          }
+          table {
+            page-break-inside: auto !important;
+          }
+          tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          [class*="productionActionBar"], button {
+            display: none !important;
+          }
+        </style>
+      </head>
+      <body>
+        ${printArea.outerHTML}
+      </body>
+      </html>
+    `);
+    iframeDoc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err) {
+        console.warn("Aviso ao imprimir via iframe, utilizando fallback direto:", err);
+        window.print();
+      }
+    }, 350);
+  };
+
+  const handleOpenProductionTab = () => {
+    const printArea = document.getElementById('production-order-print-area');
+    if (!printArea) return;
+
+    const styleTags = Array.from(document.querySelectorAll('link[rel="stylesheet"], style'))
+      .map(node => node.outerHTML)
+      .join('\n');
+
+    const newTab = window.open('', '_blank');
+    if (!newTab) {
+      alert("Por favor, permita pop-ups para visualizar a ordem de produção em nova aba.");
+      return;
+    }
+
+    newTab.document.open();
+    newTab.document.write(`
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Ordem de Produção - ${productionSummary.batchId}</title>
+        ${styleTags}
+        <style>
+          @page { size: A4 portrait; margin: 10mm; }
+          * { box-sizing: border-box !important; -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          body {
+            background: #e4e4e7;
+            margin: 0;
+            padding: 24px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+          }
+          [class*="productionDocContainer"] {
+            background: transparent !important;
+            padding: 0 !important;
+          }
+          [class*="productionDocSheet"] {
+            background: #ffffff !important;
+            color: #09090b !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+            max-width: 900px !important;
+            width: 100% !important;
+          }
+          @media print {
+            body { background: #ffffff !important; padding: 0 !important; }
+            [class*="productionDocSheet"] { box-shadow: none !important; }
+          }
+        </style>
+      </head>
+      <body>
+        ${printArea.outerHTML}
+      </body>
+      </html>
+    `);
+    newTab.document.close();
+  };
+
 
   return (
     <div className={styles.container}>
@@ -845,11 +1241,16 @@ export function CmsPedidos() {
 
           <button 
             type="button"
-            onClick={handleExportWeeklyBatch}
+            onClick={handleOpenProductionModal}
             className={styles.exportBatchBtn}
-            title="Exportar Lote Semanal para a Fábrica"
+            title="Gerar Ordem de Produção e Separação em Lote (PDF)"
           >
-            EXPORTAR LOTE SEMANAL (CSV)
+            <FileText size={14} />
+            <span>
+              {selectedOrderIds.length > 0 
+                ? `EXPORTAR LOTE (${selectedOrderIds.length})` 
+                : 'EXPORTAR LOTE (PDF)'}
+            </span>
           </button>
 
           <button 
@@ -903,13 +1304,17 @@ export function CmsPedidos() {
           <small className={styles.kpiSub}>Média por transação</small>
         </div>
 
-        <div className={`${styles.kpiCard} ${Number(metrics.exchangeRate) > 5 ? styles.alertKpi : ''}`}>
+        <div className={`${styles.kpiCard} ${Number(metrics.supportRate) > 10 ? styles.alertKpi : ''}`}>
           <div className={styles.kpiHeader}>
-            <RefreshCw size={16} className={styles.kpiIconRed} />
-            <span className={styles.kpiLabel}>TAXA DE TROCAS / DEVOLUÇÕES</span>
+            <Headphones size={16} className={styles.kpiIconPurple} />
+            <span className={styles.kpiLabel}>TAXA DE SOLICITAÇÃO DE SUPORTE</span>
           </div>
-          <strong className={styles.kpiValue}>{metrics.exchangeRate}%</strong>
-          <small className={styles.kpiSub}>{metrics.exchanges} solicitações no período</small>
+          <strong className={styles.kpiValue}>{metrics.supportRate}%</strong>
+          <small className={styles.kpiSub}>
+            {metrics.supportCount > 0 
+              ? `${metrics.supportCount} ${metrics.supportCount === 1 ? 'pedido com chamado' : 'pedidos com chamados'} • Média 1 a cada ${metrics.avgOrdersPerSupport} pedidos`
+              : '0 solicitações no período'}
+          </small>
         </div>
       </section>
 
@@ -959,14 +1364,78 @@ export function CmsPedidos() {
               </button>
             );
           })}
+
+          <button 
+            type="button"
+            className={styles.quickQueueBtn}
+            onClick={handleSelectApprovedAndProduction}
+            title="Selecionar todos os pedidos com Pagamento Aprovado e Em Produção"
+          >
+            <CheckSquare size={13} />
+            <span>SELECIONAR FILA DE PRODUÇÃO</span>
+          </button>
         </div>
       </div>
+
+      {/* BARRA DE SELEÇÃO E AÇÕES RÁPIDAS DE LOTE */}
+      {selectedOrderIds.length > 0 && (
+        <div className={styles.selectionBar}>
+          <div className={styles.selectionCount}>
+            <CheckSquare size={16} className={styles.selectionIcon} />
+            <span>
+              <strong>{selectedOrderIds.length}</strong> {selectedOrderIds.length === 1 ? 'pedido selecionado' : 'pedidos selecionados'} para produção
+            </span>
+          </div>
+
+          <div className={styles.selectionActions}>
+            <button 
+              type="button" 
+              onClick={handleOpenProductionModal}
+              className={styles.generatePdfActionBtn}
+              title="Visualizar e Imprimir Ordem de Produção em PDF"
+            >
+              <Printer size={14} />
+              <span>GERAR ORDEM DE PRODUÇÃO (PDF)</span>
+            </button>
+
+            <button 
+              type="button" 
+              onClick={handleExportBatchCsv}
+              className={styles.exportCsvActionBtn}
+              title="Baixar planilha CSV dos pedidos selecionados"
+            >
+              <Download size={14} />
+              <span>BAIXAR CSV</span>
+            </button>
+
+            <button 
+              type="button" 
+              onClick={() => setSelectedOrderIds([])}
+              className={styles.clearSelectionBtn}
+              title="Desmarcar todos"
+            >
+              <X size={13} />
+              <span>Limpar Seleção</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* TABELA DE PEDIDOS */}
       <div className={styles.tableCard}>
         <table className={styles.table}>
           <thead>
             <tr>
+              <th className={styles.checkboxTh}>
+                <input 
+                  type="checkbox"
+                  checked={isAllSelected}
+                  onChange={handleToggleSelectAll}
+                  className={styles.checkboxInput}
+                  title="Selecionar todos os pedidos visíveis"
+                  aria-label="Selecionar todos os pedidos"
+                />
+              </th>
               <th>PEDIDO</th>
               <th>DATA</th>
               <th>CLIENTE & CONTATO</th>
@@ -980,7 +1449,7 @@ export function CmsPedidos() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="8" className={styles.centerText}>
+                <td colSpan="9" className={styles.centerText}>
                   <div className={styles.loadingWrapper}>
                     <RotateCw size={18} className={styles.spinning} />
                     <span>Buscando pedidos no Firestore...</span>
@@ -989,7 +1458,7 @@ export function CmsPedidos() {
               </tr>
             ) : filteredOrders.length === 0 ? (
               <tr>
-                <td colSpan="8" className={styles.centerText}>
+                <td colSpan="9" className={styles.centerText}>
                   <div className={styles.emptyWrapper}>
                     <AlertCircle size={18} />
                     <span>Nenhum pedido encontrado para o período e filtros selecionados.</span>
@@ -1003,7 +1472,16 @@ export function CmsPedidos() {
                 const formattedCpf = order.clientCpf ? maskCPF(order.clientCpf) : 'Não informado';
 
                 return (
-                  <tr key={order.id} className={styles.tableRow}>
+                  <tr key={order.id} className={`${styles.tableRow} ${selectedOrderIds.includes(order.id) ? styles.selectedTableRow : ''}`}>
+                    <td className={styles.checkboxTd} onClick={(e) => e.stopPropagation()}>
+                      <input 
+                        type="checkbox"
+                        checked={selectedOrderIds.includes(order.id)}
+                        onChange={() => handleToggleOrder(order.id)}
+                        className={styles.checkboxInput}
+                        aria-label={`Selecionar pedido ${order.id}`}
+                      />
+                    </td>
                     <td>
                       <div className={styles.orderCodeWrapper}>
                         <strong className={styles.orderCode}>#{order.id.toUpperCase().startsWith('THR-') ? order.id.toUpperCase() : order.id.slice(0, 8).toUpperCase()}</strong>
@@ -1062,10 +1540,11 @@ export function CmsPedidos() {
                       <div className={styles.itemsSummary}>
                         {order.items?.map((it, idx) => (
                           <span key={idx} className={styles.itemTag}>
-                            {it.quantity}x {it.name} <small>({it.size})</small>
+                            {it.quantity}x {it.name} <small>({it.size} • {extractItemColor(it)})</small>
                           </span>
                         ))}
                       </div>
+
                     </td>
                     <td>
                       <strong className={styles.totalValue}>R$ {Number(order.total || 0).toFixed(2)}</strong>
@@ -1334,9 +1813,10 @@ export function CmsPedidos() {
                       <img src={it.image} alt={it.name} className={styles.itemThumb} />
                       <div className={styles.itemDetails}>
                         <strong>{it.name}</strong>
-                        <span>Tamanho: <strong>{it.size}</strong> {it.fit ? `• ${it.fit}` : ''}</span>
-                        <small>Qtd: {it.quantity} • R$ {Number(it.price || 0).toFixed(2)} un.</small>
+                        <span>Tamanho: <strong>{it.size}</strong> • Cor: <strong>{extractItemColor(it)}</strong> {it.fit ? `• ${formatFitBadgeLabel(it.fit)}` : ''}</span>
+                        <small>Qtd: {it.quantity} un. • R$ {Number(it.price || 0).toFixed(2)} un.</small>
                       </div>
+
                     </div>
                   ))}
                 </div>
@@ -1399,65 +1879,6 @@ export function CmsPedidos() {
                     <span>{savingLogistics ? 'SALVANDO...' : 'SALVAR RASTREIO & DADOS FISCAIS'}</span>
                   </button>
                 </form>
-              </div>
-
-              {/* AUTOMAÇÃO DE LOGÍSTICA REVERSA / TROCAS */}
-              <div className={`${styles.sectionBlock} ${styles.exchangeBox}`}>
-                <div className={styles.sectionHeaderLine}>
-                  <Truck size={15} className={styles.exchangeIcon} />
-                  <h3>LOGÍSTICA REVERSA (TROCA OU DEVOLUÇÃO)</h3>
-                </div>
-                <p className={styles.exchangeDescription}>
-                  Gere o código de postagem reversa imediatamente para que o cliente realize a postagem da peça sem custos.
-                </p>
-
-                {selectedOrder.reverseLogistics ? (
-                  <div className={styles.reverseActiveBox}>
-                    <div className={styles.reverseHeader}>
-                      <span className={styles.reverseCodeLabel}>CÓDIGO DE POSTAGEM REVERSA:</span>
-                      <strong className={styles.reverseCodeValue}>{selectedOrder.reverseLogistics.code}</strong>
-                    </div>
-                    <small className={styles.reverseReason}>
-                      Motivo: <strong>{selectedOrder.reverseLogistics.reason}</strong>
-                    </small>
-                    <small className={styles.reverseDate}>
-                      Gerado em: {new Date(selectedOrder.reverseLogistics.generatedAt).toLocaleString('pt-BR')}
-                    </small>
-                  </div>
-                ) : (
-                  <div className={styles.exchangeForm}>
-                    <label>MOTIVO DA SOLICITAÇÃO:</label>
-                    <select 
-                      value={exchangeReason} 
-                      onChange={(e) => setExchangeReason(e.target.value)}
-                      className={styles.selectInput}
-                    >
-                      <option value="Tamanho Boxy menor que o esperado">Tamanho Boxy menor que o esperado</option>
-                      <option value="Tamanho Oversized muito amplo">Tamanho Oversized muito amplo</option>
-                      <option value="Trocar por outra estampa / modelo">Trocar por outra estampa / modelo</option>
-                      <option value="Defeito de fábrica / costura">Defeito de fábrica / costura</option>
-                      <option value="Direito de arrependimento (7 dias)">Direito de arrependimento (7 dias)</option>
-                    </select>
-
-                    <button 
-                      onClick={handleGenerateReverseLabel}
-                      disabled={generatingLabel}
-                      className={styles.generateLabelBtn}
-                    >
-                      {generatingLabel ? (
-                        <>
-                          <RotateCw size={14} className={styles.spinning} />
-                          <span>EMITINDO ETIQUETA...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Truck size={15} />
-                          <span>EMITIR ETIQUETA DE LOGÍSTICA REVERSA</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
               </div>
             </div>
           </div>
@@ -1878,6 +2299,308 @@ export function CmsPedidos() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL DE ORDEM DE PRODUÇÃO & SEPARAÇÃO (PDF / FÁBRICA) */}
+      {productionModalOpen && (
+        <div className={styles.productionModalOverlay} onClick={() => setProductionModalOpen(false)}>
+          <div className={styles.productionModalCard} onClick={(e) => e.stopPropagation()}>
+            {/* BARRA DE AÇÕES DO MODAL (NÃO IMPRESSA) */}
+            <div className={styles.productionActionBar}>
+              <div className={styles.productionActionTitle}>
+                <FileText size={18} className={styles.productionTitleIcon} />
+                <div>
+                  <h3>ORDEM DE PRODUÇÃO & SEPARAÇÃO EM LOTE</h3>
+                  <span>{productionSummary.totalOrders} pedidos selecionados • {productionSummary.totalPieces} peças no total</span>
+                </div>
+              </div>
+
+              <div className={styles.productionActionButtons}>
+                <button
+                  type="button"
+                  onClick={() => setHideFinancials(prev => !prev)}
+                  className={`${styles.actionToggleBtn} ${hideFinancials ? styles.actionToggleBtnActive : ''}`}
+                  title={hideFinancials ? "Exibir valores financeiros" : "Ocultar valores financeiros para envio direto à fábrica"}
+                >
+                  {hideFinancials ? <EyeOff size={14} /> : <Eye size={14} />}
+                  <span>{hideFinancials ? 'Valores Ocultos (Modo Fábrica)' : 'Ocultar Valores (R$)'}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleExportBatchCsv}
+                  className={styles.actionCsvBtn}
+                  title="Exportar planilha Excel/CSV dos pedidos selecionados"
+                >
+                  <Download size={14} />
+                  <span>Baixar CSV</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleOpenProductionTab}
+                  className={styles.actionTabBtn}
+                  title="Abrir a ficha de produção em uma nova aba para visualização completa"
+                >
+                  <ExternalLink size={14} />
+                  <span>Abrir em Nova Aba</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handlePrintProductionOrder}
+                  className={styles.actionPrintBtn}
+                  title="Imprimir ou Salvar como PDF (A4)"
+                >
+                  <Printer size={15} />
+                  <span>IMPRIMIR / GERAR PDF</span>
+                </button>
+
+
+                <button
+                  type="button"
+                  onClick={() => setProductionModalOpen(false)}
+                  className={styles.actionCloseBtn}
+                  aria-label="Fechar"
+                  title="Fechar visualizador"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+
+            {/* DOCUMENTO DA ORDEM DE PRODUÇÃO (IMPRESSO / FORMATADO EM FOLHA A4) */}
+            <div className={styles.productionDocContainer} id="production-order-print-area">
+              <div className={styles.productionDocSheet}>
+                {/* CABEÇALHO DA FICHA */}
+                <div className={styles.docHeader}>
+                  <div className={styles.docBrand}>
+                    <span className={styles.docBrandLogo}>THR33</span>
+                    <span className={styles.docBrandSub}>STREETWEAR AUTORAL • CURITIBA / BR</span>
+                  </div>
+                  <div className={styles.docBatchMeta}>
+                    <div className={styles.docBatchTag}>
+                      <span>IDENTIFICADOR DO LOTE:</span>
+                      <strong>{productionSummary.batchId}</strong>
+                    </div>
+                    <span className={styles.docMetaDate}>EMISSÃO: {productionSummary.generatedAt}</span>
+                    <span className={styles.docMetaOrigin}>EXPEDIÇÃO: ESTR. DE SANTA ISABEL, 1011 - SOBRE LOJA - ITAQUAQUECETUBA - SP (08577-010)</span>
+                  </div>
+                </div>
+
+                {/* ESTATÍSTICAS E TOTAIS DO LOTE */}
+                <div className={styles.docStatsGrid}>
+                  <div className={styles.docStatCard}>
+                    <span>TOTAL DE PEDIDOS</span>
+                    <strong>{productionSummary.totalOrders}</strong>
+                    <small>Pedidos no lote</small>
+                  </div>
+                  <div className={styles.docStatCard}>
+                    <span>TOTAL DE PEÇAS</span>
+                    <strong>{productionSummary.totalPieces}</strong>
+                    <small>Unidades para corte/confecção</small>
+                  </div>
+                  {!hideFinancials && (
+                    <div className={styles.docStatCard}>
+                      <span>VALOR TOTAL DO LOTE</span>
+                      <strong>R$ {productionSummary.totalValue.toFixed(2)}</strong>
+                      <small>Faturamento bruto dos pedidos</small>
+                    </div>
+                  )}
+                  <div className={styles.docStatCard}>
+                    <span>DISTRIBUIÇÃO GERAL POR TAMANHO</span>
+                    <div className={styles.docSizeDistribution}>
+                      <span>PP: <strong>{productionSummary.sizeTotals.PP}</strong></span>
+                      <span>P: <strong>{productionSummary.sizeTotals.P}</strong></span>
+                      <span>M: <strong>{productionSummary.sizeTotals.M}</strong></span>
+                      <span>G: <strong>{productionSummary.sizeTotals.G}</strong></span>
+                      <span>GG: <strong>{productionSummary.sizeTotals.GG}</strong></span>
+                      <span>XG: <strong>{productionSummary.sizeTotals.XG}</strong></span>
+                      {productionSummary.sizeTotals.OUTROS > 0 && <span>Outros: <strong>{productionSummary.sizeTotals.OUTROS}</strong></span>}
+                    </div>
+                  </div>
+                  <div className={styles.docStatCard}>
+                    <span>DISTRIBUIÇÃO GERAL POR COR</span>
+                    <div className={styles.docSizeDistribution}>
+                      {Object.entries(productionSummary.colorTotals || {}).map(([colName, colQty]) => (
+                        <span key={colName}>
+                          {colName}: <strong>{colQty} un.</strong>
+                        </span>
+                      ))}
+                    </div>
+                    <small>Total de blanks/tecidos por cor</small>
+                  </div>
+                </div>
+
+                {/* SEÇÃO 1: TABELA CONSOLIDADA PARA A FÁBRICA / CORTE & ESTAMPARIA */}
+                <div className={styles.docSection}>
+                  <div className={styles.docSectionTitle}>
+                    <Scissors size={14} />
+                    <h4>1. GRADE DE CORTE & ESTAMPARIA CONSOLIDADA (FÁBRICA)</h4>
+                  </div>
+                  <p className={styles.docSectionDesc}>
+                    Grade consolidada somando todos os pedidos do lote. Utilize esta tabela para preparar tecidos, blanks, corte, costura e estamparia.
+                  </p>
+
+                  <table className={styles.docTable}>
+                    <thead>
+                      <tr>
+                        <th>ITEM / MODELO</th>
+                        <th>MODELAGEM</th>
+                        <th>COR</th>
+                        <th className={styles.sizeTh}>PP</th>
+                        <th className={styles.sizeTh}>P</th>
+                        <th className={styles.sizeTh}>M</th>
+                        <th className={styles.sizeTh}>G</th>
+                        <th className={styles.sizeTh}>GG</th>
+                        <th className={styles.sizeTh}>XG</th>
+                        <th className={styles.totalTh}>TOTAL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {productionSummary.groupedItems.map((prod, pIdx) => (
+                        <tr key={pIdx}>
+                          <td><strong>{prod.name}</strong></td>
+                          <td>{prod.fit}</td>
+                          <td><span className={styles.docColorTag}>{prod.color}</span></td>
+                          <td className={styles.sizeTd}>{prod.sizes.PP || '-'}</td>
+                          <td className={styles.sizeTd}>{prod.sizes.P || '-'}</td>
+                          <td className={styles.sizeTd}>{prod.sizes.M || '-'}</td>
+                          <td className={styles.sizeTd}>{prod.sizes.G || '-'}</td>
+                          <td className={styles.sizeTd}>{prod.sizes.GG || '-'}</td>
+                          <td className={styles.sizeTd}>{prod.sizes.XG || '-'}</td>
+                          <td className={styles.totalTd}><strong>{prod.total} un.</strong></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className={styles.docTableFooterRow}>
+                        <td colSpan="3"><strong>TOTAL CONSOLIDADO DO LOTE</strong></td>
+                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.PP}</strong></td>
+                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.P}</strong></td>
+                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.M}</strong></td>
+                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.G}</strong></td>
+                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.GG}</strong></td>
+                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.XG}</strong></td>
+                        <td className={styles.totalTd}><strong>{productionSummary.totalPieces} PEÇAS</strong></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+
+                {/* SEÇÃO 2: DETALHAMENTO DE SEPARAÇÃO INDIVIDUAL POR PEDIDO (PACKING LIST) */}
+                <div className={`${styles.docSection} ${styles.pageBreakBefore}`}>
+                  <div className={styles.docSectionTitle}>
+                    <Layers size={14} />
+                    <h4>2. DETALHAMENTO DE SEPARAÇÃO INDIVIDUAL POR PEDIDO (PACKING LIST)</h4>
+                  </div>
+                  <p className={styles.docSectionDesc}>
+                    Use a lista abaixo para conferir, dobrar, ensacar e etiquetar cada pacote individualmente.
+                  </p>
+
+                  <div className={styles.docOrdersList}>
+                    {productionSummary.orders.map((ord, oIdx) => {
+                      const addr = ord.shippingAddress;
+                      const addrLine = addr 
+                        ? `${addr.street || ''}, ${addr.number || ''}${addr.complement ? ` (${addr.complement})` : ''} - ${addr.neighborhood || ''}, ${addr.city || ''}/${addr.state || ''} - CEP ${addr.cep || ''}`
+                        : 'Endereço não informado';
+
+                      return (
+                        <div key={ord.id} className={styles.docOrderCard}>
+                          <div className={styles.docOrderCardHeader}>
+                            <div className={styles.docOrderCardTitle}>
+                              <strong>#{oIdx + 1} • PEDIDO #{ord.id.toUpperCase().startsWith('THR-') ? ord.id.toUpperCase() : ord.id.slice(0, 8).toUpperCase()}</strong>
+                              <span>Data: {formatOrderDate(ord)}</span>
+                            </div>
+                            <div className={styles.docOrderCardClient}>
+                              <span>Cliente: <strong>{ord.clientName || 'Cliente'}</strong></span>
+                              <span>Contato: {ord.clientPhone || ord.clientEmail || 'N/A'}</span>
+                              {!hideFinancials && (
+                                <span className={styles.docOrderTotal}>Total: <strong>R$ {Number(ord.total || 0).toFixed(2)}</strong></span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className={styles.docOrderAddress}>
+                            <MapPin size={11} />
+                            <span><strong>Destino:</strong> {addrLine}</span>
+                          </div>
+
+                          <table className={styles.docOrderItemsTable}>
+                            <thead>
+                              <tr>
+                                <th style={{ width: '40px', textAlign: 'center' }}>CHECK</th>
+                                <th>ITEM / PEÇA</th>
+                                <th>MODELAGEM</th>
+                                <th>COR</th>
+                                <th>TAMANHO</th>
+                                <th style={{ textAlign: 'center', width: '60px' }}>QTD</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(ord.items || []).map((it, iIdx) => (
+                                <tr key={iIdx}>
+                                  <td style={{ textAlign: 'center' }}>
+                                    <span className={styles.printCheckbox}>[ ]</span>
+                                  </td>
+                                  <td><strong>{it.name}</strong></td>
+                                  <td>{formatFitBadgeLabel(it.fit) || 'Boxy Fit'}</td>
+                                  <td><span className={styles.docColorTag}>{extractItemColor(it)}</span></td>
+                                  <td><strong>{it.size}</strong></td>
+                                  <td style={{ textAlign: 'center' }}><strong>{it.quantity} un.</strong></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+
+                {/* SEÇÃO 3: CONTROLE DE QUALIDADE & ASSINATURAS */}
+                <div className={`${styles.docSection} ${styles.pageBreakAvoid}`}>
+                  <div className={styles.docSectionTitle}>
+                    <ShieldCheck size={14} />
+                    <h4>3. PROTOCOLO DE CONFERÊNCIA & LIBERAÇÃO DA PRODUÇÃO</h4>
+                  </div>
+                  <div className={styles.docSignGrid}>
+                    <div className={styles.docSignBox}>
+                      <span className={styles.docSignTitle}>[ ] CORTE CONCLUÍDO</span>
+                      <div className={styles.docSignLine}>Data: _____/_____/_________</div>
+                      <div className={styles.docSignLine}>Responsável: _____________________________</div>
+                    </div>
+
+                    <div className={styles.docSignBox}>
+                      <span className={styles.docSignTitle}>[ ] ESTAMPA / SILK OK</span>
+                      <div className={styles.docSignLine}>Data: _____/_____/_________</div>
+                      <div className={styles.docSignLine}>Responsável: _____________________________</div>
+                    </div>
+
+                    <div className={styles.docSignBox}>
+                      <span className={styles.docSignTitle}>[ ] COSTURA & REVISÃO OK</span>
+                      <div className={styles.docSignLine}>Data: _____/_____/_________</div>
+                      <div className={styles.docSignLine}>Responsável: _____________________________</div>
+                    </div>
+
+                    <div className={styles.docSignBox}>
+                      <span className={styles.docSignTitle}>[ ] EMBALAGEM & EXPEDIÇÃO</span>
+                      <div className={styles.docSignLine}>Data: _____/_____/_________</div>
+                      <div className={styles.docSignLine}>Responsável: _____________________________</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* RODAPÉ DO DOCUMENTO */}
+                <div className={styles.docFooter}>
+                  <span>THR33 STREETWEAR — DOCUMENTO INTERNO DE PRODUÇÃO E EXPEDIÇÃO</span>
+                  <span>GERADO EM {productionSummary.generatedAt} • SISTEMA CMS THR33</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}
