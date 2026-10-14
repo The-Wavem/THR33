@@ -38,8 +38,10 @@ if (process.env.FUNCTIONS_EMULATOR === "true") {
 if (!admin.apps.length) {
   admin.initializeApp({
     projectId: process.env.GCLOUD_PROJECT || "thr33-streetwear",
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET || "thr33-streetwear.firebasestorage.app",
   });
 }
+
 
 // Regiao padrao do Cloud Functions v2 (Sao Paulo)
 const FUNCTION_REGION = "southamerica-east1";
@@ -2639,6 +2641,29 @@ exports.calculateShipping = onRequest(
     });
   },
 );
+
+/**
+ * Configura as regras de CORS no bucket do Firebase Storage
+ */
+exports.configureStorageCors = onCall({ region: FUNCTION_REGION }, async (request) => {
+  try {
+    const bucket = admin.storage().bucket();
+    await bucket.setCorsConfiguration([
+      {
+        origin: ["*"],
+        method: ["GET", "PUT", "POST", "DELETE", "HEAD", "OPTIONS"],
+        responseHeader: ["*"],
+        maxAgeSeconds: 3600,
+      },
+    ]);
+    logger.info("CORS configurado com sucesso no Firebase Storage");
+    return { success: true, message: "CORS configurado com sucesso no Firebase Storage!" };
+  } catch (err) {
+    logger.error("Erro ao configurar CORS no Storage:", err);
+    throw new HttpsError("internal", err.message);
+  }
+});
+
 
 
 

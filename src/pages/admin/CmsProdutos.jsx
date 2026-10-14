@@ -122,8 +122,10 @@ export function CmsProdutos() {
   const [draggedImageIndex, setDraggedImageIndex] = useState(null);
   const [urlInput, setUrlInput] = useState('');
   const [showUrlInput, setShowUrlInput] = useState(false);
+  const [storageWarning, setStorageWarning] = useState('');
 
   // Gestão de Cores Inline
+
   const [newColorName, setNewColorName] = useState('');
   const [newColorHex, setNewColorHex] = useState('#000000');
   const [activeColorStockTab, setActiveColorStockTab] = useState('preto');
@@ -339,16 +341,54 @@ export function CmsProdutos() {
     setIsFormOpen(true);
   };
 
-  // Upload de Imagens no Firebase Storage
+  // Utilitário de fallback para compactação e conversão em DataURL local caso o Firebase Storage esteja indisponível/sem CORS
+  const compressImageFile = (file, maxWidth = 1200, maxHeight = 1200, quality = 0.85) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/webp', quality) || canvas.toDataURL('image/jpeg', quality);
+          resolve(dataUrl);
+        };
+        img.onerror = () => resolve(e.target.result);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Upload de Imagens no Firebase Storage com Fallback Local Resiliente
   const handleUploadFiles = async (e) => {
     const files = Array.from(e.target.files || []);
     if (files.length === 0) return;
 
     setIsUploadingImages(true);
-    setUploadStatusText(`Enviando ${files.length} imagem(ns) ao Firebase Storage...`);
+    setUploadStatusText(`Processando ${files.length} imagem(ns)...`);
+    setStorageWarning('');
 
     const uploaded = [];
     const prodRefId = editingId || generateSlug(formData.name) || `temp_${Date.now()}`;
+    let hasFallback = false;
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
@@ -367,8 +407,24 @@ export function CmsProdutos() {
           colorId: ''
         });
       } catch (err) {
-        console.error(`Erro ao subir imagem ${file.name}:`, err);
+        console.warn(`Aviso no upload ao Firebase Storage (${file.name}):`, err);
+        hasFallback = true;
+        // Fallback imediato: comprime e insere como DataURL local otimizado para não travar o fluxo
+        const fallbackUrl = await compressImageFile(file);
+        if (fallbackUrl) {
+          uploaded.push({
+            id: `img_local_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`,
+            url: fallbackUrl,
+            name: `${file.name} (Modo Local Otimizado)`,
+            isCover: false,
+            colorId: ''
+          });
+        }
       }
+    }
+
+    if (hasFallback) {
+      setStorageWarning("O Firebase Storage precisa ser ativado no Firebase Console para receber os uploads na nuvem (ou o CORS bloqueou o acesso no localhost). As imagens foram importadas e otimizadas em modo local para você continuar o cadastro sem travar.");
     }
 
     setImagesList(prev => {
@@ -383,6 +439,7 @@ export function CmsProdutos() {
     setUploadStatusText('');
     e.target.value = '';
   };
+
 
   const handleAddUrlImage = () => {
     const trimmed = urlInput.trim();
@@ -1407,6 +1464,49 @@ export function CmsProdutos() {
                     <span>{uploadStatusText || 'Enviando imagens para o Firebase Storage...'}</span>
                   </div>
                 )}
+
+                {storageWarning && (
+                  <div style={{
+                    backgroundColor: 'rgba(234, 179, 8, 0.12)',
+                    border: '1px solid rgba(234, 179, 8, 0.4)',
+                    color: '#facc15',
+                    padding: '0.85rem 1rem',
+                    fontSize: '0.75rem',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '0.6rem',
+                    marginBottom: '1rem',
+                    lineHeight: 1.5
+                  }}>
+                    <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px', color: '#facc15' }} />
+                    <div style={{ flex: 1 }}>
+                      <strong style={{ color: '#ffffff', display: 'block', marginBottom: '0.2rem' }}>Aviso sobre o Firebase Storage:</strong>
+                      <span>{storageWarning}</span>
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <a 
+                          href="https://console.firebase.google.com/project/thr33-streetwear/storage" 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          style={{ 
+                            color: '#000000', 
+                            backgroundColor: '#facc15', 
+                            padding: '0.35rem 0.65rem', 
+                            fontWeight: 800, 
+                            fontSize: '0.72rem',
+                            textDecoration: 'none', 
+                            display: 'inline-flex', 
+                            alignItems: 'center', 
+                            gap: '0.3rem' 
+                          }}
+                        >
+                          <span>Ativar Storage no Console do Firebase</span>
+                          <ExternalLink size={11} />
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
 
                 {/* BOTÃO PARA INSERIR URL EXTERNA (OPCIONAL) */}
                 <div className={styles.externalUrlRow}>
