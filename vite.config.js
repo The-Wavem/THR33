@@ -18,6 +18,11 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      '/api/calculateShipping': {
+        target: 'https://southamerica-east1-thr33-streetwear.cloudfunctions.net',
+        changeOrigin: true,
+        rewrite: (path) => '/calculateShipping',
+      },
       '/api/pagbank': {
         target: 'https://sandbox.api.pagseguro.com',
         changeOrigin: true,

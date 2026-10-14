@@ -79,6 +79,14 @@ function getSecretToken() {
   return process.env.PAGBANK_FALLBACK_TOKEN || process.env.PAGBANK_TOKEN || "";
 }
 
+function getMelhorEnvioToken() {
+  return process.env.MELHOR_ENVIO_TOKEN ? process.env.MELHOR_ENVIO_TOKEN.trim() : "";
+}
+
+function getFrenetToken() {
+  return process.env.FRENET_TOKEN ? process.env.FRENET_TOKEN.trim() : "";
+}
+
 /**
  * 1. Endpoint para gerar/obter a Public Key RSA
  * O front-end precisa dessa chave para criptografar os dados do cartao do cliente antes do envio (PCI-Free).
@@ -739,12 +747,22 @@ exports.createPagBankOrder = onCall(
     }
 
     // 2.2 Validacao e recalculo de Frete oficial server-side
-    // Metodos: 'padrao' = R$ 24,90 (2490 centavos) | 'expresso' = R$ 38,50 (3850 centavos)
     const shippingMethodId = String(
       shipping?.method || shipping?.shippingMethod || "padrao",
     ).toLowerCase();
-    let officialShippingFeeInCents =
-      shippingMethodId === "expresso" ? 3850 : 2490;
+    
+    let officialShippingFeeInCents = 2490;
+    if (shipping?.costInCents !== undefined && !isNaN(Number(shipping.costInCents))) {
+      officialShippingFeeInCents = Math.round(Number(shipping.costInCents));
+    } else if (shipping?.cost !== undefined && !isNaN(Number(shipping.cost))) {
+      officialShippingFeeInCents = Math.round(Number(shipping.cost) * 100);
+    } else if (shipping?.fee !== undefined && !isNaN(Number(shipping.fee))) {
+      officialShippingFeeInCents = Math.round(Number(shipping.fee) * 100);
+    } else if (shippingMethodId.includes("retirada")) {
+      officialShippingFeeInCents = 0;
+    } else if (shippingMethodId === "expresso") {
+      officialShippingFeeInCents = 3850;
+    }
 
     // Regra de Frete Gratis da THR33: compras a partir de R$ 299,00 ou cupom de frete gratis
     if (
@@ -1115,8 +1133,8 @@ exports.createPagBankOrder = onCall(
       shippingMethod: shippingMethodId,
       shippingAddress: orderPayload.shipping.address,
       items: sanitizedItems,
-      trackingCode: null,
-      carrier: null,
+      carrier: shipping?.carrier || shipping?.company || null,
+      shippingDeadline: shipping?.deadline || null,
       trackingUrl: null,
       pixQrCodeUrl,
       pixCopiaECola,
@@ -2149,6 +2167,479 @@ exports.refundPagBankOrder = onCall(
     };
   },
 );
+
+/**
+ * Matriz de Contingência Oficial da THR33 (Origem 08577-010 - Itaquaquecetuba / Grande SP)
+ * Utilizada como fallback de alta precisão quando tokens ainda não foram inseridos ou as APIs estiverem indisponíveis.
+ */
+function calculateFallbackShipping(cleanCep, totalQty) {
+  const prefix2 = parseInt(cleanCep.substring(0, 2), 10);
+  const additionalQty = Math.max(0, totalQty - 1);
+
+  // Faixa 1: Grande SP e Capital (01 a 09)
+  if (prefix2 >= 1 && prefix2 <= 9) {
+    const sedexPrice = Number((14.90 + additionalQty * 2.50).toFixed(2));
+    const padraoPrice = Number((9.90 + additionalQty * 1.80).toFixed(2));
+    return [
+      {
+        id: "loggi_local",
+        name: "Loggi Express",
+        carrier: "Loggi",
+        serviceName: "Express",
+        deadline: "2 a 3 dias úteis",
+        deliveryDays: 3,
+        price: padraoPrice,
+        source: "fallback",
+      },
+      {
+        id: "sedex_local",
+        name: "SEDEX (Correios)",
+        carrier: "Correios",
+        serviceName: "SEDEX",
+        deadline: "1 a 2 dias úteis",
+        deliveryDays: 2,
+        price: sedexPrice,
+        source: "fallback",
+      },
+    ];
+  }
+
+  // Faixa 2: Interior e Litoral de SP (11 a 19)
+  if (prefix2 >= 11 && prefix2 <= 19) {
+    const sedexPrice = Number((22.50 + additionalQty * 3.00).toFixed(2));
+    const pacPrice = Number((16.90 + additionalQty * 2.00).toFixed(2));
+    return [
+      {
+        id: "pac_sp_interior",
+        name: "PAC (Correios)",
+        carrier: "Correios",
+        serviceName: "PAC",
+        deadline: "3 a 5 dias úteis",
+        deliveryDays: 5,
+        price: pacPrice,
+        source: "fallback",
+      },
+      {
+        id: "sedex_sp_interior",
+        name: "SEDEX (Correios)",
+        carrier: "Correios",
+        serviceName: "SEDEX",
+        deadline: "1 a 3 dias úteis",
+        deliveryDays: 3,
+        price: sedexPrice,
+        source: "fallback",
+      },
+    ];
+  }
+
+  // Faixa 3: Sul e Sudeste (RJ 20-28, ES 29, MG 30-39, PR 80-87, SC 88-89, RS 90-99)
+  if ((prefix2 >= 20 && prefix2 <= 39) || (prefix2 >= 80 && prefix2 <= 99)) {
+    const jadlogPrice = Number((27.90 + additionalQty * 3.50).toFixed(2));
+    const pacPrice = Number((22.90 + additionalQty * 2.50).toFixed(2));
+    return [
+      {
+        id: "pac_sulsud",
+        name: "PAC (Correios)",
+        carrier: "Correios",
+        serviceName: "PAC",
+        deadline: "4 a 6 dias úteis",
+        deliveryDays: 6,
+        price: pacPrice,
+        source: "fallback",
+      },
+      {
+        id: "jadlog_sulsud",
+        name: "Jadlog",
+        carrier: "Jadlog",
+        serviceName: "Padrão",
+        deadline: "3 a 5 dias úteis",
+        deliveryDays: 5,
+        price: jadlogPrice,
+        source: "fallback",
+      },
+    ];
+  }
+
+  // Faixa 4: Centro-Oeste e Nordeste (40 a 65, 70 a 75, 77 a 79)
+  if (
+    (prefix2 >= 40 && prefix2 <= 65) ||
+    (prefix2 >= 70 && prefix2 <= 75) ||
+    (prefix2 >= 77 && prefix2 <= 79)
+  ) {
+    const expressPrice = Number((36.90 + additionalQty * 4.50).toFixed(2));
+    const pacPrice = Number((29.90 + additionalQty * 3.50).toFixed(2));
+    return [
+      {
+        id: "pac_cone",
+        name: "PAC (Correios)",
+        carrier: "Correios",
+        serviceName: "PAC",
+        deadline: "7 a 10 dias úteis",
+        deliveryDays: 10,
+        price: pacPrice,
+        source: "fallback",
+      },
+      {
+        id: "transportadora_cone",
+        name: "Jadlog",
+        carrier: "Jadlog",
+        serviceName: "Padrão",
+        deadline: "5 a 8 dias úteis",
+        deliveryDays: 8,
+        price: expressPrice,
+        source: "fallback",
+      },
+    ];
+  }
+
+  // Faixa 5: Norte (66 a 69, 76)
+  const aereoPrice = Number((49.90 + additionalQty * 6.00).toFixed(2));
+  const pacPrice = Number((39.50 + additionalQty * 4.50).toFixed(2));
+  return [
+    {
+      id: "pac_norte",
+      name: "PAC (Correios)",
+      carrier: "Correios",
+      serviceName: "PAC",
+      deadline: "10 a 15 dias úteis",
+      deliveryDays: 15,
+      price: pacPrice,
+      source: "fallback",
+    },
+    {
+      id: "aereo_norte",
+      name: "Jadlog",
+      carrier: "Jadlog",
+      serviceName: "Padrão",
+      deadline: "6 a 10 dias úteis",
+      deliveryDays: 10,
+      price: aereoPrice,
+      source: "fallback",
+    },
+  ];
+}
+
+/**
+ * Endpoint Oficial de Cotação de Frete Real (/api/calculateShipping)
+ * Conecta com Melhor Envio e Frenet de forma segura via servidor (sem expor tokens e sem CORS),
+ * com contingência automática baseada no CEP de origem 08577-010 (Itaquaquecetuba - SP).
+ */
+exports.calculateShipping = onRequest(
+  {
+    region: FUNCTION_REGION,
+    cors: true,
+  },
+  async (req, res) => {
+    cors(req, res, async () => {
+      if (req.method !== "POST") {
+        return res
+          .status(405)
+          .json({ error: "Método não permitido. Utilize POST." });
+      }
+
+      try {
+        const { cep, items, subtotal } = req.body || {};
+        const cleanCep = String(cep || "").replace(/\D/g, "");
+
+        if (!cleanCep || cleanCep.length !== 8) {
+          return res.status(400).json({
+            error: "CEP de destino inválido. Forneça 8 dígitos numéricos.",
+          });
+        }
+
+        const ORIGIN_CEP = "08577010"; // Itaquaquecetuba - SP
+
+        // Consolidação dos itens e empilhamento volumétrico têxtil
+        let totalQty = 0;
+        let invoiceValue = 0;
+        const productsList = [];
+
+        if (Array.isArray(items) && items.length > 0) {
+          items.forEach((item, idx) => {
+            const q = Math.max(1, Number(item.quantity) || 1);
+            const price = Number(item.price) || 0;
+            totalQty += q;
+            invoiceValue += price * q;
+
+            productsList.push({
+              id: String(item.id || item.slug || `item_${idx + 1}`),
+              width: 24,
+              height: 3,
+              length: 34,
+              weight: 0.3,
+              insurance_value: price > 0 ? Number(price.toFixed(2)) : 100,
+              quantity: q,
+            });
+          });
+        } else {
+          totalQty = 1;
+          invoiceValue = Number(subtotal) || 150;
+          productsList.push({
+            id: "default_item",
+            width: 24,
+            height: 3,
+            length: 34,
+            weight: 0.3,
+            insurance_value: invoiceValue,
+            quantity: 1,
+          });
+        }
+
+        if (invoiceValue <= 0) {
+          invoiceValue = Number(subtotal) || 100;
+        }
+
+        const totalWeight = Math.max(0.3, Number((0.3 * totalQty).toFixed(2)));
+        const totalHeight = Math.min(100, Math.max(3, 3 * totalQty));
+        const width = 24;
+        const length = 34;
+
+        const meToken = getMelhorEnvioToken();
+        const frenetToken = getFrenetToken();
+        const meSandbox = process.env.MELHOR_ENVIO_SANDBOX === "true";
+
+        let quotes = [];
+        let sourceUsed = "fallback";
+        const consolidated = {};
+
+        // 1. Tenta Cotação via Melhor Envio (Jadlog, Loggi Express e J&T Express)
+        if (meToken && meToken.trim() !== "") {
+          try {
+            const meUrl = meSandbox
+              ? "https://sandbox.melhorenvio.com.br/api/v2/me/shipment/calculate"
+              : "https://melhorenvio.com.br/api/v2/me/shipment/calculate";
+
+            const mePayload = {
+              from: { postal_code: ORIGIN_CEP },
+              to: { postal_code: cleanCep },
+              products: productsList,
+              options: {
+                receipt: false,
+                own_hand: false,
+              },
+            };
+
+            const meRes = await axios.post(meUrl, mePayload, {
+              headers: {
+                Accept: "application/json",
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${meToken}`,
+                "User-Agent": "THR33 Streetwear (contato@thr33.com.br)",
+              },
+              timeout: 6000,
+            });
+
+            if (Array.isArray(meRes.data)) {
+              meRes.data.forEach((svc) => {
+                if (svc.error || !svc.price) return;
+                const compName = String(svc.company?.name || "").toLowerCase();
+                const svcName = String(svc.name || "").toLowerCase();
+                const price = parseFloat(svc.custom_price || svc.price || 0);
+                const deliveryDays = parseInt(
+                  svc.custom_delivery_time || svc.delivery_time || 0,
+                  10,
+                );
+                if (price <= 0) return;
+
+                // Ignora modalidades de ponto de retirada externa ou coleta reversa
+                if (svcName.includes("ponto") || svcName.includes("coleta")) return;
+
+                const isJadlog = compName.includes("jadlog");
+                const isLoggi = compName.includes("loggi");
+                const isJet =
+                  compName.includes("jet") ||
+                  compName.includes("j&t") ||
+                  svcName.includes("j&t");
+
+                if (isJadlog) {
+                  // Centraliza na melhor opção de entrega domiciliar da Jadlog
+                  if (!consolidated["jadlog"] || price < consolidated["jadlog"].price) {
+                    consolidated["jadlog"] = {
+                      id: `me_${svc.id}`,
+                      name: "Jadlog",
+                      carrier: "Jadlog",
+                      serviceName: "Padrão",
+                      deadline: `${deliveryDays} ${deliveryDays === 1 ? "dia útil" : "dias úteis"}`,
+                      deliveryDays,
+                      price,
+                      source: "melhor_envio",
+                    };
+                  }
+                } else if (isLoggi) {
+                  // Prioriza entrega domiciliar Loggi Express
+                  if (!consolidated["loggi"] || svcName.includes("express") || price < consolidated["loggi"].price) {
+                    consolidated["loggi"] = {
+                      id: `me_${svc.id}`,
+                      name: "Loggi Express",
+                      carrier: "Loggi",
+                      serviceName: "Express",
+                      deadline: `${deliveryDays} ${deliveryDays === 1 ? "dia útil" : "dias úteis"}`,
+                      deliveryDays,
+                      price,
+                      source: "melhor_envio",
+                    };
+                  }
+                } else if (isJet) {
+                  // J&T Express Standard
+                  if (!consolidated["jet"] || price < consolidated["jet"].price) {
+                    consolidated["jet"] = {
+                      id: `me_${svc.id}`,
+                      name: "J&T Express",
+                      carrier: "J&T Express",
+                      serviceName: "Standard",
+                      deadline: `${deliveryDays} ${deliveryDays === 1 ? "dia útil" : "dias úteis"}`,
+                      deliveryDays,
+                      price,
+                      source: "melhor_envio",
+                    };
+                  }
+                }
+              });
+            }
+          } catch (meErr) {
+            logger.warn(
+              "Aviso ao cotar via Melhor Envio:",
+              meErr.response?.data || meErr.message,
+            );
+          }
+        }
+
+        // 2. Tenta Cotação via Frenet (Regra Oficial: PAC e SEDEX Correios)
+        if (frenetToken && frenetToken.trim() !== "") {
+          try {
+            const frenetPayload = {
+              SellerCEP: ORIGIN_CEP,
+              RecipientCEP: cleanCep,
+              ShipmentInvoiceValue: Number(invoiceValue.toFixed(2)),
+              ShippingItemArray: [
+                {
+                  Height: totalHeight,
+                  Length: length,
+                  Quantity: totalQty,
+                  Weight: totalWeight,
+                  Width: width,
+                },
+              ],
+            };
+
+            const frenetRes = await axios.post(
+              "https://api.frenet.com.br/shipping/quote",
+              frenetPayload,
+              {
+                headers: {
+                  token: frenetToken,
+                  Accept: "application/json",
+                  "Content-Type": "application/json",
+                },
+                timeout: 6000,
+              },
+            );
+
+            const frenetServices = frenetRes.data?.ShippingSevicesArray;
+            if (Array.isArray(frenetServices)) {
+              frenetServices.forEach((svc) => {
+                if (svc.Error || !svc.ShippingPrice) return;
+                const carrier = String(svc.Carrier || "").toLowerCase();
+                const serviceDesc = String(svc.ServiceDescription || "").toLowerCase();
+                const price = parseFloat(svc.ShippingPrice || 0);
+                const deliveryDays = parseInt(svc.DeliveryTime || 0, 10);
+                if (price <= 0) return;
+
+                const isCorreios = carrier.includes("correios");
+                const isPac = /\bpac\b/i.test(serviceDesc);
+                const isSedex = /\bsedex\b/i.test(serviceDesc);
+
+                if (isCorreios && isPac) {
+                  if (!consolidated["correios_pac"] || price < consolidated["correios_pac"].price) {
+                    consolidated["correios_pac"] = {
+                      id: `frenet_${svc.ServiceCode || svc.CarrierCode}`,
+                      name: "PAC (Correios)",
+                      carrier: "Correios",
+                      serviceName: "PAC",
+                      deadline: `${deliveryDays} ${deliveryDays === 1 ? "dia útil" : "dias úteis"}`,
+                      deliveryDays,
+                      price,
+                      source: "frenet",
+                    };
+                  }
+                } else if (isCorreios && isSedex) {
+                  if (!consolidated["correios_sedex"] || price < consolidated["correios_sedex"].price) {
+                    consolidated["correios_sedex"] = {
+                      id: `frenet_${svc.ServiceCode || svc.CarrierCode}`,
+                      name: "SEDEX (Correios)",
+                      carrier: "Correios",
+                      serviceName: "SEDEX",
+                      deadline: `${deliveryDays} ${deliveryDays === 1 ? "dia útil" : "dias úteis"}`,
+                      deliveryDays,
+                      price,
+                      source: "frenet",
+                    };
+                  }
+                }
+              });
+            }
+          } catch (frenetErr) {
+            logger.warn(
+              "Aviso ao cotar via Frenet:",
+              frenetErr.response?.data || frenetErr.message,
+            );
+          }
+        }
+
+        quotes = Object.values(consolidated);
+        if (quotes.length > 0) {
+          sourceUsed = "apis_oficiais";
+        }
+
+        // 3. Fallback inteligente de Contingência baseado na tabela de CEP de Origem (08577-010)
+        if (quotes.length === 0) {
+          quotes = calculateFallbackShipping(cleanCep, totalQty);
+          sourceUsed = "fallback_matriz_sp";
+        }
+
+        // 4. Retirada no Ateliê para CEPs da região de Itaquaquecetuba / Mogi / Poá / Suzano (08500-08799)
+        const prefix5 = parseInt(cleanCep.substring(0, 5), 10);
+        if (prefix5 >= 8500 && prefix5 <= 8799) {
+          quotes.unshift({
+            id: "retirada_atelie",
+            name: "Retirada no Ateliê (Grátis)",
+            carrier: "THR33 Ateliê",
+            serviceName: "Retirada Presencial",
+            deadline: "Disponível em 24h úteis",
+            deliveryDays: 1,
+            price: 0,
+            source: "local",
+          });
+        }
+
+        // Ordena por menor preço
+        quotes.sort((a, b) => a.price - b.price);
+
+        return res.status(200).json({
+          success: true,
+          destinationCep: cleanCep,
+          originCep: ORIGIN_CEP,
+          originAddress:
+            "Estr. de Santa Isabel, 1011, Sobre Loja - Vila Monte Belo, Itaquaquecetuba - SP",
+          package: {
+            quantity: totalQty,
+            weightKg: totalWeight,
+            dimensions: { height: totalHeight, width, length },
+            invoiceValue,
+          },
+          source: sourceUsed,
+          options: quotes,
+        });
+      } catch (err) {
+        logger.error("Erro no cálculo de frete:", err);
+        return res.status(500).json({
+          error: "Erro interno no cálculo de frete: " + err.message,
+        });
+      }
+    });
+  },
+);
+
 
 
 

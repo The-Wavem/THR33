@@ -7,6 +7,10 @@ import {
   ChevronDown,
   Camera,
   ArrowUpRight,
+  Lock,
+  ShieldCheck,
+  CheckCircle2,
+  Truck,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { preloadRoute } from "../../utils/preloader";
@@ -55,7 +59,7 @@ export function Footer() {
       <div className={styles.container}>
         {/* GRID PRINCIPAL DO FOOTER */}
         <div className={styles.topGrid}>
-          {/* COLUNA 1: MARCA & MANIFESTO */}
+          {/* COLUNA 1: MARCA, MANIFESTO, PAGAMENTOS E SEGURANÇA */}
           <div className={styles.brandCol}>
             <Link
               className={styles.logo}
@@ -68,10 +72,61 @@ export function Footer() {
               Streetwear autoral e independente nascido no concreto de Curitiba.
               Confecção sob demanda, modelagens pesadas e edições limitadas.
             </p>
-            <span className={styles.locationBadge}>
-              <MapPin size={12} />
-              <span>CURITIBA - PR</span>
-            </span>
+
+            {/* BLOCO DE SEGURANÇA E PAGAMENTOS (OPÇÃO 1) */}
+            <div className={styles.trustPaymentWrapper}>
+              {/* MÉTODOS DE PAGAMENTO */}
+              <div className={styles.trustSection}>
+                <span className={styles.trustSubTitle}>MÉTODOS DE PAGAMENTO</span>
+                <div className={styles.cardsRow}>
+                  <img
+                    src="/cards/pix.svg"
+                    alt="Pix"
+                    className={styles.cardIcon}
+                    title="Pix - Confirmação Instantânea"
+                    loading="lazy"
+                  />
+                  <img
+                    src="/cards/mastercard.svg"
+                    alt="Mastercard"
+                    className={styles.cardIcon}
+                    title="Mastercard"
+                    loading="lazy"
+                  />
+                  <img
+                    src="/cards/visa.svg"
+                    alt="Visa"
+                    className={styles.cardIcon}
+                    title="Visa"
+                    loading="lazy"
+                  />
+                  <img
+                    src="/cards/elo.svg"
+                    alt="Elo"
+                    className={styles.cardIcon}
+                    title="Elo"
+                    loading="lazy"
+                  />
+                  <img
+                    src="/cards/hipercard.svg"
+                    alt="Hipercard"
+                    className={styles.cardIcon}
+                    title="Hipercard"
+                    loading="lazy"
+                  />
+                  <img
+                    src="/cards/amex.svg"
+                    alt="American Express"
+                    className={styles.cardIcon}
+                    title="American Express"
+                    loading="lazy"
+                  />
+                </div>
+                <span className={styles.trustCaption}>
+                  Em até 12x no cartão ou à vista no PIX com aprovação imediata
+                </span>
+              </div>
+            </div>
           </div>
 
           {/* COLUNA 2: NAVEGAÇÃO / ACORDEÃO MOBILE */}
@@ -209,14 +264,14 @@ export function Footer() {
               </form>
             )}
 
-            {/* BOTÃO DE CRÉDITO DE FOTOGRAFIA EDU LIVE */}
+            {/* BOTÃO DE CRÉDITO DE FOTOGRAFIA EDU */}
             <div className={styles.photoCreditBox}>
               <a
                 href="https://instagram.com/eduian.foto"
                 target="_blank"
                 rel="noreferrer"
                 className={styles.photoCreditBtn}
-                title="Conheça o trabalho de fotografia de Edu Live"
+                title="Conheça o trabalho de fotografia de Edu Ian"
               >
                 <Camera size={13} />
                 <span>FOTOGRAFIA: @eduian.foto</span>

@@ -1,10 +1,14 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Truck, Star, Plus, Heart, ShoppingBag, ArrowLeft, Check, Package, ShieldCheck, Flame, HelpCircle } from 'lucide-react';
+import { 
+  Truck, Star, Plus, Heart, ShoppingBag, ArrowLeft, Check, Package, 
+  ShieldCheck, Flame, HelpCircle, Maximize2, X, ChevronLeft, ChevronRight 
+} from 'lucide-react';
 import ProductCard from '../../components/catalog/ProductCard';
 import { catalogService } from '../../services/catalogService';
 import { reviewService } from '../../services/reviewService';
+import { shippingService } from '../../services/shippingService';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { analyticsService } from '../../services/analyticsService';
@@ -45,6 +49,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
   const [quantity, setQuantity] = useState(1);
   const [openAccordion, setOpenAccordion] = useState('measures');
   const [isAddedFeedback, setIsAddedFeedback] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
   // Cálculo de Frete
   const [cepInput, setCepInput] = useState('');
@@ -270,13 +275,40 @@ export function ProdutoDetalhe({ onAddToCart }) {
     setSelectedImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
   };
 
+  // Bloqueio de scroll da página (eixo Y) e atalhos de teclado (Esc, Setas) para modal de tela cheia
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsFullscreen(false);
+      } else if (e.key === 'ArrowLeft') {
+        setSelectedImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+      } else if (e.key === 'ArrowRight') {
+        setSelectedImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+      }
+    };
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isFullscreen, images.length]);
+
   const handleCepChange = (e) => {
     const raw = e.target.value.replace(/\D/g, '').slice(0, 8);
     const formatted = raw.length > 5 ? `${raw.slice(0, 5)}-${raw.slice(5)}` : raw;
     setCepInput(formatted);
   };
 
-  const handleCalculateShipping = (e) => {
+  const handleCalculateShipping = async (e) => {
     e.preventDefault();
     const cleanCep = cepInput.replace(/\D/g, '');
     
@@ -289,31 +321,26 @@ export function ProdutoDetalhe({ onAddToCart }) {
     setShippingError(null);
     setIsCalculatingShipping(true);
 
-    setTimeout(() => {
+    try {
+      const items = [{
+        id: product?.id || product?.slug || 'item_1',
+        name: product?.name || 'Peça THR33',
+        price: effectivePrice,
+        quantity: quantity || 1
+      }];
+      const result = await shippingService.calculateShipping(cleanCep, items, effectivePrice * (quantity || 1));
+      if (result.options && result.options.length > 0) {
+        setShippingOptions(result.options);
+      } else {
+        setShippingError('Nenhuma opção de entrega encontrada para este CEP.');
+        setShippingOptions(null);
+      }
+    } catch (err) {
+      setShippingError(err.message || 'Falha ao cotar frete.');
+      setShippingOptions(null);
+    } finally {
       setIsCalculatingShipping(false);
-      const isCuritiba = cleanCep.startsWith('80') || cleanCep.startsWith('81') || cleanCep.startsWith('82') || cleanCep.startsWith('83');
-      
-      setShippingOptions([
-        {
-          id: 'sedex',
-          name: 'SEDEX EXPRESSO',
-          deadline: isCuritiba ? 'Chega amanhã' : '1 a 3 dias úteis',
-          price: isCuritiba ? 14.90 : 28.50
-        },
-        {
-          id: 'pac',
-          name: 'PAC STANDARD',
-          deadline: isCuritiba ? '2 a 3 dias úteis' : '5 a 8 dias úteis',
-          price: isCuritiba ? 9.90 : 18.90
-        },
-        {
-          id: 'retirada',
-          name: 'RETIRADA ATELIÊ (CURITIBA)',
-          deadline: 'Disponível em 24h',
-          price: 0
-        }
-      ]);
-    }, 400);
+    }
   };
 
   const handleAddToCart = () => {
@@ -464,17 +491,48 @@ export function ProdutoDetalhe({ onAddToCart }) {
       <div className={styles.productGrid}>
         {/* GALERIA DE IMAGENS */}
         <section className={styles.gallerySection} aria-label="Galeria de fotos do produto">
-          <div className={styles.mainImageWrapper}>
-            <button onClick={handlePrevImage} className={`${styles.navArrow} ${styles.prevArrow}`} aria-label="Imagem anterior">
-              &#10094;
-            </button>
+          <div 
+            className={styles.mainImageWrapper}
+            onClick={() => setIsFullscreen(true)}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsFullscreen(true); } }}
+            aria-label="Clique para ampliar a imagem em tela cheia"
+          >
+            {images.length > 1 && (
+              <button 
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handlePrevImage(); }} 
+                className={`${styles.navArrow} ${styles.prevArrow}`} 
+                aria-label="Imagem anterior"
+              >
+                &#10094;
+              </button>
+            )}
             <img 
               src={images[selectedImageIndex] || images[0]} 
               alt={`${product?.name || product?.title || 'Produto'} - Foto ${selectedImageIndex + 1}`} 
               className={styles.mainImage}
             />
-            <button onClick={handleNextImage} className={`${styles.navArrow} ${styles.nextArrow}`} aria-label="Próxima imagem">
-              &#10095;
+            {images.length > 1 && (
+              <button 
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleNextImage(); }} 
+                className={`${styles.navArrow} ${styles.nextArrow}`} 
+                aria-label="Próxima imagem"
+              >
+                &#10095;
+              </button>
+            )}
+            <button 
+              type="button" 
+              className={styles.expandBadge} 
+              onClick={(e) => { e.stopPropagation(); setIsFullscreen(true); }}
+              aria-label="Abrir imagem em tela cheia"
+              title="Clique para ampliar em detalhes"
+            >
+              <Maximize2 size={14} />
+              <span>AMPLIAR</span>
             </button>
           </div>
 
@@ -902,6 +960,93 @@ export function ProdutoDetalhe({ onAddToCart }) {
           )}
         </div>
       </section>
+
+      {/* MODAL LIGHTBOX EM TELA CHEIA */}
+      <AnimatePresence>
+        {isFullscreen && (
+          <motion.div 
+            className={styles.lightboxOverlay}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setIsFullscreen(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Visualização de imagem em tela cheia"
+          >
+            <div className={styles.lightboxHeader} onClick={(e) => e.stopPropagation()}>
+              <div className={styles.lightboxInfo}>
+                <span className={styles.lightboxTitle}>{product?.name || product?.title || 'PRODUTO THR33'}</span>
+                <span className={styles.lightboxCounter}>{selectedImageIndex + 1} / {images.length}</span>
+              </div>
+              <button 
+                type="button" 
+                className={styles.lightboxCloseBtn} 
+                onClick={() => setIsFullscreen(false)}
+                aria-label="Fechar tela cheia"
+                title="Fechar (Esc)"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            <div className={styles.lightboxContent}>
+              {images.length > 1 && (
+                <button 
+                  type="button"
+                  className={`${styles.lightboxArrow} ${styles.lightboxPrev}`}
+                  onClick={(e) => { e.stopPropagation(); handlePrevImage(); }}
+                  aria-label="Imagem anterior"
+                  title="Anterior (Seta esquerda)"
+                >
+                  <ChevronLeft size={32} />
+                </button>
+              )}
+
+              <motion.img 
+                key={selectedImageIndex}
+                src={images[selectedImageIndex] || images[0]}
+                alt={`${product?.name || product?.title || 'Produto'} - Foto ${selectedImageIndex + 1}`}
+                className={styles.lightboxImage}
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ duration: 0.18 }}
+                onClick={(e) => e.stopPropagation()}
+              />
+
+              {images.length > 1 && (
+                <button 
+                  type="button"
+                  className={`${styles.lightboxArrow} ${styles.lightboxNext}`}
+                  onClick={(e) => { e.stopPropagation(); handleNextImage(); }}
+                  aria-label="Próxima imagem"
+                  title="Próxima (Seta direita)"
+                >
+                  <ChevronRight size={32} />
+                </button>
+              )}
+            </div>
+
+            {images.length > 1 && (
+              <div className={styles.lightboxThumbnails} onClick={(e) => e.stopPropagation()}>
+                {images.map((img, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={`${styles.lightboxThumbBtn} ${idx === selectedImageIndex ? styles.activeLightboxThumb : ''}`}
+                    onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(idx); }}
+                    aria-label={`Ver foto ${idx + 1}`}
+                  >
+                    <img src={img} alt={`Miniatura ${idx + 1}`} />
+                  </button>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }

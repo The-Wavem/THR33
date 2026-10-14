@@ -48,6 +48,7 @@ import {
   maskCEP
 } from '../../utils/validators';
 import { fetchAddressByCep } from '../../services/viaCepService';
+import { shippingService } from '../../services/shippingService';
 import { useAuth } from '../../context/AuthContext';
 import { doc, getDoc, setDoc, collection, addDoc, onSnapshot, runTransaction } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
@@ -71,6 +72,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     discountAmount, 
     shippingCost, 
     setShippingCost, 
+    shippingDetails,
+    setShippingDetails,
     total, 
     appliedCoupon, 
     applyCoupon, 
@@ -327,13 +330,43 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     if (paymentError) setPaymentError(null);
   };
 
-  // Atualiza o valor do frete no contexto quando a opção muda
-  useEffect(() => {
-    const opt = shippingOptions.find(o => o.id === selectedShippingMethod);
-    if (opt) {
-      setShippingCost(opt.price);
+  const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
+  const [shippingError, setShippingError] = useState(null);
+
+  const selectedShippingOption = useMemo(() => {
+    return shippingOptions.find(o => o.id === selectedShippingMethod) || shippingOptions[0] || null;
+  }, [shippingOptions, selectedShippingMethod]);
+
+  const updateShippingQuotes = async (targetCep) => {
+    const clean = String(targetCep || '').replace(/\D/g, '');
+    if (clean.length !== 8) return;
+
+    setIsCalculatingShipping(true);
+    setShippingError(null);
+    try {
+      const result = await shippingService.calculateShipping(clean, cartItems, subtotal);
+      if (result.options && Array.isArray(result.options) && result.options.length > 0) {
+        setShippingOptions(result.options);
+        const exists = result.options.some(o => o.id === selectedShippingMethod);
+        if (exists) {
+          const currentOpt = result.options.find(o => o.id === selectedShippingMethod);
+          if (currentOpt) {
+            setShippingCost(currentOpt.price);
+            setShippingDetails(currentOpt);
+          }
+        } else {
+          setSelectedShippingMethod(result.options[0].id);
+          setShippingCost(result.options[0].price);
+          setShippingDetails(result.options[0]);
+        }
+      }
+    } catch (err) {
+      console.warn("Aviso na cotação de frete do checkout:", err.message);
+      setShippingError(err.message);
+    } finally {
+      setIsCalculatingShipping(false);
     }
-  }, [selectedShippingMethod, shippingOptions]);
+  };
 
   // Endereço ativo para envio
   const activeAddress = useMemo(() => {
@@ -350,6 +383,25 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       complement: addressForm.complement || ''
     };
   }, [isAddingNewAddress, selectedAddressId, savedAddresses, addressForm]);
+
+  // Atualiza o valor e detalhes do frete no contexto quando a opção muda
+  useEffect(() => {
+    const opt = shippingOptions.find(o => o.id === selectedShippingMethod);
+    if (opt) {
+      setShippingCost(opt.price);
+      setShippingDetails(opt);
+    }
+  }, [selectedShippingMethod, shippingOptions]);
+
+  // Recalcula frete automaticamente quando o endereço ativo mudar
+  useEffect(() => {
+    if (activeAddress?.cep && cartItems.length > 0) {
+      const clean = String(activeAddress.cep).replace(/\D/g, '');
+      if (clean.length === 8) {
+        updateShippingQuotes(clean);
+      }
+    }
+  }, [activeAddress?.cep, cartItems.length, subtotal]);
 
   // Se o carrinho estiver vazio e não foi para a tela de sucesso
   if (cartItems.length === 0 && currentStep !== 4) {
@@ -528,13 +580,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         complement: res.data.complement || prev.complement
       }));
       setCepApiMessage({ type: 'success', text: `Endereço localizado: ${res.data.city}/${res.data.state} (IBGE: ${res.data.ibge || 'OK'})` });
-
-      const isCuritiba = cleanCep.startsWith('80') || cleanCep.startsWith('81') || cleanCep.startsWith('82') || cleanCep.startsWith('83');
-      setShippingOptions([
-        { id: 'sedex', name: 'SEDEX Expresso', deadline: isCuritiba ? 'Chega amanhã' : '1 a 3 dias úteis', price: isCuritiba ? 14.90 : 28.50 },
-        { id: 'pac', name: 'PAC Standard', deadline: isCuritiba ? '2 a 3 dias úteis' : '5 a 8 dias úteis', price: isCuritiba ? 9.90 : 18.90 },
-        { id: 'retirada', name: 'Retirada no Ateliê (Curitiba)', deadline: 'Disponível em 24h', price: 0 }
-      ]);
+      updateShippingQuotes(cleanCep);
     } else {
       setCepApiMessage({ type: 'error', text: res.error });
     }
@@ -707,7 +753,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       couponCode: appliedCoupon?.code || null,
       couponId: appliedCoupon?.id || null,
       shippingCost: Number(shippingCost) || 0,
-      shippingMethod: selectedShippingMethod || 'sedex',
+      shippingMethod: selectedShippingMethod || 'padrao',
+      carrier: selectedShippingOption?.carrier || selectedShippingOption?.name || 'Transportadora',
+      shippingDeadline: selectedShippingOption?.deadline || null,
       total: Number(finalAmountToPay) || 0,
       originalTotal: Number(total) || 0,
       walletDeduction: Number(walletDeduction) || 0,
@@ -722,13 +770,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         street: addressToSave.street || '',
         number: addressToSave.number || '',
         neighborhood: addressToSave.neighborhood || '',
-        city: addressToSave.city || 'Curitiba',
-        state: addressToSave.state || 'PR',
+        city: addressToSave.city || 'Itaquaquecetuba',
+        state: addressToSave.state || 'SP',
         ibge: addressToSave.ibge || '',
         complement: addressToSave.complement || ''
       },
       trackingCode: null,
-      carrier: null,
       trackingUrl: null,
       utm_source: utmSource,
       utm_medium: utmMedium,
@@ -1734,7 +1781,14 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
                 {/* SELEÇÃO DO MÉTODO DE FRETE */}
                 <div className={styles.shippingSelectionBlock}>
-                  <span className={styles.subSectionTitle}>SELECIONE A FORMA DE ENVIO:</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span className={styles.subSectionTitle}>SELECIONE A FORMA DE ENVIO:</span>
+                    {isCalculatingShipping && (
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        Cotando frete em tempo real...
+                      </span>
+                    )}
+                  </div>
                   <div className={styles.shippingOptionsGrid}>
                     {shippingOptions.map((opt) => {
                       const isSelected = selectedShippingMethod === opt.id;
