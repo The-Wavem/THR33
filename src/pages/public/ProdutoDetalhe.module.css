@@ -83,6 +83,59 @@
   transform: scale(1.02);
 }
 
+/* FAIXA TRANSVERSAL DIAGONAL NO CANTO SUPERIOR (PDP CORNER RIBBON) */
+.cornerRibbonWrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 190px;
+  height: 190px;
+  overflow: hidden;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.cornerRibbon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 280px;
+  padding: 10px 0;
+  top: 50px;
+  left: -55px;
+  transform: rotate(-45deg);
+  background-color: #10b981;
+  color: #000000;
+  font-family: var(--font-body, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: 0.86rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-align: center;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
+  border-top: 1.5px solid rgba(255, 255, 255, 0.5);
+  border-bottom: 1.5px solid rgba(0, 0, 0, 0.28);
+  line-height: 1;
+  user-select: none;
+}
+
+@media (max-width: 768px) {
+  .cornerRibbonWrapper {
+    width: 140px;
+    height: 140px;
+  }
+
+  .cornerRibbon {
+    width: 210px;
+    padding: 7px 0;
+    top: 34px;
+    left: -44px;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+  }
+}
+
 .expandBadge {
   position: absolute;
   bottom: 1rem;
@@ -566,6 +619,7 @@
 }
 
 /* CÁLCULO DE FRETE COMPACTO */
+.shippingCalculator,
 .shippingCompactSection {
   display: flex;
   flex-direction: column;
@@ -575,16 +629,45 @@
   border: 1px solid var(--border-color);
 }
 
+.freeShippingPdpHighlight {
+  background-color: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #10b981;
+  padding: 0.55rem 0.85rem;
+  font-family: var(--font-body, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  text-transform: uppercase;
+  border-radius: 2px;
+}
+
+.shippingHeader,
 .shippingHeaderRow {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  margin-top: 0.2rem;
 }
 
+.shippingTitleGroup,
 .shippingHeaderTitle {
   display: flex;
   align-items: center;
-  gap: 0.45rem;
+  gap: 0.5rem;
+  color: var(--text-primary);
+}
+
+.shippingTitle {
+  font-family: var(--font-body, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+  text-transform: uppercase;
 }
 
 .toolIcon {
@@ -592,7 +675,8 @@
 }
 
 .cepLink {
-  font-size: 0.68rem;
+  font-family: var(--font-body, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: 0.7rem;
   color: var(--text-muted);
   text-decoration: underline;
   letter-spacing: 0.5px;

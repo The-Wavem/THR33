@@ -105,6 +105,7 @@ export function CmsCupons() {
     code: "",
     type: "affiliate",
     discountPercent: 10,
+    freeShipping: false,
     partnerName: "",
     partnerPix: "",
     validUntil: "",
@@ -680,6 +681,7 @@ export function CmsCupons() {
       code: "",
       type: "affiliate",
       discountPercent: 10,
+      freeShipping: false,
       partnerName: "",
       partnerPix: "",
       validUntil: "",
@@ -696,6 +698,7 @@ export function CmsCupons() {
       code: coupon.code || "",
       type: coupon.type || "affiliate",
       discountPercent: coupon.discountPercent || 10,
+      freeShipping: Boolean(coupon.freeShipping || coupon.type === "free_shipping"),
       partnerName: coupon.partnerName || "",
       partnerPix: coupon.partnerPix || "",
       validUntil: coupon.validUntil || "",
@@ -717,7 +720,8 @@ export function CmsCupons() {
     const payload = {
       code: formData.code.trim().toUpperCase(),
       type: formData.type,
-      discountPercent: Number(formData.discountPercent) || 10,
+      discountPercent: Number(formData.discountPercent) || 0,
+      freeShipping: Boolean(formData.freeShipping),
       partnerName: isBrand
         ? "THR33 Marca Oficial"
         : formData.partnerName.trim() || "Parceiro",
@@ -1474,9 +1478,27 @@ export function CmsCupons() {
                       )}
                     </td>
                     <td>
-                      <span className={styles.discountBadge}>
-                        -{c.discountPercent}% OFF
-                      </span>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-start' }}>
+                        <span className={styles.discountBadge}>
+                          -{c.discountPercent}% OFF
+                        </span>
+                        {Boolean(c.freeShipping || c.type === 'free_shipping') && (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            fontSize: '0.66rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.5px',
+                            padding: '0.15rem 0.45rem',
+                            background: 'rgba(16, 185, 129, 0.15)',
+                            color: '#10b981',
+                            borderRadius: '3px',
+                            border: '1px solid rgba(16, 185, 129, 0.35)'
+                          }}>
+                            + FRETE GRÁTIS
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td>
                       <strong>
@@ -2363,7 +2385,7 @@ export function CmsCupons() {
                   <label>CÓDIGO DO CUPOM *</label>
                   <input
                     type="text"
-                    placeholder="Ex: EDU10"
+                    placeholder="Ex: CUPOM10"
                     value={formData.code}
                     onChange={(e) =>
                       setFormData({
@@ -2379,7 +2401,7 @@ export function CmsCupons() {
                   <input
                     type="number"
                     min="1"
-                    max="50"
+                    max="100"
                     value={formData.discountPercent}
                     onChange={(e) =>
                       setFormData({
@@ -2450,16 +2472,38 @@ export function CmsCupons() {
                 </div>
               </div>
 
+              <div className={styles.inputGroup} style={{ marginTop: '0.4rem', padding: '0.85rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '6px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', cursor: 'pointer', userSelect: 'none', margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(formData.freeShipping)}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        freeShipping: e.target.checked,
+                      })
+                    }
+                    style={{ width: '18px', height: '18px', accentColor: '#10b981', cursor: 'pointer' }}
+                  />
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: formData.freeShipping ? '#10b981' : 'inherit' }}>
+                    CONCEDER FRETE GRÁTIS NESTE CUPOM (ACUMULATIVO)
+                  </span>
+                </label>
+                <small style={{ color: 'var(--text-muted)', fontSize: '0.72rem', display: 'block', marginTop: '0.35rem', lineHeight: '1.4' }}>
+                  Ao habilitar, o cliente terá o frete zerado no carrinho e checkout, acumulando simultaneamente com a porcentagem de desconto configurada sem cancelamentos mútuos.
+                </small>
+              </div>
+
               <button
                 type="submit"
                 disabled={saving}
                 className={styles.submitBtn}
               >
                 {saving
-                  ? "GRAVANDO NO FIRESTORE..."
+                  ? "SALVANDO..."
                   : editingId
                     ? "SALVAR ALTERAÇÕES"
-                    : "CRIAR CUPOM NO FIRESTORE"}
+                    : "CRIAR CUPOM"}
               </button>
             </form>
           </div>

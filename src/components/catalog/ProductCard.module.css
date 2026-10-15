@@ -58,6 +58,7 @@
   font-weight: 800;
   padding: 0.25rem 0.6rem;
   letter-spacing: 1px;
+  transition: top var(--transition-fast);
 }
 
 .promoBadge {
@@ -71,6 +72,48 @@
   font-weight: 800;
   padding: 0.25rem 0.6rem;
   letter-spacing: 1px;
+  transition: top var(--transition-fast);
+}
+
+.promoBadgeWithRibbon {
+  top: 2.35rem !important;
+}
+
+/* FAIXA TRANSVERSAL DIAGONAL NO CANTO SUPERIOR (CORNER RIBBON FRETE GRÁTIS) */
+.cornerRibbonWrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 96px;
+  height: 96px;
+  overflow: hidden;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.cornerRibbon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 140px;
+  padding: 5px 0;
+  top: 20px;
+  left: -34px;
+  transform: rotate(-45deg);
+  background-color: #10b981;
+  color: #000000;
+  font-family: var(--font-body, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: 0.58rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.45);
+  border-top: 1px solid rgba(255, 255, 255, 0.45);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.25);
+  line-height: 1;
+  user-select: none;
 }
 
 .image {

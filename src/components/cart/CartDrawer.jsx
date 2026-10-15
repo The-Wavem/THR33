@@ -31,6 +31,9 @@ export function CartDrawer() {
     removeCoupon,
     couponFeedback,
     validatingCoupon,
+    isFreeShippingActive,
+    hasFreeShippingItem,
+    hasFreeShippingCoupon,
     total,
     totalItemsCount
   } = useCart();
@@ -237,7 +240,9 @@ export function CartDrawer() {
                     <div className={styles.appliedCouponBadge}>
                       <div className={styles.couponTagInfo}>
                         <Tag size={13} />
-                        <span>CUPOM <strong>{appliedCoupon.code}</strong> (-{appliedCoupon.discountPercent}%)</span>
+                        <span>
+                          CUPOM <strong>{appliedCoupon.code}</strong> {appliedCoupon.discountPercent > 0 ? `(-${appliedCoupon.discountPercent}%)` : ''} {appliedCoupon.freeShipping ? '+ FRETE GRÁTIS' : ''}
+                        </span>
                       </div>
                       <button type="button" onClick={removeCoupon} className={styles.removeCouponBtn} aria-label="Remover cupom">
                         <X size={14} />
@@ -253,6 +258,31 @@ export function CartDrawer() {
                   )}
                 </div>
 
+                {isFreeShippingActive && (
+                  <div style={{
+                    background: 'rgba(16, 185, 129, 0.1)',
+                    border: '1px solid rgba(16, 185, 129, 0.28)',
+                    borderRadius: '4px',
+                    padding: '0.45rem 0.65rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    color: '#10b981',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    marginBottom: '0.65rem'
+                  }}>
+                    <CheckCircle2 size={13} />
+                    <span>
+                      {hasFreeShippingItem && hasFreeShippingCoupon
+                        ? 'FRETE GRÁTIS ATIVO (PEÇA + CUPOM)'
+                        : hasFreeShippingCoupon
+                        ? `FRETE GRÁTIS ATIVO PELO CUPOM (${appliedCoupon?.code})`
+                        : 'FRETE GRÁTIS ATIVO NESTE PEDIDO'}
+                    </span>
+                  </div>
+                )}
+
                 {/* Linhas de Valores */}
                 <div className={styles.summaryList}>
                   <div className={styles.summaryRow}>
@@ -266,6 +296,13 @@ export function CartDrawer() {
                       <span>- R$ {Number(discountAmount || 0).toFixed(2)}</span>
                     </div>
                   )}
+
+                  <div className={styles.summaryRow}>
+                    <span>Frete</span>
+                    <span style={isFreeShippingActive ? { color: '#10b981', fontWeight: 600 } : undefined}>
+                      {isFreeShippingActive ? 'GRÁTIS' : 'Calculado no checkout'}
+                    </span>
+                  </div>
 
                   <div className={`${styles.summaryRow} ${styles.totalRow}`}>
                     <span>TOTAL ESTIMADO</span>

@@ -58,6 +58,23 @@ export function CartProvider({ children }) {
   const openCart = () => setIsCartOpen(true);
   const closeCart = () => setIsCartOpen(false);
 
+  // Detecção de Frete Grátis (Acumulativo via Peça ou Cupom)
+  const hasFreeShippingItem = useMemo(() => {
+    return cartItems.some(i => i.freeShipping || i.hasFreeShipping);
+  }, [cartItems]);
+
+  const hasFreeShippingCoupon = useMemo(() => {
+    return Boolean(appliedCoupon?.freeShipping);
+  }, [appliedCoupon]);
+
+  const isFreeShippingActive = hasFreeShippingItem || hasFreeShippingCoupon;
+
+  const effectiveShippingCost = useMemo(() => {
+    if (cartItems.length === 0) return 0;
+    if (isFreeShippingActive) return 0;
+    return Number(shippingCost || 0);
+  }, [cartItems.length, isFreeShippingActive, shippingCost]);
+
   // Cálculos financeiros
   const subtotal = useMemo(() => {
     return cartItems.reduce((acc, item) => {
@@ -74,8 +91,8 @@ export function CartProvider({ children }) {
   }, [subtotal, appliedCoupon]);
 
   const total = useMemo(() => {
-    return Math.max(0, subtotal - discountAmount + (cartItems.length > 0 ? Number(shippingCost || 0) : 0));
-  }, [subtotal, discountAmount, cartItems.length, shippingCost]);
+    return Math.max(0, subtotal - discountAmount + effectiveShippingCost);
+  }, [subtotal, discountAmount, effectiveShippingCost]);
 
   const totalItemsCount = useMemo(() => {
     return cartItems.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
@@ -95,12 +112,21 @@ export function CartProvider({ children }) {
       const result = await couponService.validateCoupon(code, subtotal);
 
       if (result.isValid) {
+        const isFree = Boolean(result.freeShipping);
+        const pct = result.discountPercent;
+        const couponLabel = pct > 0 && isFree
+          ? `${pct}% OFF + FRETE GRÁTIS`
+          : isFree
+            ? 'FRETE GRÁTIS'
+            : `${pct}% OFF`;
+
         setAppliedCoupon({
           id: result.coupon.id,
           code: result.coupon.code,
           type: result.coupon.type || 'affiliate',
-          discountPercent: result.discountPercent,
-          label: `${result.discountPercent}% OFF`,
+          discountPercent: pct,
+          freeShipping: isFree,
+          label: couponLabel,
           partnerName: result.coupon.partnerName
         });
         setCouponFeedback({ message: result.message, isError: false });
@@ -145,7 +171,8 @@ export function CartProvider({ children }) {
       fit: product.fit || "Boxy Fit",
       price: cleanPrice,
       quantity: qty,
-      image: product.image || (product.images && product.images[0])
+      image: product.image || (product.images && product.images[0]),
+      freeShipping: Boolean(product.freeShipping || product.hasFreeShipping)
     };
 
     setCartItems((prevItems) => {
@@ -252,6 +279,10 @@ export function CartProvider({ children }) {
         setShippingCost,
         shippingDetails,
         setShippingDetails,
+        hasFreeShippingItem,
+        hasFreeShippingCoupon,
+        isFreeShippingActive,
+        effectiveShippingCost,
         total,
         totalItemsCount
       }}

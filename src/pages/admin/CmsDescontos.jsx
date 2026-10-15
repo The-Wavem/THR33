@@ -46,7 +46,8 @@ export function CmsDescontos() {
     discountPrice: '',
     discountActive: true,
     discountStartDate: '',
-    discountEndDate: ''
+    discountEndDate: '',
+    freeShipping: false
   });
   const [savingId, setSavingId] = useState(null);
   const [feedbackSuccess, setFeedbackSuccess] = useState(null);
@@ -252,6 +253,7 @@ export function CmsDescontos() {
         if (filterMode === 'active_promo') return isPromo;
         if (filterMode === 'suggested') return suggestedProducts.some(s => s.id === p.id);
         if (filterMode === 'full_price') return !isPromo;
+        if (filterMode === 'free_shipping') return Boolean(p.freeShipping || p.hasFreeShipping);
         return true;
       });
     }
@@ -347,8 +349,38 @@ export function CmsDescontos() {
       discountPrice: existingDiscount.toFixed(2),
       discountActive: prod.discountActive !== false,
       discountStartDate: prod.discountStartDate || new Date().toISOString().split('T')[0],
-      discountEndDate: prod.discountEndDate || ''
+      discountEndDate: prod.discountEndDate || '',
+      freeShipping: Boolean(prod.freeShipping || prod.hasFreeShipping)
     });
+  };
+
+  // Alternância Rápida de Frete Grátis com 1 Clique na Tabela
+  const handleToggleFreeShipping = async (prod) => {
+    const nextStatus = !Boolean(prod.freeShipping || prod.hasFreeShipping);
+    setSavingId(prod.id);
+
+    try {
+      const docRef = doc(db, 'products', prod.id);
+      await updateDoc(docRef, {
+        freeShipping: nextStatus,
+        hasFreeShipping: nextStatus,
+        updatedAt: new Date().toISOString()
+      });
+
+      setProducts(prev => prev.map(p => p.id === prod.id ? {
+        ...p,
+        freeShipping: nextStatus,
+        hasFreeShipping: nextStatus
+      } : p));
+
+      setFeedbackSuccess(nextStatus ? `Frete Grátis ativado para ${prod.name}!` : `Frete Grátis desativado para ${prod.name}.`);
+      setTimeout(() => setFeedbackSuccess(null), 3000);
+    } catch (err) {
+      console.error("Erro ao alterar frete grátis:", err);
+      alert("Erro ao salvar frete grátis no Firestore.");
+    } finally {
+      setSavingId(null);
+    }
   };
 
   // Aplicação Rápida de Desconto Sugerido (ex: 20% OFF)
@@ -408,6 +440,8 @@ export function CmsDescontos() {
         discountPercentage: calculatedPercent,
         discountStartDate: promoForm.discountStartDate || null,
         discountEndDate: promoForm.discountEndDate || null,
+        freeShipping: Boolean(promoForm.freeShipping),
+        hasFreeShipping: Boolean(promoForm.freeShipping),
         updatedAt: new Date().toISOString()
       };
 
@@ -640,6 +674,14 @@ export function CmsDescontos() {
             >
               PREÇO CHEIO ({products.filter(p => !p.discountPrice || p.discountActive === false).length})
             </button>
+            <button 
+              type="button" 
+              className={`${styles.modeBtn} ${filterMode === 'free_shipping' ? styles.activeMode : ''}`}
+              onClick={() => setFilterMode('free_shipping')}
+              style={filterMode === 'free_shipping' ? { borderColor: '#10b981', color: '#10b981' } : {}}
+            >
+              FRETE GRÁTIS ({products.filter(p => p.freeShipping || p.hasFreeShipping).length})
+            </button>
           </div>
         </div>
 
@@ -830,6 +872,19 @@ export function CmsDescontos() {
                         <div className={styles.productMeta}>
                           <strong>{prod.name}</strong>
                           <span className={styles.slug}>{prod.slug || prod.id}</span>
+                          {(prod.freeShipping || prod.hasFreeShipping) && (
+                            <span style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '0.2rem',
+                              fontSize: '0.66rem',
+                              fontWeight: 700,
+                              color: '#10b981',
+                              marginTop: '0.2rem'
+                            }}>
+                              FRETE GRÁTIS ATIVO
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -871,11 +926,36 @@ export function CmsDescontos() {
                       <div className={styles.actionsCell}>
                         <button
                           type="button"
+                          onClick={() => handleToggleFreeShipping(prod)}
+                          disabled={savingId === prod.id}
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.3rem',
+                            padding: '0.35rem 0.55rem',
+                            borderRadius: '4px',
+                            fontSize: '0.68rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.5px',
+                            background: (prod.freeShipping || prod.hasFreeShipping) ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                            border: (prod.freeShipping || prod.hasFreeShipping) ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.1)',
+                            color: (prod.freeShipping || prod.hasFreeShipping) ? '#10b981' : 'var(--text-muted)',
+                            cursor: 'pointer',
+                            transition: 'all 0.18s ease'
+                          }}
+                          title={(prod.freeShipping || prod.hasFreeShipping) ? 'Clique para desativar frete grátis nesta peça' : 'Clique para ativar frete grátis nesta peça com 1 clique'}
+                        >
+                          <Check size={11} style={{ opacity: (prod.freeShipping || prod.hasFreeShipping) ? 1 : 0.3 }} />
+                          <span>{(prod.freeShipping || prod.hasFreeShipping) ? 'FRETE GRÁTIS' : 'FRETE PADRÃO'}</span>
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => handleOpenPromoModal(prod)}
                           className={styles.btnEditPromo}
                           title="Configurar desconto"
                         >
-                          {isPromo ? 'EDITAR DESCONTO' : 'CRIAR PROMOÇÃO'}
+                          {isPromo ? 'EDITAR' : 'PROMO'}
                         </button>
                         {isPromo && (
                           <button
@@ -992,6 +1072,17 @@ export function CmsDescontos() {
                     onChange={(e) => setPromoForm(prev => ({ ...prev, discountActive: e.target.checked }))} 
                   />
                   <span>Desconto Ativo no Catálogo e na PDP</span>
+                </label>
+                <label className={styles.checkboxLabel}>
+                  <input 
+                    type="checkbox" 
+                    checked={Boolean(promoForm.freeShipping)} 
+                    onChange={(e) => setPromoForm(prev => ({ ...prev, freeShipping: e.target.checked }))} 
+                    style={{ accentColor: '#10b981' }}
+                  />
+                  <span style={{ color: promoForm.freeShipping ? '#10b981' : 'inherit', fontWeight: promoForm.freeShipping ? 600 : 400 }}>
+                    Frete Grátis para esta Peça (Exibir Faixa Transversal e Zerar Frete)
+                  </span>
                 </label>
               </div>
 

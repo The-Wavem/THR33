@@ -259,6 +259,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
   const priceNum = Number(product?.price || 0);
   const discountPriceNum = Number(product?.discountPrice || 0);
   const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product?.discountActive !== false);
+  const hasFreeShipping = Boolean(product?.freeShipping || product?.hasFreeShipping);
   const effectivePrice = hasDiscount ? discountPriceNum : priceNum;
   const discountPercentage = hasDiscount ? Math.round(((priceNum - discountPriceNum) / priceNum) * 100) : 0;
 
@@ -326,7 +327,8 @@ export function ProdutoDetalhe({ onAddToCart }) {
         id: product?.id || product?.slug || 'item_1',
         name: product?.name || 'Peça THR33',
         price: effectivePrice,
-        quantity: quantity || 1
+        quantity: quantity || 1,
+        freeShipping: hasFreeShipping
       }];
       const result = await shippingService.calculateShipping(cleanCep, items, effectivePrice * (quantity || 1));
       if (result.options && result.options.length > 0) {
@@ -359,7 +361,8 @@ export function ProdutoDetalhe({ onAddToCart }) {
       originalPrice: priceNum,
       image: currentImg,
       color: finalColor,
-      category: product?.category || 'camisa'
+      category: product?.category || 'camisa',
+      freeShipping: hasFreeShipping
     };
 
     if (onAddToCart) {
@@ -502,6 +505,15 @@ export function ProdutoDetalhe({ onAddToCart }) {
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsFullscreen(true); } }}
             aria-label="Clique para ampliar a imagem em tela cheia"
           >
+            {/* FAIXA TRANSVERSAL DIAGONAL NO CANTO SUPERIOR (FRETE GRÁTIS) */}
+            {hasFreeShipping && (
+              <div className={styles.cornerRibbonWrapper} title="Peça com Frete Grátis">
+                <div className={styles.cornerRibbon}>
+                  FRETE GRÁTIS
+                </div>
+              </div>
+            )}
+
             {images.length > 1 && (
               <button 
                 type="button"
@@ -701,6 +713,13 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
           {/* CÁLCULO DE FRETE COMPACTO */}
           <div className={styles.shippingCalculator}>
+            {hasFreeShipping && (
+              <div className={styles.freeShippingPdpHighlight}>
+                <Truck size={14} />
+                <span>ESTA PEÇA CONTA COM FRETE GRÁTIS // THR33 OFICIAL</span>
+              </div>
+            )}
+
             <div className={styles.shippingHeader}>
               <div className={styles.shippingTitleGroup}>
                 <Truck size={16} />

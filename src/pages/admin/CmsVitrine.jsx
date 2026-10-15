@@ -553,7 +553,7 @@ export function CmsVitrine() {
                 <Save size={14} />
               )}
               <span>
-                {saving ? 'GRAVANDO...' : saveSuccess ? 'SALVO NA NUVEM!' : activeSection === 'hero' ? 'SALVAR BANNERS' : 'SALVAR GRADE BENTO'}
+                {saving ? 'SALVANDO...' : saveSuccess ? 'SALVO NA NUVEM!' : activeSection === 'hero' ? 'SALVAR BANNERS' : 'SALVAR GRADE BENTO'}
               </span>
             </button>
           )}
@@ -737,7 +737,7 @@ export function CmsVitrine() {
                           />
                         </div>
                         <div className={styles.progressLabel}>
-                          <span>Enviando para nuvem Firebase...</span>
+                          <span>Enviando...</span>
                           <span>{heroUploadProgress}%</span>
                         </div>
                       </div>
@@ -1164,7 +1164,7 @@ export function CmsVitrine() {
                           />
                         </div>
                         <div className={styles.progressLabel}>
-                          <span>Enviando para o Firebase Storage...</span>
+                          <span>Enviando...</span>
                           <span>{bentoUploadProgress}%</span>
                         </div>
                       </div>

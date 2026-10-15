@@ -97,6 +97,7 @@ export function CmsProdutos() {
     customBadge: '',
     isRelease: true,
     isFeatured: true,
+    freeShipping: false,
     image: '',
     description: '',
     stock: {
@@ -248,6 +249,7 @@ export function CmsProdutos() {
       customBadge: '',
       isRelease: true,
       isFeatured: false,
+      freeShipping: false,
       image: '',
       description: '',
       stock: { PP: 10, P: 15, M: 20, G: 15, GG: 5 },
@@ -324,6 +326,7 @@ export function CmsProdutos() {
       customBadge: product.customBadge || '',
       isRelease: product.isRelease ?? false,
       isFeatured: product.isFeatured ?? false,
+      freeShipping: Boolean(product.freeShipping || product.hasFreeShipping),
       image: product.image || initialImages[0]?.url || '',
       description: product.description || '',
       stock: product.stock || { PP: 0, P: 0, M: 0, G: 0, GG: 0 },
@@ -700,6 +703,8 @@ export function CmsProdutos() {
       customBadge: formData.customBadge.trim(),
       isRelease: formData.isRelease,
       isFeatured: formData.isFeatured,
+      freeShipping: Boolean(formData.freeShipping),
+      hasFreeShipping: Boolean(formData.freeShipping),
       image: finalCoverUrl,
       images: finalImagesUrls,
       imagesGallery: imagesList,
@@ -1050,6 +1055,7 @@ export function CmsProdutos() {
         if (statusFilter === 'on_sale') return hasDiscount;
         if (statusFilter === 'release') return p.isRelease === true;
         if (statusFilter === 'featured') return p.isFeatured === true;
+        if (statusFilter === 'free_shipping') return Boolean(p.freeShipping || p.hasFreeShipping);
         return true;
       });
     }
@@ -1190,6 +1196,7 @@ export function CmsProdutos() {
                 <option value="on_sale">Em Promoção / Desconto</option>
                 <option value="release">Lançamentos</option>
                 <option value="featured">Destaques da Vitrine</option>
+                <option value="free_shipping">Com Frete Grátis</option>
               </select>
             </div>
           </div>
@@ -1334,11 +1341,29 @@ export function CmsProdutos() {
                       </div>
                     </td>
                     <td>
-                      {prod.customBadge && prod.customBadge.trim() ? (
-                        <span className={styles.customBadge}>{prod.customBadge.trim()}</span>
-                      ) : (
-                        <span className={styles.noBadge}>Sem Badge</span>
-                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', alignItems: 'flex-start' }}>
+                        {prod.customBadge && prod.customBadge.trim() ? (
+                          <span className={styles.customBadge}>{prod.customBadge.trim()}</span>
+                        ) : (
+                          <span className={styles.noBadge}>Sem Badge</span>
+                        )}
+                        {(prod.freeShipping || prod.hasFreeShipping) && (
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            fontSize: '0.64rem',
+                            fontWeight: 700,
+                            letterSpacing: '0.5px',
+                            padding: '0.12rem 0.38rem',
+                            background: 'rgba(16, 185, 129, 0.15)',
+                            color: '#10b981',
+                            borderRadius: '3px',
+                            border: '1px solid rgba(16, 185, 129, 0.35)'
+                          }}>
+                            FRETE GRÁTIS
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td>
                       <span className={`${styles.stockBadge} ${totalUnits === 0 ? styles.outOfStock : ''}`}>
@@ -2020,6 +2045,18 @@ export function CmsProdutos() {
                     onChange={handleInputChange}
                   />
                   <span>Priorizar no Topo do Catálogo</span>
+                </label>
+                <label className={styles.checkboxLabel}>
+                  <input 
+                    type="checkbox" 
+                    name="freeShipping" 
+                    checked={Boolean(formData.freeShipping)} 
+                    onChange={handleInputChange}
+                    style={{ accentColor: '#10b981' }}
+                  />
+                  <span style={{ color: formData.freeShipping ? '#10b981' : 'inherit', fontWeight: formData.freeShipping ? 600 : 400 }}>
+                    Frete Grátis nesta Peça (Faixa Transversal no Catálogo/PDP)
+                  </span>
                 </label>
               </div>
 

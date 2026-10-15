@@ -74,6 +74,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     setShippingCost, 
     shippingDetails,
     setShippingDetails,
+    isFreeShippingActive,
+    hasFreeShippingItem,
+    hasFreeShippingCoupon,
     total, 
     appliedCoupon, 
     applyCoupon, 
@@ -388,10 +391,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   useEffect(() => {
     const opt = shippingOptions.find(o => o.id === selectedShippingMethod);
     if (opt) {
-      setShippingCost(opt.price);
+      setShippingCost(isFreeShippingActive ? 0 : opt.price);
       setShippingDetails(opt);
     }
-  }, [selectedShippingMethod, shippingOptions]);
+  }, [selectedShippingMethod, shippingOptions, isFreeShippingActive]);
 
   // Recalcula frete automaticamente quando o endereço ativo mudar
   useEffect(() => {
@@ -752,7 +755,15 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       discountAmount: Number(discountAmount) || 0,
       couponCode: appliedCoupon?.code || null,
       couponId: appliedCoupon?.id || null,
-      shippingCost: Number(shippingCost) || 0,
+      shippingCost: isFreeShippingActive ? 0 : (Number(shippingCost) || 0),
+      freeShippingApplied: Boolean(isFreeShippingActive),
+      freeShippingReason: hasFreeShippingItem && hasFreeShippingCoupon
+        ? 'item_and_coupon'
+        : hasFreeShippingCoupon
+        ? 'coupon'
+        : hasFreeShippingItem
+        ? 'item'
+        : null,
       shippingMethod: selectedShippingMethod || 'padrao',
       carrier: selectedShippingOption?.carrier || selectedShippingOption?.name || 'Transportadora',
       shippingDeadline: selectedShippingOption?.deadline || null,
@@ -1778,6 +1789,33 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                       </span>
                     )}
                   </div>
+
+                  {isFreeShippingActive && (
+                    <div style={{
+                      background: 'rgba(16, 185, 129, 0.1)',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      borderRadius: '6px',
+                      padding: '0.65rem 0.85rem',
+                      marginBottom: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      color: '#10b981',
+                      fontSize: '0.78rem',
+                      fontWeight: 600,
+                      letterSpacing: '0.5px'
+                    }}>
+                      <Check size={14} />
+                      <span>
+                        {hasFreeShippingItem && hasFreeShippingCoupon
+                          ? 'FRETE GRÁTIS APLICADO POR PEÇA E CUPOM NO PEDIDO'
+                          : hasFreeShippingCoupon
+                          ? `FRETE GRÁTIS APLICADO PELO CUPOM (${appliedCoupon?.code})`
+                          : 'FRETE GRÁTIS APLICADO PARA PEÇA ELEGÍVEL DO CATÁLOGO'}
+                      </span>
+                    </div>
+                  )}
+
                   <div className={styles.shippingOptionsGrid}>
                     {shippingOptions.map((opt) => {
                       const isSelected = selectedShippingMethod === opt.id;
@@ -1796,8 +1834,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                               <small>{opt.deadline}</small>
                             </div>
                           </div>
-                          <span className={styles.shippingPrice}>
-                            {opt.price === 0 ? 'GRÁTIS' : `R$ ${opt.price.toFixed(2)}`}
+                          <span 
+                            className={styles.shippingPrice}
+                            style={isFreeShippingActive || opt.price === 0 ? { color: '#10b981', fontWeight: 700 } : undefined}
+                          >
+                            {isFreeShippingActive || opt.price === 0 ? 'GRÁTIS' : `R$ ${opt.price.toFixed(2)}`}
                           </span>
                         </div>
                       );
@@ -2139,7 +2180,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
               <div className={styles.appliedCouponTag}>
                 <div className={styles.couponTagText}>
                   <Tag size={13} />
-                  <span>CUPOM <strong>{appliedCoupon.code}</strong> ({appliedCoupon.label})</span>
+                  <span>
+                    CUPOM <strong>{appliedCoupon.code}</strong> ({appliedCoupon.label || (appliedCoupon.freeShipping ? 'Frete Grátis' : '')})
+                  </span>
                 </div>
                 <button type="button" onClick={removeCoupon} className={styles.removeCouponBtn}>
                   REMOVER
@@ -2170,8 +2213,20 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
             <div className={styles.summaryRow}>
               <span>Frete</span>
-              <span>{shippingCost === 0 ? 'GRÁTIS' : `R$ ${shippingCost.toFixed(2)}`}</span>
+              <span style={isFreeShippingActive || shippingCost === 0 ? { color: '#10b981', fontWeight: 600 } : undefined}>
+                {isFreeShippingActive || shippingCost === 0 ? 'GRÁTIS' : `R$ ${shippingCost.toFixed(2)}`}
+              </span>
             </div>
+
+            {isFreeShippingActive && (
+              <div style={{ fontSize: '0.72rem', color: '#10b981', marginTop: '-0.35rem', textAlign: 'right', fontWeight: 500 }}>
+                {hasFreeShippingItem && hasFreeShippingCoupon
+                  ? 'Acumulado: Peça + Cupom'
+                  : hasFreeShippingCoupon
+                  ? `Cupom ${appliedCoupon?.code} com Frete Grátis`
+                  : 'Peça elegível com Frete Grátis'}
+              </div>
+            )}
 
             <div className={`${styles.summaryRow} ${styles.totalRow}`}>
               <strong>TOTAL A PAGAR</strong>

@@ -46,13 +46,24 @@ export const couponService = {
 
       const discountPercent = Number(couponData.discountPercent) || 0;
       const discountValue = (cartSubtotal * discountPercent) / 100;
+      const freeShipping = Boolean(couponData.freeShipping || couponData.type === 'free_shipping');
+
+      let feedbackMsg = `Cupom ${cleanCode} aplicado com sucesso!`;
+      if (discountPercent > 0 && freeShipping) {
+        feedbackMsg = `Cupom ${cleanCode} aplicado: -${discountPercent}% OFF + FRETE GRÁTIS!`;
+      } else if (freeShipping) {
+        feedbackMsg = `Cupom ${cleanCode} aplicado: FRETE GRÁTIS no pedido!`;
+      } else if (discountPercent > 0) {
+        feedbackMsg = `Cupom ${cleanCode} aplicado com sucesso! (-${discountPercent}%)`;
+      }
 
       return {
         isValid: true,
         coupon: couponData,
         discountPercent,
         discountValue,
-        message: `Cupom ${cleanCode} aplicado com sucesso! (-${discountPercent}%)`
+        freeShipping,
+        message: feedbackMsg
       };
     } catch (err) {
       console.error("Erro ao validar cupom no Firestore:", err);

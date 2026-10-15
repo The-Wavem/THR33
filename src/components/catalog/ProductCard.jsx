@@ -16,6 +16,7 @@ export function ProductCard({ product }) {
   const priceNum = Number(product.price || 0);
   const discountPriceNum = Number(product.discountPrice || 0);
   const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product.discountActive !== false);
+  const hasFreeShipping = Boolean(product.freeShipping || product.hasFreeShipping);
 
   const handleTrackClick = () => {
     analyticsService.trackProductView(product.id || productId, product.name, product.category, product.fit, product.slug);
@@ -30,10 +31,19 @@ export function ProductCard({ product }) {
   return (
     <article className={styles.card}>
       <div className={styles.imageWrapper}>
+        {/* FAIXA TRANSVERSAL DIAGONAL NO CANTO SUPERIOR (FRETE GRÁTIS) */}
+        {hasFreeShipping && (
+          <div className={styles.cornerRibbonWrapper} title="Peça com Frete Grátis">
+            <div className={styles.cornerRibbon}>
+              FRETE GRÁTIS
+            </div>
+          </div>
+        )}
+
         {hasDiscount ? (
-          <span className={styles.promoBadge}>PROMOÇÃO</span>
+          <span className={`${styles.promoBadge} ${hasFreeShipping ? styles.promoBadgeWithRibbon : ''}`}>PROMOÇÃO</span>
         ) : (product.customBadge && product.customBadge.trim()) ? (
-          <span className={styles.badge}>{product.customBadge.trim()}</span>
+          <span className={`${styles.badge} ${hasFreeShipping ? styles.promoBadgeWithRibbon : ''}`}>{product.customBadge.trim()}</span>
         ) : null}
         
         {/* Placeholder com Shimmer enquanto a imagem carrega */}
