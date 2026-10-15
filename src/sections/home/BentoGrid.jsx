@@ -68,7 +68,7 @@ export function BentoGrid({ gridItems = [], sectionTag, sectionTitle }) {
                   {isLarge && (
                     <span className={styles.photoCreditInline}>
                       <Camera size={11} />
-                      <span>FOTOS: @EDULIVE</span>
+                      <span>FOTOS: @eduian.foto</span>
                     </span>
                   )}
                 </div>

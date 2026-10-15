@@ -560,48 +560,6 @@ export function CmsVitrine() {
         </div>
       </header>
 
-      {/* GUIA TÁTICO DA HIERARQUIA DA HOME */}
-      <div className={styles.homeSectionsGuide}>
-        <div className={styles.guideHeader}>
-          <div className={styles.guideTitle}>
-            <Info size={13} />
-            <span>ESTRUTURA VISUAL DA HOME // O QUE MUDA ONDE:</span>
-          </div>
-          <span className={styles.liveStoreLink}>
-            Alterações salvas refletem em tempo real no site
-          </span>
-        </div>
-
-        <div className={styles.guideStepsGrid}>
-          <div 
-            className={`${styles.guideStepCard} ${activeSection === 'hero' ? styles.activeStepCard : ''}`}
-            onClick={() => setActiveSection('hero')}
-          >
-            <span className={styles.stepNumber}>[01] TOPO DA LOJA</span>
-            <span className={styles.stepName}>Carrossel Hero</span>
-            <span className={styles.stepDesc}>Banners de tela cheia com fotos, mensagens de impacto e botões de chamada.</span>
-          </div>
-
-          <div 
-            className={`${styles.guideStepCard} ${activeSection === 'bento' ? styles.activeStepCard : ''}`}
-            onClick={() => setActiveSection('bento')}
-          >
-            <span className={styles.stepNumber}>[02] MEIO DA HOME</span>
-            <span className={styles.stepName}>Grade Bento</span>
-            <span className={styles.stepDesc}>Mosaico visual para direcionar clientes às modelagens (Oversized, Boxy, Drops).</span>
-          </div>
-
-          <div 
-            className={`${styles.guideStepCard} ${activeSection === 'featured' ? styles.activeStepCard : ''}`}
-            onClick={() => setActiveSection('featured')}
-          >
-            <span className={styles.stepNumber}>[03] BASE DA HOME</span>
-            <span className={styles.stepName}>Mais Vendidos</span>
-            <span className={styles.stepDesc}>Grade automática alimentada pelos produtos marcados como Destaque no Catálogo.</span>
-          </div>
-        </div>
-      </div>
-
       {/* SELETOR DE SUB-ABAS */}
       <nav className={styles.sectionNav}>
         <button
