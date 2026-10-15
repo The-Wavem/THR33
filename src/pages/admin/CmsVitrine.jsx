@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { 
   Plus, 
   Save, 
@@ -7,28 +8,28 @@ import {
   Eye, 
   EyeOff, 
   Monitor, 
+  Smartphone,
   Check, 
   RotateCw, 
-  Sparkles,
-  MousePointerClick,
-  SlidersHorizontal,
-  Link as LinkIcon,
-  Layers,
-  LayoutGrid,
-  ArrowRight
+  MousePointerClick, 
+  SlidersHorizontal, 
+  Link as LinkIcon, 
+  Layers, 
+  ArrowRight,
+  Upload,
+  X,
+  ExternalLink,
+  ShoppingBag,
+  Star,
+  Info,
+  LayoutGrid
 } from 'lucide-react';
-import { getVitrineSettings, saveVitrineSettings } from '../../services/catalogService';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '../../services/firebaseConfig';
+import { getVitrineSettings, saveVitrineSettings, getFeaturedProducts } from '../../services/catalogService';
 import styles from './CmsVitrine.module.css';
 
-// Sugestões de imagens em alta resolução para testes rápidos
-const PLACEHOLDER_IMAGES = [
-  { label: "Ensaio Urbano PB", url: "https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=1600&auto=format&fit=crop" },
-  { label: "Look Streetwear", url: "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?q=80&w=1600&auto=format&fit=crop" },
-  { label: "Ateliê & Frio", url: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1600&auto=format&fit=crop" },
-  { label: "Modelo Heavy Boxy", url: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?q=80&w=1600&auto=format&fit=crop" },
-  { label: "Skatista & Street", url: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=1600&auto=format&fit=crop" }
-];
-
+// Configuração padrão limpa para inicialização da Grade Bento
 const DEFAULT_BENTO_CONFIG = {
   sectionTag: "ENSAIO DE CAMPANHA",
   sectionTitle: "A RUA COMO NOSSO ATELIÊ",
@@ -38,8 +39,8 @@ const DEFAULT_BENTO_CONFIG = {
       title: "OVERSIZED FIT",
       buttonText: "VER MAIS",
       link: "/catalogo?modelagem=oversized",
-      image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=800&auto=format&fit=crop",
-      size: "large", // 'large' | 'normal'
+      image: "",
+      size: "large",
       active: true
     },
     {
@@ -47,7 +48,7 @@ const DEFAULT_BENTO_CONFIG = {
       title: "BOXY TEES",
       buttonText: "VER MAIS",
       link: "/catalogo?modelagem=boxy",
-      image: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?q=80&w=600&auto=format&fit=crop",
+      image: "",
       size: "normal",
       active: true
     },
@@ -56,29 +57,56 @@ const DEFAULT_BENTO_CONFIG = {
       title: "EDITION FOR THE FEW",
       buttonText: "VER MAIS",
       link: "/catalogo?drop=leak-two",
-      image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=600&auto=format&fit=crop",
+      image: "",
       size: "normal",
       active: true
     }
   ]
 };
 
+// Atalhos rápidos sugeridos para botões de CTA e cards
+const QUICK_LINKS = [
+  { label: "Catálogo", url: "/catalogo" },
+  { label: "Lançamentos", url: "/lancamentos" },
+  { label: "Oversized", url: "/catalogo?modelagem=oversized" },
+  { label: "Boxy", url: "/catalogo?modelagem=boxy" },
+  { label: "Sobre", url: "/sobre" }
+];
+
 export function CmsVitrine() {
-  const [activeSection, setActiveSection] = useState('hero'); // 'hero' | 'bento'
+  // Seção ativa: 'hero' | 'bento' | 'featured'
+  const [activeSection, setActiveSection] = useState('hero');
+
+  // Dispositivo de pré-visualização: 'desktop' | 'mobile'
+  const [previewDevice, setPreviewDevice] = useState('desktop');
 
   // Estados dos Banners Hero
   const [slides, setSlides] = useState([]);
   const [selectedSlideIndex, setSelectedSlideIndex] = useState(0);
+  const [showHeroUrlInput, setShowHeroUrlInput] = useState(false);
+  const [isUploadingHero, setIsUploadingHero] = useState(false);
+  const [heroUploadProgress, setHeroUploadProgress] = useState(0);
 
   // Estados da Grade Bento
   const [bentoConfig, setBentoConfig] = useState(DEFAULT_BENTO_CONFIG);
   const [selectedBentoIndex, setSelectedBentoIndex] = useState(0);
+  const [showBentoUrlInput, setShowBentoUrlInput] = useState(false);
+  const [isUploadingBento, setIsUploadingBento] = useState(false);
+  const [bentoUploadProgress, setBentoUploadProgress] = useState(0);
 
+  // Produtos em destaque (Seção 3 da Home)
+  const [featuredProductsList, setFeaturedProductsList] = useState([]);
+  const [loadingFeatured, setLoadingFeatured] = useState(false);
+
+  // Estados de persistência
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
 
-  // 1. Carrega os dados do Firestore
+  const heroFileInputRef = useRef(null);
+  const bentoFileInputRef = useRef(null);
+
+  // 1. Carrega dados do Firestore
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
@@ -103,7 +131,7 @@ export function CmsVitrine() {
                 title: "A RUA COMO NOSSO ATELIÊ",
                 subtitle: "LEAK TWO — DROP EXCLUSIVO",
                 badge: "NOVO DROP",
-                bgImage: PLACEHOLDER_IMAGES[0].url,
+                bgImage: "",
                 active: true,
                 buttons: [
                   { id: "btn_1", text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" },
@@ -129,7 +157,7 @@ export function CmsVitrine() {
               title: "A RUA COMO NOSSO ATELIÊ",
               subtitle: "LEAK TWO — DROP EXCLUSIVO",
               badge: "NOVO DROP",
-              bgImage: PLACEHOLDER_IMAGES[0].url,
+              bgImage: "",
               active: true,
               buttons: [
                 { id: "btn_1", text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" },
@@ -148,8 +176,62 @@ export function CmsVitrine() {
     fetchData();
   }, []);
 
+  // 2. Carrega produtos em destaque para a aba informativa
+  useEffect(() => {
+    async function loadFeatured() {
+      setLoadingFeatured(true);
+      try {
+        const list = await getFeaturedProducts(12);
+        setFeaturedProductsList(list || []);
+      } catch (err) {
+        console.warn("Aviso ao buscar destaques:", err);
+      } finally {
+        setLoadingFeatured(false);
+      }
+    }
+    if (activeSection === 'featured') {
+      loadFeatured();
+    }
+  }, [activeSection]);
+
+  // Utilitário de compressão em Canvas (Fallback Resiliente)
+  const compressImageFile = (file, maxWidth = 1920, maxHeight = 1920, quality = 0.85) => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth || height > maxHeight) {
+            if (width > height) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+          const dataUrl = canvas.toDataURL('image/webp', quality) || canvas.toDataURL('image/jpeg', quality);
+          resolve(dataUrl);
+        };
+        img.onerror = () => resolve(e.target.result);
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
   // ----------------------------------------------------
-  // MANIPULADORES DOS BANNERS HERO
+  // MANIPULADORES DE BANNERS HERO
   // ----------------------------------------------------
   const currentSlide = slides[selectedSlideIndex] || slides[0] || {
     id: "slide_1",
@@ -177,9 +259,9 @@ export function CmsVitrine() {
     const newSlide = {
       id: `slide_${Date.now()}`,
       title: "NOVO TÍTULO DE IMPACTO",
-      subtitle: "SUBTÍTULO DO DROP OU PROMOÇÃO",
-      badge: "DESTAQUE",
-      bgImage: PLACEHOLDER_IMAGES[slides.length % PLACEHOLDER_IMAGES.length].url,
+      subtitle: "SUBTÍTULO DO DROP OU LANÇAMENTO",
+      badge: "NOVO",
+      bgImage: "",
       active: true,
       buttons: [
         { id: `btn_1_${Date.now()}`, text: "VER COLEÇÃO", link: "/catalogo", variant: "primary" }
@@ -191,7 +273,7 @@ export function CmsVitrine() {
 
   const handleDeleteSlide = (indexToDelete) => {
     if (slides.length <= 1) {
-      alert("A vitrine precisa ter pelo menos 1 slide ativo.");
+      alert("A vitrine precisa ter pelo menos 1 slide cadastrado.");
       return;
     }
     if (!window.confirm("Deseja realmente remover este slide?")) return;
@@ -200,7 +282,56 @@ export function CmsVitrine() {
     setSelectedSlideIndex(0);
   };
 
-  // Botões do Banner Hero
+  // Upload direto do Banner Hero para o Firebase Storage
+  const handleUploadHeroImage = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingHero(true);
+    setHeroUploadProgress(10);
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileRef = ref(storage, `vitrine/hero/${Date.now()}_${safeName}`);
+
+    try {
+      const uploadTask = uploadBytesResumable(fileRef, file);
+
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+          setHeroUploadProgress(Math.max(10, progress));
+        },
+        async (error) => {
+          console.warn("Upload Storage oscilou, acionando fallback local otimizado:", error);
+          const fallbackUrl = await compressImageFile(file);
+          if (fallbackUrl) {
+            handleUpdateSlide('bgImage', fallbackUrl);
+          }
+          setIsUploadingHero(false);
+          setHeroUploadProgress(0);
+        },
+        async () => {
+          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+          handleUpdateSlide('bgImage', downloadUrl);
+          setIsUploadingHero(false);
+          setHeroUploadProgress(0);
+        }
+      );
+    } catch (err) {
+      console.warn("Erro no disparo do upload:", err);
+      const fallbackUrl = await compressImageFile(file);
+      if (fallbackUrl) {
+        handleUpdateSlide('bgImage', fallbackUrl);
+      }
+      setIsUploadingHero(false);
+      setHeroUploadProgress(0);
+    }
+
+    e.target.value = '';
+  };
+
+  // Botões de Ação Hero (CTAs)
   const handleSetButtonsCount = (count) => {
     const currentBtns = currentSlide.buttons || [];
     let updated = [];
@@ -273,10 +404,10 @@ export function CmsVitrine() {
   const handleAddBentoCard = () => {
     const newCard = {
       id: `bento_${Date.now()}`,
-      title: "NOVO DESTAQUE BENTO",
+      title: "NOVO ESTILO",
       buttonText: "VER MAIS",
       link: "/catalogo",
-      image: PLACEHOLDER_IMAGES[bentoConfig.cards.length % PLACEHOLDER_IMAGES.length].url,
+      image: "",
       size: "normal",
       active: true
     };
@@ -299,6 +430,55 @@ export function CmsVitrine() {
       cards: prev.cards.filter((_, idx) => idx !== indexToDelete)
     }));
     setSelectedBentoIndex(0);
+  };
+
+  // Upload direto da Imagem do Card Bento para o Firebase Storage
+  const handleUploadBentoImage = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingBento(true);
+    setBentoUploadProgress(10);
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileRef = ref(storage, `vitrine/bento/${Date.now()}_${safeName}`);
+
+    try {
+      const uploadTask = uploadBytesResumable(fileRef, file);
+
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+          setBentoUploadProgress(Math.max(10, progress));
+        },
+        async (error) => {
+          console.warn("Upload Storage oscilou, acionando fallback local otimizado:", error);
+          const fallbackUrl = await compressImageFile(file, 1200, 1200);
+          if (fallbackUrl) {
+            handleUpdateBentoCard('image', fallbackUrl);
+          }
+          setIsUploadingBento(false);
+          setBentoUploadProgress(0);
+        },
+        async () => {
+          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+          handleUpdateBentoCard('image', downloadUrl);
+          setIsUploadingBento(false);
+          setBentoUploadProgress(0);
+        }
+      );
+    } catch (err) {
+      console.warn("Erro no upload do card bento:", err);
+      const fallbackUrl = await compressImageFile(file, 1200, 1200);
+      if (fallbackUrl) {
+        handleUpdateBentoCard('image', fallbackUrl);
+      }
+      setIsUploadingBento(false);
+      setBentoUploadProgress(0);
+    }
+
+    e.target.value = '';
   };
 
   // ----------------------------------------------------
@@ -338,34 +518,91 @@ export function CmsVitrine() {
         </div>
 
         <div className={styles.headerActions}>
-          {activeSection === 'hero' ? (
+          <a 
+            href="/" 
+            target="_blank" 
+            rel="noopener noreferrer" 
+            className={styles.secondaryBtn}
+            title="Abrir a Home da loja em nova aba"
+          >
+            <ExternalLink size={14} />
+            <span>VER LOJA AO VIVO</span>
+          </a>
+
+          {activeSection === 'hero' && (
             <button onClick={handleAddSlide} className={styles.secondaryBtn}>
               <Plus size={14} />
               <span>NOVO SLIDE</span>
             </button>
-          ) : (
+          )}
+
+          {activeSection === 'bento' && (
             <button onClick={handleAddBentoCard} className={styles.secondaryBtn}>
               <Plus size={14} />
               <span>NOVO CARD BENTO</span>
             </button>
           )}
 
-          <button onClick={handleSaveAll} disabled={saving} className={styles.primaryBtn}>
-            {saving ? (
-              <RotateCw size={14} className={styles.spinning} />
-            ) : saveSuccess ? (
-              <Check size={14} />
-            ) : (
-              <Save size={14} />
-            )}
-            <span>
-              {saving ? 'GRAVANDO...' : saveSuccess ? 'SALVO NA NUVEM!' : activeSection === 'hero' ? 'SALVAR BANNERS' : 'SALVAR GRADE BENTO'}
-            </span>
-          </button>
+          {activeSection !== 'featured' && (
+            <button onClick={handleSaveAll} disabled={saving} className={styles.primaryBtn}>
+              {saving ? (
+                <RotateCw size={14} className={styles.spinning} />
+              ) : saveSuccess ? (
+                <Check size={14} />
+              ) : (
+                <Save size={14} />
+              )}
+              <span>
+                {saving ? 'GRAVANDO...' : saveSuccess ? 'SALVO NA NUVEM!' : activeSection === 'hero' ? 'SALVAR BANNERS' : 'SALVAR GRADE BENTO'}
+              </span>
+            </button>
+          )}
         </div>
       </header>
 
-      {/* SELETOR DE SUB-ABAS (HERO vs BENTO) */}
+      {/* GUIA TÁTICO DA HIERARQUIA DA HOME */}
+      <div className={styles.homeSectionsGuide}>
+        <div className={styles.guideHeader}>
+          <div className={styles.guideTitle}>
+            <Info size={13} />
+            <span>ESTRUTURA VISUAL DA HOME // O QUE MUDA ONDE:</span>
+          </div>
+          <span className={styles.liveStoreLink}>
+            Alterações salvas refletem em tempo real no site
+          </span>
+        </div>
+
+        <div className={styles.guideStepsGrid}>
+          <div 
+            className={`${styles.guideStepCard} ${activeSection === 'hero' ? styles.activeStepCard : ''}`}
+            onClick={() => setActiveSection('hero')}
+          >
+            <span className={styles.stepNumber}>[01] TOPO DA LOJA</span>
+            <span className={styles.stepName}>Carrossel Hero</span>
+            <span className={styles.stepDesc}>Banners de tela cheia com fotos, mensagens de impacto e botões de chamada.</span>
+          </div>
+
+          <div 
+            className={`${styles.guideStepCard} ${activeSection === 'bento' ? styles.activeStepCard : ''}`}
+            onClick={() => setActiveSection('bento')}
+          >
+            <span className={styles.stepNumber}>[02] MEIO DA HOME</span>
+            <span className={styles.stepName}>Grade Bento</span>
+            <span className={styles.stepDesc}>Mosaico visual para direcionar clientes às modelagens (Oversized, Boxy, Drops).</span>
+          </div>
+
+          <div 
+            className={`${styles.guideStepCard} ${activeSection === 'featured' ? styles.activeStepCard : ''}`}
+            onClick={() => setActiveSection('featured')}
+          >
+            <span className={styles.stepNumber}>[03] BASE DA HOME</span>
+            <span className={styles.stepName}>Mais Vendidos</span>
+            <span className={styles.stepDesc}>Grade automática alimentada pelos produtos marcados como Destaque no Catálogo.</span>
+          </div>
+        </div>
+      </div>
+
+      {/* SELETOR DE SUB-ABAS */}
       <nav className={styles.sectionNav}>
         <button
           type="button"
@@ -383,6 +620,15 @@ export function CmsVitrine() {
         >
           <Layers size={14} />
           <span>GRADE BENTO (DESTAQUES & CATEGORIAS)</span>
+        </button>
+
+        <button
+          type="button"
+          className={`${styles.navTabBtn} ${activeSection === 'featured' ? styles.activeNavTab : ''}`}
+          onClick={() => setActiveSection('featured')}
+        >
+          <Star size={14} />
+          <span>PRODUTOS EM DESTAQUE (MAIS VENDIDOS)</span>
         </button>
       </nav>
 
@@ -423,7 +669,7 @@ export function CmsVitrine() {
                       checked={currentSlide.active} 
                       onChange={(e) => handleUpdateSlide('active', e.target.checked)} 
                     />
-                    <span>Banner Visível no Site</span>
+                    <span>Banner Visível na Loja</span>
                   </label>
                   {slides.length > 1 && (
                     <button 
@@ -439,45 +685,174 @@ export function CmsVitrine() {
                 </div>
               </div>
 
-              {/* CAMPOS DO SLIDE */}
               <div className={styles.formBody}>
-                <div className={styles.inputGroup}>
-                  <label>TAG / BADGE SUPERIOR</label>
-                  <input 
-                    type="text" 
-                    placeholder="Ex: NOVO DROP, COLEÇÃO 2026, FOR THE FEW" 
-                    value={currentSlide.badge || ''} 
-                    onChange={(e) => handleUpdateSlide('badge', e.target.value)} 
-                  />
+                {/* BLOCO 1: FOTO DE FUNDO (UPLOAD FIREBASE STORAGE) */}
+                <div className={styles.sectionBlock}>
+                  <div className={styles.blockTitle}>
+                    <ImageIcon size={14} />
+                    <span>IMAGEM DE FUNDO DO BANNER</span>
+                  </div>
+
+                  <div className={styles.uploadZone}>
+                    {currentSlide.bgImage ? (
+                      <div className={styles.currentImageCard}>
+                        <img 
+                          src={currentSlide.bgImage} 
+                          alt="Banner atual" 
+                          className={styles.currentImageThumb} 
+                        />
+                        <div className={styles.currentImageDetails}>
+                          <div className={styles.currentImageInfo}>
+                            <span className={styles.imageStatusBadge}>
+                              <Check size={11} /> IMAGEM CARREGADA
+                            </span>
+                            <span className={styles.imageUrlTruncated}>
+                              {currentSlide.bgImage}
+                            </span>
+                          </div>
+
+                          <div className={styles.imageActionsRow}>
+                            <button
+                              type="button"
+                              className={styles.actionSmallBtn}
+                              onClick={() => heroFileInputRef.current?.click()}
+                              disabled={isUploadingHero}
+                            >
+                              <Upload size={12} />
+                              <span>Trocar Imagem</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.actionSmallBtn}
+                              onClick={() => setShowHeroUrlInput(!showHeroUrlInput)}
+                            >
+                              <LinkIcon size={12} />
+                              <span>{showHeroUrlInput ? 'Ocultar Link' : 'Editar URL Externa'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.removeSmallBtn}
+                              onClick={() => handleUpdateSlide('bgImage', '')}
+                            >
+                              <Trash2 size={12} />
+                              <span>Remover</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div 
+                        className={styles.dropzone}
+                        onClick={() => heroFileInputRef.current?.click()}
+                      >
+                        <div className={styles.dropzoneIconWrapper}>
+                          <Upload size={20} />
+                        </div>
+                        <div className={styles.dropzoneMainText}>
+                          {isUploadingHero ? 'Enviando imagem ao Firebase Storage...' : 'Clique para selecionar a foto do computador'}
+                        </div>
+                        <div className={styles.dropzoneSubText}>
+                          Formatos aceitos: JPG, PNG ou WebP // Proporção recomendada: 1920x1080 (16:9)
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Input de arquivo invisível */}
+                    <input 
+                      ref={heroFileInputRef}
+                      type="file" 
+                      accept="image/*" 
+                      className={styles.hiddenFileInput}
+                      style={{ display: 'none' }}
+                      onChange={handleUploadHeroImage}
+                    />
+
+                    {/* Barra de progresso de upload */}
+                    {isUploadingHero && (
+                      <div className={styles.progressBarContainer}>
+                        <div className={styles.progressBarTrack}>
+                          <div 
+                            className={styles.progressBarFill} 
+                            style={{ width: `${heroUploadProgress}%` }}
+                          />
+                        </div>
+                        <div className={styles.progressLabel}>
+                          <span>Enviando para nuvem Firebase...</span>
+                          <span>{heroUploadProgress}%</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Modo alternativo de URL externa */}
+                    {showHeroUrlInput && (
+                      <div className={styles.urlToggleBox}>
+                        <label style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text-muted)' }}>
+                          URL DIRETA DA IMAGEM
+                        </label>
+                        <input 
+                          type="url" 
+                          placeholder="https://..." 
+                          value={currentSlide.bgImage || ''} 
+                          onChange={(e) => handleUpdateSlide('bgImage', e.target.value)} 
+                        />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                <div className={styles.inputGroup}>
-                  <label>TÍTULO PRINCIPAL (MANCHETE) *</label>
-                  <input 
-                    type="text" 
-                    placeholder="Ex: A RUA COMO NOSSO ATELIÊ" 
-                    value={currentSlide.title || ''} 
-                    onChange={(e) => handleUpdateSlide('title', e.target.value)} 
-                    required 
-                  />
+                {/* BLOCO 2: MENSAGENS E TEXTOS */}
+                <div className={styles.sectionBlock}>
+                  <div className={styles.blockTitle}>
+                    <SlidersHorizontal size={14} />
+                    <span>TEXTOS E IDENTIDADE DO BANNER</span>
+                  </div>
+
+                  <div className={styles.inputGroup}>
+                    <div className={styles.inputLabelRow}>
+                      <label>TAG / BADGE SUPERIOR</label>
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: NOVO DROP, EXCLUSIVO, COLEÇÃO 2026" 
+                      value={currentSlide.badge || ''} 
+                      onChange={(e) => handleUpdateSlide('badge', e.target.value)} 
+                    />
+                  </div>
+
+                  <div className={styles.inputGroup}>
+                    <div className={styles.inputLabelRow}>
+                      <label>TÍTULO PRINCIPAL (MANCHETE) *</label>
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: A RUA COMO NOSSO ATELIÊ" 
+                      value={currentSlide.title || ''} 
+                      onChange={(e) => handleUpdateSlide('title', e.target.value)} 
+                      required 
+                    />
+                  </div>
+
+                  <div className={styles.inputGroup}>
+                    <div className={styles.inputLabelRow}>
+                      <label>SUBTÍTULO / SLOGAN</label>
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="Ex: LEAK TWO — DROP EXCLUSIVO" 
+                      value={currentSlide.subtitle || ''} 
+                      onChange={(e) => handleUpdateSlide('subtitle', e.target.value)} 
+                    />
+                  </div>
                 </div>
 
-                <div className={styles.inputGroup}>
-                  <label>SUBTÍTULO / SLOGAN</label>
-                  <input 
-                    type="text" 
-                    placeholder="Ex: LEAK TWO — DROP EXCLUSIVO" 
-                    value={currentSlide.subtitle || ''} 
-                    onChange={(e) => handleUpdateSlide('subtitle', e.target.value)} 
-                  />
-                </div>
-
-                {/* BOTÕES DE AÇÃO (CTAS) */}
-                <div className={styles.ctasSection}>
+                {/* BLOCO 3: BOTÕES DE AÇÃO (CTAS) */}
+                <div className={styles.sectionBlock}>
                   <div className={styles.ctasHeader}>
                     <div className={styles.ctasTitleGroup}>
                       <MousePointerClick size={14} />
-                      <label>BOTÕES DE AÇÃO (CTAS DO BANNER)</label>
+                      <label>BOTÕES DE AÇÃO (CTAS)</label>
                     </div>
                     <div className={styles.ctaCountSelector}>
                       <button
@@ -514,7 +889,7 @@ export function CmsVitrine() {
                             className={`${styles.variantBtn} ${btn.variant === 'primary' ? styles.activeVariant : ''}`}
                             onClick={() => handleUpdateButton(bIdx, 'variant', 'primary')}
                           >
-                            Principal (Sólido)
+                            Principal (Branco)
                           </button>
                           <button
                             type="button"
@@ -536,49 +911,36 @@ export function CmsVitrine() {
                             onChange={(e) => handleUpdateButton(bIdx, 'text', e.target.value)} 
                           />
                         </div>
+
                         <div className={styles.inputGroup}>
                           <label>LINK DE DESTINO</label>
                           <div className={styles.linkFieldWrapper}>
                             <LinkIcon size={12} className={styles.linkIconInside} />
                             <input 
                               type="text" 
-                              placeholder="/catalogo, /lancamentos ou link externo" 
+                              placeholder="/catalogo ou /lancamentos" 
                               value={btn.link || ''} 
                               onChange={(e) => handleUpdateButton(bIdx, 'link', e.target.value)} 
                             />
+                          </div>
+
+                          {/* Chips de atalhos rápidos */}
+                          <div className={styles.quickChips}>
+                            {QUICK_LINKS.map((ql, qIdx) => (
+                              <button
+                                key={qIdx}
+                                type="button"
+                                className={styles.quickChip}
+                                onClick={() => handleUpdateButton(bIdx, 'link', ql.url)}
+                              >
+                                {ql.label}
+                              </button>
+                            ))}
                           </div>
                         </div>
                       </div>
                     </div>
                   ))}
-                </div>
-
-                {/* IMAGEM DE FUNDO */}
-                <div className={styles.inputGroup}>
-                  <label>URL DA IMAGEM DE FUNDO *</label>
-                  <input 
-                    type="url" 
-                    placeholder="https://images.unsplash.com/photo-..." 
-                    value={currentSlide.bgImage || ''} 
-                    onChange={(e) => handleUpdateSlide('bgImage', e.target.value)} 
-                    required 
-                  />
-                  <div className={styles.presetsBox}>
-                    <span>SUGESTÕES EM ALTA RESOLUÇÃO:</span>
-                    <div className={styles.presetsList}>
-                      {PLACEHOLDER_IMAGES.map((p, idx) => (
-                        <button
-                          key={idx}
-                          type="button"
-                          className={styles.presetBtn}
-                          onClick={() => handleUpdateSlide('bgImage', p.url)}
-                        >
-                          <ImageIcon size={11} />
-                          <span>{p.label}</span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
@@ -588,50 +950,82 @@ export function CmsVitrine() {
           <div className={styles.previewCol}>
             <div className={styles.previewSticky}>
               <div className={styles.previewHeader}>
-                <Monitor size={14} />
-                <span>PRÉ-VISUALIZAÇÃO AO VIVO (HERO BANNER)</span>
-              </div>
+                <div className={styles.previewHeaderTitle}>
+                  <Monitor size={14} />
+                  <span>PRÉ-VISUALIZAÇÃO AO VIVO</span>
+                </div>
 
-              <div className={styles.previewContainer}>
-                <div 
-                  className={styles.previewSlide} 
-                  style={{ backgroundImage: `url(${currentSlide.bgImage})` }}
-                >
-                  <div className={styles.previewOverlay} />
-                  
-                  <div className={styles.previewContent}>
-                    {currentSlide.badge && (
-                      <span className={styles.previewBadge}>
-                        <span className={styles.badgeDot} />
-                        <span>{currentSlide.badge}</span>
-                      </span>
-                    )}
-
-                    <h2 className={styles.previewTitle}>
-                      {currentSlide.title || 'SEU TÍTULO AQUI'}
-                    </h2>
-
-                    {currentSlide.subtitle && (
-                      <p className={styles.previewSubtitle}>{currentSlide.subtitle}</p>
-                    )}
-
-                    <div className={styles.previewBtnsRow}>
-                      {(currentSlide.buttons || []).map((btn, bIdx) => (
-                        <span 
-                          key={btn.id || bIdx} 
-                          className={`${styles.previewCtaBtn} ${btn.variant === 'secondary' ? styles.previewCtaSecondary : styles.previewCtaPrimary}`}
-                        >
-                          {btn.text || 'BOTÃO'}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
+                <div className={styles.deviceSelector}>
+                  <button
+                    type="button"
+                    className={`${styles.deviceBtn} ${previewDevice === 'desktop' ? styles.activeDevice : ''}`}
+                    onClick={() => setPreviewDevice('desktop')}
+                    title="Visão Desktop"
+                  >
+                    <Monitor size={12} />
+                    <span>Desktop</span>
+                  </button>
+                  <button
+                    type="button"
+                    className={`${styles.deviceBtn} ${previewDevice === 'mobile' ? styles.activeDevice : ''}`}
+                    onClick={() => setPreviewDevice('mobile')}
+                    title="Visão Mobile"
+                  >
+                    <Smartphone size={12} />
+                    <span>Mobile</span>
+                  </button>
                 </div>
               </div>
+
+              <div className={`${styles.previewContainer} ${previewDevice === 'mobile' ? styles.previewMobileWrapper : ''}`}>
+                {currentSlide.bgImage ? (
+                  <div 
+                    className={styles.previewSlide} 
+                    style={{ backgroundImage: `url(${currentSlide.bgImage})` }}
+                  >
+                    <div className={styles.previewOverlay} />
+                    
+                    <div className={styles.previewContent}>
+                      {currentSlide.badge && (
+                        <span className={styles.previewBadge}>
+                          <span className={styles.badgeDot} />
+                          <span>{currentSlide.badge}</span>
+                        </span>
+                      )}
+
+                      <h2 className={styles.previewTitle}>
+                        {currentSlide.title || 'SEU TÍTULO AQUI'}
+                      </h2>
+
+                      {currentSlide.subtitle && (
+                        <p className={styles.previewSubtitle}>{currentSlide.subtitle}</p>
+                      )}
+
+                      <div className={styles.previewBtnsRow}>
+                        {(currentSlide.buttons || []).map((btn, bIdx) => (
+                          <span 
+                            key={btn.id || bIdx} 
+                            className={`${styles.previewCtaBtn} ${btn.variant === 'secondary' ? styles.previewCtaSecondary : styles.previewCtaPrimary}`}
+                          >
+                            {btn.text || 'BOTÃO'}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className={styles.emptyPreviewBox}>
+                    <ImageIcon size={32} />
+                    <span>Nenhuma imagem selecionada</span>
+                    <small>Faça upload de uma foto no formulário ao lado para pré-visualizar o banner.</small>
+                  </div>
+                )}
+              </div>
+
               <small className={styles.previewNotice}>
                 {(currentSlide.buttons || []).length === 0 
-                  ? 'Slide sem botões interativos.' 
-                  : `Exibindo ${(currentSlide.buttons || []).length} botão(ões) no slide.`}
+                  ? 'Slide configurado sem botões de ação.' 
+                  : `Exibindo ${(currentSlide.buttons || []).length} botão(ões) de chamada.`}
               </small>
             </div>
           </div>
@@ -645,7 +1039,7 @@ export function CmsVitrine() {
         <div className={styles.layoutGrid}>
           {/* COLUNA ESQUERDA: EDITOR BENTO */}
           <div className={styles.editorCol}>
-            {/* CONFIGURAÇÃO GERAL DA SEÇÃO BENTO */}
+            {/* CABEÇALHO DA SEÇÃO BENTO */}
             <div className={styles.formCard} style={{ marginBottom: '1.5rem' }}>
               <div className={styles.formHeader}>
                 <h3>CABEÇALHO DA SEÇÃO BENTO</h3>
@@ -653,7 +1047,7 @@ export function CmsVitrine() {
               <div className={styles.formBody}>
                 <div className={styles.gridTwo}>
                   <div className={styles.inputGroup}>
-                    <label>TAG / IDENTIFICADOR SUPERIOR</label>
+                    <label>TAG SUPERIOR</label>
                     <input 
                       type="text" 
                       placeholder="Ex: ENSAIO DE CAMPANHA" 
@@ -662,7 +1056,7 @@ export function CmsVitrine() {
                     />
                   </div>
                   <div className={styles.inputGroup}>
-                    <label>TÍTULO PRINCIPAL DA SEÇÃO</label>
+                    <label>TÍTULO PRINCIPAL</label>
                     <input 
                       type="text" 
                       placeholder="Ex: A RUA COMO NOSSO ATELIÊ" 
@@ -704,7 +1098,7 @@ export function CmsVitrine() {
                       checked={currentBentoCard.active} 
                       onChange={(e) => handleUpdateBentoCard('active', e.target.checked)} 
                     />
-                    <span>Card Visível</span>
+                    <span>Card Visível na Grade</span>
                   </label>
                   {bentoConfig.cards.length > 1 && (
                     <button 
@@ -721,88 +1115,188 @@ export function CmsVitrine() {
               </div>
 
               <div className={styles.formBody}>
-                <div className={styles.gridTwo}>
-                  <div className={styles.inputGroup}>
-                    <label>TÍTULO / LEGENDA DO CARD *</label>
-                    <input 
-                      type="text" 
-                      placeholder="Ex: OVERSIZED FIT, BOXY TEES" 
-                      value={currentBentoCard.title || ''} 
-                      onChange={(e) => handleUpdateBentoCard('title', e.target.value)} 
-                      required
-                    />
+                {/* UPLOAD DA IMAGEM DO CARD BENTO */}
+                <div className={styles.sectionBlock}>
+                  <div className={styles.blockTitle}>
+                    <ImageIcon size={14} />
+                    <span>FOTO DO CARD BENTO</span>
                   </div>
 
-                  <div className={styles.inputGroup}>
-                    <label>TEXTO DO BOTÃO</label>
+                  <div className={styles.uploadZone}>
+                    {currentBentoCard.image ? (
+                      <div className={styles.currentImageCard}>
+                        <img 
+                          src={currentBentoCard.image} 
+                          alt="Card atual" 
+                          className={styles.currentImageThumbSquare} 
+                        />
+                        <div className={styles.currentImageDetails}>
+                          <div className={styles.currentImageInfo}>
+                            <span className={styles.imageStatusBadge}>
+                              <Check size={11} /> IMAGEM CARREGADA
+                            </span>
+                            <span className={styles.imageUrlTruncated}>
+                              {currentBentoCard.image}
+                            </span>
+                          </div>
+
+                          <div className={styles.imageActionsRow}>
+                            <button
+                              type="button"
+                              className={styles.actionSmallBtn}
+                              onClick={() => bentoFileInputRef.current?.click()}
+                              disabled={isUploadingBento}
+                            >
+                              <Upload size={12} />
+                              <span>Trocar Foto</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.actionSmallBtn}
+                              onClick={() => setShowBentoUrlInput(!showBentoUrlInput)}
+                            >
+                              <LinkIcon size={12} />
+                              <span>{showBentoUrlInput ? 'Ocultar Link' : 'Editar URL Externa'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.removeSmallBtn}
+                              onClick={() => handleUpdateBentoCard('image', '')}
+                            >
+                              <Trash2 size={12} />
+                              <span>Remover</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div 
+                        className={styles.dropzone}
+                        onClick={() => bentoFileInputRef.current?.click()}
+                      >
+                        <div className={styles.dropzoneIconWrapper}>
+                          <Upload size={20} />
+                        </div>
+                        <div className={styles.dropzoneMainText}>
+                          {isUploadingBento ? 'Enviando imagem ao Firebase Storage...' : 'Clique para selecionar foto do computador'}
+                        </div>
+                        <div className={styles.dropzoneSubText}>
+                          Proporção recomendada: 600x800 (Vertical) ou 800x800 (Quadrado)
+                        </div>
+                      </div>
+                    )}
+
                     <input 
-                      type="text" 
-                      placeholder="Ex: VER MAIS, EXPLORAR" 
-                      value={currentBentoCard.buttonText || ''} 
-                      onChange={(e) => handleUpdateBentoCard('buttonText', e.target.value)} 
+                      ref={bentoFileInputRef}
+                      type="file" 
+                      accept="image/*" 
+                      className={styles.hiddenFileInput}
+                      style={{ display: 'none' }}
+                      onChange={handleUploadBentoImage}
                     />
+
+                    {isUploadingBento && (
+                      <div className={styles.progressBarContainer}>
+                        <div className={styles.progressBarTrack}>
+                          <div 
+                            className={styles.progressBarFill} 
+                            style={{ width: `${bentoUploadProgress}%` }}
+                          />
+                        </div>
+                        <div className={styles.progressLabel}>
+                          <span>Enviando para o Firebase Storage...</span>
+                          <span>{bentoUploadProgress}%</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {showBentoUrlInput && (
+                      <div className={styles.urlToggleBox}>
+                        <label style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text-muted)' }}>
+                          URL DIRETA DA IMAGEM
+                        </label>
+                        <input 
+                          type="url" 
+                          placeholder="https://..." 
+                          value={currentBentoCard.image || ''} 
+                          onChange={(e) => handleUpdateBentoCard('image', e.target.value)} 
+                        />
+                      </div>
+                    )}
                   </div>
                 </div>
 
-                <div className={styles.gridTwo}>
-                  <div className={styles.inputGroup}>
-                    <label>LINK DE REDIRECIONAMENTO</label>
-                    <div className={styles.linkFieldWrapper}>
-                      <LinkIcon size={12} className={styles.linkIconInside} />
+                {/* TEXTOS E CONFIGURAÇÃO DO CARD */}
+                <div className={styles.sectionBlock}>
+                  <div className={styles.gridTwo}>
+                    <div className={styles.inputGroup}>
+                      <label>LEGENDA / TÍTULO DO CARD *</label>
                       <input 
                         type="text" 
-                        placeholder="/catalogo?modelagem=oversized" 
-                        value={currentBentoCard.link || ''} 
-                        onChange={(e) => handleUpdateBentoCard('link', e.target.value)} 
+                        placeholder="Ex: OVERSIZED FIT, BOXY TEES" 
+                        value={currentBentoCard.title || ''} 
+                        onChange={(e) => handleUpdateBentoCard('title', e.target.value)} 
+                        required
+                      />
+                    </div>
+
+                    <div className={styles.inputGroup}>
+                      <label>TEXTO DO BOTÃO</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ex: VER MAIS, EXPLORAR" 
+                        value={currentBentoCard.buttonText || ''} 
+                        onChange={(e) => handleUpdateBentoCard('buttonText', e.target.value)} 
                       />
                     </div>
                   </div>
 
-                  <div className={styles.inputGroup}>
-                    <label>FORMATO DO BLOCO (TAMANHO)</label>
-                    <div className={styles.variantSelector} style={{ marginTop: '0.2rem' }}>
-                      <button
-                        type="button"
-                        className={`${styles.variantBtn} ${currentBentoCard.size === 'large' ? styles.activeVariant : ''}`}
-                        onClick={() => handleUpdateBentoCard('size', 'large')}
-                      >
-                        Destaque (2 Colunas)
-                      </button>
-                      <button
-                        type="button"
-                        className={`${styles.variantBtn} ${currentBentoCard.size === 'normal' ? styles.activeVariant : ''}`}
-                        onClick={() => handleUpdateBentoCard('size', 'normal')}
-                      >
-                        Padrão (1 Coluna)
-                      </button>
+                  <div className={styles.gridTwo}>
+                    <div className={styles.inputGroup}>
+                      <label>LINK DE REDIRECIONAMENTO</label>
+                      <div className={styles.linkFieldWrapper}>
+                        <LinkIcon size={12} className={styles.linkIconInside} />
+                        <input 
+                          type="text" 
+                          placeholder="/catalogo?modelagem=oversized" 
+                          value={currentBentoCard.link || ''} 
+                          onChange={(e) => handleUpdateBentoCard('link', e.target.value)} 
+                        />
+                      </div>
+                      <div className={styles.quickChips}>
+                        {QUICK_LINKS.map((ql, qIdx) => (
+                          <button
+                            key={qIdx}
+                            type="button"
+                            className={styles.quickChip}
+                            onClick={() => handleUpdateBentoCard('link', ql.url)}
+                          >
+                            {ql.label}
+                          </button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* IMAGEM DO CARD */}
-                <div className={styles.inputGroup}>
-                  <label>URL DA IMAGEM DO CARD *</label>
-                  <input 
-                    type="url" 
-                    placeholder="https://images.unsplash.com/photo-..." 
-                    value={currentBentoCard.image || ''} 
-                    onChange={(e) => handleUpdateBentoCard('image', e.target.value)} 
-                    required 
-                  />
-                  <div className={styles.presetsBox}>
-                    <span>SUGESTÕES EM ALTA RESOLUÇÃO:</span>
-                    <div className={styles.presetsList}>
-                      {PLACEHOLDER_IMAGES.map((p, idx) => (
+                    <div className={styles.inputGroup}>
+                      <label>LARGURA DO BLOCO NO GRID</label>
+                      <div className={styles.variantSelector} style={{ marginTop: '0.2rem' }}>
                         <button
-                          key={idx}
                           type="button"
-                          className={styles.presetBtn}
-                          onClick={() => handleUpdateBentoCard('image', p.url)}
+                          className={`${styles.variantBtn} ${currentBentoCard.size === 'large' ? styles.activeVariant : ''}`}
+                          onClick={() => handleUpdateBentoCard('size', 'large')}
                         >
-                          <ImageIcon size={11} />
-                          <span>{p.label}</span>
+                          Destaque (2 Colunas)
                         </button>
-                      ))}
+                        <button
+                          type="button"
+                          className={`${styles.variantBtn} ${currentBentoCard.size === 'normal' ? styles.activeVariant : ''}`}
+                          onClick={() => handleUpdateBentoCard('size', 'normal')}
+                        >
+                          Padrão (1 Coluna)
+                        </button>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -814,14 +1308,16 @@ export function CmsVitrine() {
           <div className={styles.previewCol}>
             <div className={styles.previewSticky}>
               <div className={styles.previewHeader}>
-                <Monitor size={14} />
-                <span>PRÉ-VISUALIZAÇÃO AO VIVO (GRADE BENTO)</span>
+                <div className={styles.previewHeaderTitle}>
+                  <Layers size={14} />
+                  <span>PRÉ-VISUALIZAÇÃO (GRADE BENTO)</span>
+                </div>
               </div>
 
               <div className={styles.bentoPreviewSection}>
                 <div className={styles.bentoPreviewHead}>
                   <span className={styles.bentoPreviewTag}>{bentoConfig.sectionTag || 'TAG'}</span>
-                  <h3 className={styles.bentoPreviewTitle}>{bentoConfig.sectionTitle || 'TÍTULO'}</h3>
+                  <h3 className={styles.bentoPreviewTitle}>{bentoConfig.sectionTitle || 'TÍTULO DA SEÇÃO'}</h3>
                 </div>
 
                 <div className={styles.bentoPreviewGrid}>
@@ -830,9 +1326,16 @@ export function CmsVitrine() {
                       key={c.id || idx} 
                       className={`${styles.bentoPreviewCard} ${c.size === 'large' ? styles.bentoCardLarge : ''}`}
                     >
-                      <img src={c.image} alt={c.title} className={styles.bentoPreviewImg} />
+                      {c.image ? (
+                        <img src={c.image} alt={c.title} className={styles.bentoPreviewImg} />
+                      ) : (
+                        <div className={styles.emptyPreviewBox} style={{ height: '100%' }}>
+                          <ImageIcon size={20} />
+                          <span style={{ fontSize: '0.65rem' }}>Sem foto</span>
+                        </div>
+                      )}
                       <div className={styles.bentoPreviewOverlay}>
-                        <span className={styles.bentoPreviewCaption}>{c.title}</span>
+                        <span className={styles.bentoPreviewCaption}>{c.title || 'CARD BENTO'}</span>
                         <span className={styles.bentoPreviewBtn}>{c.buttonText || 'VER MAIS'}</span>
                       </div>
                     </div>
@@ -844,6 +1347,71 @@ export function CmsVitrine() {
                 {bentoConfig.cards.filter(c => c.active).length} card(s) ativo(s) na grade.
               </small>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* -------------------------------------------------------------
+          SUB-ABA 3: PRODUTOS EM DESTAQUE (MAIS VENDIDOS)
+          ------------------------------------------------------------- */}
+      {activeSection === 'featured' && (
+        <div className={styles.featuredManagerCard}>
+          <div className={styles.featuredInfoBanner}>
+            <Star size={24} className={styles.featuredInfoIcon} />
+            <div className={styles.featuredInfoContent}>
+              <h4>COMO FUNCIONA A SEÇÃO "MAIS VENDIDOS" NA HOME</h4>
+              <p>
+                A terceira seção da Home exibe os produtos do catálogo que estão marcados como <strong>Destaque</strong>. 
+                Para incluir ou remover produtos desta vitrine, basta acessar a página do Catálogo de Produtos e marcar a estrela de Destaque no card ou edição do item.
+              </p>
+              <div style={{ marginTop: '0.5rem' }}>
+                <Link to="/cms/produtos" className={styles.secondaryBtn}>
+                  <ShoppingBag size={14} />
+                  <span>GERENCIAR NO CATÁLOGO DE PRODUTOS</span>
+                  <ArrowRight size={14} />
+                </Link>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h3 style={{ fontFamily: 'var(--font-heading)', fontSize: '0.95rem', fontWeight: 800, marginBottom: '1rem' }}>
+              PRODUTOS ATUALMENTE EM DESTAQUE NA VITRINE ({featuredProductsList.length})
+            </h3>
+
+            {loadingFeatured ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-muted)' }}>
+                <RotateCw size={20} className={styles.spinning} style={{ margin: '0 auto 0.5rem' }} />
+                <span>Carregando destaques do catálogo...</span>
+              </div>
+            ) : featuredProductsList.length === 0 ? (
+              <div className={styles.featuredEmptyState}>
+                <ShoppingBag size={32} />
+                <span>Nenhum produto marcado como destaque no momento.</span>
+                <small>Acesse o catálogo e marque os produtos principais com a estrela para preencher a seção da Home.</small>
+              </div>
+            ) : (
+              <div className={styles.featuredProductsGrid}>
+                {featuredProductsList.map((p) => {
+                  const cover = p.images?.find(i => i.isCover)?.url || p.images?.[0]?.url || p.imageUrl || '';
+                  return (
+                    <div key={p.id} className={styles.featuredProductMiniCard}>
+                      <img 
+                        src={cover} 
+                        alt={p.name} 
+                        className={styles.featuredProductMiniImg} 
+                      />
+                      <div className={styles.featuredProductMiniInfo}>
+                        <span className={styles.featuredProductMiniTitle}>{p.name}</span>
+                        <span className={styles.featuredProductMiniPrice}>
+                          {p.price ? `R$ ${Number(p.price).toFixed(2)}` : 'Preço não definido'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
