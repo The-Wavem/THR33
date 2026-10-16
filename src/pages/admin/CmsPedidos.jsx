@@ -791,8 +791,16 @@ export function CmsPedidos() {
       return true;
     });
 
-    const total = ordersInPeriod.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+    // Filtra exclusivamente pedidos que tiveram pagamento aprovado em diante (dinheiro real em conta)
+    // Exclui pedidos aguardando pagamento e pedidos cancelados
+    const paidOrdersInPeriod = ordersInPeriod.filter(order => {
+      const norm = normalizeOrderStatus(order.status || order.statusCode);
+      return norm !== ORDER_STATUSES.AGUARDANDO_PAGAMENTO && norm !== ORDER_STATUSES.CANCELADO;
+    });
+
+    const total = paidOrdersInPeriod.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
     const count = ordersInPeriod.length;
+    const paidCount = paidOrdersInPeriod.length;
 
     // Pedidos que tiveram alguma requisição de suporte no período selecionado
     const supportOrders = ordersInPeriod.filter(o => 
@@ -806,7 +814,7 @@ export function CmsPedidos() {
     const supportCount = supportOrders.length;
     const supportRate = count > 0 ? ((supportCount / count) * 100).toFixed(1) : '0.0';
     const avgOrdersPerSupport = supportCount > 0 ? (count / supportCount).toFixed(1) : null;
-    const averageTicket = count > 0 ? (total / count).toFixed(2) : '0.00';
+    const averageTicket = paidCount > 0 ? (total / paidCount).toFixed(2) : '0.00';
 
     // Mantém exchanges e exchangeRate para retrocompatibilidade
     const exchanges = supportCount;
@@ -815,6 +823,7 @@ export function CmsPedidos() {
     return { 
       total, 
       count, 
+      paidCount,
       supportCount, 
       supportRate, 
       avgOrdersPerSupport, 
@@ -1283,7 +1292,9 @@ export function CmsPedidos() {
             <span className={styles.kpiLabel}>FATURAMENTO TOTAL</span>
           </div>
           <strong className={styles.kpiValue}>R$ {metrics.total.toFixed(2)}</strong>
-          <small className={styles.kpiSub}>Total no período selecionado</small>
+          <small className={styles.kpiSub}>
+            {metrics.paidCount} {metrics.paidCount === 1 ? 'pedido aprovado' : 'pedidos aprovados'} no período
+          </small>
         </div>
 
         <div className={styles.kpiCard}>
@@ -1292,7 +1303,9 @@ export function CmsPedidos() {
             <span className={styles.kpiLabel}>TOTAL DE PEDIDOS</span>
           </div>
           <strong className={styles.kpiValue}>{metrics.count}</strong>
-          <small className={styles.kpiSub}>Transações no período</small>
+          <small className={styles.kpiSub}>
+            {metrics.paidCount} {metrics.paidCount === 1 ? 'pago' : 'pagos'} • {metrics.count - metrics.paidCount} pendentes/cancelados
+          </small>
         </div>
 
         <div className={styles.kpiCard}>
@@ -1301,7 +1314,7 @@ export function CmsPedidos() {
             <span className={styles.kpiLabel}>TICKET MÉDIO</span>
           </div>
           <strong className={styles.kpiValue}>R$ {metrics.averageTicket}</strong>
-          <small className={styles.kpiSub}>Média por transação</small>
+          <small className={styles.kpiSub}>Média por pedido aprovado</small>
         </div>
 
         <div className={`${styles.kpiCard} ${Number(metrics.supportRate) > 10 ? styles.alertKpi : ''}`}>

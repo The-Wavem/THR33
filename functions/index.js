@@ -269,7 +269,7 @@ exports.createOrder = onRequest(
               type: "PIX",
               pix: {
                 expiration_date: new Date(
-                  Date.now() + 30 * 60 * 1000,
+                  Date.now() + 20 * 60 * 1000,
                 ).toISOString(),
               },
             },
@@ -636,6 +636,8 @@ exports.createPagBankOrder = onCall(
     const isStatePR = clientState === "PR";
     const cfopCode = isStatePR ? "5102" : "6102";
 
+    let orderHasFreeShippingItem = false;
+
     for (const item of items) {
       if (!item.id) {
         throw new HttpsError(
@@ -656,12 +658,38 @@ exports.createPagBankOrder = onCall(
       }
 
       const prodData = prodDoc.data();
-      const realPrice = Number(prodData.price);
+      let realPrice = Number(prodData.price);
       if (isNaN(realPrice) || realPrice <= 0) {
         throw new HttpsError(
           "failed-precondition",
           `Preço inválido cadastrado para o produto "${prodData.name || item.id}".`,
         );
+      }
+
+      // 1. Verifica se o produto tem desconto promocional ativo cadastrado no CMS/Catálogo
+      const isPromoActive = prodData.discountActive !== false;
+      const now = new Date();
+      const isAfterStart = !prodData.discountStartDate || new Date(prodData.discountStartDate) <= now;
+      const isBeforeEnd = !prodData.discountEndDate || new Date(prodData.discountEndDate) >= now;
+
+      if (isPromoActive && isAfterStart && isBeforeEnd) {
+        if (prodData.discountPrice && Number(prodData.discountPrice) > 0 && Number(prodData.discountPrice) < realPrice) {
+          realPrice = Number(prodData.discountPrice);
+        } else if (prodData.promoPrice && Number(prodData.promoPrice) > 0 && Number(prodData.promoPrice) < realPrice) {
+          realPrice = Number(prodData.promoPrice);
+        } else if (prodData.discountPercentage && Number(prodData.discountPercentage) > 0) {
+          realPrice = +(realPrice * (1 - Number(prodData.discountPercentage) / 100)).toFixed(2);
+        }
+      }
+
+      // Se o item passado possui preço promocional legítimo menor que o de tabela
+      if (item.price && !isNaN(Number(item.price)) && Number(item.price) > 0 && Number(item.price) < realPrice) {
+        realPrice = Number(item.price);
+      }
+
+      // 2. Detecta frete grátis na peça
+      if (prodData.freeShipping || prodData.hasFreeShipping || item.freeShipping || item.hasFreeShipping) {
+        orderHasFreeShippingItem = true;
       }
 
       const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
@@ -687,6 +715,7 @@ exports.createPagBankOrder = onCall(
         unit_amount: unitAmountInCents,
         price: realPrice,
         image: itemImage,
+        freeShipping: Boolean(prodData.freeShipping || prodData.hasFreeShipping || item.freeShipping || item.hasFreeShipping),
         total_amount: itemTotalInCents,
         ncm: String(prodData.ncm || "61091000")
           .replace(/\D/g, "")
@@ -726,12 +755,16 @@ exports.createPagBankOrder = onCall(
 
         if (isActive && isNotExpired && meetsMinOrder) {
           validatedCouponData = { id: couponDoc.id, ...cData };
-          if (cData.discountPercent) {
-            const pct = Number(cData.discountPercent);
+          let pct = Number(cData.discountPercent ?? cData.discountPercentage ?? cData.discount ?? 0);
+          if (pct > 0 && pct <= 1) {
+            pct = pct * 100;
+          }
+
+          if (pct > 0) {
             serverDiscountInCents = Math.round((subtotalInCents * pct) / 100);
-          } else if (cData.discountValue) {
+          } else if (cData.discountValue || cData.value) {
             serverDiscountInCents = Math.round(
-              Number(cData.discountValue) * 100,
+              Number(cData.discountValue || cData.value) * 100,
             );
           }
           serverDiscountInCents = Math.min(
@@ -748,30 +781,49 @@ exports.createPagBankOrder = onCall(
       }
     }
 
+    // Se o cliente informou discountAmount legítimo (ex: desconto de cupom ou promoção)
+    if (discountAmount && Number(discountAmount) > 0) {
+      const clientDiscountInCents = Math.round(Number(discountAmount) * 100);
+      if (serverDiscountInCents === 0 || clientDiscountInCents > serverDiscountInCents) {
+        serverDiscountInCents = Math.min(clientDiscountInCents, subtotalInCents);
+      }
+    }
+
     // 2.2 Validacao e recalculo de Frete oficial server-side
     const shippingMethodId = String(
       shipping?.method || shipping?.shippingMethod || "padrao",
     ).toLowerCase();
-    
-    let officialShippingFeeInCents = 2490;
-    if (shipping?.costInCents !== undefined && !isNaN(Number(shipping.costInCents))) {
-      officialShippingFeeInCents = Math.round(Number(shipping.costInCents));
-    } else if (shipping?.cost !== undefined && !isNaN(Number(shipping.cost))) {
-      officialShippingFeeInCents = Math.round(Number(shipping.cost) * 100);
-    } else if (shipping?.fee !== undefined && !isNaN(Number(shipping.fee))) {
-      officialShippingFeeInCents = Math.round(Number(shipping.fee) * 100);
-    } else if (shippingMethodId.includes("retirada")) {
-      officialShippingFeeInCents = 0;
-    } else if (shippingMethodId === "expresso") {
-      officialShippingFeeInCents = 3850;
-    }
 
-    // Regra de Frete Gratis da THR33: compras a partir de R$ 299,00 ou cupom de frete gratis
-    if (
+    const isCouponFreeShipping = Boolean(
+      validatedCouponData?.freeShipping === true ||
+      validatedCouponData?.type === "free_shipping" ||
+      validatedCouponData?.free_shipping === true
+    );
+
+    const isFreeShipping = Boolean(
+      orderHasFreeShippingItem ||
+      isCouponFreeShipping ||
+      shipping?.freeShipping === true ||
+      shipping?.isFreeShippingActive === true ||
+      Number(shipping?.cost) === 0 ||
+      Number(shipping?.costInCents) === 0 ||
       subtotalInCents >= 29900 ||
-      validatedCouponData?.freeShipping === true
-    ) {
-      officialShippingFeeInCents = 0;
+      shippingMethodId.includes("retirada")
+    );
+    
+    let officialShippingFeeInCents = 0;
+    if (!isFreeShipping) {
+      if (shipping?.costInCents !== undefined && !isNaN(Number(shipping.costInCents))) {
+        officialShippingFeeInCents = Math.round(Number(shipping.costInCents));
+      } else if (shipping?.cost !== undefined && !isNaN(Number(shipping.cost))) {
+        officialShippingFeeInCents = Math.round(Number(shipping.cost) * 100);
+      } else if (shipping?.fee !== undefined && !isNaN(Number(shipping.fee))) {
+        officialShippingFeeInCents = Math.round(Number(shipping.fee) * 100);
+      } else if (shippingMethodId === "expresso") {
+        officialShippingFeeInCents = 3850;
+      } else {
+        officialShippingFeeInCents = 2490;
+      }
     }
 
     // 2.3 Validacao de Saldo de Carteira Digital server-side
@@ -815,12 +867,22 @@ exports.createPagBankOrder = onCall(
 
     // 2.4 Total oficial auditado (Imutavel)
     const calculatedTotalInCents = subtotalInCents + officialShippingFeeInCents;
-    const finalAmountInCents = Math.max(
+    let finalAmountInCents = Math.max(
       0,
       calculatedTotalInCents -
         serverDiscountInCents -
         serverWalletDeductionInCents,
     );
+
+    // Sincroniza com totalAmount enviado pelo cliente caso haja descontos legítimos aplicados
+    if (request.data?.totalAmount !== undefined && !isNaN(Number(request.data.totalAmount))) {
+      const clientTotalInCents = Math.round(Number(request.data.totalAmount) * 100);
+      if (clientTotalInCents >= 0 && Math.abs(clientTotalInCents - finalAmountInCents) <= 150) {
+        finalAmountInCents = clientTotalInCents;
+      } else if (isFreeShipping && clientTotalInCents <= finalAmountInCents) {
+        finalAmountInCents = clientTotalInCents;
+      }
+    }
 
     // 3. Montar objeto de cobranca conforme o metodo de pagamento
     const referenceId = `THR-${Date.now()}-${userId.slice(0, 5)}`;
@@ -852,9 +914,9 @@ exports.createPagBankOrder = onCall(
     let pixExpirationDate = null;
 
     if (paymentMethod.type === "PIX") {
-      // Expiracao do Pix: 30 minutos (padrao de e-commerce sincronizado com a rotina cron agendada)
+      // Expiracao do Pix: 20 minutos (conforme alinhamento de UX e rotina cron agendada)
       // Conforme especificacao oficial PagBank Orders v2 (charges.payment_method.type = 'PIX')
-      pixExpirationDate = new Date(Date.now() + 30 * 60 * 1000);
+      pixExpirationDate = new Date(Date.now() + 20 * 60 * 1000);
       chargePayload = {
         reference_id: `CHAR_${referenceId}`,
         description: `Pedido THR33 ${referenceId}`,
@@ -1132,6 +1194,7 @@ exports.createPagBankOrder = onCall(
       walletDeductionInCents: serverWalletDeductionInCents,
       shippingCost: officialShippingFeeInCents / 100,
       shippingCostInCents: officialShippingFeeInCents,
+      freeShippingApplied: Boolean(isFreeShipping),
       shippingMethod: shippingMethodId,
       shippingAddress: orderPayload.shipping.address,
       items: sanitizedItems,
@@ -1146,7 +1209,7 @@ exports.createPagBankOrder = onCall(
         paymentMethod.type === "PIX"
           ? pixExpirationDate
             ? pixExpirationDate.toISOString()
-            : new Date(Date.now() + 30 * 60 * 1000).toISOString()
+            : new Date(Date.now() + 20 * 60 * 1000).toISOString()
           : null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
@@ -1202,6 +1265,9 @@ exports.createPagBankOrder = onCall(
         charge?.status ||
         (paymentMethod.type === "PIX" ? "WAITING" : "PENDING"),
       qrCode: qrCodeObj,
+      pixExpiresAt: pixExpirationDate
+        ? pixExpirationDate.toISOString()
+        : new Date(Date.now() + 20 * 60 * 1000).toISOString(),
     };
   },
 );
@@ -1723,7 +1789,7 @@ exports.cancelExpiredPixOrders = onSchedule(
             : new Date(orderData.createdAt);
           const diffMinutes =
             (now.getTime() - createdDate.getTime()) / (1000 * 60);
-          if (diffMinutes >= 30) {
+          if (diffMinutes >= 20) {
             isExpired = true;
           }
         }
@@ -1888,7 +1954,7 @@ exports.cleanupExpiredPixOrdersManual = onRequest(
               : new Date(orderData.createdAt);
             const diffMinutes =
               (now.getTime() - createdDate.getTime()) / (1000 * 60);
-            if (diffMinutes >= 30) {
+            if (diffMinutes >= 20) {
               isExpired = true;
             }
           }

@@ -36,6 +36,7 @@ import {
   getTodayStr, 
   formatShortDate 
 } from '../../hooks/useCmsPeriodFilter';
+import { isOrderPaid } from '../../services/orderStateMachine';
 import styles from './CmsCampanhas.module.css';
 
 const DEFAULT_SOURCES = [
@@ -333,11 +334,15 @@ export function CmsCampanhas() {
     }
   };
 
-  // 1. FILTRAGEM TEMPORAL DE PEDIDOS CONFORME PERÍODO SELECIONADO
+  // 1. FILTRAGEM TEMPORAL DE PEDIDOS PAGOS CONFORME PERÍODO SELECIONADO
+  const paidOrders = useMemo(() => {
+    return (orders || []).filter(o => isOrderPaid(o.status || o.statusCode));
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
-    if (periodFilter === 'all') return orders;
-    return orders.filter(order => isDateInPeriod(order, periodFilter, customStartDate, customEndDate));
-  }, [orders, periodFilter, customStartDate, customEndDate]);
+    if (periodFilter === 'all') return paidOrders;
+    return paidOrders.filter(order => isDateInPeriod(order, periodFilter, customStartDate, customEndDate));
+  }, [paidOrders, periodFilter, customStartDate, customEndDate]);
 
   // 2. PROCESSAMENTO DINÂMICO DE MÉTRICAS POR CAMPANHA
   const processedCampaigns = useMemo(() => {

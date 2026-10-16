@@ -29,6 +29,7 @@ import {
   getTodayStr, 
   formatShortDate 
 } from '../../hooks/useCmsPeriodFilter';
+import { ORDER_STATUSES, normalizeOrderStatus, isOrderPaid } from '../../services/orderStateMachine';
 import styles from './CmsDashboard.module.css';
 
 export function CmsDashboard() {
@@ -153,15 +154,21 @@ export function CmsDashboard() {
     });
   }, [orders, periodFilter, customStartDate, customEndDate]);
 
-  // 2. MÉTRICAS FINANCEIRAS DO PERÍODO
+  // 2. MÉTRICAS FINANCEIRAS DO PERÍODO (Apenas pedidos com pagamento aprovado em diante)
   const financialMetrics = useMemo(() => {
-    const revenue = filteredOrders.reduce((acc, o) => acc + (Number(o.total) || Number(o.amount) || 0), 0);
+    const paidOrders = filteredOrders.filter(o => {
+      const norm = normalizeOrderStatus(o.status || o.statusCode);
+      return norm !== ORDER_STATUSES.AGUARDANDO_PAGAMENTO && norm !== ORDER_STATUSES.CANCELADO;
+    });
+    const revenue = paidOrders.reduce((acc, o) => acc + (Number(o.total) || Number(o.amount) || 0), 0);
     const orderCount = filteredOrders.length;
-    const aov = orderCount > 0 ? (revenue / orderCount) : 0;
+    const paidCount = paidOrders.length;
+    const aov = paidCount > 0 ? (revenue / paidCount) : 0;
 
     return {
       revenue,
       orderCount,
+      paidCount,
       aov
     };
   }, [filteredOrders]);
@@ -290,7 +297,7 @@ export function CmsDashboard() {
       let lastSaleTimestamp = 0;
       let hasSale = false;
 
-      orders.forEach(order => {
+      orders.filter(o => isOrderPaid(o.status || o.statusCode)).forEach(order => {
         (order.items || []).forEach(it => {
           const itId = String(it?.id || '');
           const itSlug = String(it?.slug || '');
@@ -365,7 +372,11 @@ export function CmsDashboard() {
     );
 
     if (foundOrders.length > 0) {
-      const totalSpent = foundOrders.reduce((acc, o) => acc + (Number(o.total) || Number(o.amount) || 0), 0);
+      const paidFoundOrders = foundOrders.filter(o => {
+        const norm = normalizeOrderStatus(o.status || o.statusCode);
+        return norm !== ORDER_STATUSES.AGUARDANDO_PAGAMENTO && norm !== ORDER_STATUSES.CANCELADO;
+      });
+      const totalSpent = paidFoundOrders.reduce((acc, o) => acc + (Number(o.total) || Number(o.amount) || 0), 0);
       const firstOrder = foundOrders[0];
       setCrmResult({
         cpf: maskCPF(cleanCpf),

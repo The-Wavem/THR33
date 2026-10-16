@@ -43,40 +43,18 @@ export function CartDrawer() {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  // BLOQUEIO TOTAL E INFALÍVEL DO EIXO Y (RODAGEM DO MOUSE / TOUCH / TECLADO)
+  // Trava a rolagem de fundo ao abrir o carrinho
   useEffect(() => {
     if (isCartOpen) {
       const originalBodyOverflow = document.body.style.overflow;
       const originalHtmlOverflow = document.documentElement.style.overflow;
-      const originalTouchAction = document.body.style.touchAction;
 
-      // Trava os containers raiz
       document.body.style.overflow = 'hidden';
       document.documentElement.style.overflow = 'hidden';
-      document.body.style.touchAction = 'none';
-
-      // Intercepta e bloqueia a rolagem da bolinha do mouse na página de fundo
-      const preventBackgroundScroll = (e) => {
-        if (!itemsListRef.current) {
-          e.preventDefault();
-          return;
-        }
-
-        const isInsideList = itemsListRef.current.contains(e.target);
-        if (!isInsideList) {
-          e.preventDefault();
-        }
-      };
-
-      window.addEventListener('wheel', preventBackgroundScroll, { passive: false });
-      window.addEventListener('touchmove', preventBackgroundScroll, { passive: false });
 
       return () => {
         document.body.style.overflow = originalBodyOverflow;
         document.documentElement.style.overflow = originalHtmlOverflow;
-        document.body.style.touchAction = originalTouchAction;
-        window.removeEventListener('wheel', preventBackgroundScroll);
-        window.removeEventListener('touchmove', preventBackgroundScroll);
       };
     }
   }, [isCartOpen]);
@@ -213,7 +191,7 @@ export function CartDrawer() {
 
             {/* Rodapé e Sumário de Valores Limpo e Focado */}
             {cartItems.length > 0 && (
-              <footer className={styles.footer} onWheel={(e) => e.preventDefault()}>
+              <footer className={styles.footer}>
                 {/* Cupom de Desconto */}
                 <div className={styles.toolRow}>
                   {!appliedCoupon ? (

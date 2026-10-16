@@ -590,6 +590,50 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   // MODAL DE RECUPERAÇÃO DE PIX
   const [pixModalOrder, setPixModalOrder] = useState(null);
   const [copiedPixModal, setCopiedPixModal] = useState(false);
+  const [pixModalTimeRemaining, setPixModalTimeRemaining] = useState(20 * 60);
+  const [pixModalExpired, setPixModalExpired] = useState(false);
+
+  // Timer do Modal de Pix (Estritamente 20 minutos a partir da geracao do pedido)
+  useEffect(() => {
+    if (!pixModalOrder) return;
+
+    let orderCreationMs = pixModalOrder.createdAtTimestamp;
+    if (!orderCreationMs && pixModalOrder.id) {
+      const match = String(pixModalOrder.id).match(/THR-(\d{13})/i);
+      if (match) {
+        orderCreationMs = Number(match[1]);
+      }
+    }
+    if (!orderCreationMs) {
+      orderCreationMs = Date.now();
+    }
+
+    const max20MinDeadline = orderCreationMs + 20 * 60 * 1000;
+    let targetTimeMs = max20MinDeadline;
+
+    if (pixModalOrder.pixExpiresAt) {
+      const rawExpiry = new Date(pixModalOrder.pixExpiresAt).getTime();
+      targetTimeMs = Math.min(rawExpiry, max20MinDeadline);
+    }
+
+    const updateModalCountdown = () => {
+      const now = Date.now();
+      const diffSec = Math.min(20 * 60, Math.max(0, Math.floor((targetTimeMs - now) / 1000)));
+      setPixModalTimeRemaining(diffSec);
+      setPixModalExpired(diffSec <= 0);
+    };
+
+    updateModalCountdown();
+    const interval = setInterval(updateModalCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [pixModalOrder]);
+
+  const formatPixModalTimer = (totalSeconds) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
   const handleCopyPixModal = (text) => {
     if (!text) return;
     navigator.clipboard.writeText(text);
@@ -2582,7 +2626,10 @@ export function Perfil({ defaultTab = 'pedidos' }) {
               transition={{ duration: 0.2 }}
             >
               <div className={styles.pixModalHeader}>
-                <h3>PAGAMENTO COM PIX • {pixModalOrder.id}</h3>
+                <div className={styles.pixModalHeaderInfo}>
+                  <span className={styles.pixModalBadge}>PAGAMENTO PIX</span>
+                  <h3 className={styles.pixModalTitle}>{pixModalOrder.id}</h3>
+                </div>
                 <button 
                   type="button" 
                   onClick={() => setPixModalOrder(null)} 
@@ -2595,9 +2642,9 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
               <div className={styles.pixModalBody}>
                 <div className={styles.pixModalOrderTotal}>
-                  R$ {Number(pixModalOrder.total || 0).toFixed(2)}
+                  R$ {Number(pixModalOrder.total || 0).toFixed(2).replace('.', ',')}
                 </div>
-                <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                <p className={styles.pixModalInstruction}>
                   Abra o app do seu banco, escolha <strong>Pix</strong> e escaneie o código abaixo:
                 </p>
 
@@ -2626,9 +2673,72 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                   </button>
                 </div>
 
-                <span className={styles.pixModalTimerNote}>
-                  O código Pix expira em 45 minutos a partir da geração do pedido. O status é atualizado automaticamente assim que pago.
-                </span>
+                {/* TIMER REGRESSIVO PIX (20 MINUTOS) */}
+                <div 
+                  className={`${styles.pixModalTimerCard} ${
+                    pixModalExpired 
+                      ? styles.pixModalTimerCardExpired 
+                      : pixModalTimeRemaining <= 180 
+                        ? styles.pixModalTimerCardWarning 
+                        : ''
+                  }`}
+                >
+                  <div className={styles.pixModalTimerLeft}>
+                    <Clock 
+                      size={18} 
+                      className={`${styles.pixModalTimerIcon} ${
+                        pixModalExpired 
+                          ? styles.pixModalTimerIconExpired 
+                          : pixModalTimeRemaining <= 180 
+                            ? styles.pixModalTimerIconWarning 
+                            : ''
+                      }`} 
+                    />
+                    <div className={styles.pixModalTimerInfo}>
+                      <span className={styles.pixModalTimerLabel}>
+                        {pixModalExpired ? 'Status do Pix' : 'Tempo restante para pagar'}
+                      </span>
+                      <strong 
+                        className={`${styles.pixModalTimerCountdown} ${
+                          pixModalExpired 
+                            ? styles.pixModalTimerCountdownExpired 
+                            : pixModalTimeRemaining <= 180 
+                              ? styles.pixModalTimerCountdownWarning 
+                              : ''
+                        }`}
+                      >
+                        {pixModalExpired ? 'EXPIRADO (00:00)' : formatPixModalTimer(pixModalTimeRemaining)}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <span 
+                    className={`${styles.pixModalTimerBadgePill} ${
+                      pixModalExpired 
+                        ? styles.pixModalTimerBadgeExpired 
+                        : pixModalTimeRemaining <= 180 
+                          ? styles.pixModalTimerBadgeWarning 
+                          : ''
+                    }`}
+                  >
+                    {pixModalExpired 
+                      ? 'Prazo esgotado' 
+                      : pixModalTimeRemaining <= 180 
+                        ? 'Expira em breve' 
+                        : 'Válido por 20 min'}
+                  </span>
+                </div>
+
+                {pixModalExpired ? (
+                  <div className={styles.pixModalExpiredAlert}>
+                    <AlertCircle size={15} />
+                    <span>O prazo de 20 minutos encerrou. As peças reservadas foram devolvidas ao estoque. Para concluir a compra, gere um novo pedido no catálogo.</span>
+                  </div>
+                ) : (
+                  <span className={styles.pixModalTimerNote}>
+                    O código Pix expira em 20 minutos a partir da geração do pedido. O status é atualizado automaticamente em tempo real assim que pago.
+                  </span>
+                )}
               </div>
 
               <div className={styles.pixModalFooter}>

@@ -72,6 +72,20 @@ export function normalizeOrderStatus(status) {
 }
 
 /**
+ * Retorna true se o pedido possui pagamento confirmado/efetuado (pagamento_aprovado em diante)
+ * e false para pedidos pendentes (aguardando_pagamento) ou cancelados.
+ */
+export function isOrderPaid(rawStatus) {
+  const norm = normalizeOrderStatus(rawStatus);
+  return (
+    norm === ORDER_STATUSES.PAGAMENTO_APROVADO ||
+    norm === ORDER_STATUSES.EM_PRODUCAO ||
+    norm === ORDER_STATUSES.SAIU_PARA_ENTREGA ||
+    norm === ORDER_STATUSES.ENTREGUE
+  );
+}
+
+/**
  * Retorna metadados para exibição visual do status
  */
 export function getOrderStatusMeta(rawStatus) {

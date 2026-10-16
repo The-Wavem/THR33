@@ -46,6 +46,12 @@ import {
   getTodayStr,
   formatShortDate,
 } from "../../hooks/useCmsPeriodFilter";
+import {
+  ORDER_STATUSES,
+  normalizeOrderStatus,
+  getOrderStatusMeta,
+  isOrderPaid,
+} from "../../services/orderStateMachine";
 import styles from "./CmsCupons.module.css";
 
 export function CmsCupons() {
@@ -221,6 +227,8 @@ export function CmsCupons() {
               `coupon_${orderCouponCode.toLowerCase()}` === couponIdLower);
 
           if (isMatch) {
+            const isPaid = isOrderPaid(order.status || order.statusCode);
+            const statusMeta = getOrderStatusMeta(order.status || order.statusCode);
             const items = Array.isArray(order.items) ? order.items : [];
             const itemsCount =
               items.length > 0
@@ -256,6 +264,9 @@ export function CmsCupons() {
                 : "Recente",
               rawDate: order.createdAt,
               client: order.clientName || "Cliente",
+              status: order.status || 'aguardando_pagamento',
+              isPaid,
+              statusMeta,
               itemsCount,
               gross,
               discountAmount,
@@ -277,7 +288,7 @@ export function CmsCupons() {
     }
   };
 
-  // Resumo financeiro consolidado do cupom ativo no extrato
+  // Resumo financeiro consolidado do cupom ativo no extrato (apenas pedidos com pagamento efetuado)
   const statementSummary = useMemo(() => {
     if (!statementCoupon) return null;
 
@@ -287,49 +298,50 @@ export function CmsCupons() {
     const totalPayoutsPaid =
       payouts.reduce((sum, p) => sum + (Number(p.amount) || 0), 0) ||
       Number(statementCoupon.commissionPaid || 0);
-    const pendingCommission = Number(statementCoupon.commissionPending || 0);
-    const totalCommission = totalPayoutsPaid + pendingCommission;
 
-    const ordersList = statementOrders || [];
-    const ordersCount = ordersList.length;
-    const ordersItemsCount = ordersList.reduce(
+    const allOrdersList = statementOrders || [];
+    const paidOrdersList = allOrdersList.filter(o => o.isPaid);
+    const hasOrderHistory = allOrdersList.length > 0;
+
+    const ordersCount = paidOrdersList.length;
+    const ordersItemsCount = paidOrdersList.reduce(
       (sum, o) => sum + (Number(o.itemsCount) || 0),
       0,
     );
 
-    const ordersGross = ordersList.reduce(
+    const ordersGross = paidOrdersList.reduce(
       (sum, o) => sum + (Number(o.gross || o.total) || 0),
       0,
     );
-    const ordersDiscount = ordersList.reduce(
+    const ordersDiscount = paidOrdersList.reduce(
       (sum, o) => sum + (Number(o.discountAmount) || 0),
       0,
     );
-    const ordersCommission = ordersList.reduce(
+    const ordersCommission = paidOrdersList.reduce(
       (sum, o) => sum + (Number(o.commission) || 0),
       0,
     );
 
-    const totalGross =
-      ordersGross > 0 ? ordersGross : Number(statementCoupon.grossRevenue || 0);
-    const totalDiscount =
-      ordersDiscount > 0
-        ? ordersDiscount
-        : Number(statementCoupon.discountGiven || 0);
-    const totalItems =
-      ordersItemsCount > 0
-        ? ordersItemsCount
-        : Number(statementCoupon.itemsSold || 0);
-    const totalUses =
-      ordersCount > 0 ? ordersCount : Number(statementCoupon.usageCount || 0);
-
     const isBrand = statementCoupon.type === "brand";
+
+    // Se temos pedidos na base, os valores reais são dados pelos pedidos pagos
+    const totalGross = hasOrderHistory ? ordersGross : Number(statementCoupon.grossRevenue || 0);
+    const totalDiscount = hasOrderHistory ? ordersDiscount : Number(statementCoupon.discountGiven || 0);
+    const totalItems = hasOrderHistory ? ordersItemsCount : Number(statementCoupon.itemsSold || 0);
+    const totalUses = hasOrderHistory ? ordersCount : Number(statementCoupon.usageCount || 0);
+
     const effectiveCommission = isBrand
       ? 0
-      : ordersCommission > 0
-        ? ordersCommission
-        : totalCommission;
-    // Para cupons de parceiro/afiliado, o repasse de comissão é a dedução. Para cupons da THR33 (marca), o desconto concedido é a dedução.
+      : (hasOrderHistory ? ordersCommission : (totalPayoutsPaid + Number(statementCoupon.commissionPending || 0)));
+
+    const pendingCommission = isBrand
+      ? 0
+      : (hasOrderHistory ? Math.max(0, effectiveCommission - totalPayoutsPaid) : Number(statementCoupon.commissionPending || 0));
+
+    const totalCommission = isBrand
+      ? 0
+      : totalPayoutsPaid + pendingCommission;
+
     const netProfit = isBrand
       ? Math.max(0, totalGross - totalDiscount)
       : Math.max(0, totalGross - effectiveCommission);
@@ -343,6 +355,8 @@ export function CmsCupons() {
       totalDiscount,
       totalItems,
       totalUses,
+      allOrdersCount: allOrdersList.length,
+      unpaidOrdersCount: allOrdersList.length - paidOrdersList.length,
       effectiveCommission,
       netProfit,
       isBrand,
@@ -793,15 +807,20 @@ export function CmsCupons() {
     }
   };
 
-  // Filtra pedidos pelo período selecionado
+  // Filtra apenas pedidos com pagamento efetuado/aprovado
+  const paidOrders = useMemo(() => {
+    return (orders || []).filter((o) => isOrderPaid(o.status || o.statusCode));
+  }, [orders]);
+
+  // Filtra pedidos pagos pelo período selecionado
   const filteredOrders = useMemo(() => {
-    if (periodFilter === "all") return orders;
-    return orders.filter((o) =>
+    if (periodFilter === "all") return paidOrders;
+    return paidOrders.filter((o) =>
       isDateInPeriod(o, periodFilter, customStartDate, customEndDate),
     );
-  }, [orders, periodFilter, customStartDate, customEndDate]);
+  }, [paidOrders, periodFilter, customStartDate, customEndDate]);
 
-  // Cupons processados com reconciliação de vendas no período
+  // Cupons processados com reconciliação de vendas no período (apenas pedidos com pagamento efetuado)
   const processedCoupons = useMemo(() => {
     return (coupons || []).map((coupon) => {
       const cleanCode = String(coupon.code || coupon.id || "")
@@ -811,7 +830,25 @@ export function CmsCupons() {
         .toLowerCase()
         .trim();
 
+      // Pedidos pagos filtrados no período
       const matchingOrders = filteredOrders.filter((o) => {
+        const orderCouponCode = String(o.couponCode || o.coupon || "")
+          .toUpperCase()
+          .trim();
+        const orderCouponId = String(o.couponId || "")
+          .toLowerCase()
+          .trim();
+        return (
+          (orderCouponCode && orderCouponCode === cleanCode) ||
+          (orderCouponId &&
+            (orderCouponId === couponIdLower || orderCouponId === coupon.id)) ||
+          (orderCouponCode &&
+            `coupon_${orderCouponCode.toLowerCase()}` === couponIdLower)
+        );
+      });
+
+      // Todos os pedidos registrados para o cupom (para saber se o cupom possui histórico na coleção orders)
+      const matchingAllOrders = (orders || []).filter((o) => {
         const orderCouponCode = String(o.couponCode || o.coupon || "")
           .toUpperCase()
           .trim();
@@ -870,11 +907,17 @@ export function CmsCupons() {
       let commissionPending = firestorePending;
       let commissionPaid = firestorePaid;
 
-      if (periodFilter === "all") {
-        usageCount = Math.max(periodUses, firestoreUses);
-        grossRevenue = periodGross > 0 ? periodGross : firestoreGross;
-        itemsCount = periodItems > 0 ? periodItems : firestoreItems;
-        discountGiven = periodDiscount > 0 ? periodDiscount : firestoreDiscount;
+      // Reconciliação: se existem pedidos registrados na base, o valor real é a soma dos pagos!
+      if (matchingAllOrders.length > 0) {
+        usageCount = periodUses;
+        grossRevenue = periodGross;
+        itemsCount = periodItems;
+        discountGiven = periodDiscount;
+      } else if (periodFilter === "all") {
+        usageCount = firestoreUses;
+        grossRevenue = firestoreGross;
+        itemsCount = firestoreItems;
+        discountGiven = firestoreDiscount;
       } else {
         usageCount = periodUses;
         grossRevenue = periodGross;
@@ -887,20 +930,23 @@ export function CmsCupons() {
 
       const isBrand = coupon.type === "brand";
       const rate = Number(coupon.commissionRate || 8);
+      const calculatedCommission = isBrand
+        ? 0
+        : ((grossRevenue - discountGiven) * rate) / 100;
+
+      if (matchingAllOrders.length > 0 && !isBrand) {
+        commissionPending = Math.max(0, calculatedCommission - firestorePaid);
+      }
+
       const periodCommission = isBrand
         ? 0
         : periodFilter === "all"
-          ? commissionPending + commissionPaid
-          : ((grossRevenue - discountGiven) * rate) / 100;
+          ? (matchingAllOrders.length > 0 ? calculatedCommission : commissionPending + commissionPaid)
+          : calculatedCommission;
+
       const netProfit = isBrand
         ? Math.max(0, grossRevenue - discountGiven)
-        : Math.max(
-            0,
-            grossRevenue -
-              (periodFilter === "all"
-                ? commissionPending + commissionPaid
-                : periodCommission),
-          );
+        : Math.max(0, grossRevenue - periodCommission);
 
       return {
         ...coupon,
@@ -913,7 +959,7 @@ export function CmsCupons() {
         netProfit: Math.max(0, netProfit),
       };
     });
-  }, [coupons, filteredOrders, periodFilter]);
+  }, [coupons, filteredOrders, orders, periodFilter]);
 
   const metrics = useMemo(() => {
     let gross = 0;
@@ -2249,12 +2295,30 @@ export function CmsCupons() {
                     {statementOrders.map((ord) => (
                       <div key={ord.id} className={styles.orderItemRow}>
                         <div>
-                          <strong>
-                            {ord.id} — {ord.client}
-                          </strong>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.2rem', flexWrap: 'wrap' }}>
+                            <strong>
+                              {ord.id} — {ord.client}
+                            </strong>
+                            <span 
+                              style={{ 
+                                fontSize: '0.62rem', 
+                                fontWeight: 700, 
+                                padding: '0.12rem 0.45rem', 
+                                borderRadius: '2px',
+                                textTransform: 'uppercase',
+                                letterSpacing: '0.04em',
+                                backgroundColor: ord.statusMeta?.bgColor || (ord.isPaid ? 'rgba(74, 222, 128, 0.1)' : 'rgba(250, 204, 21, 0.1)'),
+                                color: ord.statusMeta?.color || (ord.isPaid ? '#4ade80' : '#facc15'),
+                                border: `1px solid ${ord.statusMeta?.borderColor || 'rgba(255, 255, 255, 0.1)'}`
+                              }}
+                            >
+                              {ord.statusMeta?.label || ord.status}
+                            </span>
+                          </div>
                           <small>
                             {ord.date} • {ord.itemsCount}{" "}
                             {ord.itemsCount === 1 ? "peça" : "peças"}
+                            {!ord.isPaid && " • Não contabilizado"}
                           </small>
                         </div>
                         <div className={styles.orderVal}>
@@ -2267,16 +2331,17 @@ export function CmsCupons() {
                                   {Number(ord.discountAmount || 0).toFixed(2)}
                                 </span>
                               </span>
-                              <strong className={styles.greenText}>
-                                Recebido: R$ {ord.total.toFixed(2)}
+                              <strong className={ord.isPaid ? styles.greenText : undefined} style={!ord.isPaid ? { color: '#9ca3af' } : undefined}>
+                                {ord.isPaid ? `Recebido: R$ ${ord.total.toFixed(2)}` : `Pendente: R$ ${ord.total.toFixed(2)}`}
                               </strong>
                             </>
                           ) : (
                             <>
                               <span>Total: R$ {ord.total.toFixed(2)}</span>
-                              <strong className={styles.blueText}>
-                                Comissão: +R${" "}
-                                {Number(ord.commission || 0).toFixed(2)}
+                              <strong className={ord.isPaid ? styles.blueText : undefined} style={!ord.isPaid ? { color: '#9ca3af' } : undefined}>
+                                {ord.isPaid 
+                                  ? `Comissão: +R$ ${Number(ord.commission || 0).toFixed(2)}` 
+                                  : `Pendente: R$ ${Number(ord.commission || 0).toFixed(2)}`}
                               </strong>
                             </>
                           )}

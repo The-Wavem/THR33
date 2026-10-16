@@ -2009,111 +2009,460 @@
   position: fixed;
   inset: 0;
   background-color: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(4px);
-  z-index: 1100;
+  backdrop-filter: blur(6px);
+  z-index: 1200;
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
+  padding: clamp(0.5rem, 2vw, 1.25rem);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .pixModal {
-  background-color: #0d0d0d;
+  background-color: #0c0c0c;
   border: 1px solid rgba(255, 255, 255, 0.15);
   width: 100%;
-  max-width: 480px;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.95);
+  max-width: 440px;
+  max-height: min(92vh, 670px);
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.95);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
+  margin: auto;
+  border-radius: 4px;
 }
 
 .pixModalHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 1.5rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  gap: 0.75rem;
+  padding: 0.9rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: #111111;
+  flex-shrink: 0;
 }
 
-.pixModalHeader h3 {
+.pixModalHeaderInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+.pixModalBadge {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #4ade80;
+  text-transform: uppercase;
+}
+
+.pixModalTitle {
   font-family: var(--font-heading);
   font-size: 0.95rem;
   font-weight: 800;
-  letter-spacing: 1px;
+  letter-spacing: 0.08em;
   margin: 0;
-  color: var(--text-primary);
+  color: #f5f5f5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pixModalHeader .closeModalBtn {
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  padding: 0.4rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.pixModalHeader .closeModalBtn:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.08);
 }
 
 .pixModalBody {
-  padding: 1.5rem;
+  padding: 1.1rem 1.25rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 1.2rem;
+  gap: 0.85rem;
   text-align: center;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.pixModalBody::-webkit-scrollbar {
+  width: 4px;
+}
+
+.pixModalBody::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.pixModalBody::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+}
+
+.pixModalBody::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .pixModalOrderTotal {
-  font-size: 1.1rem;
+  font-size: 1.35rem;
   font-weight: 800;
   color: #4ade80;
+  letter-spacing: -0.01em;
+}
+
+.pixModalInstruction {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  margin: 0;
+  max-width: 360px;
+}
+
+.pixModalInstruction strong {
+  color: #ffffff;
+  font-weight: 700;
 }
 
 .pixModalQrImage {
-  width: 220px;
-  height: 220px;
+  width: 170px;
+  height: 170px;
   background-color: #ffffff;
-  padding: 0.5rem;
-  border: 1px solid var(--border-color);
+  padding: 0.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 4px;
+  box-sizing: border-box;
 }
 
 .pixModalCopyArea {
   display: flex;
   width: 100%;
   gap: 0.5rem;
+  min-width: 0;
+  align-items: stretch;
 }
 
 .pixModalInput {
   flex: 1;
-  background-color: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  color: var(--text-secondary);
+  min-width: 0;
+  background-color: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: #e5e5e5;
   font-size: 0.72rem;
-  font-family: monospace;
+  font-family: monospace, ui-monospace, SFMono-Regular, Consolas, monospace;
   padding: 0.65rem 0.75rem;
   outline: none;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  border-radius: 2px;
+  transition: border-color var(--transition-fast);
+}
+
+.pixModalInput:focus {
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #ffffff;
 }
 
 .pixModalCopyBtn {
-  background-color: var(--text-primary);
-  color: var(--bg-primary);
+  background-color: #ffffff;
+  color: #000000;
   border: none;
-  padding: 0.65rem 1rem;
+  padding: 0.65rem 0.95rem;
   font-size: 0.72rem;
   font-weight: 800;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.05em;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.4rem;
   white-space: nowrap;
-  transition: opacity var(--transition-fast);
+  flex-shrink: 0;
+  border-radius: 2px;
+  transition: all var(--transition-fast);
 }
 
 .pixModalCopyBtn:hover {
-  opacity: 0.9;
+  background-color: #e5e5e5;
+  transform: translateY(-1px);
+}
+
+.pixModalCopyBtn:active {
+  transform: translateY(0);
+}
+
+/* Timer Regressivo Pix no Modal de Perfil */
+.pixModalTimerCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.65rem 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.15rem;
+  border-radius: 4px;
+  transition: all 0.3s ease;
+}
+
+.pixModalTimerCardWarning {
+  background: rgba(234, 179, 8, 0.08);
+  border-color: rgba(234, 179, 8, 0.4);
+}
+
+.pixModalTimerCardExpired {
+  background: rgba(239, 68, 68, 0.09);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.pixModalTimerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.pixModalTimerIcon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.pixModalTimerIconWarning {
+  color: #eab308;
+  animation: pulsePixModalIcon 1.5s infinite ease-in-out;
+}
+
+.pixModalTimerIconExpired {
+  color: #ef4444;
+}
+
+.pixModalTimerInfo {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  min-width: 0;
+}
+
+.pixModalTimerLabel {
+  font-size: 0.62rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.pixModalTimerCountdown {
+  font-family: monospace, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.pixModalTimerCountdownWarning {
+  color: #facc15;
+  text-shadow: 0 0 10px rgba(250, 204, 21, 0.35);
+}
+
+.pixModalTimerCountdownExpired {
+  color: #ef4444;
+  font-size: 0.88rem;
+  font-family: inherit;
+}
+
+.pixModalTimerBadgePill {
+  font-size: 0.62rem;
+  padding: 0.2rem 0.55rem;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  flex-shrink: 0;
+  border-radius: 2px;
+}
+
+.pixModalTimerBadgeWarning {
+  background: rgba(234, 179, 8, 0.15);
+  border-color: rgba(234, 179, 8, 0.4);
+  color: #facc15;
+}
+
+.pixModalTimerBadgeExpired {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
 }
 
 .pixModalTimerNote {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   color: var(--text-muted);
+  text-align: center;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.pixModalExpiredAlert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 0.65rem 0.85rem;
+  font-size: 0.72rem;
+  color: #fca5a5;
+  line-height: 1.35;
+  width: 100%;
+  box-sizing: border-box;
+  border-radius: 4px;
+}
+
+.pixModalExpiredAlert svg {
+  flex-shrink: 0;
+  color: #ef4444;
+  margin-top: 1px;
+}
+
+@keyframes pulsePixModalIcon {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.92);
+  }
 }
 
 .pixModalFooter {
   display: flex;
   justify-content: flex-end;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.1);
-  background-color: rgba(0, 0, 0, 0.3);
+  padding: 0.8rem 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background-color: #111111;
+  flex-shrink: 0;
+}
+
+.pixModalFooter .cancelBtn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--text-secondary);
+  padding: 0.55rem 1.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all var(--transition-fast);
+}
+
+.pixModalFooter .cancelBtn:hover {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: #ffffff;
+}
+
+/* Responsividade Mobile e Telas Compactas */
+@media (max-width: 480px) {
+  .pixModalBackdrop {
+    padding: 0.5rem;
+  }
+
+  .pixModal {
+    max-height: min(94vh, 620px);
+  }
+
+  .pixModalHeader {
+    padding: 0.75rem 1rem;
+  }
+
+  .pixModalBody {
+    padding: 0.85rem 1rem;
+    gap: 0.75rem;
+  }
+
+  .pixModalQrImage {
+    width: 140px;
+    height: 140px;
+    padding: 0.35rem;
+  }
+
+  .pixModalFooter {
+    padding: 0.7rem 1rem;
+    justify-content: stretch;
+  }
+
+  .pixModalFooter .cancelBtn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+  }
+}
+
+@media (max-width: 360px) {
+  .pixModalCopyArea {
+    flex-direction: column;
+  }
+
+  .pixModalCopyBtn {
+    width: 100%;
+    padding: 0.65rem 0.85rem;
+  }
+
+  .pixModalQrImage {
+    width: 125px;
+    height: 125px;
+  }
+
+  .pixModalTimerCard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.45rem;
+  }
+
+  .pixModalTimerBadgePill {
+    align-self: flex-start;
+  }
+}
+
+@media (max-height: 600px) {
+  .pixModalQrImage {
+    width: 110px;
+    height: 110px;
+    padding: 0.3rem;
+  }
+
+  .pixModalBody {
+    gap: 0.55rem;
+    padding: 0.65rem 1rem;
+  }
 }
 

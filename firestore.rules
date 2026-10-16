@@ -125,6 +125,11 @@ service cloud.firestore {
       allow read, write: if true;
     }
 
+    // Telemetria de integridade e latencia de pagamento
+    match /payment_telemetry/{docId} {
+      allow read, write: if true;
+    }
+
     // Chamados e tickets de suporte da loja ('support_tickets')
     match /support_tickets/{ticketId} {
       allow read: if isAuthenticated() && (

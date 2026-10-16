@@ -370,15 +370,31 @@ export const analyticsService = {
   },
 
   /**
-   * Rastreia conversão final da compra por produto, tamanho, cor, categoria e atribuição UTM
+   * Rastreia conversão final da compra por produto, tamanho, cor, categoria, método de pagamento, destino e atribuição UTM
    */
-  async trackPurchase(items = [], totalAmount = 0) {
+  async trackPurchase(items = [], totalAmount = 0, metadata = {}) {
     if (!items || items.length === 0) return;
     const now = new Date().toISOString();
     const updates = {
       'funnel.purchases': increment(1),
       lastUpdated: now
     };
+
+    // Coleta adicional de telemetria de pagamento, local de entrega e modalidade de envio
+    if (metadata.paymentMethod) {
+      const pmKey = String(metadata.paymentMethod).toLowerCase().replace(/[\s\-_]+/g, '_').replace(/ç/g, 'c').replace(/ã/g, 'a').replace(/é/g, 'e');
+      updates[`payment_methods.${pmKey}`] = increment(1);
+    }
+    if (metadata.shippingState) {
+      const stKey = String(metadata.shippingState).toUpperCase().trim();
+      if (stKey.length === 2) {
+        updates[`shipping_states.${stKey}`] = increment(1);
+      }
+    }
+    if (metadata.carrier || metadata.shippingMethod) {
+      const shipKey = String(metadata.carrier || metadata.shippingMethod).toLowerCase().replace(/[\s\-_]+/g, '_').replace(/á/g, 'a').replace(/é/g, 'e').replace(/í/g, 'i');
+      updates[`shipping_methods.${shipKey}`] = increment(1);
+    }
 
     for (const item of items) {
       const cleanId = String(item.id || item.slug || 'item').replace(/[./#$\[\]]/g, '_');
@@ -484,6 +500,72 @@ export const analyticsService = {
       }, { merge: true });
     } catch (err) {
       console.warn("Aviso telemetria (checkout session):", err.message);
+    }
+  },
+
+  /**
+   * Rastreia telemetria e integridade de pagamentos (latência em ms, erros de gateway, recusas de cartão)
+   */
+  async trackPaymentTelemetry({
+    success = true,
+    latencyMs = 0,
+    paymentMethod = 'PIX',
+    reasonCategory = 'SUCESSO',
+    errorCode = null,
+    errorMessage = null,
+    orderId = null
+  }) {
+    const now = new Date().toISOString();
+    const cleanCategory = String(reasonCategory || 'OUTRO').toUpperCase().replace(/[\s\-_]+/g, '_');
+
+    try {
+      // 1. Atualiza métricas agregadas em analytics/summary
+      const updates = {
+        'payment_health.total_attempts': increment(1),
+        [success ? 'payment_health.successful_attempts' : 'payment_health.failed_attempts']: increment(1),
+        lastUpdated: now
+      };
+
+      if (!success) {
+        updates[`payment_health.failures.${cleanCategory}`] = increment(1);
+      }
+
+      await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
+
+      // 2. Grava evento atômico na coleção payment_telemetry para auditoria e linha temporal de latência
+      const logRef = doc(collection(db, 'payment_telemetry'));
+      await setDoc(logRef, {
+        timestamp: now,
+        success: Boolean(success),
+        latencyMs: Math.max(0, Math.round(Number(latencyMs) || 0)),
+        paymentMethod: String(paymentMethod || 'PIX'),
+        reasonCategory: cleanCategory,
+        errorCode: errorCode ? String(errorCode) : null,
+        errorMessage: errorMessage ? String(errorMessage).slice(0, 255) : null,
+        orderId: orderId ? String(orderId) : null
+      });
+    } catch (err) {
+      console.warn("Aviso ao registrar telemetria de pagamento:", err.message);
+    }
+  },
+
+  /**
+   * Rastreia simulação de frete no catálogo ou PDP (interesse territorial por UF)
+   */
+  async trackShippingSimulation(stateUf = 'SP') {
+    if (!stateUf) return;
+    const cleanUf = String(stateUf).toUpperCase().trim();
+    if (cleanUf.length !== 2) return;
+    const eventKey = `cep_sim:${cleanUf}`;
+    if (!shouldTrack(eventKey)) return;
+
+    try {
+      await setDoc(SUMMARY_DOC_REF, {
+        [`shipping_simulations.${cleanUf}`]: increment(1),
+        lastUpdated: new Date().toISOString()
+      }, { merge: true });
+    } catch (err) {
+      console.warn("Aviso ao registrar simulação de frete:", err.message);
     }
   }
 };

@@ -152,6 +152,9 @@ export const pagbankService = {
     items,
     shippingAddress,
     shippingCost,
+    isFreeShippingActive = false,
+    hasFreeShippingItem = false,
+    hasFreeShippingCoupon = false,
     paymentMethod,
     cardData,
     cardEncrypted,
@@ -162,6 +165,16 @@ export const pagbankService = {
     walletDeduction = 0,
     rawOrderData = null
   }) => {
+    const isFree = Boolean(
+      isFreeShippingActive ||
+      rawOrderData?.freeShippingApplied ||
+      shippingCost === 0 ||
+      hasFreeShippingItem ||
+      hasFreeShippingCoupon ||
+      (items || []).some(i => i.freeShipping || i.hasFreeShipping)
+    );
+    const effectiveShipping = isFree ? 0 : (Number(shippingCost) || 0);
+
     // 1. Prioridade Maxima: Tenta disparar pela Cloud Function v2 createPagBankOrder
     try {
       if (functions) {
@@ -186,7 +199,8 @@ export const pagbankService = {
               name: String(item.name || 'Camiseta THR33').slice(0, 64),
               price: Number(item.price) || 0,
               quantity: Number(item.quantity) || 1,
-              size: item.size || 'M'
+              size: item.size || 'M',
+              freeShipping: Boolean(item.freeShipping || item.hasFreeShipping)
             })),
             customer: {
               name: customer.name || 'Cliente THR33',
@@ -198,7 +212,10 @@ export const pagbankService = {
               isentoIE: Boolean(customer.isentoIE)
             },
             shipping: {
-              cost: Number(shippingCost) || 0,
+              cost: effectiveShipping,
+              freeShipping: isFree,
+              isFreeShippingActive: isFree,
+              method: String(rawOrderData?.shippingMethod || 'padrao'),
               address: {
                 street: shippingAddress.street || 'Rua',
                 number: shippingAddress.number || 'S/N',
@@ -213,7 +230,8 @@ export const pagbankService = {
             paymentMethod: paymentMethodPayload,
             couponCode: couponCode || null,
             discountAmount: Number(discountAmount || 0),
-            walletDeduction: Number(walletDeduction || 0)
+            walletDeduction: Number(walletDeduction || 0),
+            totalAmount: Number(totalAmount !== undefined ? totalAmount : 0)
           });
 
           if (res?.data?.success) {
@@ -224,9 +242,11 @@ export const pagbankService = {
               orderId: data.orderId,
               status: data.status,
               isBackend: true,
+              pixExpiresAt: data.pixExpiresAt || (paymentMethod === 'PIX' ? new Date(Date.now() + 20 * 60 * 1000).toISOString() : null),
               data: {
                 id: data.orderId,
                 reference_id: data.orderId,
+                pixExpiresAt: data.pixExpiresAt || (paymentMethod === 'PIX' ? new Date(Date.now() + 20 * 60 * 1000).toISOString() : null),
                 qr_codes: qrCodeObj ? [qrCodeObj] : null,
                 charges: [{
                   id: `CHAR_${data.orderId}`,
@@ -305,7 +325,7 @@ export const pagbankService = {
         payment_method: {
           type: "PIX",
           pix: {
-            expiration_date: new Date(Date.now() + 30 * 60 * 1000).toISOString()
+            expiration_date: new Date(Date.now() + 20 * 60 * 1000).toISOString()
           }
         }
       }];
@@ -391,9 +411,11 @@ export const pagbankService = {
       success: true,
       isFallback: true,
       isSandbox: IS_SANDBOX,
+      pixExpiresAt: paymentMethod === 'PIX' ? new Date(Date.now() + 20 * 60 * 1000).toISOString() : null,
       data: {
         id: `ORDE_${Date.now()}`,
         reference_id: orderReference,
+        pixExpiresAt: paymentMethod === 'PIX' ? new Date(Date.now() + 20 * 60 * 1000).toISOString() : null,
         charges: [{
           id: mockChargeId,
           reference_id: `CHAR_${orderReference}`,

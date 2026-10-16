@@ -26,7 +26,8 @@ import {
   SlidersHorizontal,
   ChevronDown,
   ChevronUp,
-  Shield
+  Shield,
+  Clock
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { 
@@ -261,6 +262,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   const [orderNumber, setOrderNumber] = useState('');
   const [createdOrderId, setCreatedOrderId] = useState(null);
   const [createdOrderStatus, setCreatedOrderStatus] = useState(null);
+  const [createdOrderDate, setCreatedOrderDate] = useState(null);
+  const [pixExpiresAt, setPixExpiresAt] = useState(null);
+  const [pixTimeRemaining, setPixTimeRemaining] = useState(20 * 60);
+  const [pixExpired, setPixExpired] = useState(false);
 
   // Escuta em tempo real do status do pedido (Firestore onSnapshot)
   useEffect(() => {
@@ -270,12 +275,77 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         const data = docSnap.data();
         const norm = normalizeOrderStatus(data.status);
         setCreatedOrderStatus(norm);
+        if (data.createdAt) {
+          const ms = data.createdAt.toDate ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime();
+          setCreatedOrderDate(ms);
+        }
+        if (data.pixExpiresAt) {
+          setPixExpiresAt(data.pixExpiresAt);
+        }
       }
     }, (err) => {
       console.warn("Aviso ao escutar status do pedido:", err.message);
     });
     return () => unsub();
   }, [createdOrderId]);
+
+  // Timer Regressivo Oficial do Pix (Estritamente 20 minutos com persistencia e conferencia delta)
+  useEffect(() => {
+    if (currentStep !== 4 || paymentMethod !== 'PIX') return;
+
+    // 1. Extrai o momento real de criacao do pedido (via timestamp do ID ex: THR-1792152469015-... ou estado)
+    let orderCreationMs = createdOrderDate;
+    if (!orderCreationMs && orderNumber) {
+      const match = String(orderNumber).match(/THR-(\d{13})/i);
+      if (match) {
+        orderCreationMs = Number(match[1]);
+      }
+    }
+    if (!orderCreationMs) {
+      orderCreationMs = Date.now();
+    }
+
+    // 2. O prazo limite maximo estrito e de EXATAMENTE 20 minutos a partir da geracao do pedido
+    const max20MinDeadline = orderCreationMs + 20 * 60 * 1000;
+    const sessionKey = orderNumber ? `thr33_pix_exp_${orderNumber}` : 'thr33_pix_exp_current';
+    let targetTimeMs = null;
+
+    if (pixExpiresAt) {
+      const rawExpiry = new Date(pixExpiresAt).getTime();
+      // Se a data registrada for superior a 20 minutos (pedidos antigos ou retornos de 30min), crava em 20 min
+      targetTimeMs = Math.min(rawExpiry, max20MinDeadline);
+      sessionStorage.setItem(sessionKey, String(targetTimeMs));
+    } else {
+      const savedExp = sessionStorage.getItem(sessionKey);
+      if (savedExp) {
+        targetTimeMs = Math.min(Number(savedExp), max20MinDeadline);
+      } else {
+        targetTimeMs = max20MinDeadline;
+        sessionStorage.setItem(sessionKey, String(targetTimeMs));
+      }
+    }
+
+    const updateCountdown = () => {
+      const now = Date.now();
+      // Limita estritamente ao teto de 20 minutos (1200s), impedindo qualquer exibicao de 30 minutos
+      const diffSec = Math.min(20 * 60, Math.max(0, Math.floor((targetTimeMs - now) / 1000)));
+      setPixTimeRemaining(diffSec);
+      if (diffSec <= 0) {
+        setPixExpired(true);
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(interval);
+  }, [currentStep, paymentMethod, pixExpiresAt, orderNumber, createdOrderDate]);
+
+  const formatPixTimer = (totalSeconds) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
 
   // DADOS DE PAGAMENTO PAGBANK (CHECKOUT TRANSPARENTE)
   const [cardData, setCardData] = useState({
@@ -458,20 +528,24 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     const cleanDoc = (clientData.cpf || '').replace(/\D/g, '');
     const isPj = clientData.isPj || cleanDoc.length === 14;
 
-    if (!clientData.name.trim() || clientData.name.trim().split(' ').length < 2) {
+    if (!clientData.name || !clientData.name.trim() || clientData.name.trim().split(' ').length < 2) {
       errors.name = isPj 
         ? 'Informe a Razão Social completa da empresa.' 
         : 'Informe seu nome completo (nome e sobrenome).';
     }
-    if (!validateEmail(clientData.email)) {
+    if (!clientData.email || !validateEmail(clientData.email)) {
       errors.email = 'Informe um e-mail válido para envio da NF-e.';
     }
-    if (!validateCPForCNPJ(clientData.cpf)) {
+    if (!clientData.cpf || !clientData.cpf.trim()) {
+      errors.cpf = 'Informe seu CPF ou CNPJ para emissão da NF-e.';
+    } else if (!validateCPForCNPJ(clientData.cpf)) {
       errors.cpf = cleanDoc.length > 11 
         ? 'CNPJ inválido (dígitos verificadores incorretos).' 
         : 'CPF inválido (dígitos verificadores incorretos).';
     }
-    if (!validatePhone(clientData.phone)) {
+    if (!clientData.phone || !clientData.phone.trim()) {
+      errors.phone = 'Informe seu celular com DDD para rastreio.';
+    } else if (!validatePhone(clientData.phone)) {
       errors.phone = 'Telefone celular com DDD inválido.';
     }
 
@@ -486,10 +560,45 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   };
 
   const handleToggleEditAccountData = async () => {
-    if (isEditingAccountData) {
-      if (!validateStep1()) return;
+    if (!validateStep1()) return;
 
-      setSavingProfile(true);
+    setSavingProfile(true);
+    try {
+      const userPayload = {
+        name: clientData.name.trim(),
+        displayName: clientData.name.trim(),
+        email: clientData.email.trim(),
+        cpf: clientData.cpf.trim(),
+        phone: clientData.phone.trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const activeUid = user?.uid || authUser?.uid || currentUser?.uid;
+
+      if (activeUid) {
+        const userRef = doc(db, 'users', activeUid);
+        await setDoc(userRef, userPayload, { merge: true });
+      }
+
+      if (updateUser) {
+        await updateUser(userPayload);
+      }
+
+      setSaveProfileSuccess(true);
+      setTimeout(() => setSaveProfileSuccess(false), 3000);
+    } catch (err) {
+      console.warn("Erro ao salvar dados do perfil no Firestore:", err);
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleNextToStep2 = async (e) => {
+    if (e) e.preventDefault();
+    if (!validateStep1()) return;
+
+    // Sincroniza dados no perfil do Firestore de forma transparente se o usuário estiver autenticado
+    if (user) {
       try {
         const userPayload = {
           name: clientData.name.trim(),
@@ -501,7 +610,6 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         };
 
         const activeUid = user?.uid || authUser?.uid || currentUser?.uid;
-
         if (activeUid) {
           const userRef = doc(db, 'users', activeUid);
           await setDoc(userRef, userPayload, { merge: true });
@@ -510,29 +618,13 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         if (updateUser) {
           await updateUser(userPayload);
         }
-
-        setIsEditingAccountData(false);
-        setSaveProfileSuccess(true);
-        setTimeout(() => setSaveProfileSuccess(false), 4000);
       } catch (err) {
-        console.error("Erro ao salvar dados do perfil no Firestore:", err);
-        alert("Erro ao salvar dados cadastrais: " + (err.message || 'Tente novamente.'));
-      } finally {
-        setSavingProfile(false);
+        console.warn("Sincronização cadastral silenciosa:", err);
       }
-    } else {
-      setIsEditingAccountData(true);
-      setSaveProfileSuccess(false);
     }
-  };
 
-  const handleNextToStep2 = (e) => {
-    e.preventDefault();
-    if (isEditingAccountData) return;
-    if (validateStep1()) {
-      setCurrentStep(2);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    setCurrentStep(2);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // -------------------------------------------------------------
@@ -820,6 +912,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           cardEncrypted = encResult.encryptedCard;
         }
 
+        const effectiveShipping = isFreeShippingActive ? 0 : (Number(shippingCost) || 0);
+
+        const reqStartTime = performance.now();
         pagbankRes = await pagbankService.createOrder({
           orderReference: orderRefId,
           customer: {
@@ -831,9 +926,21 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             ie: isClientPj ? (clientData.isentoIE ? 'ISENTO' : (clientData.ie || '')) : null,
             isentoIE: Boolean(clientData.isentoIE)
           },
-          items: cartItems,
+          items: cartItems.map(item => ({
+            id: String(item.id || item.slug || `item_${Date.now()}`),
+            name: item.name || 'Produto THR33',
+            size: item.size || 'M',
+            fit: item.fit || 'boxy',
+            price: Number(item.price) || 0,
+            quantity: Number(item.quantity) || 1,
+            image: item.image || '',
+            freeShipping: Boolean(item.freeShipping || item.hasFreeShipping)
+          })),
           shippingAddress: addressToSave,
-          shippingCost: Number(shippingCost) || 0,
+          shippingCost: effectiveShipping,
+          isFreeShippingActive: Boolean(isFreeShippingActive),
+          hasFreeShippingItem: Boolean(hasFreeShippingItem),
+          hasFreeShippingCoupon: Boolean(hasFreeShippingCoupon),
           paymentMethod,
           cardData: {
             holder: cardData.holder,
@@ -848,19 +955,48 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           rawOrderData: baseOrderData
         });
 
+        const latencyMs = Math.round(performance.now() - reqStartTime);
+
         // Verifica recusa na cobrança do PagBank
         const charge = pagbankRes.data?.charges?.[0];
         if (charge && charge.status === 'DECLINED') {
+          analyticsService.trackPaymentTelemetry({
+            success: false,
+            latencyMs,
+            paymentMethod,
+            reasonCategory: 'CARTAO_RECUSADO',
+            errorCode: charge.payment_response?.code || 'DECLINED',
+            errorMessage: charge.payment_response?.message || 'Transação negada pelo banco emissor',
+            orderId: orderRefId
+          });
           setPaymentError(charge.payment_response?.message || 'Transação negada pelo banco emissor. Verifique os dados ou utilize outro cartão.');
           setIsProcessing(false);
           return;
         }
 
         if (!pagbankRes.success) {
+          analyticsService.trackPaymentTelemetry({
+            success: false,
+            latencyMs,
+            paymentMethod,
+            reasonCategory: 'DADOS_INVALIDOS',
+            errorCode: 'UNAUTHORIZED',
+            errorMessage: 'Transação não autorizada',
+            orderId: orderRefId
+          });
           setPaymentError('Transação não autorizada. Verifique os dados do cartão ou escolha outro método de pagamento.');
           setIsProcessing(false);
           return;
         }
+
+        // Sucesso na autorização da cobrança
+        analyticsService.trackPaymentTelemetry({
+          success: true,
+          latencyMs,
+          paymentMethod,
+          reasonCategory: 'SUCESSO',
+          orderId: orderRefId
+        });
 
         pagbankData = pagbankRes.data;
         setPagbankResult(pagbankRes.data);
@@ -870,6 +1006,26 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         if (userMessage.includes("40002") || userMessage.includes("buyer email must not be equals to merchant email")) {
           userMessage = "O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista (contato.thewavem@gmail.com). Por favor, retorne à Etapa 1 e utilize outro e-mail (por exemplo, seu e-mail pessoal).";
         }
+
+        let cat = 'ERRO_GATEWAY';
+        if (userMessage.includes("40002") || userMessage.includes("buyer email")) {
+          cat = 'ERRO_VALIDACAO';
+        } else if (gatewayErr.message?.toLowerCase().includes("timeout") || gatewayErr.message?.toLowerCase().includes("network")) {
+          cat = 'ERRO_GATEWAY';
+        } else if (gatewayErr.message?.toLowerCase().includes("cvv") || gatewayErr.message?.toLowerCase().includes("cartão")) {
+          cat = 'DADOS_INVALIDOS';
+        }
+
+        analyticsService.trackPaymentTelemetry({
+          success: false,
+          latencyMs: 1200,
+          paymentMethod,
+          reasonCategory: cat,
+          errorCode: gatewayErr.code || 'GATEWAY_ERROR',
+          errorMessage: gatewayErr.message,
+          orderId: orderRefId
+        });
+
         setPaymentError(userMessage);
         setIsProcessing(false);
         return;
@@ -914,7 +1070,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       paidAt,
       pixQrCodeUrl,
       pixCopiaECola,
-      pixExpiresAt: paymentMethod === 'PIX' ? new Date(Date.now() + 30 * 60 * 1000).toISOString() : null,
+      pixExpiresAt: paymentMethod === 'PIX' ? (pagbankRes?.pixExpiresAt || pagbankData?.pixExpiresAt || new Date(Date.now() + 20 * 60 * 1000).toISOString()) : null,
       pagbank: pagbankData ? {
         orderId: pagbankData.id || null,
         referenceId: pagbankData.reference_id || orderRefId,
@@ -1014,6 +1170,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       setOrderNumber(generatedOrder);
       setCreatedOrderId(finalDocId);
       setCreatedOrderStatus(initialStatus);
+      setCreatedOrderDate(Date.now());
+      if (orderData.pixExpiresAt) {
+        setPixExpiresAt(orderData.pixExpiresAt);
+      }
 
       // Notifica time operacional se já iniciou aprovado
       if (initialStatus === ORDER_STATUSES.PAGAMENTO_APROVADO) {
@@ -1103,8 +1263,14 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         status: 'concluido'
       });
 
-      // 5. Registra a conversão de compra por produto, atribuição UTM e distribuição de tamanhos no analytics
-      await analyticsService.trackPurchase(cartItems, total);
+      // 5. Registra a conversão de compra por produto, atribuição UTM e telemetria logística/pagamento
+      await analyticsService.trackPurchase(cartItems, total, {
+        paymentMethod: finalAmountToPay === 0 ? 'Carteira Digital THR33' : (paymentMethod || 'PIX'),
+        shippingState: addressToSave?.state || 'SP',
+        shippingCity: addressToSave?.city || '',
+        shippingMethod: selectedShippingMethod || 'padrao',
+        carrier: selectedShippingOption?.carrier || selectedShippingOption?.name || (isFreeShippingActive ? 'Frete Grátis' : 'Transportadora')
+      });
 
       // 6. Decrementa o estoque físico por tamanho no Firestore de forma automatizada
       await catalogService.decrementProductStock(cartItems);
@@ -1241,7 +1407,73 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                     <span>{copiedPix ? 'COPIADO!' : 'COPIAR CHAVE'}</span>
                   </button>
                 </div>
-                <span className={styles.pixTimerText}>O código Pix expira em 2 minutos.</span>
+
+                {/* TIMER REGRESSIVO DE 20 MINUTOS */}
+                <div 
+                  className={`${styles.pixTimerCard} ${
+                    pixExpired 
+                      ? styles.pixTimerCardExpired 
+                      : pixTimeRemaining <= 180 
+                        ? styles.pixTimerCardWarning 
+                        : ''
+                  }`}
+                >
+                  <div className={styles.pixTimerLeft}>
+                    <Clock 
+                      size={20} 
+                      className={`${styles.pixTimerIcon} ${
+                        pixExpired 
+                          ? styles.pixTimerIconExpired 
+                          : pixTimeRemaining <= 180 
+                            ? styles.pixTimerIconWarning 
+                            : ''
+                      }`} 
+                    />
+                    <div className={styles.pixTimerInfo}>
+                      <span className={styles.pixTimerLabel}>
+                        {pixExpired ? 'Status do Pix' : 'Tempo para pagamento'}
+                      </span>
+                      <strong 
+                        className={`${styles.pixTimerCountdown} ${
+                          pixExpired 
+                            ? styles.pixTimerCountdownExpired 
+                            : pixTimeRemaining <= 180 
+                              ? styles.pixTimerCountdownWarning 
+                              : ''
+                        }`}
+                      >
+                        {pixExpired ? 'EXPIRADO (00:00)' : formatPixTimer(pixTimeRemaining)}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <span 
+                    className={`${styles.pixTimerBadgePill} ${
+                      pixExpired 
+                        ? styles.pixTimerBadgeExpired 
+                        : pixTimeRemaining <= 180 
+                          ? styles.pixTimerBadgeWarning 
+                          : ''
+                    }`}
+                  >
+                    {pixExpired 
+                      ? 'Prazo esgotado' 
+                      : pixTimeRemaining <= 180 
+                        ? 'Expira em breve' 
+                        : 'Válido por 20 min'}
+                  </span>
+                </div>
+
+                {pixExpired ? (
+                  <div className={styles.pixExpiredNotice}>
+                    <AlertCircle size={16} />
+                    <span>O prazo de 20 minutos encerrou. As peças reservadas foram liberadas no estoque. Para concluir a compra, por favor gere um novo pedido.</span>
+                  </div>
+                ) : (
+                  <span className={styles.pixTimerSubtext}>
+                    Você tem até 20 minutos para abrir o app do seu banco e pagar via Pix.
+                  </span>
+                )}
               </div>
             )
           )}
@@ -1371,44 +1603,21 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 </div>
 
                 {user && (
-                  <div className={`${styles.prefilledUserBanner} ${isEditingAccountData ? styles.editingBanner : ''}`}>
+                  <div className={styles.prefilledUserBanner}>
                     <div className={styles.prefilledUserInfo}>
-                      <UserCheck size={18} color={isEditingAccountData ? "#facc15" : "#4ade80"} />
+                      <UserCheck size={18} color="#4ade80" />
                       <div>
-                        <strong>
-                          {isEditingAccountData 
-                            ? 'Modo de Edição Ativo' 
-                            : `Conectado como ${clientData.name || user.email}`}
-                        </strong>
-                        <small>
-                          {isEditingAccountData 
-                            ? 'Altere os campos abaixo e clique em Salvar Dados para bloquear novamente.' 
-                            : `E-mail: ${clientData.email} • CPF: ${clientData.cpf || 'Não informado'}`}
-                        </small>
+                        <strong>Conectado como {user.email}</strong>
+                        <small>Confirme ou complete seus dados cadastrais abaixo para emissão da NF-e.</small>
                       </div>
                     </div>
-                    <button 
-                      type="button" 
-                      onClick={handleToggleEditAccountData} 
-                      disabled={savingProfile}
-                      className={`${styles.editDataBtn} ${isEditingAccountData ? styles.saveDataBtn : ''}`}
-                    >
-                      {savingProfile ? (
-                        <Loader2 size={13} className={styles.spinning} />
-                      ) : isEditingAccountData ? (
-                        <Check size={13} />
-                      ) : (
-                        <Edit3 size={13} />
-                      )}
-                      <span>{savingProfile ? 'Salvando...' : isEditingAccountData ? 'Salvar Dados' : 'Editar'}</span>
-                    </button>
                   </div>
                 )}
 
                 {saveProfileSuccess && (
                   <div className={styles.saveSuccessNotice}>
                     <Check size={14} color="#4ade80" />
-                    <span>Dados cadastrais atualizados e bloqueados com sucesso!</span>
+                    <span>Dados cadastrais sincronizados com sua conta!</span>
                   </div>
                 )}
 
@@ -1422,8 +1631,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                         placeholder="Ex: Matheus Rocha" 
                         value={clientData.name} 
                         onChange={handleClientChange} 
-                        disabled={Boolean(user && !isEditingAccountData)}
-                        className={`${clientErrors.name ? styles.inputError : ''} ${isNameValid && !clientErrors.name ? styles.inputSuccess : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
+                        className={`${clientErrors.name ? styles.inputError : ''} ${isNameValid && !clientErrors.name ? styles.inputSuccess : ''}`}
                       />
                       {isNameValid && !clientErrors.name && (
                         <div className={styles.inputCheckPosition}>
@@ -1443,8 +1651,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                         placeholder="seu@email.com" 
                         value={clientData.email} 
                         onChange={handleClientChange} 
-                        disabled={Boolean(user && !isEditingAccountData)}
-                        className={`${clientErrors.email ? styles.inputError : ''} ${isEmailValid && !clientErrors.email ? styles.inputSuccess : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
+                        className={`${clientErrors.email ? styles.inputError : ''} ${isEmailValid && !clientErrors.email ? styles.inputSuccess : ''}`}
                       />
                       {isEmailValid && !clientErrors.email && (
                         <div className={styles.inputCheckPosition}>
@@ -1469,8 +1676,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                           maxLength={18}
                           value={clientData.cpf} 
                           onChange={handleClientChange} 
-                          disabled={Boolean(user && !isEditingAccountData)}
-                          className={`${clientErrors.cpf ? styles.inputError : ''} ${isCpfValid && !clientErrors.cpf ? styles.inputSuccess : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
+                          className={`${clientErrors.cpf ? styles.inputError : ''} ${isCpfValid && !clientErrors.cpf ? styles.inputSuccess : ''}`}
                         />
                         {isCpfValid && !clientErrors.cpf && (
                           <div className={styles.inputCheckPosition}>
@@ -1494,8 +1700,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                           maxLength={15}
                           value={clientData.phone} 
                           onChange={handleClientChange} 
-                          disabled={Boolean(user && !isEditingAccountData)}
-                          className={`${clientErrors.phone ? styles.inputError : ''} ${isPhoneValid && !clientErrors.phone ? styles.inputSuccess : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
+                          className={`${clientErrors.phone ? styles.inputError : ''} ${isPhoneValid && !clientErrors.phone ? styles.inputSuccess : ''}`}
                         />
                         {isPhoneValid && !clientErrors.phone && (
                           <div className={styles.inputCheckPosition}>
@@ -1541,19 +1746,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                   <button 
                     type="button" 
                     onClick={handleNextToStep2} 
-                    disabled={isEditingAccountData || savingProfile}
-                    className={`${styles.primaryBtn} ${isEditingAccountData ? styles.disabledStepBtn : ''}`}
-                    title={isEditingAccountData ? "Salve as alterações no botão 'Salvar Dados' acima antes de prosseguir." : ""}
+                    className={styles.primaryBtn}
                   >
                     <span>CONTINUAR PARA ENTREGA</span>
                     <ArrowRight size={15} />
                   </button>
-                  {isEditingAccountData && (
-                    <small className={styles.editingModeWarning}>
-                      <AlertCircle size={13} color="#facc15" />
-                      <span>Salve os dados no botão "Salvar Dados" acima para liberar o avanço.</span>
-                    </small>
-                  )}
                 </div>
               </motion.section>
             )}
