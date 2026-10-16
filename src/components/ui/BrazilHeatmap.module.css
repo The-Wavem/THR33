@@ -74,8 +74,6 @@
 }
 
 .sideDetailsCard {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-color);
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
