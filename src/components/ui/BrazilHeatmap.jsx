@@ -1,7 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ComposableMap, Geographies, Geography, Marker } from 'react-simple-maps';
 import { scaleLinear } from 'd3-scale';
-import { Compass, ShoppingBag, DollarSign, TrendingUp, Info } from 'lucide-react';
+import { Compass, MapPin, Package, Truck, Layers } from 'lucide-react';
 import styles from './BrazilHeatmap.module.css';
 
 // URL do arquivo GeoJSON oficial com as fronteiras reais dos 26 estados + DF
@@ -38,35 +38,38 @@ const STATE_CENTROIDS = {
   TO: [-48.3, -10.1],
 };
 
-// Metadados dos Estados Brasileiros e Macrorregiões
+// Estados costeiros/compactos onde a sigla estática só aparece quando há envios ou em hover para evitar sobreposição
+const COMPACT_COASTAL_UFS = new Set(['RN', 'PB', 'AL', 'SE', 'DF']);
+
+// Metadados dos Estados Brasileiros, Macrorregiões e prioridade logística para desempate quando zerado
 const BRAZIL_STATES_META = {
-  AC: { name: 'Acre', region: 'Norte' },
-  AL: { name: 'Alagoas', region: 'Nordeste' },
-  AM: { name: 'Amazonas', region: 'Norte' },
-  AP: { name: 'Amapá', region: 'Norte' },
-  BA: { name: 'Bahia', region: 'Nordeste' },
-  CE: { name: 'Ceará', region: 'Nordeste' },
-  DF: { name: 'Distrito Federal', region: 'Centro-Oeste' },
-  ES: { name: 'Espírito Santo', region: 'Sudeste' },
-  GO: { name: 'Goiás', region: 'Centro-Oeste' },
-  MA: { name: 'Maranhão', region: 'Nordeste' },
-  MG: { name: 'Minas Gerais', region: 'Sudeste' },
-  MS: { name: 'Mato Grosso do Sul', region: 'Centro-Oeste' },
-  MT: { name: 'Mato Grosso', region: 'Centro-Oeste' },
-  PA: { name: 'Pará', region: 'Norte' },
-  PB: { name: 'Paraíba', region: 'Nordeste' },
-  PE: { name: 'Pernambuco', region: 'Nordeste' },
-  PI: { name: 'Piauí', region: 'Nordeste' },
-  PR: { name: 'Paraná', region: 'Sul' },
-  RJ: { name: 'Rio de Janeiro', region: 'Sudeste' },
-  RN: { name: 'Rio Grande do Norte', region: 'Nordeste' },
-  RO: { name: 'Rondônia', region: 'Norte' },
-  RR: { name: 'Roraima', region: 'Norte' },
-  RS: { name: 'Rio Grande do Sul', region: 'Sul' },
-  SC: { name: 'Santa Catarina', region: 'Sul' },
-  SE: { name: 'Sergipe', region: 'Nordeste' },
-  SP: { name: 'São Paulo', region: 'Sudeste' },
-  TO: { name: 'Tocantins', region: 'Norte' },
+  SP: { name: 'São Paulo', region: 'Sudeste', hubPriority: 1 },
+  PR: { name: 'Paraná', region: 'Sul', hubPriority: 2 },
+  RJ: { name: 'Rio de Janeiro', region: 'Sudeste', hubPriority: 3 },
+  MG: { name: 'Minas Gerais', region: 'Sudeste', hubPriority: 4 },
+  SC: { name: 'Santa Catarina', region: 'Sul', hubPriority: 5 },
+  RS: { name: 'Rio Grande do Sul', region: 'Sul', hubPriority: 6 },
+  DF: { name: 'Distrito Federal', region: 'Centro-Oeste', hubPriority: 7 },
+  BA: { name: 'Bahia', region: 'Nordeste', hubPriority: 8 },
+  GO: { name: 'Goiás', region: 'Centro-Oeste', hubPriority: 9 },
+  ES: { name: 'Espírito Santo', region: 'Sudeste', hubPriority: 10 },
+  PE: { name: 'Pernambuco', region: 'Nordeste', hubPriority: 11 },
+  CE: { name: 'Ceará', region: 'Nordeste', hubPriority: 12 },
+  MS: { name: 'Mato Grosso do Sul', region: 'Centro-Oeste', hubPriority: 13 },
+  MT: { name: 'Mato Grosso', region: 'Centro-Oeste', hubPriority: 14 },
+  PA: { name: 'Pará', region: 'Norte', hubPriority: 15 },
+  AM: { name: 'Amazonas', region: 'Norte', hubPriority: 16 },
+  RN: { name: 'Rio Grande do Norte', region: 'Nordeste', hubPriority: 17 },
+  PB: { name: 'Paraíba', region: 'Nordeste', hubPriority: 18 },
+  MA: { name: 'Maranhão', region: 'Nordeste', hubPriority: 19 },
+  AL: { name: 'Alagoas', region: 'Nordeste', hubPriority: 20 },
+  SE: { name: 'Sergipe', region: 'Nordeste', hubPriority: 21 },
+  PI: { name: 'Piauí', region: 'Nordeste', hubPriority: 22 },
+  TO: { name: 'Tocantins', region: 'Norte', hubPriority: 23 },
+  RO: { name: 'Rondônia', region: 'Norte', hubPriority: 24 },
+  AC: { name: 'Acre', region: 'Norte', hubPriority: 25 },
+  AP: { name: 'Amapá', region: 'Norte', hubPriority: 26 },
+  RR: { name: 'Roraima', region: 'Norte', hubPriority: 27 },
 };
 
 const REGION_COLORS = {
@@ -77,18 +80,26 @@ const REGION_COLORS = {
   Norte: '#a78bfa',
 };
 
-export function BrazilHeatmap({ stateData = [], totalOrders = 0, totalRevenue = 0 }) {
-  // Mapa de métricas por UF a partir dos pedidos reais
+export function BrazilHeatmap({
+  stateData = [],
+  regionData = [],
+  totalOrders = 0,
+  totalPieces = 0,
+  totalRevenue = 0,
+}) {
+  // Mapa de métricas logísticas por UF a partir dos endereços reais dos pedidos
   const stateMetricsMap = useMemo(() => {
     const map = {};
     if (Array.isArray(stateData)) {
       stateData.forEach((st) => {
         const uf = String(st.uf || st.estado || '').toUpperCase().trim();
-        if (uf) {
+        if (uf && BRAZIL_STATES_META[uf]) {
           map[uf] = {
             pedidos: Number(st.pedidos || 0),
+            pecas: Number(st.pecas || st.pedidos || 0),
             receita: Number(st.receita || 0),
             regiao: st.regiao || BRAZIL_STATES_META[uf]?.region || 'Sudeste',
+            cidades: Array.isArray(st.cidades) ? st.cidades : [],
           };
         }
       });
@@ -96,7 +107,12 @@ export function BrazilHeatmap({ stateData = [], totalOrders = 0, totalRevenue = 
     return map;
   }, [stateData]);
 
-  // Volume máximo de pedidos para cálculo da escala
+  // Quantidade de estados atendidos com pelo menos 1 envio no período
+  const activeStatesCount = useMemo(() => {
+    return Object.values(stateMetricsMap).filter((s) => s.pedidos > 0).length;
+  }, [stateMetricsMap]);
+
+  // Volume máximo de pedidos para cálculo da escala de calor
   const maxOrders = useMemo(() => {
     let max = 0;
     Object.values(stateMetricsMap).forEach((s) => {
@@ -105,64 +121,114 @@ export function BrazilHeatmap({ stateData = [], totalOrders = 0, totalRevenue = 
     return Math.max(max, 1);
   }, [stateMetricsMap]);
 
-  // Escala linear D3 para o mapa coroplético (gradiente de calor)
+  // Escala linear D3 para o mapa coroplético (gradiente esmeralda/neon)
   const colorScale = useMemo(() => {
     return scaleLinear()
       .domain([1, Math.max(maxOrders, 2)])
-      .range(['#1b4332', '#4ade80']);
+      .range(['#134e35', '#22c55e']);
   }, [maxOrders]);
+
+  // Ranking ordenado dos 5 maiores polos de envio de roupas
+  const topRanking = useMemo(() => {
+    return Object.entries(BRAZIL_STATES_META)
+      .map(([uf, meta]) => {
+        const m = stateMetricsMap[uf] || {
+          pedidos: 0,
+          pecas: 0,
+          receita: 0,
+          cidades: [],
+        };
+        return {
+          uf,
+          name: meta.name,
+          region: meta.region,
+          hubPriority: meta.hubPriority,
+          pedidos: m.pedidos,
+          pecas: m.pecas,
+          receita: m.receita,
+          cidades: m.cidades,
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.pedidos - a.pedidos ||
+          b.pecas - a.pecas ||
+          b.receita - a.receita ||
+          a.hubPriority - b.hubPriority
+      )
+      .slice(0, 5);
+  }, [stateMetricsMap]);
 
   // Estado interativo compartilhado entre o mapa e o painel de Raio-X
   const [hoveredUf, setHoveredUf] = useState(null);
   const [selectedUf, setSelectedUf] = useState('SP');
 
+  // Sincroniza o estado inicial selecionado com o Estado líder em envios reais
+  useEffect(() => {
+    if (topRanking.length > 0 && topRanking[0].pedidos > 0) {
+      setSelectedUf(topRanking[0].uf);
+    }
+  }, [topRanking]);
+
   // Estado atualmente exibido no Raio-X Territorial
   const activeState = useMemo(() => {
     const targetUf = hoveredUf || selectedUf || 'SP';
     const meta = BRAZIL_STATES_META[targetUf] || BRAZIL_STATES_META['SP'];
-    const metrics = stateMetricsMap[targetUf] || { pedidos: 0, receita: 0, regiao: meta.region };
-    const pct = totalRevenue > 0 ? ((metrics.receita / totalRevenue) * 100).toFixed(1) : '0.0';
+    const metrics = stateMetricsMap[targetUf] || {
+      pedidos: 0,
+      pecas: 0,
+      receita: 0,
+      regiao: meta.region,
+      cidades: [],
+    };
+    const revenuePct =
+      totalRevenue > 0 ? ((metrics.receita / totalRevenue) * 100).toFixed(1) : '0.0';
+    const ordersPct =
+      totalOrders > 0 ? ((metrics.pedidos / totalOrders) * 100).toFixed(1) : '0.0';
 
     return {
       uf: targetUf,
       name: meta.name,
       region: meta.region,
       pedidos: metrics.pedidos,
+      pecas: metrics.pecas,
       receita: metrics.receita,
-      pct,
+      cidades: metrics.cidades || [],
+      revenuePct,
+      ordersPct,
     };
-  }, [hoveredUf, selectedUf, stateMetricsMap, totalRevenue]);
+  }, [hoveredUf, selectedUf, stateMetricsMap, totalRevenue, totalOrders]);
 
-  // Ranking ordenado dos 5 maiores polos
-  const topRanking = useMemo(() => {
-    return Object.entries(BRAZIL_STATES_META)
-      .map(([uf, meta]) => {
-        const m = stateMetricsMap[uf] || { pedidos: 0, receita: 0 };
-        return {
-          uf,
-          name: meta.name,
-          region: meta.region,
-          pedidos: m.pedidos,
-          receita: m.receita,
-        };
-      })
-      .sort((a, b) => b.pedidos - a.pedidos || b.receita - a.receita)
-      .slice(0, 5);
-  }, [stateMetricsMap]);
+  // Total de peças enviadas (usa prop ou soma dos estados)
+  const effectiveTotalPieces = useMemo(() => {
+    if (totalPieces > 0) return totalPieces;
+    return Object.values(stateMetricsMap).reduce((acc, s) => acc + (s.pecas || 0), 0);
+  }, [totalPieces, stateMetricsMap]);
 
   return (
     <div className={styles.heatmapContainer}>
-      {/* MAPA COROPLÉTICO VETORIAL DO BRASIL VIA REACT-SIMPLE-MAPS */}
+      {/* COLUNA ESQUERDA: MAPA COROPLÉTICO DO BRASIL (DESTINOS DE ENVIO) */}
       <div className={styles.mapWrapper}>
+        <div className={styles.mapTopBar}>
+
+          <div className={styles.mapSummaryPills}>
+            <span className={styles.mapSummaryPill}>
+              <strong>{activeStatesCount}</strong> {activeStatesCount === 1 ? 'UF atendida' : 'UFs atendidas'}
+            </span>
+            <span className={styles.mapSummaryPillAccent}>
+              <strong>{effectiveTotalPieces}</strong> {effectiveTotalPieces === 1 ? 'peça enviada' : 'peças enviadas'}
+            </span>
+          </div>
+        </div>
 
         <ComposableMap
           projection="geoMercator"
           projectionConfig={{
-            scale: 780,
+            scale: 775,
             center: [-54, -15],
           }}
           width={600}
-          height={600}
+          height={580}
           className={styles.mapSvg}
         >
           <Geographies geography={BRAZIL_GEO_URL}>
@@ -170,44 +236,59 @@ export function BrazilHeatmap({ stateData = [], totalOrders = 0, totalRevenue = 
               geographies.map((geo) => {
                 const uf = String(
                   geo.properties?.sigla ||
-                  geo.properties?.UF ||
-                  geo.properties?.sigla_uf ||
-                  geo.id ||
-                  ''
+                    geo.properties?.UF ||
+                    geo.properties?.sigla_uf ||
+                    geo.id ||
+                    ''
                 ).toUpperCase();
 
-                const metrics = stateMetricsMap[uf] || { pedidos: 0, receita: 0 };
+                const metrics = stateMetricsMap[uf] || { pedidos: 0, pecas: 0, receita: 0 };
                 const hasOrders = metrics.pedidos > 0;
+                const isLeader = hasOrders && metrics.pedidos === maxOrders;
                 const isHovered = hoveredUf === uf;
                 const isSelected = activeState.uf === uf;
 
-                // Cor do estado: grafite escuro com 0 pedidos, gradiente verde neon com pedidos
-                let fillColor = '#141414';
+                // Preenchimento do estado conforme volume de envios
+                let fillColor = '#16161a';
                 if (hasOrders) {
-                  fillColor = colorScale(metrics.pedidos);
+                  fillColor = isLeader ? '#22c55e' : colorScale(metrics.pedidos);
                 }
-                if (isHovered || isSelected) {
-                  fillColor = hasOrders ? '#22c55e' : '#262626';
+                if (isHovered) {
+                  fillColor = hasOrders ? '#4ade80' : '#27272e';
+                } else if (isSelected && !hasOrders) {
+                  fillColor = '#222228';
                 }
+
+                const strokeColor =
+                  isHovered || isSelected
+                    ? '#4ade80'
+                    : hasOrders
+                      ? 'rgba(74, 222, 128, 0.55)'
+                      : 'rgba(255, 255, 255, 0.16)';
+
+                const strokeWidth = isHovered || isSelected ? 1.75 : hasOrders ? 1.15 : 0.7;
 
                 return (
                   <Geography
                     key={geo.rsmKey}
                     geography={geo}
                     fill={fillColor}
-                    stroke={isSelected || isHovered ? '#4ade80' : 'rgba(255, 255, 255, 0.15)'}
-                    strokeWidth={isSelected || isHovered ? 1.6 : 0.6}
+                    stroke={strokeColor}
+                    strokeWidth={strokeWidth}
                     style={{
                       default: {
                         outline: 'none',
-                        transition: 'all 0.2s ease',
+                        transition: 'all 0.22s ease',
                         cursor: 'pointer',
+                        filter: hasOrders
+                          ? 'drop-shadow(0 0 8px rgba(34, 197, 94, 0.28))'
+                          : 'none',
                       },
                       hover: {
                         outline: 'none',
-                        fill: hasOrders ? '#4ade80' : '#2c2c2c',
+                        fill: hasOrders ? '#4ade80' : '#2a2a32',
                         cursor: 'pointer',
-                        filter: 'drop-shadow(0 0 6px rgba(74, 222, 128, 0.6))',
+                        filter: 'drop-shadow(0 0 10px rgba(74, 222, 128, 0.55))',
                       },
                       pressed: {
                         outline: 'none',
@@ -222,86 +303,114 @@ export function BrazilHeatmap({ stateData = [], totalOrders = 0, totalRevenue = 
             }
           </Geographies>
 
-          {/* HOTZONES PULSANTES NOS ESTADOS COM PEDIDOS CONFIRMADOS */}
+          {/* MARCADORES DE UF E HOTZONES PULSANTES NOS POLOS DE ENVIO */}
           {Object.entries(STATE_CENTROIDS).map(([uf, coords]) => {
-            const metrics = stateMetricsMap[uf] || { pedidos: 0, receita: 0 };
+            const metrics = stateMetricsMap[uf] || { pedidos: 0, pecas: 0, receita: 0 };
             const hasOrders = metrics.pedidos > 0;
-            const isLeader = metrics.pedidos === maxOrders && maxOrders > 0;
+            const isLeader = hasOrders && metrics.pedidos === maxOrders;
             const isHovered = hoveredUf === uf;
-            const isSelected = selectedUf === uf;
+            const isSelected = activeState.uf === uf;
+            const isCompact = COMPACT_COASTAL_UFS.has(uf);
 
-            if (!hasOrders && !isHovered && !isSelected) return null;
+            // Estados pequenos do litoral só exibem rótulo se tiverem envios ou estiverem ativos
+            if (isCompact && !hasOrders && !isHovered && !isSelected) {
+              return null;
+            }
 
             return (
-              <Marker key={`marker-${uf}`} coordinates={coords}>
+              <Marker
+                key={`marker-${uf}`}
+                coordinates={coords}
+                style={{
+                  default: { pointerEvents: 'none' },
+                  hover: { pointerEvents: 'none' },
+                  pressed: { pointerEvents: 'none' },
+                }}
+              >
                 {hasOrders && (
                   <>
                     <circle
-                      r={isLeader ? 14 : 9}
+                      r={isLeader ? 15 : 10}
                       className={styles.hotzonePulse}
                       fill="none"
                       stroke="#4ade80"
-                      strokeWidth={1.5}
+                      strokeWidth={1.6}
                     />
                     <circle
-                      r={isLeader ? 5 : 3.5}
-                      fill="#4ade80"
+                      r={isLeader ? 5.5 : 4}
+                      fill="#052e16"
+                      stroke="#ffffff"
+                      strokeWidth={1.5}
                       className={styles.hotzoneCore}
                     />
                   </>
                 )}
+
                 <text
                   textAnchor="middle"
                   y={hasOrders ? -10 : 3}
                   className={styles.stateLabelText}
                   style={{
-                    fill: hasOrders ? '#4ade80' : '#ffffff',
-                    fontWeight: hasOrders || isHovered ? 900 : 700,
+                    fill: hasOrders
+                      ? '#ffffff'
+                      : isHovered || isSelected
+                        ? '#e4e4e7'
+                        : 'rgba(255, 255, 255, 0.36)',
+                    fontSize: hasOrders || isHovered || isSelected ? '10px' : '8.5px',
+                    fontWeight: hasOrders || isHovered || isSelected ? 900 : 600,
                   }}
                 >
-                  {uf}
+                  {hasOrders ? `${uf} (${metrics.pedidos})` : uf}
                 </text>
               </Marker>
             );
           })}
         </ComposableMap>
 
-        <div className={styles.mapFooterLegend}>
+        <div className={styles.mapFooterBar}>
           <div className={styles.legendScale}>
-            <span style={{ fontSize: '0.65rem', color: '#777777' }}>0 pedidos</span>
+            <span className={styles.legendLabelMuted}>0 envios</span>
             <div className={styles.legendGradientBar} />
-            <span style={{ fontSize: '0.65rem', color: '#4ade80' }}>
-              {maxOrders} {maxOrders === 1 ? 'pedido' : 'pedidos'}
+            <span className={styles.legendLabelBright}>
+              {maxOrders} {maxOrders === 1 ? 'envio' : 'envios'}
             </span>
           </div>
+
+          {Array.isArray(regionData) && regionData.length > 0 && (
+            <div className={styles.regionMiniChips}>
+              {regionData.map((reg) => (
+                <span key={reg.regiao} className={styles.regionMiniChip}>
+                  <span
+                    className={styles.regionMiniDot}
+                    style={{ backgroundColor: reg.fill || REGION_COLORS[reg.regiao] || '#4ade80' }}
+                  />
+                  <span>{reg.regiao}:</span>
+                  <strong>{reg.pedidos}</strong>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
-      {/* RAIO-X TERRITORIAL DO ESTADO SELECIONADO / EM HOVER */}
+      {/* COLUNA DIREITA: RAIO-X TERRITORIAL DE ENVIOS */}
       <div className={styles.sideDetailsCard}>
         <div>
           <div className={styles.sideHeader}>
             <div>
               <h3 className={styles.sideTitle}>RAIO-X TERRITORIAL</h3>
-              <p className={styles.sideSub}>Passe o cursor ou clique em qualquer UF para inspecionar</p>
+              <p className={styles.sideSub}>
+                Endereços de entrega dos clientes • Passe o cursor ou clique em qualquer UF
+              </p>
             </div>
             <Compass size={18} color="#4ade80" />
           </div>
 
           <div className={styles.activeStateBox} style={{ marginTop: '0.85rem' }}>
             <div className={styles.activeStateName}>
-              <div>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
                 <span className={styles.activeStateUf}>{activeState.uf}</span>
-                <span
-                  style={{
-                    fontSize: '0.9rem',
-                    fontWeight: 800,
-                    marginLeft: '0.55rem',
-                    color: '#e5e5e5',
-                  }}
-                >
-                  {activeState.name}
-                </span>
+                <span className={styles.activeStateFullTitle}>{activeState.name}</span>
               </div>
               <span
                 className={styles.activeStateRegion}
@@ -314,48 +423,128 @@ export function BrazilHeatmap({ stateData = [], totalOrders = 0, totalRevenue = 
               </span>
             </div>
 
-            <div className={styles.activeStateStats}>
+            {/* CIDADES DE DESTINO DOS CLIENTES */}
+            <div className={styles.activeCitiesRow}>
+              <MapPin size={12} color={activeState.pedidos > 0 ? '#4ade80' : '#666666'} />
+              {activeState.cidades.length > 0 ? (
+                <span>
+                  Principais destinos: <strong>{activeState.cidades.join(', ')}</strong>
+                </span>
+              ) : activeState.pedidos > 0 ? (
+                <span>
+                  Endereços confirmados em <strong>{activeState.name} ({activeState.uf})</strong>
+                </span>
+              ) : (
+                <span style={{ color: '#666666' }}>
+                  Nenhum envio registrado para clientes desta UF no período
+                </span>
+              )}
+            </div>
+
+            {/* MÉTRICAS LOGÍSTICAS E DE RECEITA DA UF */}
+            <div className={styles.activeStateStatsThreeCols}>
               <div className={styles.activeStatItem}>
-                <span className={styles.activeStatLabel}>Pedidos Entregues</span>
+                <span className={styles.activeStatLabel}>
+                  <Truck size={10} /> Envios / Pedidos
+                </span>
                 <strong className={styles.activeStatVal} style={{ color: '#4ade80' }}>
-                  {activeState.pedidos} {activeState.pedidos === 1 ? 'pedido' : 'pedidos'}
+                  {activeState.pedidos} {activeState.pedidos === 1 ? 'envio' : 'envios'}
                 </strong>
               </div>
+
               <div className={styles.activeStatItem}>
-                <span className={styles.activeStatLabel}>Faturamento</span>
+                <span className={styles.activeStatLabel}>
+                  <Layers size={10} /> Roupas Enviadas
+                </span>
+                <strong className={styles.activeStatVal} style={{ color: '#60a5fa' }}>
+                  {activeState.pecas} {activeState.pecas === 1 ? 'peça' : 'peças'}
+                </strong>
+              </div>
+
+              <div className={styles.activeStatItem}>
+                <span className={styles.activeStatLabel}>
+                  <Package size={10} /> Faturamento UF
+                </span>
                 <strong className={styles.activeStatVal}>
                   R$ {activeState.receita.toFixed(2).replace('.', ',')}
                 </strong>
               </div>
             </div>
 
-            <div style={{ fontSize: '0.72rem', color: '#888888', marginTop: '0.35rem' }}>
-              Participação: <strong style={{ color: '#e5e5e5' }}>{activeState.pct}%</strong> de toda a receita nacional da THR33 no período.
+            {/* BARRA DE PARTICIPAÇÃO NACIONAL */}
+            <div className={styles.shareBlock}>
+              <div className={styles.shareHeaderRow}>
+                <span>
+                  Volume logístico: <strong>{activeState.ordersPct}%</strong> dos envios
+                </span>
+                <span>
+                  Receita: <strong>{activeState.revenuePct}%</strong> do Brasil
+                </span>
+              </div>
+              <div className={styles.shareBarTrack}>
+                <div
+                  className={styles.shareBarFill}
+                  style={{
+                    width: `${Math.min(100, Math.max(activeState.pedidos > 0 ? 4 : 0, Number(activeState.ordersPct)))}%`,
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>
 
-        {/* TOP POLOS DE VENDAS */}
+        {/* RANKING DOS TOP POLOS DE ENVIO */}
         <div className={styles.rankingList}>
-          <span className={styles.rankingHeader}>Top Polos de Vendas (Brasil)</span>
-          {topRanking.map((rk, idx) => (
-            <div
-              key={`rank-${rk.uf}`}
-              className={`${styles.rankingRow} ${activeState.uf === rk.uf ? styles.rankingRowActive : ''}`}
-              onClick={() => setSelectedUf(rk.uf)}
-              onMouseEnter={() => setHoveredUf(rk.uf)}
-              onMouseLeave={() => setHoveredUf(null)}
-            >
-              <div className={styles.rankingLeft}>
-                <span className={styles.rankingPos}>#{idx + 1}</span>
-                <strong style={{ color: rk.pedidos > 0 ? '#4ade80' : '#cccccc' }}>{rk.uf}</strong>
-                <span style={{ color: '#888888', fontSize: '0.7rem' }}>{rk.name}</span>
+          <div className={styles.rankingHeaderRow}>
+            <span className={styles.rankingHeader}>Top Destinos de Envio (Brasil)</span>
+            <span className={styles.rankingHeaderMeta}>Peças • Envios • Valor</span>
+          </div>
+
+          {topRanking.map((rk, idx) => {
+            const barWidthPct =
+              maxOrders > 0 && rk.pedidos > 0
+                ? Math.round((rk.pedidos / maxOrders) * 100)
+                : 0;
+            const isRowActive = activeState.uf === rk.uf;
+
+            return (
+              <div
+                key={`rank-${rk.uf}`}
+                className={`${styles.rankingRow} ${isRowActive ? styles.rankingRowActive : ''}`}
+                onClick={() => setSelectedUf(rk.uf)}
+                onMouseEnter={() => setHoveredUf(rk.uf)}
+                onMouseLeave={() => setHoveredUf(null)}
+              >
+                {barWidthPct > 0 && (
+                  <div
+                    className={styles.rankingRowProgressBg}
+                    style={{ width: `${barWidthPct}%` }}
+                  />
+                )}
+                <div className={styles.rankingLeft}>
+                  <span className={styles.rankingPos}>#{idx + 1}</span>
+                  <span
+                    className={styles.rankingRegionDot}
+                    style={{ backgroundColor: REGION_COLORS[rk.region] || '#4ade80' }}
+                    title={`Região ${rk.region}`}
+                  />
+                  <strong style={{ color: rk.pedidos > 0 ? '#4ade80' : '#cccccc' }}>
+                    {rk.uf}
+                  </strong>
+                  <span className={styles.rankingStateName}>{rk.name}</span>
+                </div>
+                <div className={styles.rankingRight}>
+                  <span className={styles.rankingPiecesBadge}>
+                    {rk.pecas} {rk.pecas === 1 ? 'pç' : 'pçs'}
+                  </span>
+                  <span className={styles.rankingDivider}>•</span>
+                  <span>{rk.pedidos} env.</span>
+                  <span className={styles.rankingDivider}>|</span>
+                  <strong>R$ {rk.receita.toFixed(0)}</strong>
+                </div>
               </div>
-              <div className={styles.rankingRight}>
-                {rk.pedidos} un. | R$ {rk.receita.toFixed(0)}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

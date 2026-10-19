@@ -23,8 +23,6 @@ export const webhookService = {
       timestamp: new Date().toISOString()
     };
 
-    console.info("[THR33 OPERACIONAL] Novo pedido aprovado para confecção:", summaryPayload);
-
     if (discordWebhookUrl && discordWebhookUrl.startsWith('https://discord.com/api/webhooks/')) {
       try {
         await fetch(discordWebhookUrl, {

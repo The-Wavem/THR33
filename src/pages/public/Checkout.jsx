@@ -770,8 +770,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       return;
     }
 
-    // Validação de cartão de crédito quando houver cobrança financeira
-    if (finalAmountToPay > 0 && paymentMethod === 'Cartão de Crédito') {
+    // Validação de cartão (Crédito ou Débito) quando houver cobrança financeira
+    const isCardPayment = paymentMethod === 'Cartão de Crédito' || paymentMethod === 'Cartão de Débito';
+    if (finalAmountToPay > 0 && isCardPayment) {
       const errors = {};
       if (!isCardNumberValid) {
         errors.number = 'Número de cartão inválido ou incompleto.';
@@ -863,21 +864,27 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       originalTotal: Number(total) || 0,
       walletDeduction: Number(walletDeduction) || 0,
       paymentMethod: finalAmountToPay === 0 ? 'Carteira Digital THR33' : (paymentMethod || 'PIX'),
-      paymentDetails: paymentMethod === 'Cartão de Crédito' ? {
+      paymentDetails: isCardPayment ? {
         brand: cardBrand,
         lastDigits,
-        installments: Number(installments) || 1
+        installments: paymentMethod === 'Cartão de Débito' ? 1 : (Number(installments) || 1),
+        cardType: paymentMethod === 'Cartão de Débito' ? 'DEBIT_CARD' : 'CREDIT_CARD'
       } : null,
       shippingAddress: {
         cep: addressToSave.cep || '',
+        postal_code: String(addressToSave.cep || '').replace(/\D/g, ''),
         street: addressToSave.street || '',
         number: addressToSave.number || '',
         neighborhood: addressToSave.neighborhood || '',
+        locality: addressToSave.neighborhood || '',
         city: addressToSave.city || 'Itaquaquecetuba',
         state: addressToSave.state || 'SP',
+        region_code: addressToSave.state || 'SP',
         ibge: addressToSave.ibge || '',
         complement: addressToSave.complement || ''
       },
+      clientState: addressToSave.state || 'SP',
+      clientCity: addressToSave.city || '',
       trackingCode: null,
       trackingUrl: null,
       utm_source: utmSource,
@@ -890,7 +897,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     if (finalAmountToPay > 0) {
       try {
         let cardEncrypted = null;
-        if (paymentMethod === 'Cartão de Crédito') {
+        if (isCardPayment) {
           const expYearClean = String(cardData.expYear || '').length === 2 
             ? `20${cardData.expYear}` 
             : String(cardData.expYear || '');
@@ -947,7 +954,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             lastDigits: cleanCardNumber ? cleanCardNumber.slice(-4) : '1111'
           },
           cardEncrypted,
-          installments,
+          installments: paymentMethod === 'Cartão de Débito' ? 1 : installments,
           totalAmount: finalAmountToPay,
           couponCode: appliedCoupon?.code || null,
           discountAmount: Number(discountAmount) || 0,
@@ -1039,7 +1046,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     if (finalAmountToPay === 0) {
       initialStatus = ORDER_STATUSES.PAGAMENTO_APROVADO;
       paidAt = new Date().toISOString();
-    } else if (paymentMethod === 'Cartão de Crédito') {
+    } else if (isCardPayment) {
       const charge = pagbankData?.charges?.[0];
       if (charge?.status === 'PAID' || charge?.status === 'AUTHORIZED') {
         initialStatus = ORDER_STATUSES.PAGAMENTO_APROVADO;
@@ -1145,14 +1152,18 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           finalDocId = newOrderRef.id;
         });
       } else {
-        // Enriquece o pedido já gravado no backend com metadados complementares (UTMs e detalhes visuais)
+        // Enriquece o pedido já gravado no backend com metadados complementares (UTMs, endereço normalizado e detalhes visuais)
         try {
           await setDoc(doc(db, 'orders', finalDocId), {
+            paymentMethod: cleanPayload.paymentMethod,
             utm_source: utmSource,
             utm_medium: utmMedium,
             utm_campaign: utmCampaign,
             paymentDetails: cleanPayload.paymentDetails,
-            items: cleanPayload.items
+            items: cleanPayload.items,
+            shippingAddress: cleanPayload.shippingAddress,
+            clientState: cleanPayload.clientState || cleanPayload.shippingAddress?.state || 'SP',
+            clientCity: cleanPayload.clientCity || cleanPayload.shippingAddress?.city || ''
           }, { merge: true });
         } catch (syncDocErr) {
           console.warn("Aviso ao enriquecer documento do pedido:", syncDocErr.message);
@@ -1478,13 +1489,13 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             )
           )}
 
-          {paymentMethod === 'Cartão de Crédito' && (
+          {(paymentMethod === 'Cartão de Crédito' || paymentMethod === 'Cartão de Débito') && (
             <div className={styles.cardSuccessBox}>
               <div className={styles.cardSuccessHeader}>
                 <CreditCard size={20} color="#4ade80" />
                 <div>
                   <strong>PAGAMENTO PROCESSADO COM SUCESSO</strong>
-                  <small>Gateway Seguro PagBank</small>
+                  <small>Gateway Seguro PagBank • {paymentMethod}</small>
                 </div>
               </div>
               <div className={styles.cardSuccessBody}>
@@ -1501,7 +1512,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 <div className={styles.cardSuccessRow}>
                   <span>Condição:</span>
                   <span>
-                    {(pagbankResult?.charges?.[0]?.payment_method?.installments || pagbankResult?.creditCard?.installments || installments)}x de R$ {(displayPaidAmount / (pagbankResult?.charges?.[0]?.payment_method?.installments || pagbankResult?.creditCard?.installments || installments)).toFixed(2)} sem juros
+                    {paymentMethod === 'Cartão de Débito'
+                      ? `1x de R$ ${displayPaidAmount.toFixed(2)} (À vista no Débito)`
+                      : `${(pagbankResult?.charges?.[0]?.payment_method?.installments || pagbankResult?.creditCard?.installments || installments)}x de R$ ${(displayPaidAmount / (pagbankResult?.charges?.[0]?.payment_method?.installments || pagbankResult?.creditCard?.installments || installments)).toFixed(2)} sem juros`}
                   </span>
                 </div>
                 <div className={styles.cardSuccessRow}>
@@ -1989,10 +2002,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
                   {isFreeShippingActive && (
                     <div style={{
-                      background: 'rgba(16, 185, 129, 0.1)',
-                      border: '1px solid rgba(16, 185, 129, 0.3)',
                       borderRadius: '6px',
-                      padding: '0.65rem 0.85rem',
+                      padding: '0.55rem 0.85rem',
                       marginBottom: '0.85rem',
                       display: 'flex',
                       alignItems: 'center',
@@ -2128,7 +2139,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                     <div className={styles.pagBankMethodsList}>
                       <button 
                         type="button" 
-                        onClick={() => setPaymentMethod('PIX')}
+                        onClick={() => {
+                          setPaymentMethod('PIX');
+                          if (paymentError) setPaymentError(null);
+                        }}
                         className={`${styles.methodPillBtn} ${paymentMethod === 'PIX' ? styles.activeMethodPill : ''}`}
                       >
                         <div className={styles.methodContent}>
@@ -2140,7 +2154,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
                       <button 
                         type="button" 
-                        onClick={() => setPaymentMethod('Cartão de Crédito')}
+                        onClick={() => {
+                          setPaymentMethod('Cartão de Crédito');
+                          if (paymentError) setPaymentError(null);
+                        }}
                         className={`${styles.methodPillBtn} ${paymentMethod === 'Cartão de Crédito' ? styles.activeMethodPill : ''}`}
                       >
                         <div className={styles.methodContent}>
@@ -2149,22 +2166,38 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                         </div>
                         {paymentMethod === 'Cartão de Crédito' && <CheckCircle2 size={15} className={styles.methodCheck} />}
                       </button>
+
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setPaymentMethod('Cartão de Débito');
+                          setInstallments(1);
+                          if (paymentError) setPaymentError(null);
+                        }}
+                        className={`${styles.methodPillBtn} ${paymentMethod === 'Cartão de Débito' ? styles.activeMethodPill : ''}`}
+                      >
+                        <div className={styles.methodContent}>
+                          <CreditCard size={15} />
+                          <span><strong>Cartão de Débito</strong> (À vista)</span>
+                        </div>
+                        {paymentMethod === 'Cartão de Débito' && <CheckCircle2 size={15} className={styles.methodCheck} />}
+                      </button>
                     </div>
 
-                    {/* FORMULÁRIO DE CARTÃO DE CRÉDITO TRANSPARENTE LIMPO (PADRÃO PRODUÇÃO) */}
-                    {paymentMethod === 'Cartão de Crédito' && (
+                    {/* FORMULÁRIO DE CARTÃO TRANSPARENTE LIMPO (CRÉDITO OU DÉBITO - PADRÃO PRODUÇÃO) */}
+                    {(paymentMethod === 'Cartão de Crédito' || paymentMethod === 'Cartão de Débito') && (
                       <div className={styles.cardPaymentContainer}>
                         {/* CABECALHO DE SEGURANCA LIMPO */}
                         <div className={styles.securityHeader}>
                           <div className={styles.securitySeal}>
                             <Lock size={13} />
-                            <span>PAGAMENTO</span>
+                            <span>PAGAMENTO • {paymentMethod.toUpperCase()}</span>
                           </div>
                         </div>
 
                         {/* NUMERO DO CARTAO COM DETECCAO DE BANDEIRA */}
                         <div className={styles.fieldGroup}>
-                          <label htmlFor="ccNumber">NÚMERO DO CARTÃO *</label>
+                          <label htmlFor="ccNumber">NÚMERO DO CARTÃO ({paymentMethod === 'Cartão de Débito' ? 'DÉBITO' : 'CRÉDITO'}) *</label>
                           <div className={styles.cardInputWrapper}>
                             <input
                               id="ccNumber"
@@ -2251,20 +2284,34 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                           </div>
                         </div>
 
-                        {/* PARCELAMENTO */}
-                        <div className={styles.fieldGroup}>
-                          <label htmlFor="ccInstallments">PARCELAMENTO NO PAGBANK *</label>
-                          <select
-                            id="ccInstallments"
-                            value={installments}
-                            onChange={(e) => setInstallments(Number(e.target.value))}
-                            className={styles.styledSelect}
-                          >
-                            <option value={1}>1x de R$ {finalAmountToPay.toFixed(2)} (à vista sem juros)</option>
-                            <option value={2}>2x de R$ {(finalAmountToPay / 2).toFixed(2)} sem juros</option>
-                            <option value={3}>3x de R$ {(finalAmountToPay / 3).toFixed(2)} sem juros</option>
-                          </select>
-                        </div>
+                        {/* CONDICAO DE PAGAMENTO: PARCELAMENTO (CREDITO) OU A VISTA (DEBITO) */}
+                        {paymentMethod === 'Cartão de Crédito' ? (
+                          <div className={styles.fieldGroup}>
+                            <label htmlFor="ccInstallments">PARCELAMENTO NO PAGBANK *</label>
+                            <select
+                              id="ccInstallments"
+                              value={installments}
+                              onChange={(e) => setInstallments(Number(e.target.value))}
+                              className={styles.styledSelect}
+                            >
+                              <option value={1}>1x de R$ {finalAmountToPay.toFixed(2)} (à vista sem juros)</option>
+                              <option value={2}>2x de R$ {(finalAmountToPay / 2).toFixed(2)} sem juros</option>
+                              <option value={3}>3x de R$ {(finalAmountToPay / 3).toFixed(2)} sem juros</option>
+                            </select>
+                          </div>
+                        ) : (
+                          <div className={styles.fieldGroup}>
+                            <label htmlFor="ccDebitCondition">MODALIDADE DE PAGAMENTO *</label>
+                            <input
+                              id="ccDebitCondition"
+                              type="text"
+                              readOnly
+                              value={`1x de R$ ${finalAmountToPay.toFixed(2)} (À vista — Débito em conta imediato)`}
+                              className={styles.styledInput}
+                              style={{ opacity: 0.9, cursor: 'default' }}
+                            />
+                          </div>
+                        )}
 
                         <div className={styles.securityFooterNotice}>
                           <ShieldCheck size={14} />

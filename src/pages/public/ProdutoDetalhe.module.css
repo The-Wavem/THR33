@@ -630,8 +630,6 @@
 }
 
 .freeShippingPdpHighlight {
-  background-color: rgba(16, 185, 129, 0.1);
-  border: 1px solid rgba(16, 185, 129, 0.3);
   color: #10b981;
   padding: 0.55rem 0.85rem;
   font-family: var(--font-body, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);

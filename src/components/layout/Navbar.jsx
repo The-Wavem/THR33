@@ -323,8 +323,7 @@ export function Navbar({ onOpenCart }) {
               onTouchStart={() => preloadRoute('/cms')}
             >
               <ShieldCheck size={13} className={styles.adminNavIcon} />
-              <span>Painel CMS</span>
-              <span className={styles.adminNavBadge}>ADM</span>
+              <span>Painel WEM</span>
             </NavLink>
           )}
         </nav>

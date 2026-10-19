@@ -1535,6 +1535,12 @@ export function CmsAnalytics() {
         receita: 0,
         color: "#60a5fa",
       },
+      "Cartão de Débito": {
+        name: "Cartão de Débito",
+        pedidos: 0,
+        receita: 0,
+        color: "#38bdf8",
+      },
       "Boleto Bancário": {
         name: "Boleto Bancário",
         pedidos: 0,
@@ -1563,6 +1569,8 @@ export function CmsAnalytics() {
       let key = "PIX";
       if (rawPm.includes("pix")) {
         key = "PIX";
+      } else if (rawPm.includes("deb") || rawPm.includes("déb")) {
+        key = "Cartão de Débito";
       } else if (
         rawPm.includes("cart") ||
         rawPm.includes("cred") ||
@@ -1648,63 +1656,209 @@ export function CmsAnalytics() {
     [],
   );
 
-  const { geoStateData, allGeoStates, geoRegionData, topState } = useMemo(() => {
+  const {
+    geoStateData,
+    allGeoStates,
+    geoRegionData,
+    topState,
+    totalShippedPieces,
+  } = useMemo(() => {
     const statesMap = {};
     const regionsMap = {
-      Sudeste: { regiao: "Sudeste", pedidos: 0, receita: 0, fill: "#4ade80" },
-      Sul: { regiao: "Sul", pedidos: 0, receita: 0, fill: "#60a5fa" },
+      Sudeste: { regiao: "Sudeste", pedidos: 0, pecas: 0, receita: 0, fill: "#4ade80" },
+      Sul: { regiao: "Sul", pedidos: 0, pecas: 0, receita: 0, fill: "#60a5fa" },
       "Centro-Oeste": {
         regiao: "Centro-Oeste",
         pedidos: 0,
+        pecas: 0,
         receita: 0,
         fill: "#facc15",
       },
-      Nordeste: { regiao: "Nordeste", pedidos: 0, receita: 0, fill: "#f87171" },
-      Norte: { regiao: "Norte", pedidos: 0, receita: 0, fill: "#a78bfa" },
+      Nordeste: { regiao: "Nordeste", pedidos: 0, pecas: 0, receita: 0, fill: "#f87171" },
+      Norte: { regiao: "Norte", pedidos: 0, pecas: 0, receita: 0, fill: "#a78bfa" },
     };
 
+    const STATE_NAME_TO_UF = {
+      ACRE: "AC",
+      ALAGOAS: "AL",
+      AMAPA: "AP",
+      AMAZONAS: "AM",
+      BAHIA: "BA",
+      CEARA: "CE",
+      "DISTRITO FEDERAL": "DF",
+      "ESPIRITO SANTO": "ES",
+      GOIAS: "GO",
+      MARANHAO: "MA",
+      "MATO GROSSO": "MT",
+      "MATO GROSSO DO SUL": "MS",
+      "MINAS GERAIS": "MG",
+      PARA: "PA",
+      PARAIBA: "PB",
+      PARANA: "PR",
+      PERNAMBUCO: "PE",
+      PIAUI: "PI",
+      "RIO DE JANEIRO": "RJ",
+      "RIO GRANDE DO NORTE": "RN",
+      "RIO GRANDE DO SUL": "RS",
+      RONDONIA: "RO",
+      RORAIMA: "RR",
+      "SANTA CATARINA": "SC",
+      "SAO PAULO": "SP",
+      SERGIPE: "SE",
+      TOCANTINS: "TO",
+    };
+
+    const resolveUfFromCep = (rawCep) => {
+      const clean = String(rawCep || "").replace(/\D/g, "");
+      if (clean.length < 5) return null;
+      const prefix = parseInt(clean.slice(0, 5), 10);
+      if (isNaN(prefix)) return null;
+      if (prefix >= 1000 && prefix <= 19999) return "SP";
+      if (prefix >= 20000 && prefix <= 28999) return "RJ";
+      if (prefix >= 29000 && prefix <= 29999) return "ES";
+      if (prefix >= 30000 && prefix <= 39999) return "MG";
+      if (prefix >= 40000 && prefix <= 48999) return "BA";
+      if (prefix >= 49000 && prefix <= 49999) return "SE";
+      if (prefix >= 50000 && prefix <= 56999) return "PE";
+      if (prefix >= 57000 && prefix <= 57999) return "AL";
+      if (prefix >= 58000 && prefix <= 58999) return "PB";
+      if (prefix >= 59000 && prefix <= 59999) return "RN";
+      if (prefix >= 60000 && prefix <= 63999) return "CE";
+      if (prefix >= 64000 && prefix <= 64999) return "PI";
+      if (prefix >= 65000 && prefix <= 65999) return "MA";
+      if (prefix >= 66000 && prefix <= 68899) return "PA";
+      if (prefix >= 68900 && prefix <= 68999) return "AP";
+      if (prefix >= 69000 && prefix <= 69299) return "AM";
+      if (prefix >= 69300 && prefix <= 69399) return "RR";
+      if (prefix >= 69400 && prefix <= 69899) return "AM";
+      if (prefix >= 69900 && prefix <= 69999) return "AC";
+      if (prefix >= 70000 && prefix <= 72799) return "DF";
+      if (prefix >= 72800 && prefix <= 72999) return "GO";
+      if (prefix >= 73000 && prefix <= 73699) return "DF";
+      if (prefix >= 73700 && prefix <= 76799) return "GO";
+      if (prefix >= 76800 && prefix <= 76999) return "RO";
+      if (prefix >= 77000 && prefix <= 77999) return "TO";
+      if (prefix >= 78000 && prefix <= 78899) return "MT";
+      if (prefix >= 79000 && prefix <= 79999) return "MS";
+      if (prefix >= 80000 && prefix <= 87999) return "PR";
+      if (prefix >= 88000 && prefix <= 89999) return "SC";
+      if (prefix >= 90000 && prefix <= 99999) return "RS";
+      return null;
+    };
+
+    let globalPiecesCount = 0;
+
     completedOrders.forEach((ord) => {
-      let uf = String(
+      // 1. Extrai a UF real do endereço de envio do cliente em qualquer formato persistido
+      const rawStateCandidate = String(
         ord.shippingAddress?.state ||
+          ord.shippingAddress?.region_code ||
           ord.shippingAddress?.uf ||
+          ord.nfe?.destinatario?.uf ||
+          ord.shipping?.address?.state ||
+          ord.shipping?.address?.region_code ||
+          ord.address?.state ||
+          ord.address?.uf ||
           ord.clientState ||
-          "SP",
+          ord.state ||
+          "",
       )
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
         .toUpperCase()
         .trim();
-      if (!BRAZIL_REGIONS[uf]) uf = "SP";
+
+      let uf = rawStateCandidate;
+      if (STATE_NAME_TO_UF[uf]) {
+        uf = STATE_NAME_TO_UF[uf];
+      }
+
+      // 2. Caso o campo textual não seja uma UF válida, deduz pelo CEP de entrega do cliente
+      if (!BRAZIL_REGIONS[uf]) {
+        const rawCep =
+          ord.shippingAddress?.cep ||
+          ord.shippingAddress?.postal_code ||
+          ord.nfe?.destinatario?.cep ||
+          ord.shipping?.address?.cep ||
+          ord.shipping?.address?.postal_code ||
+          ord.address?.cep ||
+          ord.cep ||
+          "";
+        const cepUf = resolveUfFromCep(rawCep);
+        uf = cepUf && BRAZIL_REGIONS[cepUf] ? cepUf : "SP";
+      }
+
+      // 3. Extrai a cidade do endereço de entrega e a quantidade de peças de roupa enviadas
+      const rawCity = String(
+        ord.shippingAddress?.city ||
+          ord.nfe?.destinatario?.municipio ||
+          ord.shipping?.address?.city ||
+          ord.address?.city ||
+          ord.clientCity ||
+          "",
+      ).trim();
+
+      const piecesInOrder =
+        Array.isArray(ord.items) && ord.items.length > 0
+          ? ord.items.reduce(
+              (acc, it) => acc + Math.max(1, Number(it.quantity || 1)),
+              0,
+            )
+          : Math.max(1, Number(ord.itemsCount || 1));
 
       const amount = Number(ord.totalAmount || ord.total || ord.subtotal || 0);
+      globalPiecesCount += piecesInOrder;
 
       if (!statesMap[uf]) {
         statesMap[uf] = {
           uf,
           estado: uf,
           pedidos: 0,
+          pecas: 0,
           receita: 0,
           regiao: BRAZIL_REGIONS[uf] || "Sudeste",
+          cidadesCount: {},
         };
       }
       statesMap[uf].pedidos += 1;
+      statesMap[uf].pecas += piecesInOrder;
       statesMap[uf].receita += amount;
+
+      if (rawCity) {
+        statesMap[uf].cidadesCount[rawCity] =
+          (statesMap[uf].cidadesCount[rawCity] || 0) + 1;
+      }
 
       const reg = BRAZIL_REGIONS[uf] || "Sudeste";
       if (regionsMap[reg]) {
         regionsMap[reg].pedidos += 1;
+        regionsMap[reg].pecas += piecesInOrder;
         regionsMap[reg].receita += amount;
       }
     });
 
-    const statesList = Object.values(statesMap).sort(
-      (a, b) => b.pedidos - a.pedidos || b.receita - a.receita,
-    );
+    const statesList = Object.values(statesMap)
+      .map((st) => {
+        const sortedCities = Object.entries(st.cidadesCount || {})
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([cityName]) => cityName);
+        return {
+          ...st,
+          cidades: sortedCities,
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.pedidos - a.pedidos || b.pecas - a.pecas || b.receita - a.receita,
+      );
 
     const fallbackStates = [
-      { uf: "SP", estado: "SP", pedidos: 0, receita: 0, regiao: "Sudeste" },
-      { uf: "RJ", estado: "RJ", pedidos: 0, receita: 0, regiao: "Sudeste" },
-      { uf: "MG", estado: "MG", pedidos: 0, receita: 0, regiao: "Sudeste" },
-      { uf: "PR", estado: "PR", pedidos: 0, receita: 0, regiao: "Sul" },
-      { uf: "SC", estado: "SC", pedidos: 0, receita: 0, regiao: "Sul" },
+      { uf: "SP", estado: "SP", pedidos: 0, pecas: 0, receita: 0, regiao: "Sudeste", cidades: [] },
+      { uf: "RJ", estado: "RJ", pedidos: 0, pecas: 0, receita: 0, regiao: "Sudeste", cidades: [] },
+      { uf: "MG", estado: "MG", pedidos: 0, pecas: 0, receita: 0, regiao: "Sudeste", cidades: [] },
+      { uf: "PR", estado: "PR", pedidos: 0, pecas: 0, receita: 0, regiao: "Sul", cidades: [] },
+      { uf: "SC", estado: "SC", pedidos: 0, pecas: 0, receita: 0, regiao: "Sul", cidades: [] },
     ];
 
     const displayStates =
@@ -1712,8 +1866,10 @@ export function CmsAnalytics() {
     const top = statesList[0] || {
       uf: "SP",
       pedidos: 0,
+      pecas: 0,
       receita: 0,
       regiao: "Sudeste",
+      cidades: [],
     };
 
     return {
@@ -1721,6 +1877,7 @@ export function CmsAnalytics() {
       allGeoStates: statesList,
       geoRegionData: Object.values(regionsMap),
       topState: top,
+      totalShippedPieces: globalPiecesCount,
     };
   }, [completedOrders, BRAZIL_REGIONS]);
 
@@ -2677,49 +2834,17 @@ export function CmsAnalytics() {
         </div>
       </div>
 
-      {/* GRÁFICO 9: DISTRIBUIÇÃO GEOGRÁFICA DE PEDIDOS NO BRASIL (FULL WIDTH) */}
+      {/* GRÁFICO 9: DISTRIBUIÇÃO GEOGRÁFICA DE ENVIOS NO BRASIL (FULL WIDTH) */}
       <div className={styles.chartCardFullWidth}>
         <div className={styles.chartCardHeader}>
           <div className={styles.chartCardHeaderLeft}>
             <h3 className={styles.chartCardTitle}>
               <MapPin size={15} color="#facc15" />
-              DESTINOS DE COMPRA NO BRASIL (ESTADOS / UF)
+              MAPA DE ENVIOS & DESTINOS DOS CLIENTES NO BRASIL (ESTADOS / REGIÃO)
             </h3>
             <p className={styles.chartCardDesc}>
-              Volume de pedidos aprovados e entregues por Estado brasileiro.
-              Cores agrupadas pelas macrorregiões do país.
+              Mapeamento real dos endereços de entrega dos clientes (CEP / UF) para onde estamos enviando peças da THR33.
             </p>
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              flexWrap: "wrap",
-            }}
-          >
-            <span className={`${styles.chartTagPill} ${styles.chartTagGreen}`}>
-              Sudeste
-            </span>
-            <span className={`${styles.chartTagPill} ${styles.chartTagBlue}`}>
-              Sul
-            </span>
-            <span className={`${styles.chartTagPill} ${styles.chartTagYellow}`}>
-              Centro-Oeste
-            </span>
-            <span
-              className={`${styles.chartTagPill}`}
-              style={{
-                color: "#f87171",
-                borderColor: "rgba(248, 113, 113, 0.3)",
-                backgroundColor: "rgba(248, 113, 113, 0.1)",
-              }}
-            >
-              Nordeste
-            </span>
-            <span className={`${styles.chartTagPill} ${styles.chartTagPurple}`}>
-              Norte
-            </span>
           </div>
         </div>
 
@@ -2727,7 +2852,9 @@ export function CmsAnalytics() {
         <div style={{ marginBottom: "1.75rem", marginTop: "0.5rem" }}>
           <BrazilHeatmap
             stateData={allGeoStates}
+            regionData={geoRegionData}
             totalOrders={completedOrders.length}
+            totalPieces={totalShippedPieces}
             totalRevenue={predictiveStats.periodRevenue}
           />
         </div>
@@ -2754,11 +2881,11 @@ export function CmsAnalytics() {
                 tick={{ fill: "#888888", fontSize: 11 }}
               />
               <RechartsTooltip
-                content={<CustomChartTooltip valueSuffix=" pedidos" />}
+                content={<CustomChartTooltip valueSuffix=" envios" />}
               />
               <Bar
                 dataKey="pedidos"
-                name="Pedidos Entregues"
+                name="Envios p/ UF"
                 radius={[4, 4, 0, 0]}
               >
                 {geoStateData.map((entry, index) => {
@@ -2802,17 +2929,6 @@ export function CmsAnalytics() {
           <p className={styles.chartsSuiteSub}>
             Rastreamento de estabilidade, motivos de recusa de cartão, erros de gateway e velocidade de resposta em milissegundos.
           </p>
-        </div>
-        <div
-          className={styles.chartTagPill}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.4rem",
-          }}
-        >
-          <Server size={12} color="#60a5fa" />
-          <span>API PAGBANK MONITORADA</span>
         </div>
       </div>
 

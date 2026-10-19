@@ -7,38 +7,92 @@
 }
 
 .mapWrapper {
-  background: radial-gradient(circle at 50% 50%, rgba(74, 222, 128, 0.03) 0%, rgba(10, 10, 10, 0.8) 100%), #0a0a0a;
+  background:
+    radial-gradient(circle at 50% 48%, rgba(74, 222, 128, 0.06) 0%, rgba(10, 10, 10, 0.92) 72%),
+    linear-gradient(180deg, #0d0d10 0%, #08080a 100%);
   border: 1px solid var(--border-color);
   border-radius: 4px;
-  padding: 1.25rem;
+  padding: 1rem 1.25rem;
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
   overflow: hidden;
-  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.8);
+  box-shadow: inset 0 0 45px rgba(0, 0, 0, 0.85);
+}
+
+.mapTopBar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  z-index: 2;
+  margin-bottom: 0.25rem;
+}
+
+.mapBadgeHeader {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  padding: 0.3rem 0.65rem;
+  border-radius: 2px;
+  font-size: 0.62rem;
+  font-family: monospace, ui-monospace, Consolas, monospace;
+  font-weight: 700;
+  color: #bbbbbb;
+  letter-spacing: 0.05em;
+}
+
+.mapBadgeDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #4ade80;
+  box-shadow: 0 0 8px #4ade80;
+}
+
+.mapSummaryPills {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.mapSummaryPill {
+  font-family: monospace, ui-monospace, Consolas, monospace;
+  font-size: 0.64rem;
+  color: #a1a1aa;
+  padding: 0.24rem 0.55rem;
+  border-radius: 2px;
+}
+
+.mapSummaryPill strong {
+  color: #ffffff;
+}
+
+.mapSummaryPillAccent {
+  font-family: monospace, ui-monospace, Consolas, monospace;
+  font-size: 0.64rem;
+  color: #4ade80;
+  padding: 0.24rem 0.55rem;
+  border-radius: 2px;
+}
+
+.mapSummaryPillAccent strong {
+  color: #4ade80;
+  font-weight: 900;
 }
 
 .mapSvg {
   width: 100%;
-  max-width: 480px;
+  max-width: 470px;
   height: auto;
-  filter: drop-shadow(0 10px 25px rgba(0, 0, 0, 0.9));
-}
-
-.statePolygon {
-  stroke: rgba(255, 255, 255, 0.12);
-  stroke-width: 1;
-  stroke-linejoin: round;
-  transition: all 0.25s ease;
-  cursor: pointer;
-}
-
-.statePolygon:hover {
-  stroke: #ffffff;
-  stroke-width: 2;
-  filter: drop-shadow(0 0 8px rgba(74, 222, 128, 0.8));
+  filter: drop-shadow(0 12px 28px rgba(0, 0, 0, 0.92));
 }
 
 .hotzoneCore {
@@ -47,33 +101,109 @@
 
 .hotzonePulse {
   pointer-events: none;
-  animation: radarPulse 2.5s infinite ease-out;
+  animation: radarPulse 2.4s infinite ease-out;
   transform-origin: center;
 }
 
 @keyframes radarPulse {
   0% {
-    r: 6;
-    opacity: 0.8;
+    r: 5;
+    opacity: 0.85;
   }
   100% {
-    r: 24;
+    r: 22;
     opacity: 0;
   }
 }
 
 .stateLabelText {
   font-family: monospace, ui-monospace, Consolas, monospace;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 800;
   fill: #e5e5e5;
   text-anchor: middle;
   dominant-baseline: central;
   pointer-events: none;
-  text-shadow: 0 1px 4px #000000;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.85);
+  stroke-width: 2.5px;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.sideDetailsCard {
+.mapFooterBar {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.55rem;
+  margin-top: 0.35rem;
+  padding-top: 0.65rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.legendScale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  width: 100%;
+  max-width: 310px;
+  font-family: monospace, ui-monospace, Consolas, monospace;
+}
+
+.legendLabelMuted {
+  font-size: 0.65rem;
+  color: #777777;
+  white-space: nowrap;
+}
+
+.legendLabelBright {
+  font-size: 0.65rem;
+  color: #4ade80;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.legendGradientBar {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: linear-gradient(90deg, #16161a 0%, #134e35 35%, #22c55e 75%, #4ade80 100%);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.regionMiniChips {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+.regionMiniChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.28rem;
+  font-family: monospace, ui-monospace, Consolas, monospace;
+  font-size: 0.62rem;
+  color: #999999;
+  padding: 0.16rem 0.45rem;
+  border-radius: 2px;
+}
+
+.regionMiniChip strong {
+  color: #e4e4e7;
+}
+
+.regionMiniDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.sideDetailsCard { 
+  border-radius: 4px;
   padding: 1.25rem;
   display: flex;
   flex-direction: column;
@@ -105,69 +235,138 @@
 }
 
 .activeStateBox {
-  background: linear-gradient(180deg, rgba(74, 222, 128, 0.06) 0%, rgba(0, 0, 0, 0.4) 100%);
-  border: 1px solid rgba(74, 222, 128, 0.25);
+  background: linear-gradient(180deg, rgba(74, 222, 128, 0.06) 0%, rgba(0, 0, 0, 0.45) 100%);
+  border: 1px solid rgba(74, 222, 128, 0.28);
   padding: 1rem;
   border-radius: 4px;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.65rem;
 }
 
 .activeStateName {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .activeStateUf {
   font-family: monospace, ui-monospace, Consolas, monospace;
-  font-size: 1.4rem;
+  font-size: 1.45rem;
   font-weight: 900;
   color: #4ade80;
 }
 
-.activeStateRegion {
-  font-size: 0.65rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  padding: 0.2rem 0.5rem;
-  border-radius: 2px;
-  background-color: rgba(255, 255, 255, 0.08);
-  color: #cccccc;
+.activeStateFullTitle {
+  font-size: 0.92rem;
+  font-weight: 800;
+  color: #f4f4f5;
 }
 
-.activeStateStats {
+.activeStateRegion {
+  font-size: 0.63rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  padding: 0.22rem 0.55rem;
+  border-radius: 2px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  letter-spacing: 0.04em;
+}
+
+.activeCitiesRow {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.71rem;
+  color: #a1a1aa;
+  background-color: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 0.38rem 0.6rem;
+  border-radius: 3px;
+}
+
+.activeCitiesRow strong {
+  color: #e4e4e7;
+}
+
+.activeStateStatsThreeCols {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 0.75rem;
-  margin-top: 0.35rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
-  padding-top: 0.5rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.6rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding-top: 0.65rem;
 }
 
 .activeStatItem {
   display: flex;
   flex-direction: column;
+  gap: 0.18rem;
 }
 
 .activeStatLabel {
-  font-size: 0.65rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.61rem;
   color: var(--text-muted);
   text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 
 .activeStatVal {
   font-family: monospace, ui-monospace, Consolas, monospace;
-  font-size: 1.05rem;
+  font-size: 0.98rem;
   font-weight: 800;
   color: var(--text-primary);
+}
+
+.shareBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+  margin-top: 0.15rem;
+}
+
+.shareHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.68rem;
+  color: #888888;
+}
+
+.shareHeaderRow strong {
+  color: #e4e4e7;
+}
+
+.shareBarTrack {
+  width: 100%;
+  height: 5px;
+  background-color: rgba(255, 255, 255, 0.07);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.shareBarFill {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981 0%, #4ade80 100%);
+  border-radius: 3px;
+  transition: width 0.3s ease;
 }
 
 .rankingList {
   display: flex;
   flex-direction: column;
-  gap: 0.45rem;
+  gap: 0.42rem;
+}
+
+.rankingHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.15rem;
 }
 
 .rankingHeader {
@@ -176,95 +375,105 @@
   text-transform: uppercase;
   color: var(--text-muted);
   letter-spacing: 0.06em;
-  margin-bottom: 0.2rem;
+}
+
+.rankingHeaderMeta {
+  font-family: monospace, ui-monospace, Consolas, monospace;
+  font-size: 0.6rem;
+  color: #666666;
+  text-transform: uppercase;
 }
 
 .rankingRow {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.45rem 0.65rem;
+  padding: 0.48rem 0.65rem;
   background-color: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  font-size: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 3px;
+  font-size: 0.74rem;
   cursor: pointer;
   transition: all 0.2s ease;
+  overflow: hidden;
+}
+
+.rankingRowProgressBg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  background: linear-gradient(90deg, rgba(74, 222, 128, 0.12) 0%, rgba(74, 222, 128, 0.02) 100%);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .rankingRow:hover {
   background-color: rgba(74, 222, 128, 0.08);
-  border-color: rgba(74, 222, 128, 0.3);
+  border-color: rgba(74, 222, 128, 0.32);
+}
+
+.rankingRowActive {
+  background-color: rgba(74, 222, 128, 0.11) !important;
+  border-color: rgba(74, 222, 128, 0.45) !important;
 }
 
 .rankingLeft {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.45rem;
 }
 
 .rankingPos {
   font-family: monospace, ui-monospace, Consolas, monospace;
   font-weight: 800;
-  color: #888888;
-  font-size: 0.7rem;
-  width: 14px;
+  color: #777777;
+  font-size: 0.68rem;
+  width: 16px;
 }
 
-.mapBadgeHeader {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  display: flex;
-  align-items: center;
-  gap: 0.45rem;
-  background-color: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  padding: 0.25rem 0.55rem;
-  border-radius: 2px;
-  font-size: 0.62rem;
-  font-family: monospace, ui-monospace, Consolas, monospace;
-  color: #aaaaaa;
-  letter-spacing: 0.05em;
-  z-index: 2;
-}
-
-.mapBadgeDot {
+.rankingRegionDot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background-color: #4ade80;
-  box-shadow: 0 0 6px #4ade80;
+  flex-shrink: 0;
 }
 
-.mapFooterLegend {
-  margin-top: 0.75rem;
-  width: 100%;
-  max-width: 320px;
+.rankingStateName {
+  color: #999999;
+  font-size: 0.7rem;
 }
 
-.legendScale {
+.rankingRight {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.65rem;
+  gap: 0.35rem;
   font-family: monospace, ui-monospace, Consolas, monospace;
+  font-size: 0.71rem;
+  font-weight: 700;
+  color: var(--text-primary);
 }
 
-.legendGradientBar {
-  flex: 1;
-  height: 6px;
-  border-radius: 3px;
-  background: linear-gradient(90deg, #141414 0%, #1b4332 30%, #22c55e 75%, #4ade80 100%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+.rankingPiecesBadge {
+  color: #60a5fa;
+  font-weight: 800;
 }
 
-.rankingRowActive {
-  background-color: rgba(74, 222, 128, 0.12) !important;
-  border-color: rgba(74, 222, 128, 0.4) !important;
+.rankingDivider {
+  color: #555555;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 960px) {
   .heatmapContainer {
     grid-template-columns: 1fr;
+  }
+
+  .activeStateStatsThreeCols {
+    grid-template-columns: 1fr 1fr;
   }
 }

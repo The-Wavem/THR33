@@ -1808,9 +1808,9 @@ export function CmsPedidos() {
                   <h3>ENDEREÇO DE ENTREGA</h3>
                 </div>
                 <p className={styles.addressText}>
-                  {selectedOrder.shippingAddress?.street}, {selectedOrder.shippingAddress?.number} {selectedOrder.shippingAddress?.complement ? `• ${selectedOrder.shippingAddress.complement}` : ''}<br/>
-                  {selectedOrder.shippingAddress?.neighborhood ? `${selectedOrder.shippingAddress.neighborhood} — ` : ''}{selectedOrder.shippingAddress?.city}/{selectedOrder.shippingAddress?.state}<br/>
-                  CEP: {selectedOrder.shippingAddress?.cep}
+                  {selectedOrder.shippingAddress?.street || selectedOrder.nfe?.destinatario?.logradouro}, {selectedOrder.shippingAddress?.number || selectedOrder.nfe?.destinatario?.numero} {selectedOrder.shippingAddress?.complement ? `• ${selectedOrder.shippingAddress.complement}` : ''}<br/>
+                  {(selectedOrder.shippingAddress?.neighborhood || selectedOrder.shippingAddress?.locality || selectedOrder.nfe?.destinatario?.bairro) ? `${selectedOrder.shippingAddress?.neighborhood || selectedOrder.shippingAddress?.locality || selectedOrder.nfe?.destinatario?.bairro} — ` : ''}{selectedOrder.shippingAddress?.city || selectedOrder.nfe?.destinatario?.municipio || selectedOrder.clientCity}/{selectedOrder.shippingAddress?.state || selectedOrder.shippingAddress?.region_code || selectedOrder.shippingAddress?.uf || selectedOrder.nfe?.destinatario?.uf || selectedOrder.clientState}<br/>
+                  CEP: {selectedOrder.shippingAddress?.cep || selectedOrder.shippingAddress?.postal_code || selectedOrder.nfe?.destinatario?.cep}
                 </p>
               </div>
 

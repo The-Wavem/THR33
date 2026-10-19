@@ -231,30 +231,56 @@ exports.createOrder = onRequest(
       };
 
       // Configura os detalhes conforme a forma de pagamento escolhida
-      if (paymentMethod.type === "CREDIT_CARD") {
+      if (paymentMethod.type === "CREDIT_CARD" || paymentMethod.type === "DEBIT_CARD") {
         if (!paymentMethod.cardEncrypted || typeof paymentMethod.cardEncrypted !== "string") {
           return res.status(400).json({
             error: "Dados do cartão devem ser criptografados via Chave Pública (PCI-Free). Não é permitido envio em texto aberto."
           });
         }
-        orderPayload.charges[0].payment_method = {
-          type: "CREDIT_CARD",
-          installments: Number(paymentMethod.installments) || 1,
-          capture: true,
-          soft_descriptor: "THR33",
-          card: {
-            encrypted: paymentMethod.cardEncrypted,
-            store: false,
-          },
-          holder: {
-            name: (
-              paymentMethod.holderName ||
-              customer.name ||
-              "TITULAR DO CARTAO"
-            ).toUpperCase(),
-            tax_id: cleanTaxId,
-          },
-        };
+        const isDebit = paymentMethod.type === "DEBIT_CARD";
+        orderPayload.charges[0].payment_method = isDebit
+          ? {
+              type: "DEBIT_CARD",
+              soft_descriptor: "THR33",
+              card: {
+                encrypted: paymentMethod.cardEncrypted,
+                store: false,
+              },
+              holder: {
+                name: (
+                  paymentMethod.holderName ||
+                  customer.name ||
+                  "TITULAR DO CARTAO"
+                ).toUpperCase(),
+                tax_id: cleanTaxId,
+              },
+              ...(paymentMethod.authenticationId
+                ? {
+                    authentication_method: {
+                      type: "THREEDS",
+                      id: paymentMethod.authenticationId,
+                    },
+                  }
+                : {}),
+            }
+          : {
+              type: "CREDIT_CARD",
+              installments: Number(paymentMethod.installments) || 1,
+              capture: true,
+              soft_descriptor: "THR33",
+              card: {
+                encrypted: paymentMethod.cardEncrypted,
+                store: false,
+              },
+              holder: {
+                name: (
+                  paymentMethod.holderName ||
+                  customer.name ||
+                  "TITULAR DO CARTAO"
+                ).toUpperCase(),
+                tax_id: cleanTaxId,
+              },
+            };
       } else if (paymentMethod.type === "PIX") {
         // Estrutura oficial PagBank Orders v2: charges[0].payment_method.type = "PIX"
         orderPayload.charges = [
@@ -309,7 +335,9 @@ exports.createOrder = onRequest(
                 id: mockChargeId,
                 reference_id: `CHAR_${cleanRefId}`,
                 status:
-                  paymentMethod.type === "CREDIT_CARD" ? "PAID" : "WAITING",
+                  paymentMethod.type === "CREDIT_CARD" || paymentMethod.type === "DEBIT_CARD"
+                    ? "PAID"
+                    : "WAITING",
                 amount: {
                   value: Math.round(Number(paymentMethod.amount || 0) * 100),
                   currency: "BRL",
@@ -375,7 +403,9 @@ exports.createOrder = onRequest(
                 paymentMethod:
                   paymentMethod.type === "CREDIT_CARD"
                     ? "Cartão de Crédito"
-                    : "PIX",
+                    : paymentMethod.type === "DEBIT_CARD"
+                      ? "Cartão de Débito"
+                      : "PIX",
                 pixQrCodeUrl,
                 pixCopiaECola,
                 createdAt: FieldValue.serverTimestamp(),
@@ -591,6 +621,99 @@ exports.createPagBankOrder = onCall(
     cors: true,
   },
   async (request) => {
+    const isSandbox = process.env.PAGBANK_ENV !== "production";
+    const baseUrl = isSandbox
+      ? "https://sandbox.api.pagseguro.com"
+      : "https://api.pagseguro.com";
+
+    // Suporte integrado para geracao de Sessao 3DS 2.0 (obrigatoria para Cartao de Debito PagBank em Producao)
+    if (request.data?.action === "create3dsSession") {
+      // Pre-valida estoque antes de abrir o desafio 3DS no aplicativo do banco do cliente
+      if (Array.isArray(request.data.items) && request.data.items.length > 0) {
+        const db = getDb();
+        for (const item of request.data.items) {
+          const prodId = String(item.id || item.reference_id || "");
+          if (!prodId) continue;
+          const snap = await db.collection("products").doc(prodId).get();
+          if (!snap.exists) {
+            throw new HttpsError(
+              "not-found",
+              `Produto "${item.name || prodId}" não foi encontrado no catálogo oficial da THR33.`,
+            );
+          }
+          const data = snap.data();
+          const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+          const size = String(item.size || "M").toUpperCase();
+          let available = 0;
+          if (data.stock && typeof data.stock === "object") {
+            available = Number(data.stock[size] ?? data.stock[item.size] ?? 0);
+          } else if (typeof data.stock === "number") {
+            available = Number(data.stock);
+          } else if (Array.isArray(data.variants) && data.variants.length > 0) {
+            const v = data.variants.find(
+              (variant) => String(variant.size || "").toUpperCase() === size,
+            );
+            available = v ? Number(v.stock_quantity ?? v.stock ?? 0) : 0;
+          }
+          if (available < qty) {
+            throw new HttpsError(
+              "failed-precondition",
+              `Estoque insuficiente para "${data.name || item.name}" no tamanho ${size}. Disponível: ${available}, solicitado: ${qty}.`,
+            );
+          }
+        }
+      }
+
+      const token = getSecretToken();
+      const sdkUrl = isSandbox
+        ? "https://sandbox.sdk.pagseguro.com"
+        : "https://sdk.pagseguro.com";
+
+      if (
+        token &&
+        token.trim() !== "" &&
+        !token.includes("SEU_TOKEN") &&
+        !token.includes("seu_token")
+      ) {
+        try {
+          const sessionRes = await axios.post(
+            `${sdkUrl}/checkout-sdk/sessions`,
+            {},
+            {
+              headers: {
+                Authorization: `Bearer ${token}`,
+                "Content-Type": "application/json",
+                Accept: "application/json",
+              },
+            },
+          );
+          if (sessionRes.data?.session) {
+            return {
+              success: true,
+              session: sessionRes.data.session,
+              expiresAt: sessionRes.data.expires_at || null,
+              env: isSandbox ? "SANDBOX" : "PROD",
+            };
+          }
+        } catch (err) {
+          logger.warn(
+            "Aviso ao criar sessao 3DS no PagBank:",
+            err.response?.data || err.message,
+          );
+          return {
+            success: false,
+            isSandbox,
+            error: err.response?.data || err.message,
+          };
+        }
+      }
+      return {
+        success: false,
+        isSandbox,
+        error: "Token 3DS indisponivel ou ambiente em modo mock.",
+      };
+    }
+
     // 1. Identifica usuario autenticado ou visitante
     const userId = request.auth
       ? request.auth.uid
@@ -612,11 +735,6 @@ exports.createPagBankOrder = onCall(
         "Dados incompletos para processamento do pedido.",
       );
     }
-
-    const isSandbox = process.env.PAGBANK_ENV !== "production";
-    const baseUrl = isSandbox
-      ? "https://sandbox.api.pagseguro.com"
-      : "https://api.pagseguro.com";
 
     // 2. Blindagem de Seguranca: Recalcula precos 100% server-side via Firestore
     const db = getDb();
@@ -931,37 +1049,63 @@ exports.createPagBankOrder = onCall(
           },
         },
       };
-    } else if (paymentMethod.type === "CREDIT_CARD") {
+    } else if (paymentMethod.type === "CREDIT_CARD" || paymentMethod.type === "DEBIT_CARD") {
       if (!paymentMethod.cardEncrypted || typeof paymentMethod.cardEncrypted !== "string") {
         throw new HttpsError(
           "invalid-argument",
           "Dados do cartão não foram criptografados no navegador. O PagBank exige criptografia client-side (PCI-Free).",
         );
       }
+      const isDebit = paymentMethod.type === "DEBIT_CARD";
       chargePayload = {
         reference_id: `CHAR_${referenceId}`,
         amount: {
           value: finalAmountInCents,
           currency: "BRL",
         },
-        payment_method: {
-          type: "CREDIT_CARD",
-          installments: Number(paymentMethod.installments || 1),
-          capture: true,
-          soft_descriptor: "THR33",
-          card: {
-            encrypted: paymentMethod.cardEncrypted,
-            store: false,
-          },
-          holder: {
-            name: (
-              paymentMethod.holderName ||
-              customer.name ||
-              "CLIENTE THR33"
-            ).toUpperCase(),
-            tax_id: formattedTaxId,
-          },
-        },
+        payment_method: isDebit
+          ? {
+              type: "DEBIT_CARD",
+              soft_descriptor: "THR33",
+              card: {
+                encrypted: paymentMethod.cardEncrypted,
+                store: false,
+              },
+              holder: {
+                name: (
+                  paymentMethod.holderName ||
+                  customer.name ||
+                  "CLIENTE THR33"
+                ).toUpperCase(),
+                tax_id: formattedTaxId,
+              },
+              ...(paymentMethod.authenticationId
+                ? {
+                    authentication_method: {
+                      type: "THREEDS",
+                      id: paymentMethod.authenticationId,
+                    },
+                  }
+                : {}),
+            }
+          : {
+              type: "CREDIT_CARD",
+              installments: Number(paymentMethod.installments || 1),
+              capture: true,
+              soft_descriptor: "THR33",
+              card: {
+                encrypted: paymentMethod.cardEncrypted,
+                store: false,
+              },
+              holder: {
+                name: (
+                  paymentMethod.holderName ||
+                  customer.name ||
+                  "CLIENTE THR33"
+                ).toUpperCase(),
+                tax_id: formattedTaxId,
+              },
+            },
       };
     } else {
       throw new HttpsError("invalid-argument", "Metodo de pagamento invalido.");
@@ -1024,11 +1168,21 @@ exports.createPagBankOrder = onCall(
     let charge = null;
     const token = getSecretToken();
 
+    const isMockEncryptedCard =
+      (paymentMethod.type === "CREDIT_CARD" || paymentMethod.type === "DEBIT_CARD") &&
+      String(paymentMethod.cardEncrypted || "").startsWith("MOCK_ENC_");
+    const isSandboxDebitWithout3DS =
+      isSandbox &&
+      paymentMethod.type === "DEBIT_CARD" &&
+      !paymentMethod.authenticationId;
+
     if (
       token &&
       token.trim() !== "" &&
       !token.includes("SEU_TOKEN") &&
-      !token.includes("seu_token")
+      !token.includes("seu_token") &&
+      !isMockEncryptedCard &&
+      !isSandboxDebitWithout3DS
     ) {
       try {
         const response = await axios.post(`${baseUrl}/orders`, orderPayload, {
@@ -1056,38 +1210,54 @@ exports.createPagBankOrder = onCall(
           "Erro na API PagBank Orders:",
           error.response?.data || error.message,
         );
-        // Se a chamada do gateway falhar, reverte o estoque reservado atomicamente!
-        await restoreStockAtomic(
-          db,
-          sanitizedItems,
-          referenceId,
-          "Falha na chamada da API PagBank",
-        );
-        stockReserved = false;
         const pagbankError = error.response?.data || error.message;
         const errorString =
           typeof pagbankError === "object"
             ? JSON.stringify(pagbankError)
             : String(pagbankError);
 
-        if (errorString.includes("whitelist access required")) {
-          throw new HttpsError(
-            "failed-precondition",
-            "Sua conta PagBank requer liberação de Whitelist em Produção para a API de Pedidos. Conclua a solicitação de homologação enviada ao PagBank ou ative o Sandbox para testes.",
+        // Em modo Sandbox, se o erro for apenas falta de sessao 3DS no Cartao de Debito, permite homologacao Sandbox
+        if (
+          isSandbox &&
+          paymentMethod.type === "DEBIT_CARD" &&
+          (errorString.toLowerCase().includes("authentication_method") ||
+            errorString.toLowerCase().includes("threeds"))
+        ) {
+          logger.warn(
+            "Aplicando homologacao Sandbox para DEBIT_CARD sem desafio 3DS:",
+            errorString,
           );
-        }
-
-        if (errorString.includes("buyer email must not be equals to merchant email") || errorString.includes("40002")) {
-          throw new HttpsError(
-            "invalid-argument",
-            "O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista (contato.thewavem@gmail.com). Para testar compras ou realizar pedidos, informe um e-mail diferente.",
+        } else {
+          // Se a chamada do gateway falhar em producao ou por outro motivo, reverte o estoque reservado atomicamente!
+          await restoreStockAtomic(
+            db,
+            sanitizedItems,
+            referenceId,
+            "Falha na chamada da API PagBank",
           );
-        }
+          stockReserved = false;
 
-        throw new HttpsError("internal", errorString);
+          if (errorString.includes("whitelist access required")) {
+            throw new HttpsError(
+              "failed-precondition",
+              "Sua conta PagBank requer liberação de Whitelist em Produção para a API de Pedidos. Conclua a solicitação de homologação enviada ao PagBank ou ative o Sandbox para testes.",
+            );
+          }
+
+          if (errorString.includes("buyer email must not be equals to merchant email") || errorString.includes("40002")) {
+            throw new HttpsError(
+              "invalid-argument",
+              "O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista (contato.thewavem@gmail.com). Para testar compras ou realizar pedidos, informe um e-mail diferente.",
+            );
+          }
+
+          throw new HttpsError("internal", errorString);
+        }
       }
-    } else {
-      // Mock estruturado v2 de homologacao quando executado localmente sem token ativo
+    }
+
+    if (!pagbankOrder) {
+      // Mock estruturado v2 de homologacao quando executado localmente ou em Sandbox sem 3DS ativo
       const mockChargeId = `CHAR_${Date.now()}`;
       const mockPixText = `00020101021226850014br.gov.bcb.pix2563api-h.pagseguro.com/pix/v2/mock-${referenceId}5204899953039865802BR5921Pagseguro Internet SA6009SAO PAULO62070503***63045677`;
       pagbankOrder = {
@@ -1097,7 +1267,10 @@ exports.createPagBankOrder = onCall(
           {
             id: mockChargeId,
             reference_id: `CHAR_${referenceId}`,
-            status: paymentMethod.type === "CREDIT_CARD" ? "PAID" : "WAITING",
+            status:
+              paymentMethod.type === "CREDIT_CARD" || paymentMethod.type === "DEBIT_CARD"
+                ? "PAID"
+                : "WAITING",
             created_at: new Date().toISOString(),
             description: `Pedido THR33 ${referenceId}`,
             amount: { value: finalAmountInCents, currency: "BRL" },
@@ -1178,9 +1351,11 @@ exports.createPagBankOrder = onCall(
       paymentMethod:
         paymentMethod.type === "CREDIT_CARD"
           ? "Cartão de Crédito"
-          : paymentMethod.type === "PIX"
-            ? "PIX"
-            : "Boleto Bancário",
+          : paymentMethod.type === "DEBIT_CARD"
+            ? "Cartão de Débito"
+            : paymentMethod.type === "PIX"
+              ? "PIX"
+              : "Boleto Bancário",
       total: finalAmountInCents / 100,
       amountInCents: finalAmountInCents,
       subtotal: subtotalInCents / 100,

@@ -715,7 +715,6 @@ export function ProdutoDetalhe({ onAddToCart }) {
           <div className={styles.shippingCalculator}>
             {hasFreeShipping && (
               <div className={styles.freeShippingPdpHighlight}>
-                <Truck size={14} />
                 <span>ESTA PEÇA CONTA COM FRETE GRÁTIS // THR33 OFICIAL</span>
               </div>
             )}

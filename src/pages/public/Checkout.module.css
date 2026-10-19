@@ -153,9 +153,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: rgba(74, 222, 128, 0.06);
-  border: 1px solid rgba(74, 222, 128, 0.2);
-  padding: 0.85rem 1.1rem;
+  padding: 0.55rem 1.1rem;
   transition: all var(--transition-fast);
 }
 
@@ -727,9 +725,6 @@
 
 /* FORMULÁRIO DE CARTÃO DE CRÉDITO LIMPO (PADRÃO PRODUÇÃO) */
 .cardPaymentContainer {
-  background-color: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  padding: 1.75rem;
   margin-top: 1.25rem;
   display: flex;
   flex-direction: column;

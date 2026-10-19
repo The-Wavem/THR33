@@ -238,8 +238,6 @@ export function CartDrawer() {
 
                 {isFreeShippingActive && (
                   <div style={{
-                    background: 'rgba(16, 185, 129, 0.1)',
-                    border: '1px solid rgba(16, 185, 129, 0.28)',
                     borderRadius: '4px',
                     padding: '0.45rem 0.65rem',
                     display: 'flex',
