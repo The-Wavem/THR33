@@ -1,112 +1,294 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
+import * as THREE from 'three';
 import { analyticsService } from '../../services/analyticsService';
 import styles from './Sobre.module.css';
 
+const STREET_REEL_FRAMES = [
+  'https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=1000&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?q=80&w=1000&auto=format&fit=crop',
+  'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1000&auto=format&fit=crop'
+];
+
+const FITS = [
+  {
+    id: 'heavy',
+    name: 'Oversized Heavy',
+    desc: 'Malha 100% algodão de gramatura pesada (260g/m²). Proporciona caimento reto e estruturado que não marca o corpo.',
+    specs: [
+      ['Gramatura', '260g/m² Heavy Weight'],
+      ['Gola', 'Canelada 2x1 de 3cm reforçada'],
+      ['Estampa', 'Silk/DTF em escala máxima até 40x50 cm'],
+      ['Acabamento', 'Pesponto duplo ombro a ombro']
+    ],
+    shape: { shoulder: 108, body: 80, length: 185, sleeve: 56 }
+  },
+  {
+    id: 'classic',
+    name: 'Oversized Clássica',
+    desc: 'Algodão penteado fio 30.1 encorpado (190g/m²). Toque macio com caimento amplo tradicional para uso diário.',
+    specs: [
+      ['Gramatura', '190g/m² Algodão Penteado'],
+      ['Gola', 'Ribana reforçada de 2.5cm'],
+      ['Estampa', 'Impressão ampla 40x50 cm ou peito 15x20 cm'],
+      ['Acabamento', 'Costura reforçada com fita interna']
+    ],
+    shape: { shoulder: 104, body: 76, length: 182, sleeve: 52 }
+  },
+  {
+    id: 'boxy',
+    name: 'Boxy Fit',
+    desc: 'Modelagem contemporânea mais curta no comprimento com ombros caídos e largura equilibrada.',
+    specs: [
+      ['Gramatura', '220g/m² Algodão Estruturado'],
+      ['Gola', 'Gola canelada de 3cm'],
+      ['Estampa', 'Proporção frontal 35x40 cm ou detalhe 15x20 cm'],
+      ['Acabamento', 'Barra larga e caimento solto']
+    ],
+    shape: { shoulder: 112, body: 84, length: 155, sleeve: 60 }
+  }
+];
+
 export function Sobre() {
+  const threeContainerRef = useRef(null);
+  const [frameIndex, setFrameIndex] = useState(0);
+  const [activeFitId, setActiveFitId] = useState('heavy');
+
   useEffect(() => {
     analyticsService.trackPageView('sobre');
   }, []);
 
+  // Loop visual discreto (estilo GIF P&B urbano)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setFrameIndex((prev) => (prev + 1) % STREET_REEL_FRAMES.length);
+    }, 1800);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Elemento 3D Minimalista Monocromático (Black Piano + Wireframe Branco)
+  useEffect(() => {
+    const container = threeContainerRef.current;
+    if (!container) return;
+
+    const width = container.clientWidth || 540;
+    const height = container.clientHeight || 440;
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 100);
+    camera.position.set(0, 0, 5.5);
+
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    } catch {
+      return;
+    }
+
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    container.innerHTML = '';
+    container.appendChild(renderer.domElement);
+
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+
+    const keyLight = new THREE.DirectionalLight(0xffffff, 2.2);
+    keyLight.position.set(4, 5, 4);
+    scene.add(keyLight);
+
+    const rimLight = new THREE.DirectionalLight(0x888888, 1.2);
+    rimLight.position.set(-4, -3, -2);
+    scene.add(rimLight);
+
+    const group = new THREE.Group();
+    scene.add(group);
+
+    // Sólido Central Preto Fosco Facetado
+    const coreGeo = new THREE.IcosahedronGeometry(1.45, 1);
+    const coreMat = new THREE.MeshStandardMaterial({
+      color: 0x141414,
+      roughness: 0.35,
+      metalness: 0.8,
+      flatShading: true
+    });
+    const coreMesh = new THREE.Mesh(coreGeo, coreMat);
+    group.add(coreMesh);
+
+    // Malha Externa Branca Minimalista
+    const wireGeo = new THREE.IcosahedronGeometry(1.72, 1);
+    const wireMat = new THREE.MeshBasicMaterial({
+      color: 0xffffff,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.22
+    });
+    const wireMesh = new THREE.Mesh(wireGeo, wireMat);
+    group.add(wireMesh);
+
+    let targetX = 0;
+    let targetY = 0;
+
+    const onPointerMove = (e) => {
+      const rect = container.getBoundingClientRect();
+      const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+      targetY = nx * 0.75;
+      targetX = ny * 0.5;
+    };
+
+    container.addEventListener('pointermove', onPointerMove);
+
+    const onResize = () => {
+      if (!container) return;
+      const w = container.clientWidth || 540;
+      const h = container.clientHeight || 440;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    };
+    window.addEventListener('resize', onResize);
+
+    let frameId;
+    const animate = () => {
+      frameId = requestAnimationFrame(animate);
+      coreMesh.rotation.y += 0.004;
+      coreMesh.rotation.x += 0.002;
+      wireMesh.rotation.y -= 0.003;
+
+      group.rotation.y += (targetY - group.rotation.y) * 0.06;
+      group.rotation.x += (targetX - group.rotation.x) * 0.06;
+
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      window.removeEventListener('resize', onResize);
+      container.removeEventListener('pointermove', onPointerMove);
+      coreGeo.dispose();
+      coreMat.dispose();
+      wireGeo.dispose();
+      wireMat.dispose();
+      renderer.dispose();
+    };
+  }, []);
+
+  const currentFit = FITS.find((f) => f.id === activeFitId) || FITS[0];
+
   return (
     <main className={styles.container}>
-      {/* HERO INSTITUCIONAL */}
-      <section className={styles.heroSection}>
-        <span className={styles.tag}>MANIFESTO & ATELIÊ</span>
-        <h1 className={styles.title}>THR33 STREETWEAR</h1>
-        <p className={styles.lead}>
-          Nascida no concreto de Curitiba, a THR33 une a música independente, a estética urbana e a modelagem autoral. Desenvolvida para quem valoriza caimento pesado e exclusividade.
-        </p>
+      {/* 1. HERO: 1 TEXTO + 1 ELEMENTO 3D */}
+      <section className={styles.splitSection}>
+        <div className={styles.textColumn}>
+          <h1 className={styles.title}>THR33 STREETWEAR</h1>
+          <p className={styles.bodyText}>
+            Nascida no concreto de Curitiba, a THR33 une a música independente, a estética urbana e a modelagem autoral. Desenvolvida para quem valoriza caimento pesado e exclusividade.
+          </p>
+        </div>
+
+        <div
+          ref={threeContainerRef}
+          className={styles.threeBox}
+          aria-label="Elemento 3D interativo THR33"
+        />
       </section>
 
-      {/* BLOCO DE HISTÓRIA */}
-      <section className={styles.gridSection}>
-        <div className={styles.imageBox}>
-          <img 
-            src="https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=800&auto=format&fit=crop" 
-            alt="Ateliê THR33 Curitiba" 
+      {/* 2. HISTÓRIA: 1 VISUAL EM MOVIMENTO + 1 TEXTO */}
+      <section className={styles.splitSection}>
+        <div className={styles.motionBox}>
+          <img
+            src={STREET_REEL_FRAMES[frameIndex]}
+            alt="Ateliê THR33 Curitiba"
+            className={styles.motionImage}
           />
         </div>
-        <div className={styles.textBox}>
-          <span className={styles.subTag}>PRODUÇÃO AUTORAL</span>
-          <h2>A RUA COMO NOSSO ATELIÊ</h2>
-          <p>
+
+        <div className={styles.textColumn}>
+          <h2 className={styles.sectionTitle}>A RUA COMO NOSSO ATELIÊ</h2>
+          <p className={styles.bodyText}>
             Criada por jovens curitibanos, a THR33 foca na confecção de camisetas estruturadas em malha pesada. Cada estampa é desenvolvida em edições limitadas sem repetição de tiragem.
           </p>
-          <p>
+          <p className={styles.bodyText}>
             Trabalhamos sob demanda semanal: as peças são produzidas e estampadas conforme os pedidos chegam, garantindo controle de qualidade unitário em cada costura.
           </p>
         </div>
       </section>
 
-      {/* ESPECIFICAÇÕES DE TECIDOS E MODELAGENS */}
-      <section className={styles.specsSection}>
-        <div className={styles.sectionHeader}>
-          <span className={styles.subTag}>MATERIAIS & CORTE</span>
-          <h2>MODELAGENS & ESPECIFICAÇÕES DE TECIDO</h2>
-          <p>Conheça os três cortes oficiais presentes na grade da THR33.</p>
+      {/* 3. MODELAGENS: 1 TEXTO SELECIONÁVEL + 1 SILHUETA DO CORTE */}
+      <section className={styles.splitSection}>
+        <div className={styles.textColumn}>
+          <h2 className={styles.sectionTitle}>MODELAGENS &amp; TECIDOS</h2>
+
+          <div className={styles.fitSelectorBar}>
+            {FITS.map((fit) => (
+              <button
+                key={fit.id}
+                type="button"
+                onClick={() => setActiveFitId(fit.id)}
+                className={`${styles.fitTab} ${
+                  activeFitId === fit.id ? styles.fitTabActive : ''
+                }`}
+              >
+                {fit.name}
+              </button>
+            ))}
+          </div>
+
+          <p className={styles.bodyText}>{currentFit.desc}</p>
+
+          <ul className={styles.specList}>
+            {currentFit.specs.map(([label, val]) => (
+              <li key={label}>
+                <strong>{label}:</strong> {val}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className={styles.specsGrid}>
-          {/* OVERSIZED HEAVY */}
-          <div className={styles.specCard}>
-            <div className={styles.specHeader}>
-              <span className={styles.specBadge}>PREMIUM HEAVY</span>
-              <h3>OVERSIZED HEAVY</h3>
-            </div>
-            <p className={styles.specDesc}>
-              Malha 100% algodão de gramatura pesada (260g/m²). Proporciona caimento reto e estruturado que não marca o corpo.
-            </p>
-            <ul className={styles.specDetails}>
-              <li><strong>Gramatura:</strong> 260g/m² Heavy Weight</li>
-              <li><strong>Gola:</strong> Canelada 2x1 de 3cm reforçada</li>
-              <li><strong>Estampa:</strong> Silk/DTF em escala máxima até 40x50 cm</li>
-              <li><strong>Acabamento:</strong> Pesponto duplo ombro a ombro</li>
-            </ul>
-          </div>
+        <div className={styles.silhouetteBox}>
+          <svg
+            viewBox="0 0 280 240"
+            className={styles.silhouetteSvg}
+            aria-label={`Molde ${currentFit.name}`}
+          >
+            {(() => {
+              const cx = 140;
+              const { shoulder, body, length, sleeve } = currentFit.shape;
+              const bottomY = 30 + length;
+              const sleeveY = 36 + sleeve;
 
-          {/* OVERSIZED CLÁSSICA */}
-          <div className={styles.specCard}>
-            <div className={styles.specHeader}>
-              <span className={styles.specBadge}>STREETWEAR</span>
-              <h3>OVERSIZED CLÁSSICA</h3>
-            </div>
-            <p className={styles.specDesc}>
-              Algodão penteado fio 30.1 encorpado (190g/m²). Toque macio com caimento amplo tradicional para uso diário.
-            </p>
-            <ul className={styles.specDetails}>
-              <li><strong>Gramatura:</strong> 190g/m² Algodão Penteado</li>
-              <li><strong>Gola:</strong> Ribana reforçada de 2.5cm</li>
-              <li><strong>Estampa:</strong> Impressão ampla 40x50 cm ou peito 15x20 cm</li>
-              <li><strong>Acabamento:</strong> Costura reforçada com fita interna</li>
-            </ul>
-          </div>
+              const d = `
+                M ${cx - 28} 30
+                Q ${cx} 42 ${cx + 28} 30
+                L ${cx + shoulder} 48
+                L ${cx + shoulder - 14} ${sleeveY}
+                L ${cx + body} ${sleeveY - 10}
+                L ${cx + body} ${bottomY}
+                L ${cx - body} ${bottomY}
+                L ${cx - body} ${sleeveY - 10}
+                L ${cx - shoulder + 14} ${sleeveY}
+                L ${cx - shoulder} 48
+                Z
+              `;
 
-          {/* BOXY FIT */}
-          <div className={styles.specCard}>
-            <div className={styles.specHeader}>
-              <span className={styles.specBadge}>CORTE QUADRADO</span>
-              <h3>BOXY FIT</h3>
-            </div>
-            <p className={styles.specDesc}>
-              Modelagem contemporânea mais curta no comprimento com ombros caídos e largura equilibrada.
-            </p>
-            <ul className={styles.specDetails}>
-              <li><strong>Gramatura:</strong> 220g/m² Algodão Estruturado</li>
-              <li><strong>Gola:</strong> Gola canelada de 3cm</li>
-              <li><strong>Estampa:</strong> Proporção frontal 35x40 cm ou detalhe 15x20 cm</li>
-              <li><strong>Acabamento:</strong> Barra larga e caimento solto</li>
-            </ul>
-          </div>
+              return (
+                <path
+                  d={d}
+                  fill="rgba(255, 255, 255, 0.04)"
+                  stroke="#ffffff"
+                  strokeWidth="1.5"
+                />
+              );
+            })()}
+          </svg>
         </div>
       </section>
 
-      {/* TABELA DE MEDIDAS OFICIAL */}
-      <section className={styles.measuresSection}>
-        <div className={styles.sectionHeader}>
-          <span className={styles.subTag}>GUIA EXATO</span>
-          <h2>TABELA DE MEDIDAS (CENTÍMETROS)</h2>
-        </div>
+      {/* 4. TABELA DE MEDIDAS LIMPA */}
+      <section className={styles.measuresBlock}>
+        <h2 className={styles.sectionTitle}>TABELA DE MEDIDAS (CM)</h2>
 
         <div className={styles.tableWrapper}>
           <table className={styles.table}>
@@ -121,7 +303,7 @@ export function Sobre() {
             </thead>
             <tbody>
               <tr>
-                <td rowSpan={5}><strong>Oversized Heavy & Clássica</strong></td>
+                <td rowSpan={5}><strong>Oversized Heavy &amp; Clássica</strong></td>
                 <td>PP</td>
                 <td>54 cm</td>
                 <td>72 cm</td>
@@ -188,10 +370,15 @@ export function Sobre() {
         </div>
       </section>
 
-      {/* BANNER FINAL */}
-      <section className={styles.statementBanner}>
-        <h2>COMPROMISSO COM A QUALIDADE</h2>
-        <p>Saiba todos os detalhes sobre prazos de confecção e logística sob demanda.</p>
+      {/* 5. RODAPÉ DE AÇÃO DIRETO */}
+      <section className={styles.footerBanner}>
+        <div className={styles.textColumn}>
+          <h2 className={styles.sectionTitle}>COMPROMISSO COM A QUALIDADE</h2>
+          <p className={styles.bodyText}>
+            Prazos de confecção sob demanda e peças disponíveis no catálogo.
+          </p>
+        </div>
+
         <div className={styles.bannerActions}>
           <Link className={styles.ctaBtn} to="/como-funciona-a-entrega">
             COMO FUNCIONA A ENTREGA
