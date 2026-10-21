@@ -28,6 +28,21 @@ export function ProductCard({ product }) {
     toggleFavorite(product);
   };
 
+  // Imagem principal do produto
+  const primaryImage = product.image || (Array.isArray(product.images) && product.images[0]) || '';
+
+  // Imagem secundária (lado / costas / detalhe para transição minimalista ao passar o mouse)
+  const secondaryImage = 
+    product.secondaryImage || 
+    product.hoverImage || 
+    product.imageHover || 
+    (Array.isArray(product.images) && product.images.length > 1 ? product.images[1] : null) ||
+    (Array.isArray(product.imagesGallery) && product.imagesGallery.length > 1 
+      ? (product.imagesGallery.find(img => !img.isCover)?.url || product.imagesGallery[1]?.url)
+      : null);
+
+  const hasSecondaryImage = Boolean(secondaryImage && secondaryImage !== primaryImage);
+
   return (
     <article className={styles.card}>
       <div className={styles.imageWrapper}>
@@ -49,21 +64,31 @@ export function ProductCard({ product }) {
         {/* Placeholder com Shimmer enquanto a imagem carrega */}
         {!imageLoaded && <div className={styles.imagePlaceholderShimmer} />}
 
-        {/* Link direto da Imagem para a PDP */}
+        {/* Link direto da Imagem para a PDP com troca suave ao passar o mouse */}
         <Link 
           to={`/produto/${productId}`} 
-          className={styles.imageLink}
+          className={`${styles.imageLink} ${hasSecondaryImage ? styles.hasSecondary : ''}`}
           onClick={handleTrackClick}
           aria-label={`Ver detalhes de ${product.name}`}
         >
           <img 
-            src={product.image} 
+            src={primaryImage} 
             alt={product.name} 
             loading="lazy"
             decoding="async"
             onLoad={() => setImageLoaded(true)}
-            className={`${styles.image} ${imageLoaded ? styles.imageVisible : styles.imageHidden}`} 
+            className={`${styles.image} ${styles.primaryImage} ${imageLoaded ? styles.imageVisible : styles.imageHidden}`} 
           />
+
+          {hasSecondaryImage && (
+            <img 
+              src={secondaryImage} 
+              alt={`${product.name} - Imagem alternativa`} 
+              loading="lazy"
+              decoding="async"
+              className={`${styles.image} ${styles.secondaryImage}`} 
+            />
+          )}
         </Link>
 
         {/* BOTÃO DE FAVORITO EM POSIÇÃO ABSOLUTA NO CANTO SUPERIOR DIREITO (TOUCH >= 44PX) */}

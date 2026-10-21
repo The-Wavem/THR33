@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getVitrineSettings, getFeaturedProducts } from '../services/catalogService';
+import { PRODUCTS_DATA } from '../data/productsData';
 
 /**
  * Hook customizado para gerenciar a camada de dados da Home (Fase 2)
@@ -32,7 +33,7 @@ export function useHomeData(limitProducts = 8) {
       ]);
 
       setVitrine(vitrineData || null);
-      setFeaturedProducts(Array.isArray(productsData) ? productsData : []);
+      setFeaturedProducts(Array.isArray(productsData) && productsData.length > 0 ? productsData : PRODUCTS_DATA);
     } catch (err) {
       console.error('Erro ao carregar dados da Home:', err);
       setError('Não foi possível carregar os destaques da vitrine no momento.');

@@ -41,6 +41,8 @@ function InstagramIcon({ size = 20, className }) {
   );
 }
 
+
+
 // Variantes suaves de animação para os dropdowns (rápido, fluído e elegante)
 const dropdownMotionVariants = {
   hidden: {
@@ -72,11 +74,26 @@ const dropdownMotionVariants = {
   }
 };
 
+// Palavras da rotação refinada da marca
+const BRAND_ROTATION_ITEMS = [
+  { id: 'brand', text: 'THR33', isBrand: true },
+  { id: 'creed', text: 'FOR THE FEW', isBrand: false }
+];
+
 export function Navbar({ onOpenCart }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobileCategoriesOpen, setIsMobileCategoriesOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isCatalogDropdownOpen, setIsCatalogDropdownOpen] = useState(false);
+  const [logoSlideIndex, setLogoSlideIndex] = useState(0);
+
+  // Timer suave de 6 segundos para alternar entre a marca e o manifesto
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLogoSlideIndex(prev => (prev + 1) % BRAND_ROTATION_ITEMS.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Trava scroll do body quando menu mobile estiver aberto
   useEffect(() => {
@@ -183,14 +200,32 @@ export function Navbar({ onOpenCart }) {
           <span className={styles.hamburger}></span>
         </button>
 
-        {/* Logo */}
+        {/* Logo com Troca Lisa, Clean e Diferenciada (THR33 / FOR THE FEW) */}
         <Link 
           to="/" 
           className={styles.logo} 
           aria-label="THR33 Home"
           onMouseEnter={() => preloadRoute('/')}
+          onTouchStart={() => preloadRoute('/')}
         >
-          <span className={styles.logoText}>THR33</span>
+          <div className={styles.logoRollFrame}>
+            <AnimatePresence initial={false}>
+              <motion.span
+                key={BRAND_ROTATION_ITEMS[logoSlideIndex].id}
+                initial={{ y: 18, opacity: 0, filter: 'blur(3px)' }}
+                animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
+                exit={{ y: -18, opacity: 0, filter: 'blur(3px)' }}
+                transition={{ duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
+                className={`${styles.logoItem} ${
+                  BRAND_ROTATION_ITEMS[logoSlideIndex].isBrand 
+                    ? styles.logoText 
+                    : styles.logoCreedText
+                }`}
+              >
+                {BRAND_ROTATION_ITEMS[logoSlideIndex].text}
+              </motion.span>
+            </AnimatePresence>
+          </div>
         </Link>
 
         {/* Links de Navegação com Preloading no Hover */}

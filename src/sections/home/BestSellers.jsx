@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Package } from 'lucide-react';
 import { catalogService } from '../../services/catalogService';
+import { PRODUCTS_DATA } from '../../data/productsData';
 import ProductCard from '../../components/catalog/ProductCard';
 import styles from './BestSellers.module.css';
 
@@ -21,9 +22,14 @@ export function BestSellers({ products: initialProducts }) {
       try {
         const all = await catalogService.getFeaturedProducts(4);
         const vestuario = all.filter(p => p.type !== 'brinde' && p.category !== 'gift-card');
-        setProducts(vestuario.slice(0, 4));
+        if (vestuario.length > 0) {
+          setProducts(vestuario.slice(0, 4));
+        } else {
+          setProducts(PRODUCTS_DATA.filter(p => p.category === 'camisa'));
+        }
       } catch (err) {
         console.error("Erro ao carregar mais vendidos:", err);
+        setProducts(PRODUCTS_DATA.filter(p => p.category === 'camisa'));
       } finally {
         setLoading(false);
       }

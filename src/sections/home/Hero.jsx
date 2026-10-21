@@ -29,8 +29,22 @@ const DEFAULT_HERO_SLIDES = [
       { id: "btn_1", text: "EXPLORAR CATÁLOGO", link: "/catalogo", variant: "primary" },
       { id: "btn_2", text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
     ]
+  },
+  {
+    id: "slide_3",
+    title: "CONCRETE PROCESS",
+    subtitle: "OVERSIZED & BOXY // EDIÇÕES LIMITADAS",
+    badge: "DROP LIMITADO",
+    bgImage: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?q=80&w=1600&auto=format&fit=crop",
+    active: true,
+    buttons: [
+      { id: "btn_1", text: "VER LANÇAMENTOS", link: "/lancamentos", variant: "primary" },
+      { id: "btn_2", text: "CONHEÇA O ATELIÊ", link: "/sobre", variant: "secondary" }
+    ]
   }
 ];
+
+const AUTOPLAY_DELAY = 5000; // 5 segundos por slide
 
 // Animação refinada para o background do slide
 const bgVariants = {
@@ -86,6 +100,7 @@ export function Hero({ bannerData }) {
   const [currentSlide, setCurrentSlide] = useState(0);
   const [direction, setDirection] = useState(1);
   const [isHovered, setIsHovered] = useState(false);
+  const [timerKey, setTimerKey] = useState(0);
 
   // Sincroniza dados da prop bannerData recebida do Firestore
   useEffect(() => {
@@ -93,24 +108,39 @@ export function Hero({ bannerData }) {
 
     if (Array.isArray(bannerData.slides) && bannerData.slides.length > 0) {
       const active = bannerData.slides.filter(s => s.active !== false);
-      if (active.length > 0) setSlides(active);
+      if (active.length > 1) {
+        setSlides(active);
+      } else if (active.length === 1) {
+        // Se houver apenas 1 slide no Firestore, adiciona os slides padrão complementares para manter a rotação
+        const remaining = DEFAULT_HERO_SLIDES.filter(ds => ds.id !== active[0].id);
+        setSlides([active[0], ...remaining]);
+      }
     } else if (Array.isArray(bannerData) && bannerData.length > 0) {
       const active = bannerData.filter(s => s.active !== false);
-      if (active.length > 0) setSlides(active);
+      if (active.length > 1) {
+        setSlides(active);
+      } else if (active.length === 1) {
+        const remaining = DEFAULT_HERO_SLIDES.filter(ds => ds.id !== active[0].id);
+        setSlides([active[0], ...remaining]);
+      }
     } else if (bannerData.title || bannerData.mediaUrl || bannerData.bgImage) {
-      setSlides([{
-        id: bannerData.id || "hero_banner_1",
-        title: bannerData.title || "THR33 STREETWEAR",
-        subtitle: bannerData.subtitle || "A RUA COMO NOSSO ATELIÊ",
-        badge: bannerData.badge || "DESTAQUE",
-        bgImage: bannerData.mediaUrl || bannerData.bgImage || DEFAULT_HERO_SLIDES[0].bgImage,
-        type: bannerData.type || "image",
-        mediaUrl: bannerData.mediaUrl,
-        active: true,
-        buttons: bannerData.buttons || [
-          { id: "btn_1", text: "VER CATÁLOGO", link: "/catalogo", variant: "primary" }
-        ]
-      }]);
+      setSlides([
+        {
+          id: bannerData.id || "hero_banner_1",
+          title: bannerData.title || "THR33 STREETWEAR",
+          subtitle: bannerData.subtitle || "A RUA COMO NOSSO ATELIÊ",
+          badge: bannerData.badge || "DESTAQUE",
+          bgImage: bannerData.mediaUrl || bannerData.bgImage || DEFAULT_HERO_SLIDES[0].bgImage,
+          type: bannerData.type || "image",
+          mediaUrl: bannerData.mediaUrl,
+          active: true,
+          buttons: bannerData.buttons || [
+            { id: "btn_1", text: "VER CATÁLOGO", link: "/catalogo", variant: "primary" }
+          ]
+        },
+        DEFAULT_HERO_SLIDES[1],
+        DEFAULT_HERO_SLIDES[2]
+      ]);
     }
   }, [bannerData]);
 
@@ -128,28 +158,31 @@ export function Hero({ bannerData }) {
   const nextSlide = useCallback(() => {
     setDirection(1);
     setCurrentSlide((prev) => (prev + 1) % slides.length);
+    setTimerKey((k) => k + 1);
   }, [slides.length]);
 
   const prevSlide = useCallback(() => {
     setDirection(-1);
     setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
+    setTimerKey((k) => k + 1);
   }, [slides.length]);
 
   const goToSlide = (index) => {
     setDirection(index > currentSlide ? 1 : -1);
     setCurrentSlide(index);
+    setTimerKey((k) => k + 1);
   };
 
-  // Transição automática a cada 7.5 segundos (pausa no hover)
+  // Timer automático para o carrossel ir mudando sozinho
   useEffect(() => {
     if (isHovered || slides.length <= 1) return;
 
     const timer = setInterval(() => {
       nextSlide();
-    }, 7500);
+    }, AUTOPLAY_DELAY);
 
     return () => clearInterval(timer);
-  }, [nextSlide, isHovered, slides.length]);
+  }, [nextSlide, isHovered, slides.length, timerKey]);
 
   // Manipulador de arraste (drag / swipe horizontal)
   const handleDragEnd = (e, { offset, velocity }) => {
@@ -170,8 +203,6 @@ export function Hero({ bannerData }) {
     <section 
       className={styles.heroSection} 
       aria-label="Destaques THR33"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
     >
       {/* Área Arrastável com AnimatePresence */}
       <motion.div 
@@ -215,6 +246,8 @@ export function Hero({ bannerData }) {
               animate="animate"
               exit="exit"
               className={styles.contentContainer}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
             >
               {slide.badge && (
                 <div className={styles.badge}>
@@ -258,6 +291,8 @@ export function Hero({ bannerData }) {
           <button 
             className={`${styles.navArrow} ${styles.navArrowPrev}`}
             onClick={prevSlide}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
             aria-label="Slide anterior"
           >
             <ChevronLeft size={22} />
@@ -266,21 +301,47 @@ export function Hero({ bannerData }) {
           <button 
             className={`${styles.navArrow} ${styles.navArrowNext}`}
             onClick={nextSlide}
+            onMouseEnter={() => setIsHovered(true)}
+            onMouseLeave={() => setIsHovered(false)}
             aria-label="Próximo slide"
           >
             <ChevronRight size={22} />
           </button>
 
-          {/* Indicadores do Carrossel */}
+          {/* Indicadores do Carrossel com Timer em Linha Minimalista */}
           <div className={styles.dotsContainer}>
-            {slides.map((_, index) => (
-              <button
-                key={index}
-                className={`${styles.dot} ${index === currentSlide ? styles.activeDot : ''}`}
-                onClick={() => goToSlide(index)}
-                aria-label={`Ir para slide ${index + 1}`}
-              />
-            ))}
+            <div className={styles.slideCounter}>
+              <span>0{currentSlide + 1}</span>
+              <span className={styles.slideCounterTotal}> / 0{slides.length}</span>
+            </div>
+
+            <div className={styles.dotsTrack}>
+              {slides.map((_, index) => {
+                const isActive = index === currentSlide;
+                return (
+                  <button
+                    key={index}
+                    className={`${styles.dot} ${isActive ? styles.activeDot : ''}`}
+                    onClick={() => goToSlide(index)}
+                    aria-label={`Ir para slide ${index + 1}`}
+                  >
+                    {isActive && (
+                      <motion.span
+                        key={`progress-${currentSlide}-${timerKey}`}
+                        className={styles.dotProgressBar}
+                        initial={{ scaleX: 0 }}
+                        animate={{ scaleX: isHovered ? 0 : 1 }}
+                        transition={{
+                          duration: AUTOPLAY_DELAY / 1000,
+                          ease: "linear"
+                        }}
+                        style={{ originX: 0 }}
+                      />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </>
       )}

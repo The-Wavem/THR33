@@ -23,10 +23,12 @@
 }
 
 .imageLink {
+  position: relative;
   display: block;
   width: 100%;
   height: 100%;
   text-decoration: none;
+  overflow: hidden;
 }
 
 .imagePlaceholderShimmer {
@@ -117,10 +119,14 @@
 }
 
 .image {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.4s ease, opacity 0.4s ease;
+  transition: opacity 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
+              transform 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+  will-change: opacity, transform;
 }
 
 .imageHidden {
@@ -131,8 +137,29 @@
   opacity: 1;
 }
 
-.card:hover .image {
-  transform: scale(1.05);
+.primaryImage {
+  z-index: 1;
+}
+
+.secondaryImage {
+  z-index: 2;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Transição Minimalista e Clean no Hover das Camisas */
+@media (hover: hover) and (pointer: fine) {
+  .card:hover .image {
+    transform: scale(1.035);
+  }
+
+  .card:hover .hasSecondary .primaryImage {
+    opacity: 0;
+  }
+
+  .card:hover .hasSecondary .secondaryImage {
+    opacity: 1;
+  }
 }
 
 /* BOTÃO DE FAVORITO NO TOPO DIREITO */

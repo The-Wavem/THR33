@@ -11,6 +11,11 @@ export const PRODUCTS_DATA = [
     isRelease: true,
     customBadge: "LANÇAMENTO",
     image: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop",
+    secondaryImage: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=600&auto=format&fit=crop",
+    images: [
+      "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=600&auto=format&fit=crop"
+    ],
     description: "Modelagem Boxy em malha estruturada de 220g/m². Corte quadrado com ombros caídos e caimento pesado contemporâneo.",
     stock: { PP: 5, P: 10, M: 15, G: 12, GG: 6 }
   },
@@ -27,6 +32,11 @@ export const PRODUCTS_DATA = [
     isRelease: true,
     customBadge: "PREMIUM HEAVY",
     image: "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?q=80&w=600&auto=format&fit=crop",
+    secondaryImage: "https://images.unsplash.com/photo-1529374255404-311a2a4f1fd9?q=80&w=600&auto=format&fit=crop",
+    images: [
+      "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?q=80&w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1529374255404-311a2a4f1fd9?q=80&w=600&auto=format&fit=crop"
+    ],
     description: "Malha 100% algodão de 260g/m² (Heavy Weight). Gola canelada de 3cm com pesponto duplo ombro a ombro e estampa em alta escala.",
     stock: { PP: 8, P: 15, M: 20, G: 15, GG: 8 }
   },
@@ -43,6 +53,11 @@ export const PRODUCTS_DATA = [
     isRelease: false,
     customBadge: "EDITION 2026",
     image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=600&auto=format&fit=crop",
+    secondaryImage: "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop",
+    images: [
+      "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop"
+    ],
     description: "Algodão penteado 190g/m² fio 30.1 encorpado. Caimento amplo e fluido com gola ribana de 2,5cm.",
     stock: { PP: 10, P: 15, M: 18, G: 10, GG: 5 }
   },
@@ -58,6 +73,11 @@ export const PRODUCTS_DATA = [
     isRelease: false,
     customBadge: "GIFT PASS",
     image: "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?q=80&w=600&auto=format&fit=crop",
+    secondaryImage: "https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?q=80&w=600&auto=format&fit=crop",
+    images: [
+      "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?q=80&w=600&auto=format&fit=crop",
+      "https://images.unsplash.com/photo-1607083206869-4c7672e72a8a?q=80&w=600&auto=format&fit=crop"
+    ],
     description: "Vale digital com saldo adaptável para resgate direto na carteira do usuário.",
     stock: { ÚNICO: 999 }
   }
