@@ -67,7 +67,7 @@ const DEFAULT_BENTO_CONFIG = {
 // Atalhos rápidos sugeridos para botões de CTA e cards
 const QUICK_LINKS = [
   { label: "Catálogo", url: "/catalogo" },
-  { label: "Lançamentos", url: "/lancamentos" },
+  { label: "Destaques", url: "/catalogo" },
   { label: "Oversized", url: "/catalogo?modelagem=oversized" },
   { label: "Boxy", url: "/catalogo?modelagem=boxy" },
   { label: "Sobre", url: "/sobre" }
@@ -876,7 +876,7 @@ export function CmsVitrine() {
                             <LinkIcon size={12} className={styles.linkIconInside} />
                             <input 
                               type="text" 
-                              placeholder="/catalogo ou /lancamentos" 
+                              placeholder="/catalogo ou /sobre" 
                               value={btn.link || ''} 
                               onChange={(e) => handleUpdateButton(bIdx, 'link', e.target.value)} 
                             />

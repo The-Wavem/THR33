@@ -447,7 +447,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
                 <span>EXPLORAR CATÁLOGO</span>
               </Link>
 
-              <Link to="/lancamentos" className={styles.notFoundSecondaryBtn}>
+              <Link to="/sobre" className={styles.notFoundSecondaryBtn}>
                 <Flame size={16} />
                 <span>LANÇAMENTOS VIP</span>
               </Link>

@@ -14,6 +14,7 @@ export default defineConfig({
       '@services': fileURLToPath(new URL('./src/services', import.meta.url)),
       '@hooks': fileURLToPath(new URL('./src/hooks', import.meta.url)),
       '@theme': fileURLToPath(new URL('./src/theme', import.meta.url)),
+      '@assets': fileURLToPath(new URL('./src/assets', import.meta.url)),
     },
   },
   server: {

@@ -169,7 +169,7 @@ export function HomeContent({ onOpenCatalogo, onAddToCart, onOpenCart }) {
                 <h1 className={styles.heroTitle}>THR33: THE STREETS ARE OURS</h1>
                 <p className={styles.heroCaption}>{carouselSlides[currentSlideIndex].caption}</p>
                 <div className={styles.heroButtons}>
-                  <button onClick={() => navigate('/lancamentos')} className={styles.btnPrimary}>
+                  <button onClick={() => navigate('/catalogo')} className={styles.btnPrimary}>
                     <span>VER DROP ATIVO</span>
                     <ArrowRight size={16} />
                   </button>
@@ -358,7 +358,7 @@ export function HomeContent({ onOpenCatalogo, onAddToCart, onOpenCart }) {
                   Construímos modelagens brutas para suportar o ritmo urbano e permanecer no tempo. Não produzimos em massa. Cada peça carrega número de série e acabamento manual.
                 </p>
                 <button 
-                  onClick={() => navigate('/lancamentos')} 
+                  onClick={() => navigate('/sobre')} 
                   className={styles.btnManifestoAtelier}
                 >
                   <span>CONHEÇA O ATELIÊ</span>
@@ -374,7 +374,7 @@ export function HomeContent({ onOpenCatalogo, onAddToCart, onOpenCart }) {
             {/* LIFESTYLE CARD */}
             <div className={styles.lifestyleCard}>
               <div 
-                onClick={() => navigate('/lancamentos')}
+                onClick={() => navigate('/catalogo')}
                 className={styles.lifestyleFrame}
                 style={{ cursor: 'pointer' }}
               >
