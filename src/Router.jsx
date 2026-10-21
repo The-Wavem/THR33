@@ -1,5 +1,5 @@
 import React, { Suspense, useEffect } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { PublicLayout } from './layouts/PublicLayout';
 import { PrivateLayout } from './layouts/PrivateLayout';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
@@ -16,7 +16,7 @@ import { analyticsService } from './services/analyticsService';
 const Home = lazyWithRetry(() => import('./pages/public/Home').then(m => ({ default: m.Home || m.default })));
 const Catalogo = lazyWithRetry(() => import('./pages/public/Catalogo').then(m => ({ default: m.Catalogo || m.default })));
 const ProdutoDetalhe = lazyWithRetry(() => import('./pages/public/ProdutoDetalhe').then(m => ({ default: m.ProdutoDetalhe || m.default })));
-const Lancamentos = lazyWithRetry(() => import('./pages/public/Lancamentos').then(m => ({ default: m.Lancamentos || m.default })));
+// (Lancamentos removido - redireciona para catalogo)
 const Checkout = lazyWithRetry(() => import('./pages/public/Checkout').then(m => ({ default: m.Checkout || m.default })));
 const Auth = lazyWithRetry(() => import('./pages/public/Auth').then(m => ({ default: m.Auth || m.default })));
 const Sobre = lazyWithRetry(() => import('./pages/public/Sobre').then(m => ({ default: m.Sobre || m.default })));
@@ -80,7 +80,7 @@ export function AppRoutes() {
             <Route path="/" element={<Home onAddToCart={addToCart} onOpenCart={() => setIsCartOpen(true)} />} />
             
             {/* ROTA LANÇAMENTOS VIP */}
-            <Route path="/lancamentos" element={<Lancamentos onAddToCart={addToCart} onOpenAuthModal={handleOpenAuth} user={user} />} />
+            <Route path="/lancamentos" element={<Navigate to="/catalogo" replace />} />
             
             {/* ROTA PRINCIPAL E ROTA DINÂMICA DE CATEGORIA */}
             <Route path="/catalogo" element={<Catalogo onAddToCart={addToCart} />} />

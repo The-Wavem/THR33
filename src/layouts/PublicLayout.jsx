@@ -18,7 +18,7 @@ export function PublicLayout({
   useEffect(() => {
     const rootHTML = document.documentElement;
     
-    if (location.pathname === '/lancamentos') {
+    if (false) {
       rootHTML.setAttribute('data-theme', 'drop');
     } else {
       rootHTML.removeAttribute('data-theme');
