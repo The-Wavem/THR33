@@ -3,7 +3,7 @@
 const routeLoaders = {
   '/': () => import('../pages/public/Home'),
   '/catalogo': () => import('../pages/public/Catalogo'),
-  '/lancamentos': () => import('../pages/public/Lancamentos'),
+  // '/lancamentos' redirecionado para /catalogo
   '/checkout': () => import('../pages/public/Checkout'),
   '/auth': () => import('../pages/public/Auth'),
   '/login': () => import('../pages/public/Auth'),
