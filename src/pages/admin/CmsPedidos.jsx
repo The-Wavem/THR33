@@ -33,7 +33,8 @@ import {
   Layers,
   Scissors,
   Eye,
-  EyeOff
+  EyeOff,
+  Tag
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../services/firebaseConfig';
@@ -92,6 +93,83 @@ export const extractItemColor = (item) => {
 
   // Padrão canônico do streetwear autoral THR33
   return 'Preto';
+};
+
+// Helper para consolidar informacoes financeiras e de frete do pedido
+export const resolveOrderFinancials = (order) => {
+  if (!order) return null;
+
+  const rawSubtotal = Number(order.subtotal);
+  const calculatedItemsSubtotal = Array.isArray(order.items)
+    ? order.items.reduce((acc, it) => acc + (Number(it.price || 0) * Number(it.quantity || 1)), 0)
+    : 0;
+  const subtotal = !isNaN(rawSubtotal) && rawSubtotal > 0 ? rawSubtotal : calculatedItemsSubtotal;
+
+  const rawShippingCost = order.shippingCost ?? order.freightCost;
+  const shippingCost = Number(rawShippingCost || 0);
+
+  const isRetirada = order.shippingMethod === 'retirada_atelie' || String(order.carrier || '').toLowerCase().includes('retirada');
+  const isFreeShipping = Boolean(
+    order.freeShippingApplied || 
+    order.isFreeShipping || 
+    (shippingCost === 0 && (order.freeShippingReason || isRetirada || subtotal > 0))
+  );
+
+  let freeReasonLabel = '';
+  if (isRetirada) {
+    freeReasonLabel = 'Retirada no Ateliê';
+  } else if (order.freeShippingReason === 'item_and_coupon') {
+    freeReasonLabel = 'Item promocional + Cupom';
+  } else if (order.freeShippingReason === 'coupon') {
+    freeReasonLabel = 'Cupom de frete grátis';
+  } else if (order.freeShippingReason === 'item') {
+    freeReasonLabel = 'Peça com frete cortesia';
+  } else if (order.freeShippingReason === 'order_value') {
+    freeReasonLabel = 'Faixa de valor promocional';
+  } else if (isFreeShipping) {
+    freeReasonLabel = 'Frete Grátis';
+  }
+
+  let carrierName = order.carrier || '';
+  if (!carrierName) {
+    if (isRetirada) carrierName = 'Retirada';
+    else if (order.shippingMethod?.toLowerCase().includes('jadlog')) carrierName = 'Jadlog';
+    else if (order.shippingMethod?.toLowerCase().includes('correios') || order.shippingMethod === 'pac' || order.shippingMethod === 'sedex') carrierName = 'Correios';
+    else if (order.shippingMethod?.toLowerCase().includes('loggi')) carrierName = 'Loggi';
+    else carrierName = 'Transportadora';
+  }
+
+  let serviceName = order.shippingMethod || '';
+  if (serviceName.toLowerCase() === 'retirada_atelie') serviceName = 'Retirada no Ateliê';
+  else if (serviceName.toLowerCase() === 'padrao') serviceName = 'Econômico / Padrão';
+  else if (serviceName.toLowerCase() === 'expresso') serviceName = 'Expresso';
+  else if (serviceName.toUpperCase() === 'PAC') serviceName = 'PAC';
+  else if (serviceName.toUpperCase() === 'SEDEX') serviceName = 'SEDEX';
+  else if (serviceName.toLowerCase() === '.package') serviceName = '.Package';
+  else if (serviceName.toLowerCase() === '.com') serviceName = '.Com';
+
+  const deadline = order.shippingDeadline || order.deliveryTime || '';
+
+  const discountAmount = Number(order.discountAmount || order.discount || 0);
+  const couponCode = order.couponCode || order.coupon || '';
+  const walletDeduction = Number(order.walletDeduction || 0);
+  const total = Number(order.total || 0);
+  const paymentMethod = (order.paymentMethod || 'PIX').toUpperCase();
+
+  return {
+    subtotal,
+    shippingCost,
+    isFreeShipping,
+    freeReasonLabel,
+    carrierName,
+    serviceName,
+    deadline,
+    discountAmount,
+    couponCode,
+    walletDeduction,
+    total,
+    paymentMethod
+  };
 };
 
 const STATUS_OPTIONS = [
@@ -1560,7 +1638,38 @@ export function CmsPedidos() {
 
                     </td>
                     <td>
-                      <strong className={styles.totalValue}>R$ {Number(order.total || 0).toFixed(2)}</strong>
+                      {(() => {
+                        const fin = resolveOrderFinancials(order);
+                        return (
+                          <div className={styles.totalColWrapper}>
+                            <strong className={styles.totalValue}>R$ {fin.total.toFixed(2)}</strong>
+                            <div className={styles.orderFinanceMiniStack}>
+                              <span className={styles.financeMiniItem} title="Subtotal das peças">
+                                Itens: R$ {fin.subtotal.toFixed(2)}
+                              </span>
+                              {fin.isFreeShipping ? (
+                                <span className={styles.financeMiniFreeShipping} title={fin.freeReasonLabel || 'Frete Grátis'}>
+                                  FRETE GRÁTIS
+                                </span>
+                              ) : fin.shippingCost > 0 ? (
+                                <span className={styles.financeMiniShipping} title={`Frete: ${fin.carrierName}`}>
+                                  Frete: R$ {fin.shippingCost.toFixed(2)}
+                                </span>
+                              ) : null}
+                              {fin.discountAmount > 0 && (
+                                <span className={styles.financeMiniDiscount} title={fin.couponCode ? `Cupom: ${fin.couponCode}` : 'Desconto aplicado'}>
+                                  Desc: -R$ {fin.discountAmount.toFixed(2)}
+                                </span>
+                              )}
+                              {fin.walletDeduction > 0 && (
+                                <span className={styles.financeMiniDiscount} title="Saldo da carteira utilizado">
+                                  Saldo: -R$ {fin.walletDeduction.toFixed(2)}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
                     <td>
                       <span className={styles.paymentMethod}>
@@ -1834,6 +1943,103 @@ export function CmsPedidos() {
                   ))}
                 </div>
               </div>
+
+              {/* DISCRIMINAÇÃO FINANCEIRA & FRETE */}
+              {(() => {
+                const fin = resolveOrderFinancials(selectedOrder);
+                if (!fin) return null;
+                return (
+                  <div className={styles.sectionBlock}>
+                    <div className={styles.sectionHeaderLine}>
+                      <DollarSign size={15} className={styles.sectionIcon} />
+                      <h3>DISCRIMINAÇÃO FINANCEIRA & FRETE</h3>
+                    </div>
+
+                    <div className={styles.financialBreakdownBox}>
+                      {/* Subtotal das Peças */}
+                      <div className={styles.financialRow}>
+                        <div className={styles.financialLabelCol}>
+                          <span className={styles.financialLabel}>Subtotal das Peças</span>
+                          <span className={styles.financialSubtext}>
+                            {selectedOrder.items?.reduce((sum, it) => sum + (Number(it.quantity) || 1), 0) || 1} {selectedOrder.items?.reduce((sum, it) => sum + (Number(it.quantity) || 1), 0) === 1 ? 'peça' : 'peças'}
+                          </span>
+                        </div>
+                        <div className={styles.financialValueCol}>
+                          <span className={styles.financialValue}>R$ {fin.subtotal.toFixed(2)}</span>
+                        </div>
+                      </div>
+
+                      {/* Frete / Envio Selecionado */}
+                      <div className={styles.financialRow}>
+                        <div className={styles.financialLabelCol}>
+                          <span className={styles.financialLabel}>
+                            Frete Selecionado: <strong>{fin.carrierName}</strong> {fin.serviceName ? `(${fin.serviceName})` : ''}
+                          </span>
+                          {fin.deadline && (
+                            <span className={styles.financialSubtext}>
+                              Prazo estimado: {fin.deadline}
+                            </span>
+                          )}
+                        </div>
+                        <div className={styles.financialValueCol}>
+                          {fin.isFreeShipping ? (
+                            <span className={styles.freeShippingBadge}>
+                              {fin.freeReasonLabel || 'FRETE GRÁTIS'}
+                            </span>
+                          ) : (
+                            <span className={styles.financialValue}>R$ {fin.shippingCost.toFixed(2)}</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Desconto / Cupom se houver */}
+                      {fin.discountAmount > 0 && (
+                        <div className={styles.financialRowDiscount}>
+                          <div className={styles.financialLabelCol}>
+                            <span className={styles.financialLabelDiscount}>
+                              <Tag size={12} />
+                              <span>Desconto Promocional</span>
+                              {fin.couponCode && (
+                                <span className={styles.couponTagText}>{fin.couponCode.toUpperCase()}</span>
+                              )}
+                            </span>
+                          </div>
+                          <div className={styles.financialValueCol}>
+                            <span className={styles.financialValueDiscount}>- R$ {fin.discountAmount.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Dedução de Carteira se houver */}
+                      {fin.walletDeduction > 0 && (
+                        <div className={styles.financialRowDiscount}>
+                          <div className={styles.financialLabelCol}>
+                            <span className={styles.financialLabelDiscount}>
+                              <span>Crédito da Carteira / Troca</span>
+                            </span>
+                          </div>
+                          <div className={styles.financialValueCol}>
+                            <span className={styles.financialValueDiscount}>- R$ {fin.walletDeduction.toFixed(2)}</span>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Total Líquido Pago */}
+                      <div className={styles.financialTotalRow}>
+                        <div>
+                          <div className={styles.financialTotalLabel}>TOTAL PAGO PELO CLIENTE</div>
+                          <div className={styles.financialPaymentMethodSub}>
+                            Forma de pagamento: {fin.paymentMethod}
+                          </div>
+                        </div>
+                        <div>
+                          <span className={styles.financialTotalValue}>R$ {fin.total.toFixed(2)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
 
               {/* CONTROLE LOGÍSTICO & RASTREIO SOB DEMANDA */}
               <div className={styles.sectionBlock}>

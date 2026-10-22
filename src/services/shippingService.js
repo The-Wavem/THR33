@@ -259,7 +259,7 @@ export const shippingService = {
           width: 24,
           length: 34
         },
-        invoiceValue: Number(subtotal) || 100
+        invoiceValue: Math.max(50 * totalQty, Number(((Number(subtotal) || 0) * 0.5).toFixed(2)))
       },
       source: 'fallback_matriz_sp',
       options: fallbackOptions

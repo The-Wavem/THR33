@@ -2057,3 +2057,194 @@
 
 
 
+
+/* ==========================================================================
+   FINANCIAL BREAKDOWN & SHIPPING SUMMARY
+   ========================================================================== */
+
+.financialBreakdownBox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.1rem 1.25rem;
+  margin-top: 0.5rem;
+}
+
+.financialRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.financialRowDiscount {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  font-size: 0.82rem;
+  color: #38bdf8;
+  line-height: 1.4;
+}
+
+.financialLabel {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.financialLabelCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.financialSubtext {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.financialValueCol {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.25rem;
+}
+
+.financialValue {
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.84rem;
+}
+
+.financialLabelDiscount {
+  font-weight: 600;
+  color: #38bdf8;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.financialValueDiscount {
+  font-family: var(--font-mono, monospace);
+  font-weight: 700;
+  color: #38bdf8;
+  font-size: 0.84rem;
+}
+
+.couponTagText {
+  display: inline-block;
+  background-color: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  color: #38bdf8;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  font-family: var(--font-mono, monospace);
+}
+
+.freeShippingBadge {
+  display: inline-block;
+  background-color: rgba(74, 222, 128, 0.12);
+  border: 1px solid rgba(74, 222, 128, 0.35);
+  color: #4ade80;
+  padding: 0.15rem 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-family: var(--font-mono, monospace);
+}
+
+.financialTotalRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 0.4rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed var(--border-color);
+}
+
+.financialTotalLabel {
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-primary);
+}
+
+.financialPaymentMethodSub {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-top: 0.15rem;
+}
+
+.financialTotalValue {
+  font-family: var(--font-mono, monospace);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: var(--text-primary);
+}
+
+/* ==========================================================================
+   TABLE COLUMN - FINANCIAL MINI BREAKDOWN
+   ========================================================================== */
+
+.totalColWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.orderFinanceMiniStack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin-top: 0.2rem;
+}
+
+.financeMiniItem {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-family: var(--font-mono, monospace);
+  line-height: 1.2;
+}
+
+.financeMiniShipping {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  font-family: var(--font-mono, monospace);
+  line-height: 1.2;
+}
+
+.financeMiniFreeShipping {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #4ade80;
+  background: rgba(74, 222, 128, 0.1);
+  padding: 0.05rem 0.3rem;
+  border: 1px solid rgba(74, 222, 128, 0.25);
+  font-family: var(--font-mono, monospace);
+  letter-spacing: 0.04em;
+  width: fit-content;
+}
+
+.financeMiniDiscount {
+  font-size: 0.68rem;
+  color: #38bdf8;
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  line-height: 1.2;
+}

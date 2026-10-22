@@ -2597,42 +2597,51 @@ exports.calculateShipping = onRequest(
         let invoiceValue = 0;
         const productsList = [];
 
+        // Base de seguro de carga: 50% do valor de venda da peça (conforme alinhamento de custos e margem)
+        // com piso mínimo de R$ 50,00 por peça para resguardar o custo de produção
+        const MIN_INSURANCE_PER_ITEM = 50;
+
         if (Array.isArray(items) && items.length > 0) {
           items.forEach((item, idx) => {
             const q = Math.max(1, Number(item.quantity) || 1);
-            const price = Number(item.price) || 0;
+            const itemPrice = Number(item.price || item.unitPrice || 0);
+            const halfPrice = itemPrice > 0 ? Number((itemPrice * 0.5).toFixed(2)) : 0;
+            const itemInsurance = Math.max(MIN_INSURANCE_PER_ITEM, halfPrice);
+
             totalQty += q;
-            invoiceValue += price * q;
+            invoiceValue += itemInsurance * q;
 
             productsList.push({
               id: String(item.id || item.slug || `item_${idx + 1}`),
               width: 24,
               height: 3,
               length: 34,
-              weight: 0.3,
-              insurance_value: price > 0 ? Number(price.toFixed(2)) : 100,
+              weight: 0.35,
+              insurance_value: itemInsurance,
               quantity: q,
             });
           });
         } else {
           totalQty = 1;
-          invoiceValue = Number(subtotal) || 150;
+          const subtotalVal = Number(subtotal || 0);
+          const halfSubtotal = subtotalVal > 0 ? Number((subtotalVal * 0.5).toFixed(2)) : 0;
+          invoiceValue = Math.max(MIN_INSURANCE_PER_ITEM, halfSubtotal);
           productsList.push({
             id: "default_item",
             width: 24,
             height: 3,
             length: 34,
-            weight: 0.3,
+            weight: 0.35,
             insurance_value: invoiceValue,
             quantity: 1,
           });
         }
 
         if (invoiceValue <= 0) {
-          invoiceValue = Number(subtotal) || 100;
+          invoiceValue = MIN_INSURANCE_PER_ITEM * totalQty;
         }
 
-        const totalWeight = Math.max(0.3, Number((0.3 * totalQty).toFixed(2)));
+        const totalWeight = Math.max(0.35, Number((0.35 * totalQty).toFixed(2)));
         const totalHeight = Math.min(100, Math.max(3, 3 * totalQty));
         const width = 24;
         const length = 34;

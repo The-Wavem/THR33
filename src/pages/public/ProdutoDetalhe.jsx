@@ -756,7 +756,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
                   <div key={opt.id} className={styles.shippingRowCompact}>
                     <div className={styles.shippingInfoCompact}>
                       <span className={styles.shippingNameCompact}>{opt.name}</span>
-                      <span className={styles.shippingDeadlineCompact}>{opt.deadline}</span>
+                      <span className={styles.shippingDeadlineCompact}>Produção + {opt.deadline}</span>
                     </div>
                     <span className={styles.shippingPriceCompact}>
                       {opt.price === 0 ? 'GRÁTIS' : `R$ ${opt.price.toFixed(2)}`}
