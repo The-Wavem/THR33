@@ -1,0 +1,498 @@
+.lookbookItem {
+  position: relative;
+  width: 100%;
+  min-height: 75vh;
+  height: 100%;
+  background-color: #080808;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  user-select: none;
+  isolation: isolate;
+}
+
+.shimmerBackdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(
+    110deg,
+    #0a0a0a 25%,
+    #141414 50%,
+    #0a0a0a 75%
+  );
+  background-size: 200% 100%;
+  animation: editorialPulse 1.8s infinite linear;
+}
+
+@keyframes editorialPulse {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ==========================================================================
+   FAIXA TRANSVERSAL DIAGONAL NO CANTO SUPERIOR (CORNER RIBBON FRETE GRÁTIS)
+   ========================================================================== */
+.cornerRibbonWrapper {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 148px;
+  height: 148px;
+  overflow: hidden;
+  z-index: 6;
+  pointer-events: none;
+}
+
+.cornerRibbon {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 210px;
+  padding: 8px 0;
+  top: 34px;
+  left: -54px;
+  transform: rotate(-45deg);
+  background-color: #10b981;
+  color: #000000;
+  font-family: var(--font-body, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
+  font-size: 0.76rem;
+  font-weight: 900;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  text-align: center;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.75), 0 0 12px rgba(16, 185, 129, 0.35);
+  border-top: 1px solid rgba(255, 255, 255, 0.55);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.35);
+  line-height: 1;
+  user-select: none;
+}
+
+/* ==========================================================================
+   PILHA DE BADGES (MODO SINGULAR OU MÚTUO SEM SOBREPOR A FAIXA DIAGONAL)
+   ========================================================================== */
+.badgesStack {
+  position: absolute;
+  top: 1.15rem;
+  left: 1.15rem;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.45rem;
+  pointer-events: none;
+  transition: top 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Quando a faixa diagonal FRETE GRÁTIS está presente, posiciona abaixo do fim da diagonal (y > 120px) */
+.badgesStackWithRibbon {
+  top: 8.15rem;
+}
+
+.customBadge,
+.promoBadge,
+.soldOutBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0.38rem 0.8rem;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
+  line-height: 1;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65);
+}
+
+.customBadge {
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+}
+
+.promoBadge {
+  background-color: var(--accent-primary, #ff0055);
+  color: #ffffff;
+}
+
+.soldOutBadge {
+  background-color: rgba(18, 18, 18, 0.92);
+  color: #a3a3a3;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
+
+.editorialLink {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  width: 100%;
+  height: 100%;
+  min-height: inherit;
+  text-decoration: none;
+  color: var(--text-primary);
+  z-index: 1;
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   CAMADA 1: FOTO BASE LIFESTYLE / MODELO (100% DA METADE DA TELA)
+   ========================================================================== */
+.lifestyleLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  overflow: hidden;
+  background-color: #080808;
+}
+
+.lifestyleImg {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+  opacity: 0;
+  transform: scale(1);
+  filter: brightness(0.88) contrast(1.04) blur(0px);
+  transition:
+    transform 0.75s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 0.5s ease;
+  will-change: transform, filter, opacity;
+}
+
+.imgLoaded {
+  opacity: 1;
+}
+
+/* Quando o lado oposto está em hover, escurece sutilmente este lado */
+.itemDimmed .lifestyleImg {
+  filter: brightness(0.45) contrast(1.05) grayscale(0.25);
+}
+
+/* ==========================================================================
+   CAMADA 2: DESTAQUE CUTOUT / CAMISA ISOLADA (POP-OUT NO HOVER)
+   ========================================================================== */
+.cutoutLayer {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3.5rem 2.5rem 6.5rem;
+  pointer-events: none;
+}
+
+.cutoutImg {
+  max-width: 78%;
+  max-height: 76%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  opacity: 0;
+  transform: scale(0.92) translateY(15px);
+  filter: drop-shadow(0 25px 40px rgba(0, 0, 0, 0.95));
+  transition:
+    opacity 0.5s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.6s cubic-bezier(0.16, 1, 0.3, 1),
+    filter 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity, filter;
+}
+
+/* Efeito Hover Pop-Out em dispositivos com ponteiro preciso */
+@media (hover: hover) and (pointer: fine) {
+  .lookbookItem:hover .lifestyleImg,
+  .itemHovered .lifestyleImg {
+    filter: brightness(0.35) contrast(1.1) blur(2px);
+    transform: scale(1.02);
+  }
+
+  .lookbookItem:hover .cutoutImg,
+  .itemHovered .cutoutImg {
+    opacity: 1;
+    transform: scale(1.08) translateY(-5px);
+    filter: drop-shadow(0 25px 40px rgba(0, 0, 0, 0.95));
+  }
+}
+
+/* Gradiente sutil exclusivamente na base para leitura tipográfica */
+.bottomVignette {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 55%;
+  z-index: 3;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.92) 0%,
+    rgba(0, 0, 0, 0.55) 45%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  pointer-events: none;
+  transition: opacity 0.4s ease;
+}
+
+/* Botão de Favorito no Topo Direito (padrão elegante circular translúcido) */
+.wishlistTrigger {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 6;
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  background-color: rgba(10, 10, 10, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: all var(--transition-fast);
+  border-radius: 50%;
+}
+
+.wishlistTrigger:hover {
+  border-color: var(--border-active);
+  background-color: rgba(22, 22, 22, 0.95);
+  transform: scale(1.08);
+}
+
+.wishlistActive {
+  border-color: rgba(239, 68, 68, 0.55);
+  background-color: rgba(10, 10, 10, 0.82);
+  color: #ef4444;
+  box-shadow: 0 0 10px rgba(239, 68, 68, 0.25);
+}
+
+/* ==========================================================================
+   CANTO INFERIOR: TIPOGRAFIA BRUTALISTA DIRETA SOBRE A IMAGEM
+   ========================================================================== */
+.bottomEditorialInfo {
+  position: relative;
+  z-index: 4;
+  margin-top: auto;
+  padding: 2rem 2.25rem 2.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  pointer-events: none;
+  transform: translateY(6px);
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lookbookItem:hover .bottomEditorialInfo,
+  .itemHovered .bottomEditorialInfo {
+    transform: translateY(0);
+  }
+}
+
+.tagsRow {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 1.4px;
+  margin-bottom: 0.1rem;
+}
+
+.categoryTag {
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.fitTag {
+  color: rgba(255, 255, 255, 0.52);
+  text-transform: uppercase;
+}
+
+.pieceTitle {
+  font-family: 'Syne', var(--font-heading, sans-serif);
+  font-size: clamp(1.5rem, 3vw, 2.5rem);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  line-height: 1.02;
+  color: #ffffff;
+  margin: 0;
+  text-shadow: 0 4px 24px rgba(0, 0, 0, 0.95);
+  word-break: break-word;
+}
+
+.priceAndStatusRow {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  font-family: var(--font-mono, 'Space Grotesk', sans-serif);
+  margin-top: 0.15rem;
+}
+
+.originalPrice {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.45);
+  text-decoration: line-through;
+  letter-spacing: 0.08em;
+}
+
+.currentPrice {
+  font-size: clamp(1.05rem, 1.5vw, 1.35rem);
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: 0.1em;
+}
+
+.inlineEditorialTag {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-primary, #ff0055);
+}
+
+.inlineSoldOutTag {
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #a3a3a3;
+}
+
+/* Tamanhos disponíveis exibidos apenas como letras espaçadas no hover */
+.sizesRevealRow {
+  display: flex;
+  align-items: center;
+  gap: 1.35rem;
+  margin-top: 0.35rem;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .lookbookItem:hover .sizesRevealRow,
+  .itemHovered .sizesRevealRow {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sizeLetter {
+  font-family: var(--font-mono, 'Space Grotesk', sans-serif);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: #ffffff;
+  transition: color 0.2s ease;
+}
+
+.sizeUnavailable {
+  color: rgba(255, 255, 255, 0.25);
+  text-decoration: line-through;
+}
+
+.itemOutOfStock .lifestyleImg {
+  filter: brightness(0.45) contrast(1.05) grayscale(0.6);
+}
+
+/* ==========================================================================
+   RESPONSIVIDADE MOBILE (< 768px)
+   ========================================================================== */
+@media (max-width: 768px) {
+  .lookbookItem {
+    min-height: 65vh;
+    height: 65vh;
+  }
+
+  .cornerRibbonWrapper {
+    width: 120px;
+    height: 120px;
+  }
+
+  .cornerRibbon {
+    width: 170px;
+    padding: 6px 0;
+    top: 26px;
+    left: -44px;
+    font-size: 0.66rem;
+  }
+
+  .wishlistTrigger {
+    top: 0.65rem;
+    right: 0.65rem;
+    width: 40px;
+    height: 40px;
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .badgesStack {
+    top: 0.75rem;
+    left: 0.75rem;
+    gap: 0.35rem;
+  }
+
+  .badgesStackWithRibbon {
+    top: 6.6rem;
+  }
+
+  .customBadge,
+  .promoBadge,
+  .soldOutBadge {
+    font-size: 0.62rem;
+    padding: 0.26rem 0.55rem;
+  }
+
+  .cutoutLayer {
+    padding: 2.5rem 1.5rem 5.5rem;
+  }
+
+  .bottomEditorialInfo {
+    padding: 1.25rem 1.15rem 1.35rem;
+    transform: translateY(0);
+    gap: 0.3rem;
+  }
+
+  .tagsRow {
+    font-size: 0.6rem;
+    gap: 0.55rem;
+  }
+
+  .pieceTitle {
+    font-size: clamp(1.35rem, 6vw, 1.85rem);
+  }
+
+  .currentPrice {
+    font-size: 1rem;
+  }
+
+  .originalPrice {
+    font-size: 0.8rem;
+  }
+
+  .inlineEditorialTag,
+  .inlineSoldOutTag {
+    font-size: 0.72rem;
+  }
+
+  /* No mobile (sem hover), exibe os tamanhos de forma sutil e permanente */
+  .sizesRevealRow {
+    opacity: 0.85;
+    transform: translateY(0);
+    gap: 1rem;
+    margin-top: 0.2rem;
+  }
+
+  .sizeLetter {
+    font-size: 0.7rem;
+  }
+}

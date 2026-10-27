@@ -1,49 +1,23 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Link, useSearchParams, useParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import FilterSidebar from '../../components/catalog/FilterSidebar';
-import ProductCard from '../../components/catalog/ProductCard';
 import ProductCardSkeleton from '../../components/catalog/ProductCardSkeleton';
-import { catalogService } from '../../services/catalogService';
-import { analyticsService } from '../../services/analyticsService';
+import LookbookSplitSection from '../../sections/catalogo/LookbookSplitSection';
+import { catalogService, fetchProducts } from '../../services/catalogService';
+import { fetchActiveDiscounts } from '../../services/campaignService';
+import { logPageView } from '../../services/analyticsService';
 import { normalizeFitSlug, formatFitLabel } from '../../utils/fitUtils';
 import styles from './Catalogo.module.css';
-
-// Variantes de animação staggered para a grade de cards
-const gridVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.05,
-      delayChildren: 0.02
-    }
-  },
-  exit: { opacity: 0, transition: { duration: 0.15 } }
-};
-
-const cardItemVariants = {
-  hidden: { opacity: 0, y: 18, scale: 0.98 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: {
-      type: 'spring',
-      stiffness: 280,
-      damping: 24
-    }
-  }
-};
 
 export function Catalogo() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { categorySlug } = useParams();
   const topRef = useRef(null);
 
-  // Produtos carregados do Firestore
+  // Produtos e Campanhas carregados do Firestore
   const [products, setProducts] = useState([]);
+  const [activeDiscounts, setActiveDiscounts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
   // Estados de Filtros Multi-Seleção e Busca
@@ -54,6 +28,8 @@ export function Catalogo() {
     drops: [],
     sizes: []
   });
+  const [priceRange, setPriceRange] = useState([0, 10000]);
+  const [onlyInStock, setOnlyInStock] = useState(false);
 
   const [sortOrder, setSortOrder] = useState('newest');
   const [itemsPerPage, setItemsPerPage] = useState(6);
@@ -61,21 +37,25 @@ export function Catalogo() {
   const [isLoading, setIsLoading] = useState(false);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
 
-  // 0. Telemetria e Busca de Produtos no Firestore
+  // 0. Telemetria e Busca de Produtos e Descontos Ativos no Firestore
   useEffect(() => {
-    analyticsService.trackPageView('catalogo');
-    async function loadCatalog() {
+    logPageView('/catalogo');
+    async function loadCatalogData() {
       setLoadingProducts(true);
       try {
-        const data = await catalogService.getAllProducts();
-        setProducts(data);
+        const [productsData, discountsData] = await Promise.all([
+          fetchProducts ? fetchProducts() : catalogService.getAllProducts(),
+          fetchActiveDiscounts()
+        ]);
+        setProducts(productsData || []);
+        setActiveDiscounts(discountsData || []);
       } catch (err) {
-        console.error("Erro ao carregar catálogo:", err);
+        console.error('Erro ao carregar catálogo:', err);
       } finally {
         setLoadingProducts(false);
       }
     }
-    loadCatalog();
+    loadCatalogData();
   }, []);
 
   // 1. SINCRONIZAÇÃO: Ler parâmetros da URL e atualizar estados internos
@@ -148,12 +128,12 @@ export function Catalogo() {
     setCurrentPage(1);
   };
 
-  // Simulação de carregamento assíncrono para paginação e filtros
+  // Transição suave para paginação e filtros
   useEffect(() => {
     setIsLoading(true);
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 250);
+    }, 200);
     return () => clearTimeout(timer);
   }, [filters, searchQuery, itemsPerPage, sortOrder, currentPage]);
 
@@ -161,6 +141,8 @@ export function Catalogo() {
     const emptyFilters = { categories: [], fits: [], drops: [], sizes: [] };
     setFilters(emptyFilters);
     setSearchQuery('');
+    setPriceRange([0, 10000]);
+    setOnlyInStock(false);
     setSortOrder('newest');
     setCurrentPage(1);
     setSearchParams({}, { replace: true });
@@ -178,24 +160,10 @@ export function Catalogo() {
   };
 
   // Remoções individuais de filtros (chips)
-  const removeCategory = (cat) => {
-    const updated = (filters.categories || []).filter(c => c !== cat);
-    const newFilters = { ...filters, categories: updated };
-    setFilters(newFilters);
-    applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
-  };
-
   const removeFit = (fit) => {
     const norm = normalizeFitSlug(fit);
     const updated = (filters.fits || []).filter(f => normalizeFitSlug(f) !== norm && f !== fit);
     const newFilters = { ...filters, fits: updated };
-    setFilters(newFilters);
-    applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
-  };
-
-  const removeDrop = (drop) => {
-    const updated = (filters.drops || []).filter(d => d !== drop);
-    const newFilters = { ...filters, drops: updated };
     setFilters(newFilters);
     applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
   };
@@ -212,67 +180,81 @@ export function Catalogo() {
     applyUrlParams(filters, searchQuery, newOrder, currentPage, itemsPerPage);
   };
 
-  const handlePerPageChange = (newPerPage) => {
-    setItemsPerPage(newPerPage);
-    setCurrentPage(1);
-    applyUrlParams(filters, searchQuery, sortOrder, 1, newPerPage);
-  };
-
   // Motor de Filtragem e Ordenação Multi-Critério
   const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
-      // Ignora brindes da listagem geral de vestuário se type for brinde
-      if (product.type === 'brinde') return false;
+    return products
+      .filter((product) => {
+        // Ignora brindes da listagem geral de vestuário se type for brinde
+        if (product.type === 'brinde') return false;
 
-      // 1. Busca textual confirmada
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchName = product.name?.toLowerCase().includes(q);
-        const matchDesc = product.description?.toLowerCase().includes(q);
-        const matchTag = product.customBadge?.toLowerCase().includes(q) || product.tag?.toLowerCase().includes(q);
-        if (!matchName && !matchDesc && !matchTag) return false;
-      }
-      // 2. Categorias (Multi-Seleção: OR)
-      if (filters.categories && filters.categories.length > 0) {
-        if (!filters.categories.includes(product.category?.toLowerCase())) return false;
-      }
-      // 3. Modelagens Dinâmicas (Multi-Seleção: OR)
-      if (filters.fits && filters.fits.length > 0) {
-        const prodFitNorm = normalizeFitSlug(product.fit);
-        const matchFit = filters.fits.some(f => {
-          const filterNorm = normalizeFitSlug(f);
-          return (
-            filterNorm === prodFitNorm || 
-            product.fit?.toLowerCase() === f.toLowerCase() ||
-            product.fit?.toLowerCase().includes(f.toLowerCase()) ||
-            f.toLowerCase().includes(product.fit?.toLowerCase())
-          );
-        });
-        if (!matchFit) return false;
-      }
-      // 4. Drops (Multi-Seleção: OR)
-      if (filters.drops && filters.drops.length > 0) {
-        if (!filters.drops.includes(product.drop?.toLowerCase())) return false;
-      }
-      // 5. Tamanhos (Multi-Seleção: Se o produto tiver qualquer um dos tamanhos selecionados com estoque)
-      if (filters.sizes && filters.sizes.length > 0) {
-        const hasMatchingSize = (product.sizes && product.sizes.some(sz => filters.sizes.includes(sz))) ||
-          (product.stock && filters.sizes.some(sz => Number(product.stock[sz]) > 0));
-        if (!hasMatchingSize) return false;
-      }
-      return true;
-    }).sort((a, b) => {
-      if (sortOrder === 'price-low') return Number(a.price || 0) - Number(b.price || 0);
-      if (sortOrder === 'price-high') return Number(b.price || 0) - Number(a.price || 0);
-      return (b.isRelease ? 1 : 0) - (a.isRelease ? 1 : 0);
-    });
-  }, [products, filters, searchQuery, sortOrder]);
+        // 1. Busca textual confirmada
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const matchName = product.name?.toLowerCase().includes(q);
+          const matchDesc = product.description?.toLowerCase().includes(q);
+          const matchTag =
+            product.customBadge?.toLowerCase().includes(q) ||
+            product.tag?.toLowerCase().includes(q);
+          if (!matchName && !matchDesc && !matchTag) return false;
+        }
+        // 2. Categorias (Multi-Seleção: OR)
+        if (filters.categories && filters.categories.length > 0) {
+          if (!filters.categories.includes(product.category?.toLowerCase())) return false;
+        }
+        // 3. Modelagens Dinâmicas (Multi-Seleção: OR)
+        if (filters.fits && filters.fits.length > 0) {
+          const prodFitNorm = normalizeFitSlug(product.fit);
+          const matchFit = filters.fits.some((f) => {
+            const filterNorm = normalizeFitSlug(f);
+            return (
+              filterNorm === prodFitNorm ||
+              product.fit?.toLowerCase() === f.toLowerCase() ||
+              product.fit?.toLowerCase().includes(f.toLowerCase()) ||
+              f.toLowerCase().includes(product.fit?.toLowerCase())
+            );
+          });
+          if (!matchFit) return false;
+        }
+        // 4. Drops (Multi-Seleção: OR)
+        if (filters.drops && filters.drops.length > 0) {
+          if (!filters.drops.includes(product.drop?.toLowerCase())) return false;
+        }
+        // 5. Tamanhos (Multi-Seleção: OR)
+        if (filters.sizes && filters.sizes.length > 0) {
+          const hasMatchingSize =
+            (product.sizes && product.sizes.some((sz) => filters.sizes.includes(sz))) ||
+            (product.stock && filters.sizes.some((sz) => Number(product.stock[sz]) > 0));
+          if (!hasMatchingSize) return false;
+        }
+        // 6. Faixa de preço
+        const itemPrice = Number(product.discountPrice || product.price || 0);
+        if (priceRange && (itemPrice < priceRange[0] || itemPrice > priceRange[1])) {
+          return false;
+        }
+        // 7. Apenas em estoque
+        if (onlyInStock) {
+          const outOfStock =
+            (product.stock !== undefined && typeof product.stock !== 'object' && Number(product.stock) <= 0) ||
+            (product.stock &&
+              typeof product.stock === 'object' &&
+              Object.values(product.stock).reduce((a, b) => a + (Number(b) || 0), 0) <= 0) ||
+            (product.totalStock !== undefined && Number(product.totalStock) <= 0);
+          if (outOfStock) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortOrder === 'price-low') return Number(a.price || 0) - Number(b.price || 0);
+        if (sortOrder === 'price-high') return Number(b.price || 0) - Number(a.price || 0);
+        return (b.isRelease ? 1 : 0) - (a.isRelease ? 1 : 0);
+      });
+  }, [products, filters, searchQuery, sortOrder, priceRange, onlyInStock]);
 
   // Cálculo de Paginação
   const totalItems = filteredProducts.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
 
-  // Ajuste se a página atual ultrapassar o total
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(1);
@@ -288,7 +270,6 @@ export function Catalogo() {
       setCurrentPage(newPage);
       applyUrlParams(filters, searchQuery, sortOrder, newPage, itemsPerPage);
 
-      // Rolagem suave com offset para o topo da lista de produtos
       if (topRef.current) {
         const headerOffset = 80;
         const elementPosition = topRef.current.getBoundingClientRect().top;
@@ -305,8 +286,8 @@ export function Catalogo() {
   // Contagem de filtros ativos
   const selectedFits = filters.fits || [];
   const selectedSizes = filters.sizes || [];
-
-  const activeFiltersCount = selectedFits.length + selectedSizes.length + (searchQuery.trim() ? 1 : 0);
+  const activeFiltersCount =
+    selectedFits.length + selectedSizes.length + (searchQuery.trim() ? 1 : 0);
 
   return (
     <main className={styles.catalogPage} ref={topRef}>
@@ -316,9 +297,9 @@ export function Catalogo() {
           <nav aria-label="Breadcrumb" className={styles.breadcrumbNav}>
             <Link to="/" className={styles.breadcrumbLink}>HOME</Link>
             <span className={styles.breadcrumbSeparator}>/</span>
-            <Link 
-              to="/catalogo" 
-              onClick={(e) => {
+            <Link
+              to="/catalogo"
+              onClick={() => {
                 if (activeFiltersCount > 0) {
                   handleReset();
                 }
@@ -344,9 +325,9 @@ export function Catalogo() {
 
       {/* TOOLBAR MOBILE COMPACTA: FILTROS */}
       <div className={styles.mobileToolbar}>
-        <button 
-          type="button" 
-          onClick={() => setIsMobileFilterOpen(true)} 
+        <button
+          type="button"
+          onClick={() => setIsMobileFilterOpen(true)}
           className={styles.mobileFilterBtn}
           aria-label="Abrir filtros"
         >
@@ -370,7 +351,7 @@ export function Catalogo() {
               </button>
             </span>
           )}
-          {selectedFits.map(fit => (
+          {selectedFits.map((fit) => (
             <span key={fit} className={styles.filterChip}>
               MODELAGEM: {formatFitLabel(fit)}
               <button onClick={() => removeFit(fit)} aria-label={`Remover modelagem ${fit}`}>
@@ -378,7 +359,7 @@ export function Catalogo() {
               </button>
             </span>
           ))}
-          {selectedSizes.map(size => (
+          {selectedSizes.map((size) => (
             <span key={size} className={styles.filterChip}>
               TAMANHO: {size}
               <button onClick={() => removeSize(size)} aria-label={`Remover tamanho ${size}`}>
@@ -392,16 +373,16 @@ export function Catalogo() {
         </div>
       )}
 
-      {/* CORPO DO CATÁLOGO: SIDEBAR + GRADE DE PRODUTOS */}
+      {/* CORPO DO CATÁLOGO: SIDEBAR + LOOKBOOK EDITORIAL SPLIT-SCREEN */}
       <div className={styles.contentLayout}>
         <div className={styles.sidebarWrapper}>
-          <FilterSidebar 
+          <FilterSidebar
             products={products}
-            filters={filters} 
-            setFilters={handleFiltersChange} 
+            filters={filters}
+            setFilters={handleFiltersChange}
             sortOrder={sortOrder}
             onSortChange={handleSortChange}
-            onReset={handleReset} 
+            onReset={handleReset}
             searchQuery={searchQuery}
             onSearchSubmit={handleSearchSubmit}
             onSearchClear={handleSearchClear}
@@ -416,7 +397,10 @@ export function Catalogo() {
           <div className={styles.resultsBar}>
             <div className={styles.resultsCount}>
               {totalItems > 0 ? (
-                <>EXIBINDO <strong>{startIndex + 1}–{endIndex}</strong> DE <strong>{totalItems}</strong> PEÇAS</>
+                <>
+                  EXIBINDO <strong>{startIndex + 1}–{endIndex}</strong> DE{' '}
+                  <strong>{totalItems}</strong> PEÇAS
+                </>
               ) : (
                 '0 PEÇAS ENCONTRADAS'
               )}
@@ -429,29 +413,20 @@ export function Catalogo() {
             )}
           </div>
 
-          {/* SKELETON LOADING OU GRADE ANIMADA DE PRODUTOS */}
-          {isLoading ? (
-            <div className={styles.grid}>
-              {Array.from({ length: Math.min(itemsPerPage, totalItems || itemsPerPage) }).map((_, idx) => (
+          {/* SKELETON LOADING OU LOOKBOOK EDITORIAL SPLIT-SCREEN */}
+          {loadingProducts || isLoading ? (
+            <div className={styles.splitSkeletonGrid}>
+              {Array.from({ length: Math.min(itemsPerPage, 4) }).map((_, idx) => (
                 <ProductCardSkeleton key={idx} />
               ))}
             </div>
           ) : paginatedProducts.length > 0 ? (
             <>
-              <motion.div 
-                key={`page-${currentPage}-${sortOrder}-${itemsPerPage}-${JSON.stringify(filters)}-${searchQuery}`}
-                variants={gridVariants}
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                className={styles.grid}
-              >
-                {paginatedProducts.map(product => (
-                  <motion.div key={product.id} variants={cardItemVariants}>
-                    <ProductCard product={product} />
-                  </motion.div>
-                ))}
-              </motion.div>
+              <LookbookSplitSection
+                products={paginatedProducts}
+                activeDiscounts={activeDiscounts}
+                startIndex={startIndex}
+              />
 
               {/* BARRA DE PAGINAÇÃO COMPLETA */}
               {totalPages > 1 && (
@@ -470,7 +445,9 @@ export function Catalogo() {
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                       <button
                         key={page}
-                        className={`${styles.pageNumberBtn} ${page === currentPage ? styles.activePageNumber : ''}`}
+                        className={`${styles.pageNumberBtn} ${
+                          page === currentPage ? styles.activePageNumber : ''
+                        }`}
                         onClick={() => handlePageChange(page)}
                         aria-label={`Ir para a página ${page}`}
                         aria-current={page === currentPage ? 'page' : undefined}
@@ -495,7 +472,9 @@ export function Catalogo() {
           ) : (
             <div className={styles.emptyState}>
               <p>Nenhuma peça encontrada com os filtros selecionados.</p>
-              <button onClick={handleReset} className={styles.resetBtn}>LIMPAR FILTROS</button>
+              <button onClick={handleReset} className={styles.resetBtn}>
+                LIMPAR FILTROS
+              </button>
             </div>
           )}
         </section>

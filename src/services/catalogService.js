@@ -136,6 +136,8 @@ export const getAllProducts = async () => {
   }
 };
 
+export const fetchProducts = getAllProducts;
+
 /**
  * Busca produto individual por ID ou Slug
  */
@@ -275,6 +277,7 @@ export const catalogService = {
   saveVitrineSettings,
   getFeaturedProducts,
   getAllProducts,
+  fetchProducts: getAllProducts,
   getProductById,
   getReleases,
   getGifts,

@@ -727,4 +727,13 @@ export function calculateDynamicMetrics(activeProducts = [], completedOrders = [
   };
 }
 
+export function logProductCardClick(productId, productName = '', source = 'Catalog', category = '', fit = '', slug = '') {
+  return analyticsService.trackProductView(productId, productName, category, fit, slug);
+}
+
+export function logPageView(pagePath = '/catalogo') {
+  const cleanPage = String(pagePath).replace(/^\/+/, '') || 'catalogo';
+  return analyticsService.trackPageView(cleanPage);
+}
+
 export default analyticsService;

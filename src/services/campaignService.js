@@ -163,5 +163,101 @@ export const campaignService = {
       localStorage.setItem(`thr33_custom_utm_${listKey}`, JSON.stringify(updatedList));
       return updatedList;
     }
+  },
+
+  // Busca campanhas/descontos ativos
+  async fetchActiveDiscounts() {
+    try {
+      const campaigns = await this.getAllCampaigns();
+      return campaigns.filter(c => c.active !== false);
+    } catch (err) {
+      console.warn("Erro ao buscar descontos ativos:", err);
+      return [];
+    }
   }
 };
+
+export async function fetchActiveDiscounts() {
+  return campaignService.fetchActiveDiscounts();
+}
+
+/**
+ * Calcula o melhor desconto aplicável para um produto considerando
+ * tanto o preço promocional direto da peça quanto campanhas ativas.
+ */
+export function calculateBestDiscount(product, activeDiscounts = []) {
+  if (!product) {
+    return {
+      hasDiscount: false,
+      originalPrice: 0,
+      finalPrice: 0,
+      discountPrice: 0,
+      discountPercentage: 0,
+      campaignName: null
+    };
+  }
+
+  const basePrice = Number(product.originalPrice || product.price || 0);
+  const currentPrice = Number(product.price || 0);
+  const directDiscountPrice = Number(product.discountPrice || 0);
+  const directDiscountPercent = Number(product.discount || 0);
+
+  let bestFinalPrice = currentPrice;
+  let originalPrice = basePrice > currentPrice ? basePrice : currentPrice;
+  let campaignName = null;
+
+  // 1. Desconto direto configurado no produto (discountPrice)
+  if (
+    directDiscountPrice > 0 &&
+    directDiscountPrice < currentPrice &&
+    product.discountActive !== false
+  ) {
+    bestFinalPrice = directDiscountPrice;
+    originalPrice = currentPrice;
+  } else if (directDiscountPercent > 0 && directDiscountPercent < 100 && product.discountActive !== false) {
+    const calcPrice = currentPrice * (1 - directDiscountPercent / 100);
+    if (calcPrice < bestFinalPrice) {
+      bestFinalPrice = calcPrice;
+    }
+  }
+
+  // 2. Descontos de campanhas ativas (se houver percentual associado à campanha)
+  if (Array.isArray(activeDiscounts) && activeDiscounts.length > 0) {
+    activeDiscounts.forEach((camp) => {
+      if (!camp || camp.active === false) return;
+      const campPercent = Number(camp.discountPercentage || camp.discountPercent || camp.discount || 0);
+      if (campPercent > 0 && campPercent < 100) {
+        const appliesToCategory =
+          !camp.category ||
+          String(camp.category).toLowerCase() === String(product.category || '').toLowerCase();
+        const appliesToDrop =
+          !camp.drop ||
+          String(camp.drop).toLowerCase() === String(product.drop || '').toLowerCase();
+
+        if (appliesToCategory && appliesToDrop) {
+          const candidatePrice = originalPrice * (1 - campPercent / 100);
+          if (candidatePrice > 0 && candidatePrice < bestFinalPrice) {
+            bestFinalPrice = candidatePrice;
+            campaignName = camp.name || null;
+          }
+        }
+      }
+    });
+  }
+
+  const hasDiscount = bestFinalPrice > 0 && bestFinalPrice < originalPrice;
+  const discountPercentage = hasDiscount
+    ? Math.round(((originalPrice - bestFinalPrice) / originalPrice) * 100)
+    : 0;
+
+  return {
+    hasDiscount,
+    originalPrice,
+    finalPrice: hasDiscount ? bestFinalPrice : currentPrice,
+    discountPrice: hasDiscount ? bestFinalPrice : 0,
+    discountPercentage,
+    campaignName
+  };
+}
+
+export default campaignService;

@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Syne:wght@700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@500;700&family=Syne:wght@700;800&display=swap');
 
 /* Versão das variaveis 0.1 */
 :root {
@@ -13,10 +13,12 @@
 
   --border-color: #262626;
   --border-active: #ffffff;
+  --accent-primary: #ff0055;
 
   /* Tipografia */
   --font-heading: 'Syne', sans-serif;
   --font-body: 'Inter', sans-serif;
+  --font-mono: 'Space Grotesk', 'Inter', monospace;
 
   /* Transições e Transparências */
   --transition-fast: 0.2s cubic-bezier(0.16, 1, 0.3, 1);

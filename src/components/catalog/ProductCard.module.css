@@ -78,7 +78,7 @@
 }
 
 .promoBadgeWithRibbon {
-  top: 2.35rem !important;
+  top: 5.35rem !important;
 }
 
 /* FAIXA TRANSVERSAL DIAGONAL NO CANTO SUPERIOR (CORNER RIBBON FRETE GRÁTIS) */
@@ -391,4 +391,3 @@
     display: none !important;
   }
 }
-

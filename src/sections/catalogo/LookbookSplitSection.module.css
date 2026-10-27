@@ -1,0 +1,208 @@
+.lookbookSection {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  background-color: #080808;
+  border-top: 1px solid rgba(255, 255, 255, 0.14);
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.splitRow {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  width: 100%;
+  min-height: 75vh;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  background-color: #080808;
+}
+
+.halfPane {
+  position: relative;
+  width: 100%;
+  min-height: 75vh;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ==========================================================================
+   LINHA DIVISÓRIA CENTRAL DINÂMICA & INDICADOR TIPOGRÁFICO NO EIXO Y
+   ========================================================================== */
+.centerDivider {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background-color: rgba(255, 255, 255, 0.14);
+  z-index: 10;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+.dividerBeam {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--accent-primary, #ff0055) 50%,
+    transparent 100%
+  );
+  opacity: 0;
+  transform: scaleY(0.35);
+  transition:
+    opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.45s ease;
+}
+
+.dividerActiveLeft .dividerBeam,
+.dividerActiveRight .dividerBeam {
+  opacity: 1;
+  transform: scaleY(1);
+  box-shadow: 0 0 18px var(--accent-primary, #ff0055);
+}
+
+/* Indicador tipográfico centralizado no eixo Y: ◄ 01 | 02 ► */
+.centerAxisIndicator {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.75rem;
+  background-color: rgba(8, 8, 8, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-family: var(--font-mono, 'Space Grotesk', monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  transition:
+    transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 0.35s ease,
+    box-shadow 0.35s ease;
+}
+
+.dividerActiveLeft .centerAxisIndicator {
+  transform: translateX(-8px);
+  border-color: var(--accent-primary, #ff0055);
+  box-shadow: -6px 0 22px rgba(255, 0, 85, 0.28);
+}
+
+.dividerActiveRight .centerAxisIndicator {
+  transform: translateX(8px);
+  border-color: var(--accent-primary, #ff0055);
+  box-shadow: 6px 0 22px rgba(255, 0, 85, 0.28);
+}
+
+.arrowGlyph {
+  font-size: 0.62rem;
+  color: rgba(255, 255, 255, 0.25);
+  transition:
+    color 0.3s ease,
+    transform 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.arrowLeft.arrowActive {
+  color: var(--accent-primary, #ff0055);
+  transform: translateX(-3px);
+}
+
+.arrowRight.arrowActive {
+  color: var(--accent-primary, #ff0055);
+  transform: translateX(3px);
+}
+
+.pairCounter {
+  color: rgba(255, 255, 255, 0.5);
+  transition: color 0.3s ease;
+}
+
+.counterActive {
+  color: #ffffff;
+}
+
+.counterPipe {
+  color: rgba(255, 255, 255, 0.22);
+}
+
+/* Painel brutalista quando o número total de itens na página é ímpar */
+.editorialFillerPane {
+  width: 100%;
+  height: 100%;
+  min-height: 75vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem;
+  background: radial-gradient(circle at center, #111111 0%, #070707 100%);
+  text-align: center;
+  gap: 0.75rem;
+}
+
+.fillerCode {
+  font-family: var(--font-mono, 'Space Grotesk', monospace);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  color: var(--accent-primary, #ff0055);
+  text-transform: uppercase;
+}
+
+.fillerStatement {
+  font-family: 'Syne', var(--font-heading, sans-serif);
+  font-size: clamp(1.3rem, 2.2vw, 2rem);
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.22);
+  text-transform: uppercase;
+  max-width: 16ch;
+  line-height: 1.1;
+}
+
+.fillerSub {
+  font-family: var(--font-mono, 'Space Grotesk', monospace);
+  font-size: 0.65rem;
+  letter-spacing: 0.22em;
+  color: rgba(255, 255, 255, 0.25);
+  text-transform: uppercase;
+}
+
+/* ==========================================================================
+   RESPONSIVIDADE MOBILE (< 768px): EMPILHAMENTO VERTICAL
+   ========================================================================== */
+@media (max-width: 768px) {
+  .splitRow {
+    display: flex;
+    flex-direction: column;
+    min-height: auto;
+    border-bottom: none;
+  }
+
+  .halfPane {
+    width: 100%;
+    min-height: auto;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  }
+
+  .centerDivider {
+    display: none;
+  }
+
+  .editorialFillerPane {
+    display: none;
+  }
+}
