@@ -208,15 +208,6 @@ export const analyticsService = {
         lastViewedAt: now
       }, { merge: true });
 
-      if (cleanSlug && cleanSlug !== cleanId) {
-        try {
-          const slugDocRef = doc(db, 'products', cleanSlug);
-          await setDoc(slugDocRef, {
-            views: increment(1),
-            lastViewedAt: now
-          }, { merge: true });
-        } catch (_) {}
-      }
 
       // 2. Incrementa o sumário global de analytics e funil
       const updates = {
@@ -264,15 +255,6 @@ export const analyticsService = {
         lastAddedToCartAt: now
       }, { merge: true });
 
-      if (cleanSlug && cleanSlug !== cleanId) {
-        try {
-          const slugRef = doc(db, 'products', cleanSlug);
-          await setDoc(slugRef, {
-            addedToCart: increment(qty),
-            lastAddedToCartAt: now
-          }, { merge: true });
-        } catch (_) {}
-      }
 
       // 2. Grava no sumário global
       const updates = {
@@ -328,15 +310,6 @@ export const analyticsService = {
         lastRemovedFromCartAt: now
       }, { merge: true });
 
-      if (cleanSlug && cleanSlug !== cleanId) {
-        try {
-          const slugRef = doc(db, 'products', cleanSlug);
-          await setDoc(slugRef, {
-            removedFromCart: increment(removeQty),
-            lastRemovedFromCartAt: now
-          }, { merge: true });
-        } catch (_) {}
-      }
 
       // 2. Grava no sumário global
       const updates = {
@@ -422,13 +395,6 @@ export const analyticsService = {
           lastSoldAt: now
         }, { merge: true });
 
-        if (cleanSlug && cleanSlug !== cleanId) {
-          const slugRef = doc(db, 'products', cleanSlug);
-          await setDoc(slugRef, {
-            purchases: increment(qty),
-            lastSoldAt: now
-          }, { merge: true });
-        }
       } catch (e) {
         console.warn("Erro ao atualizar compra no produto:", e.message);
       }

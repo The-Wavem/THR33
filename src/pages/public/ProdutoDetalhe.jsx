@@ -94,18 +94,23 @@ export function ProdutoDetalhe({ onAddToCart }) {
     async function loadProduct() {
       setLoading(true);
       try {
-        // 1. Busca direta pelo produto por ID ou Slug
+        // 1. Busca direta pelo produto por ID ou Slug (com resolução inteligente)
         let data = await catalogService.getProductById(currentParam);
         
         // 2. Fallback buscando no catálogo completo caso slug ou ID seja variante
-        if (!data) {
+        if (!data || (!data.name && !data.title)) {
           const all = await catalogService.getAllProducts();
           data = all.find(p => p.id === currentParam || p.slug === currentParam) || null;
         }
 
         if (!isMounted) return;
 
-        if (data) {
+        if (data && (data.name || data.title) && data.price !== undefined) {
+          // Se o produto foi localizado mas a rota na URL é um ID interno ou slug anterior,
+          // atualiza suavemente a URL para o slug canônico atual
+          if (data.slug && data.slug !== currentParam && window.location.pathname !== `/produto/${data.slug}`) {
+            navigate(`/produto/${data.slug}`, { replace: true });
+          }
           setProduct(data);
           let defaultSize = 'M';
           if (data.stock && typeof data.stock === 'object') {

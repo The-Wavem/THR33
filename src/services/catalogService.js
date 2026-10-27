@@ -120,14 +120,25 @@ export const getAllProducts = async () => {
     const q = query(collection(db, 'products'), orderBy('updatedAt', 'desc'));
     const snap = await getDocs(q);
     const list = [];
-    snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+    snap.forEach(d => {
+      const data = d.data();
+      // Validação estrita: ignora documentos incompletos / fantasma sem nome ou preço
+      if (data && (data.name || data.title) && data.price !== undefined) {
+        list.push({ id: d.id, ...data });
+      }
+    });
     return list;
   } catch (err) {
     // Fallback sem orderBy caso índice composto não exista imediatamente
     try {
       const snap = await getDocs(collection(db, 'products'));
       const list = [];
-      snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+      snap.forEach(d => {
+        const data = d.data();
+        if (data && (data.name || data.title) && data.price !== undefined) {
+          list.push({ id: d.id, ...data });
+        }
+      });
       return list;
     } catch (e) {
       console.error("Erro ao buscar produtos no Firestore:", e);
@@ -143,20 +154,58 @@ export const fetchProducts = getAllProducts;
  */
 export const getProductById = async (idOrSlug) => {
   if (!idOrSlug) return null;
+  const cleanSearch = String(idOrSlug).toLowerCase().trim();
+
   try {
     // 1. Tenta buscar diretamente pelo ID do documento
     const docRef = doc(db, 'products', idOrSlug);
     const snap = await getDoc(docRef);
     if (snap.exists()) {
-      return { id: snap.id, ...snap.data() };
+      const data = snap.data();
+      // Validação: só retorna se for um produto válido com nome e preço
+      if (data && (data.name || data.title) && data.price !== undefined) {
+        return { id: snap.id, ...data };
+      }
     }
 
-    // 2. Tenta buscar por campo slug ou id caso seja slug customizado
+    // 2. Tenta buscar por campo slug exato
     const q = query(collection(db, 'products'), where('slug', '==', idOrSlug));
     const querySnap = await getDocs(q);
     if (!querySnap.empty) {
-      const d = querySnap.docs[0];
-      return { id: d.id, ...d.data() };
+      for (const d of querySnap.docs) {
+        const data = d.data();
+        if (data && (data.name || data.title) && data.price !== undefined) {
+          return { id: d.id, ...data };
+        }
+      }
+    }
+
+    // 3. Fallback inteligente e resiliente: busca no acervo completo com suporte a histórico de slugs e nomes
+    const all = await getAllProducts();
+    const normalize = (str) => String(str || '')
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+    const found = all.find(p => {
+      if (!p || (!p.name && !p.title)) return false;
+      const pSlug = String(p.slug || '').toLowerCase().trim();
+      const pId = String(p.id || '').toLowerCase().trim();
+      const pNameNorm = normalize(p.name || p.title);
+      const prevSlugs = Array.isArray(p.previousSlugs) 
+        ? p.previousSlugs.map(s => String(s).toLowerCase().trim()) 
+        : [];
+
+      return pSlug === cleanSearch ||
+             pId === cleanSearch ||
+             pNameNorm === normalize(cleanSearch) ||
+             prevSlugs.includes(cleanSearch);
+    });
+
+    if (found) {
+      return found;
     }
 
     return null;

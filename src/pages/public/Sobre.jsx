@@ -323,7 +323,7 @@ export function Sobre() {
         <div className={styles.heroContent}>
           <div className={styles.splitSection}>
             <div className={styles.textColumn}>
-              <h1 className={styles.title}>THR33 STREETWEAR</h1>
+              <h1 className={styles.title}>THR33</h1>
               <p className={styles.bodyText}>
                 Nascida no concreto e nas vielas de Curitiba, a THR33 une a música independente, a estética urbana e a modelagem autoral. Desenvolvida para quem valoriza caimento pesado e exclusividade sob o clima e a cultura da rua.
               </p>

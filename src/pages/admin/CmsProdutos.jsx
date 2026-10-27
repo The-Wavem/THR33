@@ -635,6 +635,12 @@ export function CmsProdutos() {
     const priceNum = parseFloat(formData.price) || 0;
     const existingProd = editingId ? products.find(p => p.id === editingId) : null;
     
+    // Preserva histórico de slugs anteriores para redirecionamentos amigáveis
+    const previousSlugs = Array.isArray(existingProd?.previousSlugs) ? [...existingProd.previousSlugs] : [];
+    if (existingProd?.slug && existingProd.slug !== productSlug && !previousSlugs.includes(existingProd.slug)) {
+      previousSlugs.push(existingProd.slug);
+    }
+    
     // Se o produto já possuir desconto configurado na aba de Descontos, mantém a integridade
     const origPriceNum = existingProd?.originalPrice && existingProd.originalPrice > priceNum
       ? existingProd.originalPrice
@@ -688,6 +694,7 @@ export function CmsProdutos() {
     const productPayload = {
       id: productId,
       slug: productSlug,
+      previousSlugs,
       name: formData.name.trim(),
       title: formData.name.trim(),
       type: formData.type,
