@@ -626,7 +626,7 @@ export function CmsDashboard() {
                         ))}
                       </div>
                       <button 
-                        onClick={() => navigate('/cms/metricas')} 
+                        onClick={() => navigate('/cms/analytics')} 
                         className={styles.adjustStockBtn}
                       >
                         <span>Ajustar Grade no Raio-X</span>

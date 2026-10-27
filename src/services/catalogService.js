@@ -1,16 +1,15 @@
-import { PRODUCTS_DATA } from '../data/productsData';
 import { GIFTS_DATA } from '../data/giftsData';
 import { currentDropConfig } from '../data/dropConfig';
-import { 
-  collection, 
-  getDocs, 
-  doc, 
-  getDoc, 
-  setDoc, 
-  query, 
-  where, 
-  orderBy, 
-  limit 
+import {
+  collection,
+  getDocs,
+  doc,
+  getDoc,
+  setDoc,
+  query,
+  where,
+  orderBy,
+  limit
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 
@@ -40,9 +39,9 @@ export const getVitrineSettings = async () => {
       const bentoData = bentoSnap.exists() ? bentoSnap.data() : null;
       return {
         hero: bannerData ? { slides: bannerData.slides || [] } : null,
-        bentoGrid: bentoData ? (bentoData.cards || []) : [],
-        sectionTag: bentoData?.sectionTag || "ENSAIO DE CAMPANHA",
-        sectionTitle: bentoData?.sectionTitle || "A RUA COMO NOSSO ATELIÊ"
+        bentoGrid: bentoData ? bentoData.cards || [] : [],
+        sectionTag: bentoData?.sectionTag || 'ENSAIO DE CAMPANHA',
+        sectionTitle: bentoData?.sectionTitle || 'A RUA COMO NOSSO ATELIÊ'
       };
     }
 
@@ -59,26 +58,38 @@ export const getVitrineSettings = async () => {
 export const saveVitrineSettings = async (settingsData) => {
   try {
     const docRef = doc(db, 'settings', 'vitrine');
-    await setDoc(docRef, {
-      ...settingsData,
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    await setDoc(
+      docRef,
+      {
+        ...settingsData,
+        updatedAt: new Date().toISOString()
+      },
+      { merge: true }
+    );
 
     // Sincroniza também storefront para compatibilidade
     if (settingsData.hero?.slides) {
-      await setDoc(doc(db, 'storefront', 'home_banners'), {
-        slides: settingsData.hero.slides,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+      await setDoc(
+        doc(db, 'storefront', 'home_banners'),
+        {
+          slides: settingsData.hero.slides,
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
     }
 
     if (settingsData.bentoGrid) {
-      await setDoc(doc(db, 'storefront', 'home_bento'), {
-        cards: settingsData.bentoGrid,
-        sectionTag: settingsData.sectionTag || "ENSAIO DE CAMPANHA",
-        sectionTitle: settingsData.sectionTitle || "A RUA COMO NOSSO ATELIÊ",
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+      await setDoc(
+        doc(db, 'storefront', 'home_bento'),
+        {
+          cards: settingsData.bentoGrid,
+          sectionTag: settingsData.sectionTag || 'ENSAIO DE CAMPANHA',
+          sectionTitle: settingsData.sectionTitle || 'A RUA COMO NOSSO ATELIÊ',
+          updatedAt: new Date().toISOString()
+        },
+        { merge: true }
+      );
     }
 
     return true;
@@ -96,15 +107,19 @@ export const getFeaturedProducts = async (maxItems = 8) => {
     const productsRef = collection(db, 'products');
     const q = query(productsRef, where('isFeatured', '==', true), limit(maxItems));
     const snapshot = await getDocs(q);
-    
-    // Se não houver produtos com tag 'isFeatured', faz fallback buscando os primeiros ativos
+
+    // Se não houver produtos com tag 'isFeatured', faz fallback buscando os primeiros ativos reais do Firestore
     if (snapshot.empty) {
       const fallbackQuery = query(productsRef, limit(maxItems));
       const fallbackSnap = await getDocs(fallbackQuery);
-      return fallbackSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+      return fallbackSnap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((d) => (d.name || d.title) && d.price !== undefined);
     }
-    
-    return snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
+
+    return snapshot.docs
+      .map((d) => ({ id: d.id, ...d.data() }))
+      .filter((d) => (d.name || d.title) && d.price !== undefined);
   } catch (error) {
     console.error('Erro ao buscar produtos em destaque:', error);
     return [];
@@ -112,20 +127,19 @@ export const getFeaturedProducts = async (maxItems = 8) => {
 };
 
 // ============================================================
-// 2. CONSULTAS DO CATÁLOGO DE PRODUTOS
+// 2. CONSULTAS DO CATÁLOGO DE PRODUTOS (100% FIRESTORE REAL)
 // ============================================================
 
 /**
- * Busca todos os produtos ativos do catálogo ordenados por atualização
+ * Busca todos os produtos ativos do catálogo ordenados por atualização (sem fallback para mocks estáticos)
  */
 export const getAllProducts = async () => {
   try {
     const q = query(collection(db, 'products'), orderBy('updatedAt', 'desc'));
     const snap = await getDocs(q);
     const list = [];
-    snap.forEach(d => {
+    snap.forEach((d) => {
       const data = d.data();
-      // Validação estrita: ignora documentos incompletos / fantasma sem nome ou preço
       if (data && (data.name || data.title) && data.price !== undefined) {
         list.push({ id: d.id, ...data });
       }
@@ -136,7 +150,7 @@ export const getAllProducts = async () => {
     try {
       const snap = await getDocs(collection(db, 'products'));
       const list = [];
-      snap.forEach(d => {
+      snap.forEach((d) => {
         const data = d.data();
         if (data && (data.name || data.title) && data.price !== undefined) {
           list.push({ id: d.id, ...data });
@@ -144,8 +158,8 @@ export const getAllProducts = async () => {
       });
       return list;
     } catch (e) {
-      console.warn("Aviso: Falha ao conectar ao Firestore. Ativando catálogo de contingência local:", e.message);
-      return PRODUCTS_DATA;
+      console.warn('Aviso: Falha ao conectar ao Firestore ao listar produtos:', e.message);
+      return [];
     }
   }
 };
@@ -153,7 +167,7 @@ export const getAllProducts = async () => {
 export const fetchProducts = getAllProducts;
 
 /**
- * Busca produto individual por ID ou Slug
+ * Busca produto individual por ID ou Slug no Firestore (retorna null quando não existe, sem cair em productsData.js)
  */
 export const getProductById = async (idOrSlug) => {
   if (!idOrSlug) return null;
@@ -165,7 +179,6 @@ export const getProductById = async (idOrSlug) => {
     const snap = await getDoc(docRef);
     if (snap.exists()) {
       const data = snap.data();
-      // Validação: só retorna se for um produto válido com nome e preço
       if (data && (data.name || data.title) && data.price !== undefined) {
         return { id: snap.id, ...data };
       }
@@ -183,40 +196,41 @@ export const getProductById = async (idOrSlug) => {
       }
     }
 
-    // 3. Fallback inteligente e resiliente: busca no acervo completo com suporte a histórico de slugs e nomes
+    // 3. Busca nos documentos reais do Firestore por slug normalizado ou histórico de slugs
     const all = await getAllProducts();
-    const normalize = (str) => String(str || '')
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-+|-+$/g, "");
+    const normalize = (str) =>
+      String(str || '')
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
 
-    const found = all.find(p => {
+    const found = all.find((p) => {
       if (!p || (!p.name && !p.title)) return false;
       const pSlug = String(p.slug || '').toLowerCase().trim();
       const pId = String(p.id || '').toLowerCase().trim();
       const pNameNorm = normalize(p.name || p.title);
-      const prevSlugs = Array.isArray(p.previousSlugs) 
-        ? p.previousSlugs.map(s => String(s).toLowerCase().trim()) 
+      const prevSlugs = Array.isArray(p.previousSlugs)
+        ? p.previousSlugs.map((s) => String(s).toLowerCase().trim())
         : [];
 
-      return pSlug === cleanSearch ||
-             pId === cleanSearch ||
-             pNameNorm === normalize(cleanSearch) ||
-             prevSlugs.includes(cleanSearch);
+      return (
+        pSlug === cleanSearch ||
+        pId === cleanSearch ||
+        pNameNorm === normalize(cleanSearch) ||
+        prevSlugs.includes(cleanSearch)
+      );
     });
 
-    if (found) {
-      return found;
-    }
-
-    return null;
+    return found || null;
   } catch (err) {
     console.error(`Erro ao buscar produto ${idOrSlug}:`, err);
     return null;
   }
 };
+
+export const fetchProductById = getProductById;
 
 /**
  * Busca apenas lançamentos / releases
@@ -226,10 +240,10 @@ export const getReleases = async () => {
     const q = query(collection(db, 'products'), where('isRelease', '==', true));
     const snap = await getDocs(q);
     const list = [];
-    snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+    snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
     return list;
   } catch (err) {
-    console.error("Erro ao buscar lançamentos:", err);
+    console.error('Erro ao buscar lançamentos:', err);
     return [];
   }
 };
@@ -244,7 +258,7 @@ export const getGifts = async () => {
       const giftsSnap = await getDocs(collection(db, 'gifts'));
       if (!giftsSnap.empty) {
         const list = [];
-        giftsSnap.forEach(d => list.push({ id: d.id, ...d.data() }));
+        giftsSnap.forEach((d) => list.push({ id: d.id, ...d.data() }));
         if (list.length > 0) return list;
       }
     } catch (_) {}
@@ -253,20 +267,19 @@ export const getGifts = async () => {
     const q = query(collection(db, 'products'), where('type', '==', 'brinde'));
     const snap = await getDocs(q);
     const list = [];
-    snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+    snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
 
     if (list.length > 0) return list;
 
-    // 3. Fallback de contingência caso Firestore não possua brindes cadastrados
     return GIFTS_DATA;
   } catch (err) {
-    console.warn("Aviso ao buscar brindes no Firestore. Utilizando contingência local:", err.message);
+    console.warn('Aviso ao buscar brindes no Firestore:', err.message);
     return GIFTS_DATA;
   }
 };
 
 /**
- * Consulta a configuração atual do Drop ativo no Firestore (com fallback para dropConfig.js)
+ * Consulta a configuração atual do Drop ativo no Firestore
  */
 export const getDropConfig = async () => {
   try {
@@ -275,7 +288,12 @@ export const getDropConfig = async () => {
       getDoc(doc(db, 'drop_settings', 'current')).catch(() => null)
     ]);
 
-    const activeSnap = (dropSnap && dropSnap.exists()) ? dropSnap : (settingsSnap && settingsSnap.exists() ? settingsSnap : null);
+    const activeSnap =
+      dropSnap && dropSnap.exists()
+        ? dropSnap
+        : settingsSnap && settingsSnap.exists()
+          ? settingsSnap
+          : null;
     if (activeSnap) {
       return {
         ...currentDropConfig,
@@ -284,7 +302,7 @@ export const getDropConfig = async () => {
     }
     return currentDropConfig;
   } catch (err) {
-    console.warn("Aviso ao buscar configuração do drop no Firestore. Utilizando contingência:", err.message);
+    console.warn('Aviso ao buscar configuração do drop no Firestore:', err.message);
     return currentDropConfig;
   }
 };
@@ -304,7 +322,7 @@ export const getProductsByCategory = async (category) => {
     const q = query(collection(db, 'products'), where('category', '==', category));
     const snap = await getDocs(q);
     const list = [];
-    snap.forEach(d => list.push({ id: d.id, ...d.data() }));
+    snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
     return list;
   } catch (err) {
     console.error(`Erro ao buscar produtos da categoria ${category}:`, err);
@@ -342,20 +360,26 @@ export const decrementProductStock = async (items = []) => {
 
       if (prodSnap.exists()) {
         const prodData = prodSnap.data() || {};
-        const currentStock = prodData.stock ? { ...prodData.stock } : { PP: 5, P: 10, M: 15, G: 10, GG: 5 };
-        
+        const currentStock = prodData.stock
+          ? { ...prodData.stock }
+          : { PP: 5, P: 10, M: 15, G: 10, GG: 5 };
+
         const currentSizeQty = Number(currentStock[size] ?? 0);
         const newSizeQty = Math.max(0, currentSizeQty - qtyToDeduct);
         currentStock[size] = newSizeQty;
 
         const totalStock = Object.values(currentStock).reduce((a, b) => Number(a) + Number(b), 0);
 
-        await setDoc(prodRef, {
-          stock: currentStock,
-          totalStock,
-          lastSoldAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
+        await setDoc(
+          prodRef,
+          {
+            stock: currentStock,
+            totalStock,
+            lastSoldAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          },
+          { merge: true }
+        );
       }
     } catch (err) {
       console.warn(`Erro ao decrementar estoque de ${productId}:`, err.message);
@@ -370,6 +394,7 @@ export const catalogService = {
   getAllProducts,
   fetchProducts: getAllProducts,
   getProductById,
+  fetchProductById: getProductById,
   getReleases,
   getGifts,
   getGiftById,

@@ -1,8 +1,10 @@
 import { GIFTS_DATA } from '../../data/giftsData';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Gift, Sparkles, ArrowRight, Package } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { catalogService } from '../../services/catalogService';
+import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
+import ProductCardSkeleton from '../../components/catalog/ProductCardSkeleton';
 import styles from './Brindes.module.css';
 
 export function Brindes() {
@@ -17,7 +19,7 @@ export function Brindes() {
         const gifts = await catalogService.getGifts();
         setGiftsList(Array.isArray(gifts) && gifts.length > 0 ? gifts : GIFTS_DATA);
       } catch (err) {
-        console.error("Erro ao carregar brindes:", err);
+        console.error('Erro ao carregar brindes:', err);
       } finally {
         setLoading(false);
       }
@@ -27,8 +29,12 @@ export function Brindes() {
 
   const filteredGifts = useMemo(() => {
     return giftsList.filter((item) => {
-      if (filterType === 'gift-card' && item.category !== 'gift-card' && !item.id.includes('vale')) return false;
-      if (filterType === 'brinde' && (item.category === 'gift-card' || item.id.includes('vale'))) return false;
+      if (filterType === 'gift-card' && item.category !== 'gift-card' && !item.id.includes('vale')) {
+        return false;
+      }
+      if (filterType === 'brinde' && (item.category === 'gift-card' || item.id.includes('vale'))) {
+        return false;
+      }
       return true;
     });
   }, [giftsList, filterType]);
@@ -43,21 +49,21 @@ export function Brindes() {
 
         {/* FILTROS POR TIPO */}
         <div className={styles.filterBar}>
-          <button 
+          <button
             type="button"
             className={`${styles.filterBtn} ${filterType === 'all' ? styles.activeFilter : ''}`}
             onClick={() => setFilterType('all')}
           >
             TODOS OS ITENS
           </button>
-          <button 
+          <button
             type="button"
             className={`${styles.filterBtn} ${filterType === 'gift-card' ? styles.activeFilter : ''}`}
             onClick={() => setFilterType('gift-card')}
           >
             VALE-PRESENTE
           </button>
-          <button 
+          <button
             type="button"
             className={`${styles.filterBtn} ${filterType === 'brinde' ? styles.activeFilter : ''}`}
             onClick={() => setFilterType('brinde')}
@@ -71,7 +77,10 @@ export function Brindes() {
       <section className={styles.giftBanner}>
         <div className={styles.bannerText}>
           <h2>PRESENTEIE COM A THR33</h2>
-          <p>Escolha vales de R$ 150 até R$ 5.000 com envio digital imediato para o e-mail do seu amigo.</p>
+          <p>
+            Escolha vales de R$ 150 até R$ 5.000 com envio digital imediato para o e-mail do seu
+            amigo.
+          </p>
         </div>
         <Link className={styles.bannerCta} to="/brindes/vale-presente-thr33">
           <span>COMPRAR VALE-PRESENTE</span>
@@ -82,12 +91,16 @@ export function Brindes() {
       {/* GRID DE CARDS */}
       <div className={styles.grid}>
         {loading ? (
-          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary)' }}>
-            <Package size={28} style={{ animation: 'spin 1.5s linear infinite', margin: '0 auto 0.75rem' }} />
-            <p>Carregando vales e brindes do Firestore...</p>
-          </div>
+          Array.from({ length: 4 }).map((_, idx) => <ProductCardSkeleton key={idx} />)
         ) : filteredGifts.length === 0 ? (
-          <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary)' }}>
+          <div
+            style={{
+              gridColumn: '1 / -1',
+              textAlign: 'center',
+              padding: '4rem 1rem',
+              color: 'var(--text-secondary)'
+            }}
+          >
             <p>Nenhum brinde ou vale-presente cadastrado no momento.</p>
           </div>
         ) : (
@@ -99,7 +112,13 @@ export function Brindes() {
                   <span className={styles.typeBadge}>
                     {isGiftCard ? 'VALE DIGITAL' : 'BRINDE FÍSICO'}
                   </span>
-                  <img src={item.image} alt={item.name} className={styles.image} />
+                  <ImageWithSkeleton
+                    src={item.image}
+                    alt={item.name}
+                    aspectRatio="4/5"
+                    className={styles.image}
+                    style={{ width: '100%', height: '100%' }}
+                  />
                 </div>
 
                 <div className={styles.details}>

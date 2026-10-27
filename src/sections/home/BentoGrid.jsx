@@ -2,42 +2,68 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Camera } from 'lucide-react';
 import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
+import largoDaOrdemBg from '@assets/images/largo-da-ordem-bg.jpeg';
+import largoDaOrdemBg2 from '@assets/images/largo-da-ordem-bg2.jpeg';
 import styles from './BentoGrid.module.css';
 
-const DEFAULT_BENTO_CARDS = [
+const REAL_FALLBACK_BENTO_CARDS = [
   {
-    id: "bento_1",
-    title: "OVERSIZED HEAVY",
-    buttonText: "VER DETALHES",
-    link: "/catalogo?modelagem=oversized",
-    image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=800&auto=format&fit=crop",
-    size: "large",
+    id: 'bento_1',
+    title: 'OVERSIZED HEAVY',
+    buttonText: 'VER DETALHES',
+    link: '/catalogo?modelagem=oversized',
+    image: largoDaOrdemBg,
+    size: 'large',
     active: true
   },
   {
-    id: "bento_2",
-    title: "BOXY TEES",
-    buttonText: "VER DETALHES",
-    link: "/catalogo?modelagem=boxy",
-    image: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?q=80&w=600&auto=format&fit=crop",
-    size: "normal",
+    id: 'bento_2',
+    title: 'BOXY TEES',
+    buttonText: 'VER DETALHES',
+    link: '/catalogo?modelagem=boxy',
+    image: largoDaOrdemBg2,
+    size: 'normal',
     active: true
   },
   {
-    id: "bento_3",
-    title: "EDITION 2026",
-    buttonText: "VER CATÁLOGO",
-    link: "/catalogo",
-    image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=600&auto=format&fit=crop",
-    size: "normal",
+    id: 'bento_3',
+    title: 'EDITION 2026',
+    buttonText: 'VER CATÁLOGO',
+    link: '/catalogo',
+    image: largoDaOrdemBg,
+    size: 'normal',
     active: true
   }
 ];
 
-export function BentoGrid({ gridItems = [], sectionTag, sectionTitle }) {
-  const items = Array.isArray(gridItems) && gridItems.length > 0
-    ? gridItems.filter(c => c.active !== false)
-    : DEFAULT_BENTO_CARDS;
+export function BentoGrid({ gridItems = [], sectionTag, sectionTitle, isLoading = false }) {
+  if (isLoading) {
+    return (
+      <section className={styles.section} aria-busy="true" aria-label="Carregando destaques">
+        <div className={styles.header}>
+          <span className={styles.tag}>{sectionTag || 'COLEÇÃO OFICIAL // ATELIÊ CWB'}</span>
+          <h2 className={styles.title}>{sectionTitle || 'A RUA COMO NOSSO ATELIÊ'}</h2>
+        </div>
+
+        <div className={styles.grid}>
+          <div className={`${styles.card} ${styles.cardLarge} ${styles.skeletonCard}`}>
+            <div className={styles.shimmer} />
+          </div>
+          <div className={`${styles.card} ${styles.skeletonCard}`}>
+            <div className={styles.shimmer} />
+          </div>
+          <div className={`${styles.card} ${styles.skeletonCard}`}>
+            <div className={styles.shimmer} />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const items =
+    Array.isArray(gridItems) && gridItems.length > 0
+      ? gridItems.filter((c) => c.active !== false)
+      : REAL_FALLBACK_BENTO_CARDS;
 
   if (!items || items.length === 0) return null;
 
@@ -50,17 +76,17 @@ export function BentoGrid({ gridItems = [], sectionTag, sectionTitle }) {
 
       <div className={styles.grid}>
         {items.map((item, index) => {
-          const imgSrc = item.imageUrl || item.image || '';
+          const imgSrc = item.imageUrl || item.image || largoDaOrdemBg;
           const isLarge = item.size === 'large';
 
           return (
-            <div 
-              key={item.id || index} 
+            <div
+              key={item.id || index}
               className={`${styles.card} ${isLarge ? styles.cardLarge : ''}`}
             >
               <ImageWithSkeleton
-                src={imgSrc} 
-                alt={item.title || 'Destaque THR33'} 
+                src={imgSrc}
+                alt={item.title || 'Destaque THR33'}
                 aspectRatio={isLarge ? '16/10' : '4/5'}
                 className={styles.cardImage}
                 style={{ width: '100%', height: '100%' }}

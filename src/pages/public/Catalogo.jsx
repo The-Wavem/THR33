@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react'
 import { Link, useSearchParams, useParams } from 'react-router-dom';
 import { X, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import FilterSidebar from '../../components/catalog/FilterSidebar';
-import ProductCardSkeleton from '../../components/catalog/ProductCardSkeleton';
+import LookbookSplitSkeleton from '../../components/catalog/LookbookSplitSkeleton';
 import LookbookSplitSection from '../../sections/catalogo/LookbookSplitSection';
 import { catalogService, fetchProducts } from '../../services/catalogService';
 import { fetchActiveDiscounts } from '../../services/campaignService';
@@ -415,11 +415,7 @@ export function Catalogo() {
       <div className={styles.catalogLayout}>
         <section className={styles.mainContent}>
           {loadingProducts || isLoading ? (
-            <div className={styles.splitSkeletonGrid}>
-              {Array.from({ length: 8 }).map((_, idx) => (
-                <ProductCardSkeleton key={idx} />
-              ))}
-            </div>
+            <LookbookSplitSkeleton rows={2} startIndex={startIndex} />
           ) : paginatedProducts.length > 0 ? (
             <>
               <LookbookSplitSection

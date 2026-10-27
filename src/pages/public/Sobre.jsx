@@ -3,17 +3,17 @@ import { Link } from 'react-router-dom';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { motion, useScroll, useTransform } from 'framer-motion';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../services/firebaseConfig';
+import { getVitrineSettings, fetchProducts } from '../../services/catalogService';
 import { analyticsService } from '../../services/analyticsService';
+import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
 import styles from './Sobre.module.css';
 
 import largoDaOrdemBg from '@assets/images/largo-da-ordem-bg.jpeg';
 import largoDaOrdemBg2 from '@assets/images/largo-da-ordem-bg2.jpeg';
 
-const STREET_REEL_FRAMES = [
-  'https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=1000&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1523381210434-271e8be1f52b?q=80&w=1000&auto=format&fit=crop',
-  'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=1000&auto=format&fit=crop'
-];
+const INITIAL_REAL_REEL_FRAMES = [largoDaOrdemBg, largoDaOrdemBg2];
 
 const FITS = [
   {
@@ -59,6 +59,7 @@ export function Sobre() {
   const atelierSectionRef = useRef(null);
   const threeContainerRef = useRef(null);
 
+  const [reelFrames, setReelFrames] = useState(INITIAL_REAL_REEL_FRAMES);
   const [frameIndex, setFrameIndex] = useState(0);
   const [activeFitId, setActiveFitId] = useState('heavy');
   const [is3DLoaded, setIs3DLoaded] = useState(false);
@@ -66,15 +67,85 @@ export function Sobre() {
 
   useEffect(() => {
     analyticsService.trackPageView('sobre');
+
+    // Busca imagens reais do Firestore (settings/sobre, settings/home, settings/vitrine ou produtos reais)
+    async function loadRealGalleryFrames() {
+      try {
+        const [sobreSnap, homeSnap, vitrineData, products] = await Promise.all([
+          getDoc(doc(db, 'settings', 'sobre')).catch(() => null),
+          getDoc(doc(db, 'settings', 'home')).catch(() => null),
+          getVitrineSettings().catch(() => null),
+          fetchProducts().catch(() => [])
+        ]);
+
+        const isCleanUrl = (url) =>
+          Boolean(url) &&
+          typeof url === 'string' &&
+          !url.includes('images.unsplash.com') &&
+          !url.includes('picsum.photos');
+
+        const collected = [];
+
+        const sobreData = sobreSnap && sobreSnap.exists() ? sobreSnap.data() : null;
+        if (Array.isArray(sobreData?.galleryImages)) {
+          sobreData.galleryImages.forEach((img) => {
+            const u = typeof img === 'string' ? img : img?.url || img?.image;
+            if (isCleanUrl(u)) collected.push(u);
+          });
+        }
+
+        const homeData = homeSnap && homeSnap.exists() ? homeSnap.data() : null;
+        if (Array.isArray(homeData?.galleryImages)) {
+          homeData.galleryImages.forEach((img) => {
+            const u = typeof img === 'string' ? img : img?.url || img?.image;
+            if (isCleanUrl(u)) collected.push(u);
+          });
+        }
+
+        if (Array.isArray(vitrineData?.bentoGrid)) {
+          vitrineData.bentoGrid.forEach((card) => {
+            const u = card?.imageUrl || card?.image;
+            if (isCleanUrl(u)) collected.push(u);
+          });
+        }
+
+        if (Array.isArray(products)) {
+          products
+            .filter((p) => p && p.type !== 'brinde' && p.category !== 'gift-card')
+            .slice(0, 4)
+            .forEach((p) => {
+              const candidate =
+                p.lifestyleImage ||
+                p.secondaryImage ||
+                (Array.isArray(p.images) && p.images[1]) ||
+                p.image;
+              if (isCleanUrl(candidate)) collected.push(candidate);
+            });
+        }
+
+        const uniqueReal = Array.from(
+          new Set([...collected, largoDaOrdemBg, largoDaOrdemBg2])
+        ).slice(0, 6);
+
+        if (uniqueReal.length > 0) {
+          setReelFrames(uniqueReal);
+        }
+      } catch (err) {
+        console.warn('Utilizando imagens locais oficiais na galeria Sobre:', err.message);
+      }
+    }
+
+    loadRealGalleryFrames();
   }, []);
 
-  // Loop visual discreto (estilo GIF P&B urbano)
+  // Loop visual discreto (estilo GIF P&B urbano) com fotos reais
   useEffect(() => {
+    if (!reelFrames || reelFrames.length <= 1) return;
     const timer = setInterval(() => {
-      setFrameIndex((prev) => (prev + 1) % STREET_REEL_FRAMES.length);
-    }, 1800);
+      setFrameIndex((prev) => (prev + 1) % reelFrames.length);
+    }, 2400);
     return () => clearInterval(timer);
-  }, []);
+  }, [reelFrames]);
 
   // -------------------------------------------------------------------------
   // PARALLAX ENGINE (SCROLL-LINKED CONFORME GUIA MOTION.DEV)
@@ -108,8 +179,13 @@ export function Sobre() {
 
     let renderer;
     try {
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'high-performance' });
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: 'high-performance'
+      });
     } catch {
+      setIs3DLoaded(true);
       return;
     }
 
@@ -161,8 +237,8 @@ export function Sobre() {
             child.receiveShadow = true;
             child.material = new THREE.MeshStandardMaterial({
               color: 0xe5e5e5,
-              metalness: 0.90,
-              roughness: 0.20,
+              metalness: 0.9,
+              roughness: 0.2,
               envMapIntensity: 1.6
             });
           }
@@ -172,7 +248,6 @@ export function Sobre() {
         const boxInitial = new THREE.Box3().setFromObject(model);
         const sizeInitial = boxInitial.getSize(new THREE.Vector3());
         const maxDim = Math.max(sizeInitial.x, sizeInitial.y, sizeInitial.z);
-        // Escala 2.3 garante margem confortável de 15% nos cantos em qualquer resolução
         const targetScale = 3.35 / (maxDim || 1);
         model.scale.setScalar(targetScale);
         model.updateMatrixWorld(true);
@@ -208,7 +283,7 @@ export function Sobre() {
     let startX = 0;
     let startY = 0;
     let dragRotY = 0;
-    let dragRotX = 0.08; // Inclinação sutil de 5° para realce de profundidade
+    let dragRotX = 0.08;
     let autoRotY = 0;
 
     const onPointerDown = (e) => {
@@ -247,7 +322,6 @@ export function Sobre() {
       const aspect = w / h;
       camera.aspect = aspect;
 
-      // Em telas estreitas (celular retrato), afasta a câmera sutilmente para nunca cortar as pontas
       if (aspect < 1.1) {
         camera.position.z = 5.2 + (1.1 - aspect) * 1.8;
       } else {
@@ -269,7 +343,6 @@ export function Sobre() {
       frameId = requestAnimationFrame(animate);
       const elapsedTime = (performance.now() - startTime) * 0.001;
 
-      // Giro contínuo suave de 360° enquanto não há arraste do usuário
       if (!isPointerDown) {
         autoRotY += 0.0065;
       }
@@ -277,11 +350,8 @@ export function Sobre() {
       const targetY = autoRotY + dragRotY;
       const targetX = dragRotX;
 
-      // Inércia amortecida fluida
       group.rotation.y += (targetY - group.rotation.y) * 0.08;
       group.rotation.x += (targetX - group.rotation.x) * 0.08;
-
-      // Leve levitação orgânica no ar
       group.position.y = Math.sin(elapsedTime * 1.6) * 0.05;
 
       renderer.render(scene, camera);
@@ -299,6 +369,7 @@ export function Sobre() {
   }, []);
 
   const currentFit = FITS.find((f) => f.id === activeFitId) || FITS[0];
+  const currentReelSrc = reelFrames[frameIndex % reelFrames.length] || largoDaOrdemBg;
 
   return (
     <div className={styles.pageWrapper}>
@@ -306,17 +377,18 @@ export function Sobre() {
           1. HERO COM PARALLAX REAL: VIELAS DE PARALELEPÍPEDOS DE CURITIBA (LARGO DA ORDEM)
           ========================================================================= */}
       <section ref={heroSectionRef} className={styles.heroParallaxSection}>
-        {/* IMAGEM DE FUNDO COM SCROLL PARALLAX VISÍVEL */}
-        <div className={styles.parallaxBgLayer} style={{ backgroundColor: '#080808' }}>
-          <motion.img
+        {/* IMAGEM DE FUNDO COM SCROLL PARALLAX VISÍVEL E SKELETON */}
+        <motion.div
+          className={styles.parallaxBgLayer}
+          style={{ backgroundColor: '#080808', y: heroBgParallaxY }}
+        >
+          <ImageWithSkeleton
             src={largoDaOrdemBg}
             alt="Vielas e paralelepípedos de Curitiba à noite"
-            loading="lazy"
-            decoding="async"
             className={styles.parallaxBgImage}
-            style={{ y: heroBgParallaxY }}
+            style={{ width: '100%', height: '100%' }}
           />
-        </div>
+        </motion.div>
 
         {/* DEGRADÊ ESCURO VIGNETTE PARA MANTER O TEXTO E A LOGO 3D EM TOTAL DESTAQUE */}
         <div className={styles.parallaxOverlayMask} />
@@ -327,11 +399,23 @@ export function Sobre() {
             <div className={styles.textColumn}>
               <h1 className={styles.title}>THR33</h1>
               <p className={styles.bodyText}>
-                Nascida no concreto e nas vielas de Curitiba, a THR33 une a música independente, a estética urbana e a modelagem autoral. Desenvolvida para quem valoriza caimento pesado e exclusividade sob o clima e a cultura da rua.
+                Nascida no concreto e nas vielas de Curitiba, a THR33 une a música independente, a
+                estética urbana e a modelagem autoral. Desenvolvida para quem valoriza caimento
+                pesado e exclusividade sob o clima e a cultura da rua.
               </p>
             </div>
 
             <div className={styles.threeWrapper}>
+              {/* SKELETON CIRCULAR BRUTALISTA ENQUANTO O MODELO /models/thr33-badge.glb CARREGA */}
+              {!is3DLoaded && (
+                <div className={styles.threeSkeletonOverlay} aria-hidden="true">
+                  <div className={styles.threeSkeletonCircle}>
+                    <div className={styles.threeSkeletonRing} />
+                    <span className={styles.threeSkeletonCode}>THR33 // 3D</span>
+                  </div>
+                </div>
+              )}
+
               <div
                 ref={threeContainerRef}
                 className={styles.threeBox}
@@ -354,36 +438,44 @@ export function Sobre() {
       <div className={styles.mainContentContainer}>
         {/* HISTÓRIA: A RUA COMO NOSSO ATELIÊ COM PARALLAX NO REEL */}
         <section ref={atelierSectionRef} className={styles.atelierParallaxSection}>
-          <div className={styles.parallaxBgLayer} style={{ backgroundColor: '#080808' }}>
-            <motion.img
+          <motion.div
+            className={styles.parallaxBgLayer}
+            style={{ backgroundColor: '#080808', y: atelierBgParallaxY }}
+          >
+            <ImageWithSkeleton
               src={largoDaOrdemBg2}
               alt="Concreto e arquitetura urbana de Curitiba"
-              loading="lazy"
-              decoding="async"
               className={styles.parallaxBgImage}
-              style={{ y: atelierBgParallaxY }}
+              style={{ width: '100%', height: '100%' }}
             />
-          </div>
+          </motion.div>
           <div className={styles.parallaxOverlayMask} />
 
           <div className={styles.sectionInnerContent}>
             <div className={styles.splitSection}>
               <div className={styles.motionBox}>
-                <motion.img
-                  src={STREET_REEL_FRAMES[frameIndex]}
-                  alt="Ateliê THR33 Curitiba"
-                  className={styles.motionImage}
-                  style={{ y: atelierReelParallaxY }}
-                />
+                <motion.div
+                  style={{ y: atelierReelParallaxY, width: '100%', height: '124%' }}
+                >
+                  <ImageWithSkeleton
+                    src={currentReelSrc}
+                    alt="Ateliê THR33 Curitiba"
+                    className={styles.motionImage}
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                </motion.div>
               </div>
 
               <div className={styles.textColumn}>
                 <h2 className={styles.sectionTitle}>A RUA COMO NOSSO ATELIÊ</h2>
                 <p className={styles.bodyText}>
-                  Criada por jovens curitibanos, a THR33 foca na confecção de camisetas estruturadas em malha pesada. Cada estampa é desenvolvida em edições limitadas sem repetição de tiragem.
+                  Criada por jovens curitibanos, a THR33 foca na confecção de camisetas estruturadas
+                  em malha pesada. Cada estampa é desenvolvida em edições limitadas sem repetição de
+                  tiragem.
                 </p>
                 <p className={styles.bodyText}>
-                  Trabalhamos sob demanda semanal: as peças são produzidas e estampadas conforme os pedidos chegam, garantindo controle de qualidade unitário em cada costura.
+                  Trabalhamos sob demanda semanal: as peças são produzidas e estampadas conforme os
+                  pedidos chegam, garantindo controle de qualidade unitário em cada costura.
                 </p>
               </div>
             </div>
@@ -480,7 +572,9 @@ export function Sobre() {
               </thead>
               <tbody>
                 <tr>
-                  <td rowSpan={5}><strong>Oversized Heavy &amp; Clássica</strong></td>
+                  <td rowSpan={5}>
+                    <strong>Oversized Heavy &amp; Clássica</strong>
+                  </td>
                   <td>PP</td>
                   <td>54 cm</td>
                   <td>72 cm</td>
@@ -510,9 +604,13 @@ export function Sobre() {
                   <td>80 cm</td>
                   <td>27 cm</td>
                 </tr>
-                <tr className={styles.dividerRow}><td colSpan={5}></td></tr>
+                <tr className={styles.dividerRow}>
+                  <td colSpan={5}></td>
+                </tr>
                 <tr>
-                  <td rowSpan={5}><strong>Boxy Fit</strong></td>
+                  <td rowSpan={5}>
+                    <strong>Boxy Fit</strong>
+                  </td>
                   <td>PP</td>
                   <td>56 cm</td>
                   <td>66 cm</td>

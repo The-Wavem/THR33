@@ -6,6 +6,8 @@ import {
   ShieldCheck, Flame, HelpCircle, Maximize2, X, ChevronLeft, ChevronRight 
 } from 'lucide-react';
 import ProductCard from '../../components/catalog/ProductCard';
+import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
+import largoDaOrdemBg from '@assets/images/largo-da-ordem-bg.jpeg';
 import { catalogService } from '../../services/catalogService';
 import { reviewService } from '../../services/reviewService';
 import { shippingService } from '../../services/shippingService';
@@ -227,7 +229,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
     if (product?.image) {
       return [{ id: 'img_0', url: product.image, colorId: '' }];
     }
-    return [{ id: 'img_0', url: 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=800', colorId: '' }];
+    return [{ id: 'img_0', url: largoDaOrdemBg, colorId: '' }];
   }, [product]);
 
   const images = useMemo(() => imagesGallery.map(img => img.url), [imagesGallery]);
@@ -529,10 +531,13 @@ export function ProdutoDetalhe({ onAddToCart }) {
                 &#10094;
               </button>
             )}
-            <img 
+            <ImageWithSkeleton 
               src={images[selectedImageIndex] || images[0]} 
               alt={`${product?.name || product?.title || 'Produto'} - Foto ${selectedImageIndex + 1}`} 
+              aspectRatio="3/4"
+              priority={true}
               className={styles.mainImage}
+              style={{ width: '100%', height: '100%' }}
             />
             {images.length > 1 && (
               <button 
@@ -564,7 +569,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
                 onClick={() => setSelectedImageIndex(idx)}
                 aria-label={`Selecionar foto ${idx + 1}`}
               >
-                <img src={img} alt={`Miniatura ${idx + 1}`} />
+                <ImageWithSkeleton src={img} alt={`Miniatura ${idx + 1}`} aspectRatio="3/4" style={{ width: '100%', height: '100%' }} />
               </button>
             ))}
           </div>
@@ -1065,7 +1070,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
                     onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(idx); }}
                     aria-label={`Ver foto ${idx + 1}`}
                   >
-                    <img src={img} alt={`Miniatura ${idx + 1}`} />
+                    <ImageWithSkeleton src={img} alt={`Miniatura ${idx + 1}`} aspectRatio="3/4" style={{ width: '100%', height: '100%' }} />
                   </button>
                 ))}
               </div>

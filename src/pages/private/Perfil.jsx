@@ -549,7 +549,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
               const hasCustomImg = item.image && !item.image.includes('photo-1521572267360-ee0c2909d518');
               const finalImg = hasCustomImg 
                 ? item.image 
-                : (catalogImg || item.image || item.imageUrl || item.thumbnail || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop');
+                : (catalogImg || item.image || item.imageUrl || item.thumbnail || '');
 
               return {
                 id: item.id || `item-${idx}`,

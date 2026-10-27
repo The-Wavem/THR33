@@ -1,50 +1,50 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Button from '../../components/ui/Button';
-import Container from '../../components/layout/Container';
+import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
+import largoDaOrdemBg from '@assets/images/largo-da-ordem-bg.jpeg';
+import largoDaOrdemBg2 from '@assets/images/largo-da-ordem-bg2.jpeg';
 import styles from './Hero.module.css';
 
 const DEFAULT_HERO_SLIDES = [
   {
-    id: "slide_1",
-    title: "A RUA COMO NOSSO ATELIÊ",
-    subtitle: "LEAK TWO — DROP EXCLUSIVO",
-    badge: "NOVO DROP",
-    bgImage: "https://images.unsplash.com/photo-1509631179647-0177331693ae?q=80&w=1600&auto=format&fit=crop",
+    id: 'slide_1',
+    title: 'A RUA COMO NOSSO ATELIÊ',
+    subtitle: 'LEAK TWO — DROP EXCLUSIVO',
+    badge: 'NOVO DROP',
+    bgImage: largoDaOrdemBg,
     active: true,
     buttons: [
-      { id: "btn_1", text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" },
-      { id: "btn_2", text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
+      { id: 'btn_1', text: 'VER LANÇAMENTOS', link: '/catalogo', variant: 'primary' },
+      { id: 'btn_2', text: 'CONHEÇA A MARCA', link: '/sobre', variant: 'secondary' }
     ]
   },
   {
-    id: "slide_2",
-    title: "FOR THE FEW.",
-    subtitle: "STREETWEAR URBANO & CURITIBANO",
-    badge: "COLEÇÃO 2026",
-    bgImage: "https://images.unsplash.com/photo-1523381210434-271e8be1f52b?q=80&w=1600&auto=format&fit=crop",
+    id: 'slide_2',
+    title: 'FOR THE FEW.',
+    subtitle: 'STREETWEAR URBANO & CURITIBANO',
+    badge: 'COLEÇÃO 2026',
+    bgImage: largoDaOrdemBg2,
     active: true,
     buttons: [
-      { id: "btn_1", text: "EXPLORAR CATÁLOGO", link: "/catalogo", variant: "primary" },
-      { id: "btn_2", text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
-    ]
-  },
-  {
-    id: "slide_3",
-    title: "CONCRETE PROCESS",
-    subtitle: "OVERSIZED & BOXY // EDIÇÕES LIMITADAS",
-    badge: "DROP LIMITADO",
-    bgImage: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?q=80&w=1600&auto=format&fit=crop",
-    active: true,
-    buttons: [
-      { id: "btn_1", text: "VER LANÇAMENTOS", link: "/lancamentos", variant: "primary" },
-      { id: "btn_2", text: "CONHEÇA O ATELIÊ", link: "/sobre", variant: "secondary" }
+      { id: 'btn_1', text: 'EXPLORAR CATÁLOGO', link: '/catalogo', variant: 'primary' },
+      { id: 'btn_2', text: 'CONHEÇA A MARCA', link: '/sobre', variant: 'secondary' }
     ]
   }
 ];
 
 const AUTOPLAY_DELAY = 5000; // 5 segundos por slide
+
+// Fallback circular brutalista para modelos 3D ou mídia em carregamento no Hero
+export function HeroBadgeFallback() {
+  return (
+    <div className={styles.modelFallbackPulse} aria-hidden="true">
+      <div className={styles.modelFallbackRing} />
+      <span className={styles.modelFallbackCode}>THR33 // 3D</span>
+    </div>
+  );
+}
 
 // Animação refinada para o background do slide
 const bgVariants = {
@@ -95,7 +95,7 @@ const textVariants = {
   }
 };
 
-export function Hero({ bannerData }) {
+export function Hero({ bannerData, isLoading = false, children }) {
   const [slides, setSlides] = useState(DEFAULT_HERO_SLIDES);
   const [currentSlide, setCurrentSlide] = useState(0);
   const [direction, setDirection] = useState(1);
@@ -107,46 +107,44 @@ export function Hero({ bannerData }) {
     if (!bannerData) return;
 
     if (Array.isArray(bannerData.slides) && bannerData.slides.length > 0) {
-      const active = bannerData.slides.filter(s => s.active !== false);
+      const active = bannerData.slides.filter((s) => s.active !== false);
       if (active.length > 1) {
         setSlides(active);
       } else if (active.length === 1) {
-        // Se houver apenas 1 slide no Firestore, adiciona os slides padrão complementares para manter a rotação
-        const remaining = DEFAULT_HERO_SLIDES.filter(ds => ds.id !== active[0].id);
+        const remaining = DEFAULT_HERO_SLIDES.filter((ds) => ds.id !== active[0].id);
         setSlides([active[0], ...remaining]);
       }
     } else if (Array.isArray(bannerData) && bannerData.length > 0) {
-      const active = bannerData.filter(s => s.active !== false);
+      const active = bannerData.filter((s) => s.active !== false);
       if (active.length > 1) {
         setSlides(active);
       } else if (active.length === 1) {
-        const remaining = DEFAULT_HERO_SLIDES.filter(ds => ds.id !== active[0].id);
+        const remaining = DEFAULT_HERO_SLIDES.filter((ds) => ds.id !== active[0].id);
         setSlides([active[0], ...remaining]);
       }
     } else if (bannerData.title || bannerData.mediaUrl || bannerData.bgImage) {
       setSlides([
         {
-          id: bannerData.id || "hero_banner_1",
-          title: bannerData.title || "THR33 STREETWEAR",
-          subtitle: bannerData.subtitle || "A RUA COMO NOSSO ATELIÊ",
-          badge: bannerData.badge || "DESTAQUE",
+          id: bannerData.id || 'hero_banner_1',
+          title: bannerData.title || 'THR33 STREETWEAR',
+          subtitle: bannerData.subtitle || 'A RUA COMO NOSSO ATELIÊ',
+          badge: bannerData.badge || 'DESTAQUE',
           bgImage: bannerData.mediaUrl || bannerData.bgImage || DEFAULT_HERO_SLIDES[0].bgImage,
-          type: bannerData.type || "image",
+          type: bannerData.type || 'image',
           mediaUrl: bannerData.mediaUrl,
           active: true,
           buttons: bannerData.buttons || [
-            { id: "btn_1", text: "VER CATÁLOGO", link: "/catalogo", variant: "primary" }
+            { id: 'btn_1', text: 'VER CATÁLOGO', link: '/catalogo', variant: 'primary' }
           ]
         },
-        DEFAULT_HERO_SLIDES[1],
-        DEFAULT_HERO_SLIDES[2]
+        DEFAULT_HERO_SLIDES[1]
       ]);
     }
   }, [bannerData]);
 
   // Pré-carrega imagens para transição instantânea
   useEffect(() => {
-    slides.forEach(s => {
+    slides.forEach((s) => {
       const url = s.bgImage || s.mediaUrl;
       if (url && !s.type?.includes('video')) {
         const img = new Image();
@@ -197,15 +195,13 @@ export function Hero({ bannerData }) {
   };
 
   const slide = slides[currentSlide] || slides[0];
-  const isVideo = slide.type === 'video' || (slide.mediaUrl && slide.mediaUrl.match(/\.(mp4|webm|ogg)$/i));
+  const isVideo =
+    slide.type === 'video' || (slide.mediaUrl && slide.mediaUrl.match(/\.(mp4|webm|ogg)$/i));
 
   return (
-    <section 
-      className={styles.heroSection} 
-      aria-label="Destaques THR33"
-    >
+    <section className={styles.heroSection} aria-label="Destaques THR33">
       {/* Área Arrastável com AnimatePresence */}
-      <motion.div 
+      <motion.div
         className={styles.dragWrapper}
         drag="x"
         dragConstraints={{ left: 0, right: 0 }}
@@ -227,35 +223,41 @@ export function Hero({ bannerData }) {
               style={{ backgroundColor: '#0a0a0a' }}
             >
               {!isVideo && (slide.bgImage || slide.mediaUrl) && (
-                <img
+                <ImageWithSkeleton
                   src={slide.bgImage || slide.mediaUrl}
                   alt={slide.title || 'Destaque THR33'}
-                  fetchPriority="high"
-                  decoding="sync"
+                  priority={true}
+                  wrapperClassName={styles.heroImageSkeletonWrapper}
                   style={{
                     position: 'absolute',
                     inset: 0,
                     width: '100%',
-                    height: '100%',
-                    objectFit: 'cover'
+                    height: '100%'
                   }}
                 />
               )}
               {isVideo && (
-                <video 
-                  src={slide.mediaUrl || slide.bgImage} 
-                  autoPlay 
-                  loop 
-                  muted 
-                  playsInline 
+                <video
+                  src={slide.mediaUrl || slide.bgImage}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
                   style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                 />
               )}
               <div className={styles.overlay} />
             </motion.div>
 
+            {/* Suporte a Modelo 3D opcional no Hero com Suspense e Pulso Brutalista */}
+            {children && (
+              <div className={styles.modelWrapper}>
+                <Suspense fallback={<HeroBadgeFallback />}>{children}</Suspense>
+              </div>
+            )}
+
             {/* Conteúdo Textual do Slide */}
-            <motion.div 
+            <motion.div
               variants={textVariants}
               initial="initial"
               animate="animate"
@@ -278,20 +280,20 @@ export function Hero({ bannerData }) {
               {Array.isArray(slide.buttons) && slide.buttons.length > 0 ? (
                 <div className={styles.actions}>
                   {slide.buttons.map((btn, bIdx) => (
-                    <Button 
+                    <Button
                       key={btn.id || bIdx}
                       variant={btn.variant === 'secondary' ? 'secondary' : 'primary'}
                       size="md"
-                      to={btn.link || "/catalogo"}
+                      to={btn.link || '/catalogo'}
                     >
-                      {btn.text || "VER MAIS"}
+                      {btn.text || 'VER MAIS'}
                     </Button>
                   ))}
                 </div>
               ) : slide.cta || slide.link ? (
                 <div className={styles.actions}>
-                  <Button variant="primary" size="md" to={slide.link || "/catalogo"}>
-                    {slide.cta || "VER LANÇAMENTOS"}
+                  <Button variant="primary" size="md" to={slide.link || '/catalogo'}>
+                    {slide.cta || 'VER LANÇAMENTOS'}
                   </Button>
                 </div>
               ) : null}
@@ -303,7 +305,7 @@ export function Hero({ bannerData }) {
       {/* Botões de Navegação Lateral */}
       {slides.length > 1 && (
         <>
-          <button 
+          <button
             className={`${styles.navArrow} ${styles.navArrowPrev}`}
             onClick={prevSlide}
             onMouseEnter={() => setIsHovered(true)}
@@ -313,7 +315,7 @@ export function Hero({ bannerData }) {
             <ChevronLeft size={22} />
           </button>
 
-          <button 
+          <button
             className={`${styles.navArrow} ${styles.navArrowNext}`}
             onClick={nextSlide}
             onMouseEnter={() => setIsHovered(true)}
@@ -348,7 +350,7 @@ export function Hero({ bannerData }) {
                         animate={{ scaleX: isHovered ? 0 : 1 }}
                         transition={{
                           duration: AUTOPLAY_DELAY / 1000,
-                          ease: "linear"
+                          ease: 'linear'
                         }}
                         style={{ originX: 0 }}
                       />
@@ -364,8 +366,14 @@ export function Hero({ bannerData }) {
       {/* FAIXA MARQUEE STREETWEAR CONTÍNUA */}
       <div className={styles.marqueeStrip} aria-hidden="true">
         <div className={styles.marqueeTrack}>
-          <span>THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSO ATELIÊ // TIRAGENS LIMITADAS // </span>
-          <span>THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSO ATELIÊ // TIRAGENS LIMITADAS // </span>
+          <span>
+            THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSO
+            ATELIÊ // TIRAGENS LIMITADAS //{' '}
+          </span>
+          <span>
+            THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSO
+            ATELIÊ // TIRAGENS LIMITADAS //{' '}
+          </span>
         </div>
       </div>
     </section>

@@ -4,6 +4,7 @@ import { Check, ShoppingBag, ShieldCheck, ArrowLeft, Package } from 'lucide-reac
 import { catalogService } from '../../services/catalogService';
 import { GIFTS_DATA } from '../../data/giftsData';
 import { useCart } from '../../context/CartContext';
+import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
 import styles from './BrindeDetalhe.module.css';
 
 const DEFAULT_GIFT_VALUES = [150, 300, 500, 1000];
@@ -47,17 +48,17 @@ export function BrindeDetalhe() {
         let item = await catalogService.getProductById(id);
         if (!item) {
           const gifts = await catalogService.getGifts();
-          item = gifts.find(p => p.id === id || p.slug === id) || null;
+          item = gifts.find((p) => p.id === id || p.slug === id) || null;
         }
         if (!item) {
-          item = GIFTS_DATA.find(g => g.id === id || g.slug === id) || null;
+          item = GIFTS_DATA.find((g) => g.id === id || g.slug === id) || null;
         }
         if (item) {
           setGiftItem(item);
           setSelectedValue(item.price ? Number(item.price) : 150);
         }
       } catch (err) {
-        console.error("Erro ao carregar brinde:", err);
+        console.error('Erro ao carregar brinde:', err);
       } finally {
         setLoading(false);
       }
@@ -69,7 +70,10 @@ export function BrindeDetalhe() {
     return (
       <main className={styles.container}>
         <div style={{ textAlign: 'center', padding: '6rem 1rem', color: 'var(--text-secondary)' }}>
-          <Package size={32} style={{ animation: 'spin 1.5s linear infinite', margin: '0 auto 1rem' }} />
+          <Package
+            size={32}
+            style={{ animation: 'spin 1.5s linear infinite', margin: '0 auto 1rem' }}
+          />
           <p>Carregando item no Firestore...</p>
         </div>
       </main>
@@ -80,9 +84,31 @@ export function BrindeDetalhe() {
     return (
       <main className={styles.container}>
         <div style={{ textAlign: 'center', padding: '6rem 1rem' }}>
-          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', marginBottom: '1rem' }}>ITEM NÃO ENCONTRADO</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>O vale ou brinde que você procura não está mais disponível.</p>
-          <Link to="/brindes" style={{ background: 'var(--text-primary)', color: 'var(--bg-primary)', padding: '0.8rem 1.5rem', fontWeight: 800, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+          <h2
+            style={{
+              fontFamily: 'var(--font-heading)',
+              fontSize: '1.8rem',
+              marginBottom: '1rem'
+            }}
+          >
+            ITEM NÃO ENCONTRADO
+          </h2>
+          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
+            O vale ou brinde que você procura não está mais disponível.
+          </p>
+          <Link
+            to="/brindes"
+            style={{
+              background: 'var(--text-primary)',
+              color: 'var(--bg-primary)',
+              padding: '0.8rem 1.5rem',
+              fontWeight: 800,
+              textDecoration: 'none',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem'
+            }}
+          >
             <ArrowLeft size={16} />
             <span>VOLTAR A BRINDES & VALES</span>
           </Link>
@@ -99,7 +125,7 @@ export function BrindeDetalhe() {
       name: isGiftCard ? `${giftItem.name} (R$ ${selectedValue})` : giftItem.name,
       price: isGiftCard ? selectedValue : Number(giftItem.price || 0),
       image: giftItem.image,
-      fit: isGiftCard ? `Vale Digital R$ ${selectedValue}` : "Acessório Oficial",
+      fit: isGiftCard ? `Vale Digital R$ ${selectedValue}` : 'Acessório Oficial',
       recipientName: recipientName.trim() || undefined,
       recipientEmail: recipientEmail.trim() || undefined,
       giftMessage: giftMessage.trim() || undefined
@@ -130,8 +156,15 @@ export function BrindeDetalhe() {
         <section className={styles.imageSection}>
           <div className={styles.imageCard}>
             <span className={styles.badge}>{isGiftCard ? 'VALE DIGITAL' : 'BRINDE OFICIAL'}</span>
-            <img src={giftItem.image} alt={giftItem.name} className={styles.mainImage} />
-            
+            <ImageWithSkeleton
+              src={giftItem.image}
+              alt={giftItem.name}
+              aspectRatio="4/5"
+              priority={true}
+              className={styles.mainImage}
+              style={{ width: '100%', height: '100%' }}
+            />
+
             {isGiftCard && (
               <div className={styles.cardOverlayPreview}>
                 <div className={styles.previewHeader}>
@@ -142,7 +175,9 @@ export function BrindeDetalhe() {
                   R$ {selectedValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </div>
                 <div className={styles.previewRecipient}>
-                  {recipientName ? `PARA: ${recipientName.toUpperCase()}` : 'CARTÃO DIGITAL THR33'}
+                  {recipientName
+                    ? `PARA: ${recipientName.toUpperCase()}`
+                    : 'CARTÃO DIGITAL THR33'}
                 </div>
                 <div className={styles.previewFooterNote}>
                   CÓDIGO DIGITAL EXCLUSIVO • SEM VALIDADE
@@ -155,7 +190,9 @@ export function BrindeDetalhe() {
         {/* FORMULÁRIO DE SELEÇÃO E COMPRA */}
         <section className={styles.infoSection}>
           <div className={styles.headerInfo}>
-            <span className={styles.typeTag}>{isGiftCard ? 'DIGITAL GIFT CARD' : 'ACESSÓRIO OFICIAL'}</span>
+            <span className={styles.typeTag}>
+              {isGiftCard ? 'DIGITAL GIFT CARD' : 'ACESSÓRIO OFICIAL'}
+            </span>
             <h1 className={styles.title}>{giftItem.name}</h1>
             <p className={styles.description}>{giftItem.description}</p>
           </div>
@@ -169,7 +206,9 @@ export function BrindeDetalhe() {
                   <button
                     key={val}
                     type="button"
-                    className={`${styles.valueChip} ${!isCustomMode && selectedValue === val ? styles.activeValue : ''}`}
+                    className={`${styles.valueChip} ${
+                      !isCustomMode && selectedValue === val ? styles.activeValue : ''
+                    }`}
                     onClick={() => handlePresetSelect(val)}
                   >
                     R$ {val.toLocaleString('pt-BR')}
@@ -182,7 +221,7 @@ export function BrindeDetalhe() {
                 <label htmlFor="customGiftVal">OUTRO VALOR LIVRE (R$ 50 A R$ 5.000):</label>
                 <div className={styles.customInputRow}>
                   <span className={styles.currencyPrefix}>R$</span>
-                  <input 
+                  <input
                     id="customGiftVal"
                     type="number"
                     min="50"
@@ -193,7 +232,9 @@ export function BrindeDetalhe() {
                     className={styles.customValInput}
                   />
                 </div>
-                <small>O saldo será creditado integralmente no código digital gerado para resgate.</small>
+                <small>
+                  O saldo será creditado integralmente no código digital gerado para resgate.
+                </small>
               </div>
             </div>
           )}
@@ -215,7 +256,7 @@ export function BrindeDetalhe() {
                 </div>
 
                 <div className={styles.fieldGroup}>
-                  <label htmlFor="recipientEmail">E-MAIL DO PRESENTEDO (OPCIONAL):</label>
+                  <label htmlFor="recipientEmail">E-MAIL DO PRESENTEADO (OPCIONAL):</label>
                   <input
                     id="recipientEmail"
                     type="email"
@@ -226,7 +267,9 @@ export function BrindeDetalhe() {
                 </div>
 
                 <div className={styles.fieldGroup}>
-                  <label htmlFor="giftMessage">MENSAGEM PERSONALIZADA NO CARTÃO (OPCIONAL):</label>
+                  <label htmlFor="giftMessage">
+                    MENSAGEM PERSONALIZADA NO CARTÃO (OPCIONAL):
+                  </label>
                   <textarea
                     id="giftMessage"
                     rows="3"
@@ -244,7 +287,11 @@ export function BrindeDetalhe() {
             <div className={styles.totalPrice}>
               <span>VALOR FINAL:</span>
               <strong>
-                R$ {(isGiftCard ? selectedValue : Number(giftItem.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                R${' '}
+                {(isGiftCard ? selectedValue : Number(giftItem.price || 0)).toLocaleString(
+                  'pt-BR',
+                  { minimumFractionDigits: 2 }
+                )}
               </strong>
             </div>
 
@@ -269,7 +316,10 @@ export function BrindeDetalhe() {
 
           <div className={styles.guaranteeNotice}>
             <ShieldCheck size={16} />
-            <span>Vales digitais são entregues instantaneamente via e-mail e não possuem prazo de expiração.</span>
+            <span>
+              Vales digitais são entregues instantaneamente via e-mail e não possuem prazo de
+              expiração.
+            </span>
           </div>
 
           <div className={styles.termsList}>

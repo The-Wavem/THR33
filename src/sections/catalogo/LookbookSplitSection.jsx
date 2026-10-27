@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import LookbookItem from '../../components/catalog/LookbookItem';
+import LookbookSplitSkeleton from '../../components/catalog/LookbookSplitSkeleton';
 import styles from './LookbookSplitSection.module.css';
 
 function LookbookSplitRow({
@@ -134,7 +135,8 @@ function LookbookSplitRow({
 export function LookbookSplitSection({
   products = [],
   activeDiscounts = [],
-  startIndex = 0
+  startIndex = 0,
+  loading = false
 }) {
   const [hoveredSide, setHoveredSide] = useState(null); // 'left' | 'right' | null
 
@@ -147,6 +149,10 @@ export function LookbookSplitSection({
     }
     return pairs;
   }, [products]);
+
+  if (loading) {
+    return <LookbookSplitSkeleton rows={2} startIndex={startIndex} />;
+  }
 
   if (!productPairs.length) {
     return null;
