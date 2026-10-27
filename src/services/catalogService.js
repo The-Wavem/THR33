@@ -1,3 +1,6 @@
+import { PRODUCTS_DATA } from '../data/productsData';
+import { GIFTS_DATA } from '../data/giftsData';
+import { currentDropConfig } from '../data/dropConfig';
 import { 
   collection, 
   getDocs, 
@@ -141,8 +144,8 @@ export const getAllProducts = async () => {
       });
       return list;
     } catch (e) {
-      console.error("Erro ao buscar produtos no Firestore:", e);
-      return [];
+      console.warn("Aviso: Falha ao conectar ao Firestore. Ativando catálogo de contingência local:", e.message);
+      return PRODUCTS_DATA;
     }
   }
 };
@@ -236,14 +239,53 @@ export const getReleases = async () => {
  */
 export const getGifts = async () => {
   try {
+    // 1. Tenta buscar da coleção dedicada 'gifts'
+    try {
+      const giftsSnap = await getDocs(collection(db, 'gifts'));
+      if (!giftsSnap.empty) {
+        const list = [];
+        giftsSnap.forEach(d => list.push({ id: d.id, ...d.data() }));
+        if (list.length > 0) return list;
+      }
+    } catch (_) {}
+
+    // 2. Tenta buscar produtos com type 'brinde' ou category 'brinde'/'gift-card'
     const q = query(collection(db, 'products'), where('type', '==', 'brinde'));
     const snap = await getDocs(q);
     const list = [];
     snap.forEach(d => list.push({ id: d.id, ...d.data() }));
-    return list;
+
+    if (list.length > 0) return list;
+
+    // 3. Fallback de contingência caso Firestore não possua brindes cadastrados
+    return GIFTS_DATA;
   } catch (err) {
-    console.error("Erro ao buscar brindes:", err);
-    return [];
+    console.warn("Aviso ao buscar brindes no Firestore. Utilizando contingência local:", err.message);
+    return GIFTS_DATA;
+  }
+};
+
+/**
+ * Consulta a configuração atual do Drop ativo no Firestore (com fallback para dropConfig.js)
+ */
+export const getDropConfig = async () => {
+  try {
+    const [dropSnap, settingsSnap] = await Promise.all([
+      getDoc(doc(db, 'settings', 'drop')).catch(() => null),
+      getDoc(doc(db, 'drop_settings', 'current')).catch(() => null)
+    ]);
+
+    const activeSnap = (dropSnap && dropSnap.exists()) ? dropSnap : (settingsSnap && settingsSnap.exists() ? settingsSnap : null);
+    if (activeSnap) {
+      return {
+        ...currentDropConfig,
+        ...activeSnap.data()
+      };
+    }
+    return currentDropConfig;
+  } catch (err) {
+    console.warn("Aviso ao buscar configuração do drop no Firestore. Utilizando contingência:", err.message);
+    return currentDropConfig;
   }
 };
 

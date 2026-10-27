@@ -307,10 +307,12 @@ export function Sobre() {
           ========================================================================= */}
       <section ref={heroSectionRef} className={styles.heroParallaxSection}>
         {/* IMAGEM DE FUNDO COM SCROLL PARALLAX VISÍVEL */}
-        <div className={styles.parallaxBgLayer}>
+        <div className={styles.parallaxBgLayer} style={{ backgroundColor: '#080808' }}>
           <motion.img
             src={largoDaOrdemBg}
             alt="Vielas e paralelepípedos de Curitiba à noite"
+            loading="lazy"
+            decoding="async"
             className={styles.parallaxBgImage}
             style={{ y: heroBgParallaxY }}
           />
@@ -352,10 +354,12 @@ export function Sobre() {
       <div className={styles.mainContentContainer}>
         {/* HISTÓRIA: A RUA COMO NOSSO ATELIÊ COM PARALLAX NO REEL */}
         <section ref={atelierSectionRef} className={styles.atelierParallaxSection}>
-          <div className={styles.parallaxBgLayer}>
+          <div className={styles.parallaxBgLayer} style={{ backgroundColor: '#080808' }}>
             <motion.img
               src={largoDaOrdemBg2}
               alt="Concreto e arquitetura urbana de Curitiba"
+              loading="lazy"
+              decoding="async"
               className={styles.parallaxBgImage}
               style={{ y: atelierBgParallaxY }}
             />

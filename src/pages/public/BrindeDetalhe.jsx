@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Check, ShoppingBag, ShieldCheck, ArrowLeft, Package } from 'lucide-react';
 import { catalogService } from '../../services/catalogService';
+import { GIFTS_DATA } from '../../data/giftsData';
 import { useCart } from '../../context/CartContext';
 import styles from './BrindeDetalhe.module.css';
 
@@ -45,8 +46,11 @@ export function BrindeDetalhe() {
       try {
         let item = await catalogService.getProductById(id);
         if (!item) {
-          const all = await catalogService.getAllProducts();
-          item = all.find(p => p.id === id || p.slug === id || p.type === 'brinde') || null;
+          const gifts = await catalogService.getGifts();
+          item = gifts.find(p => p.id === id || p.slug === id) || null;
+        }
+        if (!item) {
+          item = GIFTS_DATA.find(g => g.id === id || g.slug === id) || null;
         }
         if (item) {
           setGiftItem(item);

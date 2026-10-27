@@ -1,6 +1,7 @@
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Camera, ArrowUpRight } from 'lucide-react';
+import ImageWithSkeleton from '../ui/ImageWithSkeleton';
 import { fadeInUp, staggerContainer } from '../../utils/motionVariants';
 import styles from './SocialCommunityGrid.module.css';
 
@@ -67,7 +68,13 @@ export function SocialCommunityGrid() {
             transition={{ duration: 0.2 }}
             className={`${styles.bentoCell} ${idx === 0 ? styles.bentoCellLarge : ''}`}
           >
-            <img src={post.image} alt={post.tag} className={styles.cellImg} />
+            <ImageWithSkeleton
+              src={post.image} 
+              alt={post.tag} 
+              aspectRatio="1/1"
+              className={styles.cellImg}
+              style={{ width: '100%', height: '100%' }}
+            />
             <div className={styles.cellOverlay} />
             <div className={styles.cellFooter}>
               <span className={styles.cellTag}>{post.tag}</span>

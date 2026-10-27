@@ -4,6 +4,7 @@ import { Heart } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
 import { analyticsService } from '../../services/analyticsService';
 import { formatFitBadgeLabel, formatCategoryBadgeLabel } from '../../utils/fitUtils';
+import ImageWithSkeleton from '../ui/ImageWithSkeleton';
 import styles from './ProductCard.module.css';
 
 export function ProductCard({ product }) {
@@ -61,9 +62,6 @@ export function ProductCard({ product }) {
           <span className={`${styles.badge} ${hasFreeShipping ? styles.promoBadgeWithRibbon : ''}`}>{product.customBadge.trim()}</span>
         ) : null}
         
-        {/* Placeholder com Shimmer enquanto a imagem carrega */}
-        {!imageLoaded && <div className={styles.imagePlaceholderShimmer} />}
-
         {/* Link direto da Imagem para a PDP com troca suave ao passar o mouse */}
         <Link 
           to={`/produto/${productId}`} 
@@ -71,11 +69,10 @@ export function ProductCard({ product }) {
           onClick={handleTrackClick}
           aria-label={`Ver detalhes de ${product.name}`}
         >
-          <img 
+          <ImageWithSkeleton 
             src={primaryImage} 
             alt={product.name} 
-            loading="lazy"
-            decoding="async"
+            aspectRatio="3/4"
             onLoad={() => setImageLoaded(true)}
             className={`${styles.image} ${styles.primaryImage} ${imageLoaded ? styles.imageVisible : styles.imageHidden}`} 
           />

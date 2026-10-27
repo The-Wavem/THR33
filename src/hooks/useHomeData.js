@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getVitrineSettings, getFeaturedProducts } from '../services/catalogService';
 import { PRODUCTS_DATA } from '../data/productsData';
+import { heroSlidesData, carouselSlides } from '../data/homeData';
 
 /**
  * Hook customizado para gerenciar a camada de dados da Home (Fase 2)
@@ -32,7 +33,15 @@ export function useHomeData(limitProducts = 8) {
         })
       ]);
 
-      setVitrine(vitrineData || null);
+      // Monta dados consolidados da vitrine com fallback seguro para homeData.js
+      const consolidatedVitrine = vitrineData || {
+        hero: { slides: heroSlidesData },
+        bentoGrid: [],
+        sectionTag: "COLEÇÃO OFICIAL // ATELIÊ CWB",
+        sectionTitle: "A RUA COMO NOSSO ATELIÊ"
+      };
+
+      setVitrine(consolidatedVitrine);
       setFeaturedProducts(Array.isArray(productsData) && productsData.length > 0 ? productsData : PRODUCTS_DATA);
     } catch (err) {
       console.error('Erro ao carregar dados da Home:', err);

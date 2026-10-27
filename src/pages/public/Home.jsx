@@ -10,16 +10,6 @@ import styles from './Home.module.css';
 export function Home() {
   const { vitrine, featuredProducts, loading } = useHomeData(8);
 
-  if (loading) {
-    return (
-      <main className={styles.homeContainer}>
-        <Container size="default" style={{ padding: '4rem 0' }}>
-          <ProductCardSkeleton count={4} />
-        </Container>
-      </main>
-    );
-  }
-
   return (
     <main className={styles.homeContainer}>
       <Hero bannerData={vitrine?.hero} />
@@ -28,7 +18,7 @@ export function Home() {
         sectionTag={vitrine?.sectionTag}
         sectionTitle={vitrine?.sectionTitle}
       />
-      <BestSellers products={featuredProducts} />
+      <BestSellers products={featuredProducts} isLoading={loading} />
     </main>
   );
 }

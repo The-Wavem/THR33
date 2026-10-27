@@ -217,15 +217,30 @@ export function Hero({ bannerData }) {
             key={`hero-slide-${slide.id || currentSlide}`}
             className={styles.slideMotionContainer}
           >
-            {/* Background do Slide com Zoom Suave */}
+            {/* Background do Slide com Zoom Suave & Prioridade LCP */}
             <motion.div
               variants={bgVariants}
               initial="initial"
               animate="animate"
               exit="exit"
               className={styles.slideBackground}
-              style={{ backgroundImage: !isVideo ? `url(${slide.bgImage || slide.mediaUrl})` : 'none' }}
+              style={{ backgroundColor: '#0a0a0a' }}
             >
+              {!isVideo && (slide.bgImage || slide.mediaUrl) && (
+                <img
+                  src={slide.bgImage || slide.mediaUrl}
+                  alt={slide.title || 'Destaque THR33'}
+                  fetchPriority="high"
+                  decoding="sync"
+                  style={{
+                    position: 'absolute',
+                    inset: 0,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover'
+                  }}
+                />
+              )}
               {isVideo && (
                 <video 
                   src={slide.mediaUrl || slide.bgImage} 

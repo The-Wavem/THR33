@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Camera } from 'lucide-react';
+import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
 import styles from './BentoGrid.module.css';
 
 const DEFAULT_BENTO_CARDS = [
@@ -57,10 +58,12 @@ export function BentoGrid({ gridItems = [], sectionTag, sectionTitle }) {
               key={item.id || index} 
               className={`${styles.card} ${isLarge ? styles.cardLarge : ''}`}
             >
-              <img 
+              <ImageWithSkeleton
                 src={imgSrc} 
                 alt={item.title || 'Destaque THR33'} 
+                aspectRatio={isLarge ? '16/10' : '4/5'}
                 className={styles.cardImage}
+                style={{ width: '100%', height: '100%' }}
               />
               <div className={styles.cardOverlay}>
                 <div>

@@ -416,7 +416,7 @@ export function Catalogo() {
         <section className={styles.mainContent}>
           {loadingProducts || isLoading ? (
             <div className={styles.splitSkeletonGrid}>
-              {Array.from({ length: Math.min(itemsPerPage, 4) }).map((_, idx) => (
+              {Array.from({ length: 8 }).map((_, idx) => (
                 <ProductCardSkeleton key={idx} />
               ))}
             </div>

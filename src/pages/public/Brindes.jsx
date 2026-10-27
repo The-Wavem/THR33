@@ -1,3 +1,4 @@
+import { GIFTS_DATA } from '../../data/giftsData';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Gift, Sparkles, ArrowRight, Package } from 'lucide-react';
@@ -13,9 +14,8 @@ export function Brindes() {
     async function loadGifts() {
       setLoading(true);
       try {
-        const all = await catalogService.getAllProducts();
-        const gifts = all.filter(p => p.type === 'brinde' || p.category === 'brinde' || p.category === 'gift-card');
-        setGiftsList(gifts);
+        const gifts = await catalogService.getGifts();
+        setGiftsList(Array.isArray(gifts) && gifts.length > 0 ? gifts : GIFTS_DATA);
       } catch (err) {
         console.error("Erro ao carregar brindes:", err);
       } finally {
