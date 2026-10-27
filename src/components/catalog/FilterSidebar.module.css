@@ -1,41 +1,127 @@
-.sidebar {
-  width: 260px;
+/* ============================================================
+   DRAWER LATERAL UNIFICADO (DESKTOP & MOBILE)
+   ============================================================ */
+.drawerRoot {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+}
+
+.drawerRootOpen {
+  pointer-events: auto;
+}
+
+.backdrop {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  transition: opacity 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 1000;
+}
+
+.backdropOpen {
+  opacity: 1;
+}
+
+.drawer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+  height: 100dvh;
+  width: 340px;
+  max-width: 88vw;
+  background-color: #0b0b0b;
+  border-right: 1px solid rgba(255, 255, 255, 0.14);
+  display: flex;
+  flex-direction: column;
+  z-index: 1001;
+  transform: translateX(-100%);
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 20px 0 50px rgba(0, 0, 0, 0.92);
+  overflow: hidden;
+}
+
+.open {
+  transform: translateX(0);
+}
+
+.drawerHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.15rem 1.35rem;
+  border-bottom: 1px solid var(--border-color);
+  background-color: #080808;
+  flex-shrink: 0;
+}
+
+.drawerTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.drawerTitle {
+  font-family: var(--font-heading);
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--text-primary);
+  margin: 0;
+  text-transform: uppercase;
+}
+
+.drawerActiveBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  font-size: 0.68rem;
+  font-weight: 800;
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+}
+
+.drawerCloseBtn {
+  min-width: 40px;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color var(--transition-fast), transform var(--transition-fast);
+}
+
+.drawerCloseBtn:hover {
+  color: var(--text-primary);
+  transform: scale(1.08);
+}
+
+.drawerBody {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.5rem 1.35rem;
   display: flex;
   flex-direction: column;
   gap: 1.75rem;
-  padding-right: 1.5rem;
-  border-right: 1px solid var(--border-color);
-}
-
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.title {
-  font-family: var(--font-heading);
-  font-size: 1.1rem;
-  letter-spacing: 2px;
-}
-
-.clearBtn {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  letter-spacing: 1px;
-  text-decoration: underline;
-  transition: color var(--transition-fast);
-}
-
-.clearBtn:hover {
-  color: var(--text-primary);
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Seção de Busca */
 .searchSection {
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.65rem;
   padding-bottom: 1.5rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -49,7 +135,7 @@
 
 .searchIcon {
   position: absolute;
-  left: 0.65rem;
+  left: 0.75rem;
   color: var(--text-muted);
   pointer-events: none;
 }
@@ -59,8 +145,8 @@
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 0.55rem 2rem 0.55rem 2.1rem;
-  font-size: 0.8rem;
+  padding: 0.65rem 2.1rem 0.65rem 2.25rem;
+  font-size: 0.82rem;
   font-family: var(--font-body);
   outline: none;
   transition: border-color var(--transition-fast);
@@ -85,66 +171,47 @@
   color: var(--text-primary);
 }
 
-.btnApplySearch {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  width: 100%;
-  background-color: #000000;
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  padding: 0.5rem 0.8rem;
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.btnApplySearchHighlight {
-  background-color: var(--text-primary);
-  color: var(--bg-primary);
-  border-color: var(--text-primary);
-}
-
-.btnApplySearch:hover {
-  transform: translateY(-1px);
-  opacity: 0.95;
-}
-
 /* Grupos de Filtros */
 .filterGroup {
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0.85rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.filterGroup:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
 }
 
 .groupLabel {
+  font-family: var(--font-mono, 'Space Grotesk', sans-serif);
   font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 1.8px;
+  letter-spacing: 2px;
   color: var(--text-secondary);
+  text-transform: uppercase;
 }
 
 .optionsList {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 0.55rem;
+  gap: 0.65rem;
 }
 
 .optionBtn {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.7rem;
   font-size: 0.82rem;
   color: var(--text-muted);
   letter-spacing: 0.8px;
   transition: color var(--transition-fast);
   text-align: left;
   width: 100%;
+  padding: 0.2rem 0;
   cursor: pointer;
 }
 
@@ -159,8 +226,8 @@
 
 /* Checkbox Minimalista Streetwear */
 .checkboxBox {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
   border: 1px solid var(--border-color);
   background-color: var(--bg-card);
   display: flex;
@@ -180,19 +247,19 @@
 }
 
 .checkboxInner {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   background-color: var(--text-primary);
 }
 
 .optionLabelText {
-  line-height: 1;
+  line-height: 1.2;
 }
 
 /* Grade de Tamanhos */
 .gridSizes {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 0.45rem;
 }
 
@@ -200,9 +267,9 @@
   border: 1px solid var(--border-color);
   background-color: var(--bg-card);
   color: var(--text-secondary);
-  padding: 0.45rem 0.2rem;
-  font-size: 0.75rem;
-  font-weight: 600;
+  padding: 0.55rem 0.2rem;
+  font-size: 0.76rem;
+  font-weight: 700;
   text-align: center;
   transition: all var(--transition-fast);
   cursor: pointer;
@@ -224,12 +291,12 @@
 .sortOptionsList {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.55rem;
 }
 
 .radioBox {
-  width: 14px;
-  height: 14px;
+  width: 15px;
+  height: 15px;
   border-radius: 50%;
   border: 1px solid var(--border-color);
   background-color: var(--bg-card);
@@ -245,134 +312,15 @@
 }
 
 .radioInner {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background-color: var(--text-primary);
 }
 
-.mobileApplyBtn {
-  display: none;
-}
-
-@media (max-width: 900px) {
-  .mobileApplyBtn {
-    display: block;
-    width: 100%;
-    margin-top: 1.5rem;
-    background-color: var(--text-primary);
-    color: var(--bg-primary);
-    padding: 0.85rem;
-    font-size: 0.75rem;
-    font-weight: 800;
-    letter-spacing: 1.5px;
-    cursor: pointer;
-  }
-}
-
-/* ============================================================
-   MOBILE BOTTOM SHEET / DRAWER DE FILTROS
-   ============================================================ */
-.mobileDrawerWrapper {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  height: 100dvh;
-  z-index: 99999;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-
-.backdrop {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.85);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  z-index: 100000;
-}
-
-.mobileDrawer {
-  position: relative;
-  width: 100%;
-  max-width: 600px;
-  max-height: 85dvh;
-  background-color: #0e0e0e;
-  border-top: 1px solid var(--border-color);
-  border-top-left-radius: 14px;
-  border-top-right-radius: 14px;
-  display: flex;
-  flex-direction: column;
-  z-index: 100001;
-  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.9);
-  overflow: hidden;
-}
-
-.drawerHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.85rem 1.25rem;
-  border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
-}
-
-.drawerTitleRow {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-}
-
-.drawerTitle {
-  font-family: var(--font-heading);
-  font-size: 0.95rem;
-  font-weight: 800;
-  letter-spacing: 2px;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.drawerActiveBadge {
-  font-size: 0.65rem;
-  font-weight: 800;
-  letter-spacing: 0.5px;
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--text-primary);
-  padding: 0.15rem 0.5rem;
-  border-radius: 2px;
-}
-
-.drawerCloseBtn {
-  min-width: 44px;
-  min-height: 44px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: color var(--transition-fast);
-}
-
-.drawerCloseBtn:hover {
-  color: var(--text-primary);
-}
-
-.drawerBody {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 1.5rem;
-  -webkit-overflow-scrolling: touch;
-}
-
+/* Footer Fixo da Gaveta */
 .drawerStickyFooter {
-  padding: 1rem 1.25rem calc(1rem + env(safe-area-inset-bottom, 0px));
+  padding: 1rem 1.35rem calc(1rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--border-color);
   background-color: #080808;
   display: flex;
@@ -382,14 +330,15 @@
 }
 
 .drawerResetBtn {
-  min-height: 48px;
-  padding: 0.85rem 1.25rem;
+  min-height: 46px;
+  padding: 0.75rem 1rem;
   border: 1px solid var(--border-color);
   background: transparent;
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 700;
-  letter-spacing: 1px;
+  letter-spacing: 1.2px;
+  text-transform: uppercase;
   cursor: pointer;
   white-space: nowrap;
   transition: all var(--transition-fast);
@@ -402,13 +351,14 @@
 
 .drawerApplyBtn {
   flex: 1;
-  min-height: 48px;
+  min-height: 46px;
   background-color: var(--text-primary);
   color: var(--bg-primary);
   border: none;
-  font-size: 0.78rem;
+  font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 1.5px;
+  text-transform: uppercase;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -417,13 +367,7 @@
 }
 
 .drawerApplyBtn:hover {
-  opacity: 0.92;
-}
-
-@media (max-width: 768px) {
-  .sidebar {
-    display: none !important;
-  }
+  opacity: 0.9;
 }
 
 @media (max-width: 380px) {
@@ -434,18 +378,12 @@
 
   .drawerResetBtn {
     padding: 0.75rem 0.65rem;
-    font-size: 0.7rem;
+    font-size: 0.68rem;
   }
 
   .drawerApplyBtn {
     padding: 0.75rem 0.65rem;
-    font-size: 0.72rem;
+    font-size: 0.7rem;
     letter-spacing: 1px;
-  }
-}
-
-@media (min-width: 769px) {
-  .mobileDrawerWrapper {
-    display: none !important;
   }
 }

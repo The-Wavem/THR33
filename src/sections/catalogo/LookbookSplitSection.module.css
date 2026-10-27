@@ -2,54 +2,128 @@
   width: 100%;
   display: flex;
   flex-direction: column;
-  background-color: #080808;
-  border-top: 1px solid rgba(255, 255, 255, 0.14);
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  gap: 4.5rem;
+  background-color: transparent;
 }
 
+.rowBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+}
+
+/* Barra sutil acima de cada dupla para criar respiro e organização editorial */
+.rowEditorialHeader {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 0.15rem;
+}
+
+.seriesLabel {
+  font-family: var(--font-mono, 'Space Grotesk', monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.seriesLine {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.14) 0%,
+    rgba(255, 255, 255, 0.04) 50%,
+    rgba(255, 255, 255, 0.14) 100%
+  );
+}
+
+.seriesRange {
+  font-family: var(--font-mono, 'Space Grotesk', monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  color: rgba(255, 255, 255, 0.35);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* ==========================================================================
+   ESTRUTURA SPLIT JUNTINHA (50% / 50%) + DESALINHAMENTO ASSIMÉTRICO (3REM)
+   ========================================================================== */
 .splitRow {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: start;
   width: 100%;
-  min-height: 75vh;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
-  background-color: #080808;
 }
 
 .halfPane {
   position: relative;
   width: 100%;
-  min-height: 75vh;
-  height: 100%;
+  aspect-ratio: 4 / 4.4;
+  max-height: 78vh;
+  min-height: 540px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background-color: #080808;
   overflow: hidden;
+  transition:
+    border-color 0.4s cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Desalinhamento Editorial Assimétrico (Staggered Offset): coluna da direita desce 3rem (48px) */
+.halfPane:last-child {
+  margin-top: 3rem;
+  border-left: none;
+}
+
+.focusLeft .halfPane:first-child,
+.focusRight .halfPane:last-child {
+  border-color: rgba(255, 255, 255, 0.38);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.85);
 }
 
 /* ==========================================================================
    LINHA DIVISÓRIA CENTRAL DINÂMICA & INDICADOR TIPOGRÁFICO NO EIXO Y
    ========================================================================== */
-.centerDivider {
+.centerCorridor {
   position: absolute;
   top: 0;
   bottom: 0;
   left: 50%;
   width: 1px;
   transform: translateX(-50%);
-  background-color: rgba(255, 255, 255, 0.14);
-  z-index: 10;
-  pointer-events: none;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: background-color 0.35s ease, box-shadow 0.35s ease;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.dividerTrack {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  transform: translateX(-50%);
+  background-color: rgba(255, 255, 255, 0.18);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .dividerBeam {
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 1px;
+  width: 2px;
   background: linear-gradient(
     to bottom,
     transparent 0%,
@@ -71,24 +145,25 @@
   box-shadow: 0 0 18px var(--accent-primary, #ff0055);
 }
 
-/* Indicador tipográfico centralizado no eixo Y: ◄ 01 | 02 ► */
+/* Indicador tipográfico centralizado na linha divisória: ◄ 01 | 02 ► */
 .centerAxisIndicator {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 0.45rem;
-  padding: 0.45rem 0.75rem;
-  background-color: rgba(8, 8, 8, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.15);
+  gap: 0.4rem;
+  padding: 0.45rem 0.7rem;
+  background-color: rgba(8, 8, 8, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   font-family: var(--font-mono, 'Space Grotesk', monospace);
-  font-size: 0.68rem;
+  font-size: 0.66rem;
   font-weight: 700;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.16em;
   color: rgba(255, 255, 255, 0.55);
   white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9);
   transition:
     transform 0.4s cubic-bezier(0.16, 1, 0.3, 1),
     border-color 0.35s ease,
@@ -98,17 +173,17 @@
 .dividerActiveLeft .centerAxisIndicator {
   transform: translateX(-8px);
   border-color: var(--accent-primary, #ff0055);
-  box-shadow: -6px 0 22px rgba(255, 0, 85, 0.28);
+  box-shadow: -6px 0 22px rgba(255, 0, 85, 0.32);
 }
 
 .dividerActiveRight .centerAxisIndicator {
   transform: translateX(8px);
   border-color: var(--accent-primary, #ff0055);
-  box-shadow: 6px 0 22px rgba(255, 0, 85, 0.28);
+  box-shadow: 6px 0 22px rgba(255, 0, 85, 0.32);
 }
 
 .arrowGlyph {
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   color: rgba(255, 255, 255, 0.25);
   transition:
     color 0.3s ease,
@@ -142,7 +217,6 @@
 .editorialFillerPane {
   width: 100%;
   height: 100%;
-  min-height: 75vh;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -182,23 +256,43 @@
 }
 
 /* ==========================================================================
-   RESPONSIVIDADE MOBILE (< 768px): EMPILHAMENTO VERTICAL
+   RESPONSIVIDADE TABLET & MOBILE
    ========================================================================== */
+@media (max-width: 1100px) {
+  .halfPane {
+    min-height: 460px;
+  }
+}
+
 @media (max-width: 768px) {
+  .lookbookSection {
+    gap: 2.25rem;
+  }
+
+  .rowEditorialHeader {
+    padding: 0 0.25rem;
+  }
+
   .splitRow {
     display: flex;
     flex-direction: column;
-    min-height: auto;
-    border-bottom: none;
+    gap: 1.5rem;
   }
 
   .halfPane {
     width: 100%;
+    aspect-ratio: 4 / 4.6;
     min-height: auto;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+    max-height: none;
+    height: auto;
   }
 
-  .centerDivider {
+  .halfPane:last-child {
+    margin-top: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.14);
+  }
+
+  .centerCorridor {
     display: none;
   }
 

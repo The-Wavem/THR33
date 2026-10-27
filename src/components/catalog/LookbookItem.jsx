@@ -41,7 +41,7 @@ export function LookbookItem({
   const hasFreeShipping = Boolean(product.freeShipping || product.hasFreeShipping);
   const customBadgeText = product.customBadge && product.customBadge.trim() ? product.customBadge.trim() : null;
 
-  // Camada 1 (Base - Foto Lifestyle / Modelo)
+  // Camada 1 (Base - Foto Lifestyle / Modelo preenchendo 100% do quadro)
   const lifestyleImage =
     product.lifestyleImage ||
     product.secondaryImage ||
@@ -133,7 +133,7 @@ export function LookbookItem({
         className={styles.editorialLink}
         aria-label={`Ver peça ${product.name}`}
       >
-        {/* CAMADA 1: FOTO BASE LIFESTYLE / MODELO */}
+        {/* CAMADA 1: FOTO BASE LIFESTYLE / MODELO PREENCHENDO 100% SEM VÃOS LATERAIS */}
         <div className={styles.lifestyleLayer}>
           {lifestyleImage && (
             <img

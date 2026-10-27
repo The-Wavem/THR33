@@ -35,7 +35,7 @@ export function Catalogo() {
   const [itemsPerPage, setItemsPerPage] = useState(6);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
 
   // 0. Telemetria e Busca de Produtos e Descontos Ativos no Firestore
   useEffect(() => {
@@ -288,6 +288,7 @@ export function Catalogo() {
   const selectedSizes = filters.sizes || [];
   const activeFiltersCount =
     selectedFits.length + selectedSizes.length + (searchQuery.trim() ? 1 : 0);
+  const totalActiveWithSort = activeFiltersCount + (sortOrder !== 'newest' ? 1 : 0);
 
   return (
     <main className={styles.catalogPage} ref={topRef}>
@@ -323,20 +324,39 @@ export function Catalogo() {
         </div>
       </header>
 
-      {/* TOOLBAR MOBILE COMPACTA: FILTROS */}
-      <div className={styles.mobileToolbar}>
+      {/* BARRA SUPERIOR DE CONTROLE: BOTÃO BRUTALISTA DE GAVETA + CONTAGEM DE PEÇAS */}
+      <div className={styles.resultsHeader}>
         <button
           type="button"
-          onClick={() => setIsMobileFilterOpen(true)}
-          className={styles.mobileFilterBtn}
-          aria-label="Abrir filtros"
+          onClick={() => setIsFilterDrawerOpen(true)}
+          className={styles.filterDrawerTrigger}
+          aria-label="Abrir gaveta de filtros e ordenação"
         >
-          <SlidersHorizontal size={16} />
-          <span>FILTROS</span>
-          {activeFiltersCount > 0 && (
-            <span className={styles.mobileFilterBadge}>{activeFiltersCount}</span>
+          <SlidersHorizontal size={15} />
+          <span>FILTRAR & ORDENAR</span>
+          {totalActiveWithSort > 0 && (
+            <span className={styles.filterTriggerBadge}>{totalActiveWithSort}</span>
           )}
         </button>
+
+        <div className={styles.resultsMetaGroup}>
+          <div className={styles.resultsCount}>
+            {totalItems > 0 ? (
+              <>
+                EXIBINDO <strong>{startIndex + 1}–{endIndex}</strong> DE{' '}
+                <strong>{totalItems}</strong> PEÇAS
+              </>
+            ) : (
+              '0 PEÇAS ENCONTRADAS'
+            )}
+          </div>
+
+          {totalPages > 1 && (
+            <span className={styles.pageIndicatorMini}>
+              PÁGINA {currentPage} DE {totalPages}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* CHIPS DE FILTROS ATIVOS (MULTI-SELEÇÃO) */}
@@ -373,47 +393,27 @@ export function Catalogo() {
         </div>
       )}
 
-      {/* CORPO DO CATÁLOGO: SIDEBAR + LOOKBOOK EDITORIAL SPLIT-SCREEN */}
-      <div className={styles.contentLayout}>
-        <div className={styles.sidebarWrapper}>
-          <FilterSidebar
-            products={products}
-            filters={filters}
-            setFilters={handleFiltersChange}
-            sortOrder={sortOrder}
-            onSortChange={handleSortChange}
-            onReset={handleReset}
-            searchQuery={searchQuery}
-            onSearchSubmit={handleSearchSubmit}
-            onSearchClear={handleSearchClear}
-            isMobileOpen={isMobileFilterOpen}
-            onCloseMobile={() => setIsMobileFilterOpen(false)}
-            totalResults={totalItems}
-          />
-        </div>
+      {/* GAVETA LATERAL UNIFICADA (DESKTOP & MOBILE) */}
+      <FilterSidebar
+        products={products}
+        filters={filters}
+        setFilters={handleFiltersChange}
+        sortOrder={sortOrder}
+        onSortChange={handleSortChange}
+        onReset={handleReset}
+        searchQuery={searchQuery}
+        onSearchSubmit={handleSearchSubmit}
+        onSearchClear={handleSearchClear}
+        isOpen={isFilterDrawerOpen}
+        isMobileOpen={isFilterDrawerOpen}
+        onClose={() => setIsFilterDrawerOpen(false)}
+        onCloseMobile={() => setIsFilterDrawerOpen(false)}
+        totalResults={totalItems}
+      />
 
-        <section className={styles.productsArea}>
-          {/* BARRA DE CONTAGEM E STATUS */}
-          <div className={styles.resultsBar}>
-            <div className={styles.resultsCount}>
-              {totalItems > 0 ? (
-                <>
-                  EXIBINDO <strong>{startIndex + 1}–{endIndex}</strong> DE{' '}
-                  <strong>{totalItems}</strong> PEÇAS
-                </>
-              ) : (
-                '0 PEÇAS ENCONTRADAS'
-              )}
-            </div>
-
-            {totalPages > 1 && (
-              <span className={styles.pageIndicatorMini}>
-                PÁGINA {currentPage} DE {totalPages}
-              </span>
-            )}
-          </div>
-
-          {/* SKELETON LOADING OU LOOKBOOK EDITORIAL SPLIT-SCREEN */}
+      {/* CONTEÚDO PRINCIPAL 100% LARGURA: LOOKBOOK EDITORIAL SPLIT-SCREEN */}
+      <div className={styles.catalogLayout}>
+        <section className={styles.mainContent}>
           {loadingProducts || isLoading ? (
             <div className={styles.splitSkeletonGrid}>
               {Array.from({ length: Math.min(itemsPerPage, 4) }).map((_, idx) => (

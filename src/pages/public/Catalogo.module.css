@@ -1,5 +1,6 @@
 .catalogPage {
   max-width: 1600px;
+  width: 100%;
   margin: 0 auto;
   padding: 2.5rem 1.5rem 6rem;
   background-color: var(--bg-primary);
@@ -10,9 +11,9 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  padding-bottom: 1.75rem;
+  padding-bottom: 1.5rem;
   border-bottom: 1px solid var(--border-color);
-  margin-bottom: 2rem;
+  margin-bottom: 1.25rem;
   gap: 1.5rem;
 }
 
@@ -60,46 +61,86 @@
   margin-top: 0.3rem;
 }
 
-/* Mobile Toolbar (Filtros) */
-.mobileToolbar {
-  display: none;
-}
-
-.mobileFilterBtn {
-  flex: 1;
-  min-height: 44px;
+/* ============================================================
+   BARRA DE CONTROLE NO TOPO: BOTÃO DE GAVETA + RESULTADOS
+   ============================================================ */
+.resultsHeader {
   display: flex;
+  justify-content: space-between;
   align-items: center;
-  justify-content: center;
-  gap: 0.5rem;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  color: var(--text-primary);
-  font-size: 0.78rem;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: all var(--transition-fast);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  flex-wrap: wrap;
 }
 
-.mobileFilterBtn:active {
-  background-color: #1a1a1a;
-  border-color: var(--border-active);
-}
-
-.mobileFilterBadge {
+.filterDrawerTrigger {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
+  gap: 0.65rem;
+  min-height: 42px;
+  padding: 0.55rem 1.15rem;
+  background-color: #0e0e0e;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: var(--text-primary);
+  font-family: var(--font-mono, 'Space Grotesk', sans-serif);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 1.8px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    background-color var(--transition-fast),
+    border-color var(--transition-fast),
+    color var(--transition-fast),
+    transform var(--transition-fast);
+}
+
+.filterDrawerTrigger:hover {
+  background-color: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
+}
+
+.filterTriggerBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
   font-size: 0.65rem;
   font-weight: 800;
-  background-color: var(--text-primary);
-  color: var(--bg-primary);
-  border-radius: 9px;
+  background-color: var(--accent-primary, #ff0055);
+  color: #ffffff;
+  line-height: 1;
+}
+
+.resultsMetaGroup {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.resultsCount {
+  font-family: var(--font-mono, 'Space Grotesk', sans-serif);
+  font-size: 0.75rem;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary);
+}
+
+.resultsCount strong {
+  color: var(--text-primary);
+}
+
+.pageIndicatorMini {
+  font-family: var(--font-mono, 'Space Grotesk', sans-serif);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
 }
 
 /* Chips de Filtros Ativos */
@@ -111,7 +152,7 @@
   padding: 0.75rem 1rem;
   background-color: rgba(255, 255, 255, 0.03);
   border: 1px dashed var(--border-color);
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
 }
 
 .activeFiltersLabel {
@@ -160,49 +201,17 @@
   color: var(--text-primary);
 }
 
-/* Layout Principal */
-.contentLayout {
-  display: flex;
-  gap: 2.25rem;
-  align-items: flex-start;
-}
-
-.sidebarWrapper {
-  flex-shrink: 0;
-}
-
-.productsArea {
-  flex: 1;
-  min-width: 0;
+/* ============================================================
+   LAYOUT PRINCIPAL 100% LARGURA (SEM SIDEBAR FIXA)
+   ============================================================ */
+.catalogLayout {
   width: 100%;
+  display: block;
 }
 
-.resultsBar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 1.25rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-}
-
-.resultsCount {
-  font-family: var(--font-mono, 'Space Grotesk', sans-serif);
-  font-size: 0.75rem;
-  letter-spacing: 1.5px;
-  color: var(--text-secondary);
-}
-
-.resultsCount strong {
-  color: var(--text-primary);
-}
-
-.pageIndicatorMini {
-  font-family: var(--font-mono, 'Space Grotesk', sans-serif);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 1.5px;
-  color: var(--text-muted);
+.mainContent {
+  width: 100%;
+  min-width: 0;
 }
 
 /* Skeleton Split-Screen 50/50 */
@@ -315,18 +324,6 @@
 }
 
 /* Responsividade */
-@media (max-width: 900px) {
-  .header {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 1.25rem;
-  }
-
-  .contentLayout {
-    flex-direction: column;
-  }
-}
-
 @media (max-width: 768px) {
   .catalogPage {
     padding: 1.25rem 0.5rem calc(4rem + env(safe-area-inset-bottom, 0px));
@@ -335,6 +332,8 @@
   }
 
   .header {
+    flex-direction: column;
+    align-items: flex-start;
     margin-bottom: 1rem;
     padding: 0 0.25rem 0.85rem;
     gap: 0.75rem;
@@ -360,13 +359,29 @@
     margin-top: 0.15rem;
   }
 
-  .mobileToolbar {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
+  .resultsHeader {
+    padding: 0 0.25rem 0.75rem;
     margin-bottom: 1rem;
-    width: 100%;
-    padding: 0 0.25rem;
+    gap: 0.65rem;
+  }
+
+  .filterDrawerTrigger {
+    padding: 0.5rem 0.85rem;
+    font-size: 0.68rem;
+    letter-spacing: 1.4px;
+  }
+
+  .resultsMetaGroup {
+    gap: 0.65rem;
+  }
+
+  .resultsCount {
+    font-size: 0.68rem;
+    letter-spacing: 1px;
+  }
+
+  .pageIndicatorMini {
+    font-size: 0.65rem;
   }
 
   .activeFiltersRow {
@@ -388,25 +403,6 @@
   .clearAllLink {
     font-size: 0.65rem;
     padding: 0.25rem 0;
-  }
-
-  .sidebarWrapper {
-    display: contents;
-    width: 100%;
-  }
-
-  .resultsBar {
-    margin-bottom: 0.85rem;
-    padding: 0 0.25rem 0.5rem;
-  }
-
-  .resultsCount {
-    font-size: 0.68rem;
-    letter-spacing: 1px;
-  }
-
-  .pageIndicatorMini {
-    font-size: 0.65rem;
   }
 
   .splitSkeletonGrid {
@@ -434,6 +430,19 @@
 }
 
 @media (max-width: 480px) {
+  .resultsHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .filterDrawerTrigger {
+    width: 100%;
+  }
+
+  .resultsMetaGroup {
+    justify-content: space-between;
+  }
+
   .pageBtnText {
     display: none;
   }
