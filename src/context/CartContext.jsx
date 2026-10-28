@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
 import { couponService } from '../services/couponService';
 import { analyticsService } from '../services/analyticsService';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext();
 
@@ -22,6 +23,7 @@ const sanitizeItem = (item) => ({
 });
 
 export function CartProvider({ children }) {
+  const { currentUser, user } = useAuth() || {};
   const [cartItems, setCartItems] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -64,7 +66,12 @@ export function CartProvider({ children }) {
   }, [cartItems]);
 
   const hasFreeShippingCoupon = useMemo(() => {
-    return Boolean(appliedCoupon?.freeShipping);
+    return Boolean(
+      appliedCoupon &&
+      (appliedCoupon.freeShipping === true ||
+        appliedCoupon.type === 'free_shipping' ||
+        appliedCoupon.discountMode === 'free_shipping_only')
+    );
   }, [appliedCoupon]);
 
   const isFreeShippingActive = hasFreeShippingItem || hasFreeShippingCoupon;
@@ -86,6 +93,10 @@ export function CartProvider({ children }) {
 
   const discountAmount = useMemo(() => {
     if (!appliedCoupon || subtotal <= 0) return 0;
+    if (appliedCoupon.discountMode === 'free_shipping_only') return 0;
+    if (appliedCoupon.discountMode === 'fixed') {
+      return Math.min(subtotal, Math.max(0, Number(appliedCoupon.fixedDiscountValue || 0)));
+    }
     const pct = Number(appliedCoupon.discountPercent || (appliedCoupon.discountPercentage ? appliedCoupon.discountPercentage * 100 : 0)) || 0;
     return (subtotal * pct) / 100;
   }, [subtotal, appliedCoupon]);
@@ -99,7 +110,7 @@ export function CartProvider({ children }) {
   }, [cartItems]);
 
   // Ações de Cupom com validação no Firestore
-  const applyCoupon = async (code) => {
+  const applyCoupon = async (code, userContextOverride = null) => {
     if (!code || !code.trim()) {
       setCouponFeedback({ message: 'Digite um código de cupom.', isError: true });
       return false;
@@ -108,25 +119,30 @@ export function CartProvider({ children }) {
     setValidatingCoupon(true);
     setCouponFeedback({ message: '', isError: false });
 
+    const activeUserContext = userContextOverride || {
+      uid: currentUser?.uid || user?.uid || null,
+      email: currentUser?.email || user?.email || null
+    };
+
     try {
-      const result = await couponService.validateCoupon(code, subtotal);
+      const result = await couponService.validateCoupon(
+        code,
+        subtotal,
+        activeUserContext,
+        totalItemsCount
+      );
 
-      if (result.isValid) {
-        const isFree = Boolean(result.freeShipping);
-        const pct = result.discountPercent;
-        const couponLabel = pct > 0 && isFree
-          ? `${pct}% OFF + FRETE GRÁTIS`
-          : isFree
-            ? 'FRETE GRÁTIS'
-            : `${pct}% OFF`;
-
+      if (result.valid || result.isValid) {
         setAppliedCoupon({
+          ...result.coupon,
           id: result.coupon.id,
           code: result.coupon.code,
           type: result.coupon.type || 'affiliate',
-          discountPercent: pct,
-          freeShipping: isFree,
-          label: couponLabel,
+          discountMode: result.coupon.discountMode || 'percentage',
+          discountPercent: Number(result.coupon.discountPercent || 0),
+          fixedDiscountValue: Number(result.coupon.fixedDiscountValue || 0),
+          freeShipping: Boolean(result.coupon.freeShipping),
+          label: result.coupon.label,
           partnerName: result.coupon.partnerName
         });
         setCouponFeedback({ message: result.message, isError: false });
@@ -147,9 +163,29 @@ export function CartProvider({ children }) {
   };
 
   const removeCoupon = () => {
+    try {
+      sessionStorage.removeItem('thr33_pending_vip_coupon');
+    } catch {
+      // ignore
+    }
     setAppliedCoupon(null);
     setCouponFeedback({ message: 'Cupom removido com sucesso.', isError: false });
   };
+
+  // Aplica automaticamente o cupom VIP reservado pelo cliente no Perfil assim que adicionar peças à sacola
+  useEffect(() => {
+    if (cartItems.length > 0 && !appliedCoupon && !validatingCoupon) {
+      try {
+        const pendingVip = sessionStorage.getItem('thr33_pending_vip_coupon');
+        if (pendingVip) {
+          sessionStorage.removeItem('thr33_pending_vip_coupon');
+          applyCoupon(pendingVip);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [cartItems.length, appliedCoupon, validatingCoupon]);
 
   // Adicionar item ao carrinho
   const addToCart = (product, size = 'M', quantity = 1, color = null) => {

@@ -37,6 +37,8 @@ import {
   QrCode
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import { useCart } from '../../context/CartContext';
+import { couponService } from '../../services/couponService';
 import { 
   maskCPF, 
   maskPhone, 
@@ -263,6 +265,7 @@ const ReviewModal = React.memo(function ReviewModal({ item, onClose, onReviewSuc
 
 export function Perfil({ defaultTab = 'pedidos' }) {
   const { user, currentUser, updateUser, logout, changePassword } = useAuth();
+  const { cartItems, applyCoupon, openCart, appliedCoupon } = useCart() || {};
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== 'undefined') {
       const urlTab = new URLSearchParams(window.location.search).get('tab');
@@ -273,15 +276,21 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   
   const activeUser = currentUser || user;
 
-  // DADOS DA CARTEIRA DIGITAL
+  // DADOS DA CARTEIRA DIGITAL & CUPONS VIP VINCULADOS AO E-MAIL
   const [walletBalance, setWalletBalance] = useState(0);
   const [giftRedeemCode, setGiftRedeemCode] = useState('');
   const [redeeming, setRedeeming] = useState(false);
   const [redeemFeedback, setRedeemFeedback] = useState(null);
+  const [exclusiveCoupons, setExclusiveCoupons] = useState([]);
+  const [loadingExclusiveCoupons, setLoadingExclusiveCoupons] = useState(false);
+  const [copiedVipCode, setCopiedVipCode] = useState(null);
+  const [vipActionFeedback, setVipActionFeedback] = useState(null);
 
-  // Carrega saldo da carteira do Firestore
+  // Carrega saldo da carteira e cupons exclusivos vinculados ao e-mail do cliente
   useEffect(() => {
     const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = currentUser?.email || user?.email;
+
     if (activeUid) {
       getDoc(doc(db, 'users', activeUid)).then(snap => {
         if (snap.exists()) {
@@ -289,7 +298,67 @@ export function Perfil({ defaultTab = 'pedidos' }) {
         }
       }).catch(err => console.warn("Aviso ao carregar carteira:", err));
     }
+
+    if (activeEmail) {
+      setLoadingExclusiveCoupons(true);
+      couponService
+        .getUserExclusiveCoupons(activeEmail, activeUid)
+        .then((list) => {
+          setExclusiveCoupons(Array.isArray(list) ? list : []);
+        })
+        .catch((err) => console.warn("Aviso ao carregar cupons VIP:", err))
+        .finally(() => setLoadingExclusiveCoupons(false));
+    } else {
+      setExclusiveCoupons([]);
+    }
   }, [currentUser, user]);
+
+  const handleCopyAndUseVipCoupon = async (coupon) => {
+    if (!coupon?.code) return;
+    const cleanCode = coupon.code.trim().toUpperCase();
+
+    try {
+      await navigator.clipboard.writeText(cleanCode);
+    } catch {
+      // Fallback caso clipboard não esteja disponível
+    }
+
+    try {
+      sessionStorage.setItem('thr33_pending_vip_coupon', cleanCode);
+    } catch {
+      // ignore
+    }
+
+    setCopiedVipCode(cleanCode);
+    setTimeout(() => {
+      setCopiedVipCode((prev) => (prev === cleanCode ? null : prev));
+    }, 3500);
+
+    const activeUid = currentUser?.uid || user?.uid || null;
+    const activeEmail = currentUser?.email || user?.email || null;
+
+    if (Array.isArray(cartItems) && cartItems.length > 0 && applyCoupon) {
+      const applied = await applyCoupon(cleanCode, { uid: activeUid, email: activeEmail });
+      if (applied) {
+        setVipActionFeedback({
+          code: cleanCode,
+          text: `Cupom ${cleanCode} copiado e aplicado automaticamente na sua sacola!`
+        });
+        if (openCart) openCart();
+      } else {
+        setVipActionFeedback({
+          code: cleanCode,
+          text: `Código ${cleanCode} copiado! Verifique os requisitos mínimos na sacola.`
+        });
+        if (openCart) openCart();
+      }
+    } else {
+      setVipActionFeedback({
+        code: cleanCode,
+        text: `Código ${cleanCode} copiado e reservado! Assim que você adicionar uma peça do catálogo à sacola, ele será aplicado automaticamente.`
+      });
+    }
+  };
 
   const handleRedeemGift = async (e) => {
     e.preventDefault();
@@ -845,7 +914,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       });
     }
 
-    setUserData({ ...editFormData });
+    setUserData(prev => ({ ...prev, name: editFormData.name, cpf: editFormData.cpf, phone: editFormData.phone }));
     setUserErrors({});
     setIsEditingData(false);
     setSaveSuccessFeedback(true);
@@ -1155,7 +1224,12 @@ export function Perfil({ defaultTab = 'pedidos' }) {
             onClick={() => setActiveTab('carteira')}
           >
             <CreditCard size={16} />
-            <span>Carteira & Créditos</span>
+            <span>Carteira & Cupons VIP</span>
+            {exclusiveCoupons.filter((c) => c.canBeUsed).length > 0 && (
+              <span className={styles.vipNavBadge}>
+                {exclusiveCoupons.filter((c) => c.canBeUsed).length} VIP
+              </span>
+            )}
           </button>
           
           <button 
@@ -1179,6 +1253,129 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
         {/* ÁREA DE CONTEÚDO DINÂMICO */}
         <section className={styles.tabContent}>
+          {/* BANNER AUTOMÁTICO DE CUPONS VIP EXCLUSIVOS VINCULADOS AO E-MAIL DO CLIENTE */}
+          {activeTab !== 'carteira' && exclusiveCoupons.some((c) => c.canBeUsed) && (
+            <div className={styles.vipExclusiveBannerSection}>
+              <div className={styles.vipSectionTop}>
+                <div className={styles.vipSectionTitleGroup}>
+                  <Tag size={15} className={styles.vipIconAccent} />
+                  <div>
+                    <span className={styles.vipOverline}>BENEFÍCIO VINCULADO AO SEU E-MAIL</span>
+                    <h3 className={styles.vipSectionTitle}>
+                      VOCÊ POSSUI {exclusiveCoupons.filter((c) => c.canBeUsed).length}{' '}
+                      {exclusiveCoupons.filter((c) => c.canBeUsed).length === 1
+                        ? 'CUPOM VIP EXCLUSIVO DISPONÍVEL'
+                        : 'CUPONS VIP EXCLUSIVOS DISPONÍVEIS'}
+                    </h3>
+                  </div>
+                </div>
+              </div>
+
+              {vipActionFeedback && (
+                <div className={styles.vipActionFeedbackBanner}>
+                  <CheckCircle2 size={14} />
+                  <span>{vipActionFeedback.text}</span>
+                  <Link to="/catalogo" className={styles.vipGoCatalogLink}>
+                    IR PARA O CATÁLOGO
+                  </Link>
+                </div>
+              )}
+
+              <div className={styles.vipTicketsGrid}>
+                {exclusiveCoupons
+                  .filter((c) => c.canBeUsed)
+                  .map((coupon) => {
+                    const isCopied = copiedVipCode === coupon.code;
+                    const isAppliedInCart =
+                      appliedCoupon?.code?.toUpperCase() === coupon.code;
+
+                    return (
+                      <div key={coupon.id} className={styles.vipTicketCard}>
+                        <div className={styles.vipTicketStub}>
+                          <span className={styles.vipTicketLockTag}>
+                            <Lock size={10} />
+                            <span>EXCLUSIVO DA SUA CONTA</span>
+                          </span>
+                          <strong className={styles.vipTicketCode}>{coupon.code}</strong>
+                          <small className={styles.vipTicketEmailNote}>
+                            Vinculado a {userData.email}
+                          </small>
+                        </div>
+
+                        <div className={styles.vipTicketMain}>
+                          <div className={styles.vipTicketInfo}>
+                            <strong className={styles.vipTicketBenefit}>
+                              {coupon.label}
+                            </strong>
+                            <div className={styles.vipTicketMetaPills}>
+                              {coupon.remainingUses !== null && (
+                                <span className={styles.vipMetaPill}>
+                                  Restam {coupon.remainingUses} uso(s)
+                                </span>
+                              )}
+                              {coupon.onlyFirstPurchase && (
+                                <span className={styles.vipMetaPill}>
+                                  Válido na 1ª Compra
+                                </span>
+                              )}
+                              {coupon.minOrderValue > 0 && (
+                                <span className={styles.vipMetaPill}>
+                                  Pedido mín. R$ {Number(coupon.minOrderValue).toFixed(0)}
+                                </span>
+                              )}
+                              {coupon.minItemsCount > 0 && (
+                                <span className={styles.vipMetaPill}>
+                                  Mín. {coupon.minItemsCount} peça(s)
+                                </span>
+                              )}
+                              {coupon.validUntil && (
+                                <span className={styles.vipMetaPill}>
+                                  <Clock size={10} />
+                                  <span>
+                                    Até{' '}
+                                    {new Date(
+                                      String(coupon.validUntil).length === 10
+                                        ? `${coupon.validUntil}T12:00:00`
+                                        : coupon.validUntil
+                                    ).toLocaleDateString('pt-BR')}
+                                  </span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCopyAndUseVipCoupon(coupon)}
+                            className={`${styles.vipUseBtn} ${
+                              isCopied || isAppliedInCart ? styles.vipUseBtnActive : ''
+                            }`}
+                          >
+                            {isAppliedInCart ? (
+                              <>
+                                <Check size={14} />
+                                <span>ATIVO NA SUA SACOLA</span>
+                              </>
+                            ) : isCopied ? (
+                              <>
+                                <Check size={14} />
+                                <span>COPIADO & RESERVADO!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={14} />
+                                <span>COPIAR & USAR MEU CUPOM VIP</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
           {/* TAB 1: DADOS PESSOAIS */}
           {activeTab === 'dados' && (
             <div className={styles.panel}>
@@ -1223,21 +1420,25 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                 </div>
 
                 <div className={styles.inputField}>
-                  <label>E-mail *</label>
-                  <input 
-                    type="email" 
-                    name="email"
-                    value={isEditingData ? editFormData.email : userData.email} 
-                    onChange={handleUserChange} 
-                    disabled={!isEditingData}
-                    className={`${!isEditingData ? styles.inputLocked : ''} ${userErrors.email ? styles.inputError : ''}`}
-                    required 
-                  />
-                  {userErrors.email && (
-                    <span className={styles.errorText}>
-                      <AlertCircle size={12} /> {userErrors.email}
-                    </span>
-                  )}
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span>E-mail *</span>
+                    <Lock size={11} style={{ color: 'var(--text-muted)' }} />
+                  </label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input 
+                      type="email" 
+                      name="email"
+                      value={userData.email} 
+                      readOnly
+                      disabled={true}
+                      className={styles.inputLocked}
+                      style={{ width: '100%', paddingRight: '2.2rem', cursor: 'not-allowed', opacity: 0.7 }}
+                    />
+                    <Lock size={13} style={{ position: 'absolute', right: '0.85rem', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                  </div>
+                  <small style={{ fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.4, marginTop: '0.2rem' }}>
+                    O e-mail é o identificador único da sua conta e de seus cupons exclusivos, não podendo ser alterado.
+                  </small>
                 </div>
 
                 <div className={styles.inputField}>
@@ -1684,6 +1885,122 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                   </button>
                 </form>
               </section>
+
+              {/* SEÇÃO DE CUPONS VIP VINCULADOS À CONTA DENTRO DA ABA CARTEIRA */}
+              {exclusiveCoupons.length > 0 && (
+                <section className={styles.vipExclusiveBannerSection} style={{ marginTop: '1.5rem' }}>
+                  <div className={styles.vipSectionTop}>
+                    <div className={styles.vipSectionTitleGroup}>
+                      <Tag size={15} className={styles.vipIconAccent} />
+                      <div>
+                        <span className={styles.vipOverline}>PRESENTES & BENEFÍCIOS PESSOAIS</span>
+                        <h3 className={styles.vipSectionTitle}>
+                          MEUS CUPONS VIP VINCULADOS ({exclusiveCoupons.length})
+                        </h3>
+                      </div>
+                    </div>
+                  </div>
+
+                  {vipActionFeedback && (
+                    <div className={styles.vipActionFeedbackBanner}>
+                      <CheckCircle2 size={14} />
+                      <span>{vipActionFeedback.text}</span>
+                      <Link to="/catalogo" className={styles.vipGoCatalogLink}>
+                        IR PARA O CATÁLOGO
+                      </Link>
+                    </div>
+                  )}
+
+                  <div className={styles.vipTicketsGrid}>
+                    {exclusiveCoupons.map((coupon) => {
+                      const isCopied = copiedVipCode === coupon.code;
+                      const isAppliedInCart =
+                        appliedCoupon?.code?.toUpperCase() === coupon.code;
+
+                      return (
+                        <div
+                          key={coupon.id}
+                          className={`${styles.vipTicketCard} ${
+                            !coupon.canBeUsed ? styles.vipTicketDisabled : ''
+                          }`}
+                        >
+                          <div className={styles.vipTicketStub}>
+                            <span className={styles.vipTicketLockTag}>
+                              <Lock size={10} />
+                              <span>{coupon.statusReason}</span>
+                            </span>
+                            <strong className={styles.vipTicketCode}>{coupon.code}</strong>
+                            <small className={styles.vipTicketEmailNote}>
+                              Vinculado a {userData.email}
+                            </small>
+                          </div>
+
+                          <div className={styles.vipTicketMain}>
+                            <div className={styles.vipTicketInfo}>
+                              <strong className={styles.vipTicketBenefit}>
+                                {coupon.label}
+                              </strong>
+                              <div className={styles.vipTicketMetaPills}>
+                                {coupon.remainingUses !== null && (
+                                  <span className={styles.vipMetaPill}>
+                                    Restam {coupon.remainingUses} de {coupon.maxUsesPerUser} uso(s)
+                                  </span>
+                                )}
+                                {coupon.onlyFirstPurchase && (
+                                  <span className={styles.vipMetaPill}>
+                                    Válido na 1ª Compra
+                                  </span>
+                                )}
+                                {coupon.minOrderValue > 0 && (
+                                  <span className={styles.vipMetaPill}>
+                                    Pedido mín. R$ {Number(coupon.minOrderValue).toFixed(0)}
+                                  </span>
+                                )}
+                                {coupon.minItemsCount > 0 && (
+                                  <span className={styles.vipMetaPill}>
+                                    Mín. {coupon.minItemsCount} peça(s)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {coupon.canBeUsed ? (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyAndUseVipCoupon(coupon)}
+                                className={`${styles.vipUseBtn} ${
+                                  isCopied || isAppliedInCart ? styles.vipUseBtnActive : ''
+                                }`}
+                              >
+                                {isAppliedInCart ? (
+                                  <>
+                                    <Check size={14} />
+                                    <span>ATIVO NA SUA SACOLA</span>
+                                  </>
+                                ) : isCopied ? (
+                                  <>
+                                    <Check size={14} />
+                                    <span>COPIADO & RESERVADO!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy size={14} />
+                                    <span>COPIAR & USAR MEU CUPOM VIP</span>
+                                  </>
+                                )}
+                              </button>
+                            ) : (
+                              <span className={styles.vipUnavailableBadge}>
+                                {coupon.statusReason}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+              )}
             </div>
           )}
 

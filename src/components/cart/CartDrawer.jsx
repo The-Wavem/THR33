@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
   Trash2, 
@@ -41,7 +41,7 @@ export function CartDrawer() {
   const [couponInput, setCouponInput] = useState('');
   const itemsListRef = useRef(null);
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, currentUser } = useAuth();
 
   // Trava a rolagem de fundo ao abrir o carrinho
   useEffect(() => {
@@ -62,7 +62,11 @@ export function CartDrawer() {
   const handleApplyCoupon = async (e) => {
     e.preventDefault();
     if (couponInput.trim()) {
-      const success = await applyCoupon(couponInput.trim());
+      const activeUser = currentUser || user;
+      const success = await applyCoupon(couponInput.trim(), {
+        uid: activeUser?.uid || null,
+        email: activeUser?.email || null
+      });
       if (success) {
         setCouponInput('');
       }
@@ -219,7 +223,13 @@ export function CartDrawer() {
                       <div className={styles.couponTagInfo}>
                         <Tag size={13} />
                         <span>
-                          CUPOM <strong>{appliedCoupon.code}</strong> {appliedCoupon.discountPercent > 0 ? `(-${appliedCoupon.discountPercent}%)` : ''} {appliedCoupon.freeShipping ? '+ FRETE GRÁTIS' : ''}
+                          CUPOM <strong>{appliedCoupon.code}</strong>{' '}
+                          {appliedCoupon.discountMode === 'fixed' && Number(appliedCoupon.fixedDiscountValue) > 0
+                            ? `(-R$ ${Number(appliedCoupon.fixedDiscountValue).toFixed(2).replace('.', ',')})`
+                            : appliedCoupon.discountPercent > 0
+                            ? `(-${appliedCoupon.discountPercent}%)`
+                            : ''}{' '}
+                          {appliedCoupon.freeShipping ? '+ FRETE GRÁTIS' : ''}
                         </span>
                       </div>
                       <button type="button" onClick={removeCoupon} className={styles.removeCouponBtn} aria-label="Remover cupom">

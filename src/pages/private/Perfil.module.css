@@ -2466,3 +2466,254 @@
   }
 }
 
+/* ============================================================
+   SEÇÃO DE CUPONS VIP VINCULADOS AO E-MAIL DA CONTA
+   ============================================================ */
+.vipNavBadge {
+  margin-left: auto;
+  background-color: rgba(168, 85, 247, 0.2);
+  border: 1px solid rgba(168, 85, 247, 0.55);
+  color: #e9d5ff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  padding: 0.12rem 0.45rem;
+}
+
+.vipExclusiveBannerSection {
+  background: linear-gradient(135deg, rgba(20, 20, 20, 0.96) 0%, rgba(10, 10, 10, 0.98) 100%);
+  border: 1px solid rgba(168, 85, 247, 0.4);
+  padding: 1.5rem;
+  margin-bottom: 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  box-shadow: 0 12px 35px rgba(0, 0, 0, 0.45);
+}
+
+.vipSectionTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.9rem;
+}
+
+.vipSectionTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.vipIconAccent {
+  color: #c084fc;
+  flex-shrink: 0;
+}
+
+.vipOverline {
+  display: block;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 1.6px;
+  color: #c084fc;
+  margin-bottom: 0.15rem;
+}
+
+.vipSectionTitle {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: #ffffff;
+  margin: 0;
+}
+
+.vipActionFeedbackBanner {
+  background-color: rgba(74, 222, 128, 0.1);
+  border: 1px solid rgba(74, 222, 128, 0.4);
+  color: #4ade80;
+  padding: 0.75rem 1rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.vipGoCatalogLink {
+  margin-left: auto;
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  padding: 0.3rem 0.65rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.vipGoCatalogLink:hover {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+.vipTicketsGrid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.vipTicketCard {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  background-color: #0a0a0a;
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  transition: border-color var(--transition-fast);
+}
+
+.vipTicketCard:hover {
+  border-color: rgba(168, 85, 247, 0.6);
+}
+
+.vipTicketDisabled {
+  opacity: 0.55;
+}
+
+.vipTicketStub {
+  padding: 1.15rem 1.25rem;
+  border-right: 1px dashed rgba(255, 255, 255, 0.18);
+  background-color: rgba(168, 85, 247, 0.04);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.3rem;
+}
+
+.vipTicketLockTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #c084fc;
+}
+
+.vipTicketCode {
+  font-family: monospace;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  color: #ffffff;
+}
+
+.vipTicketEmailNote {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vipTicketMain {
+  padding: 1.15rem 1.35rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+.vipTicketInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.vipTicketBenefit {
+  font-family: var(--font-heading);
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #4ade80;
+}
+
+.vipTicketMetaPills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.vipMetaPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.18rem 0.5rem;
+}
+
+.vipUseBtn {
+  background-color: #ffffff;
+  color: #000000;
+  border: 1px solid #ffffff;
+  padding: 0.75rem 1.15rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.vipUseBtn:hover {
+  background-color: #c084fc;
+  border-color: #c084fc;
+  color: #000000;
+}
+
+.vipUseBtnActive {
+  background-color: rgba(74, 222, 128, 0.15);
+  border-color: #4ade80;
+  color: #4ade80;
+}
+
+.vipUnavailableBadge {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+  padding: 0.45rem 0.8rem;
+}
+
+@media (max-width: 768px) {
+  .vipTicketCard {
+    grid-template-columns: 1fr;
+  }
+
+  .vipTicketStub {
+    border-right: none;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.18);
+  }
+
+  .vipTicketMain {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .vipUseBtn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+

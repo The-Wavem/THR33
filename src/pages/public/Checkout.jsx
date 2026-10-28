@@ -567,7 +567,6 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       const userPayload = {
         name: clientData.name.trim(),
         displayName: clientData.name.trim(),
-        email: clientData.email.trim(),
         cpf: clientData.cpf.trim(),
         phone: clientData.phone.trim(),
         updatedAt: new Date().toISOString()
@@ -603,7 +602,6 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         const userPayload = {
           name: clientData.name.trim(),
           displayName: clientData.name.trim(),
-          email: clientData.email.trim(),
           cpf: clientData.cpf.trim(),
           phone: clientData.phone.trim(),
           updatedAt: new Date().toISOString()
@@ -794,6 +792,26 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       }
     }
 
+    const totalItemsCount = cartItems.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
+
+    // Revalidação de segurança do cupom vinculado à conta / limites de uso antes de enviar ao gateway
+    if (appliedCoupon?.code) {
+      const couponCheck = await couponService.validateCoupon(
+        appliedCoupon.code,
+        subtotal,
+        {
+          uid: user?.uid || currentUser?.uid || authUser?.uid || null,
+          email: user?.email || currentUser?.email || authUser?.email || clientData.email || null
+        },
+        totalItemsCount
+      );
+      if (!couponCheck.valid) {
+        removeCoupon();
+        setPaymentError(couponCheck.message || 'O cupom aplicado não é válido para esta conta ou pedido.');
+        return;
+      }
+    }
+
     setIsProcessing(true);
 
     const addressToSave = activeAddress || {
@@ -806,7 +824,6 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       complement: addressForm.complement || ''
     };
 
-    const totalItemsCount = cartItems.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
     const orderRefId = `THR-${Date.now()}`;
 
     // Captura UTMs congeladas da sessão/campanha ou URL
@@ -1326,7 +1343,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   const handleApplyCouponInline = async (e) => {
     e.preventDefault();
     if (couponInput.trim()) {
-      const ok = await applyCoupon(couponInput.trim());
+      const ok = await applyCoupon(couponInput.trim(), {
+        uid: user?.uid || currentUser?.uid || authUser?.uid || null,
+        email: user?.email || currentUser?.email || authUser?.email || clientData.email || null
+      });
       if (ok) {
         setCouponInput('');
       }

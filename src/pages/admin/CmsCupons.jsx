@@ -36,6 +36,15 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Lock,
+  Users,
+  Truck,
+  Tag,
+  Percent,
+  Shuffle,
+  Clock,
+  Award,
+  Hash,
 } from "lucide-react";
 import { db } from "../../services/firebaseConfig";
 import { InfoTooltip } from "../../components/ui/InfoTooltip";
@@ -106,16 +115,26 @@ export function CmsCupons() {
   // Modal para pré-visualização de imagem
   const [previewImage, setPreviewImage] = useState(null);
 
-  // Form State Criação / Edição
+  // Form State Criação / Edição (Coupon Studio)
+  const [emailInput, setEmailInput] = useState("");
   const [formData, setFormData] = useState({
     code: "",
     type: "affiliate",
+    discountMode: "percentage",
     discountPercent: 10,
+    fixedDiscountValue: 50,
     freeShipping: false,
     partnerName: "",
     partnerPix: "",
-    validUntil: "",
+    audienceMode: "public",
+    allowedEmails: [],
+    onlyFirstPurchase: false,
+    maxUsesPerUser: "",
+    maxTotalUses: "",
     minOrderValue: "",
+    minItemsCount: "",
+    startDate: "",
+    validUntil: "",
     active: true,
   });
 
@@ -691,15 +710,25 @@ export function CmsCupons() {
 
   const handleOpenCreate = () => {
     setEditingId(null);
+    setEmailInput("");
     setFormData({
       code: "",
       type: "affiliate",
+      discountMode: "percentage",
       discountPercent: 10,
+      fixedDiscountValue: 50,
       freeShipping: false,
       partnerName: "",
       partnerPix: "",
-      validUntil: "",
+      audienceMode: "public",
+      allowedEmails: [],
+      onlyFirstPurchase: false,
+      maxUsesPerUser: "",
+      maxTotalUses: "",
       minOrderValue: "",
+      minItemsCount: "",
+      startDate: "",
+      validUntil: "",
       active: true,
     });
     setIsModalOpen(true);
@@ -708,40 +737,243 @@ export function CmsCupons() {
   const handleOpenEdit = (coupon) => {
     if (!coupon) return;
     setEditingId(coupon.id);
+    setEmailInput("");
+    const existingEmails = Array.isArray(coupon.allowedEmails)
+      ? coupon.allowedEmails.filter(Boolean)
+      : [];
+    const mode = ["percentage", "fixed", "free_shipping_only"].includes(
+      coupon.discountMode,
+    )
+      ? coupon.discountMode
+      : coupon.type === "free_shipping"
+        ? "free_shipping_only"
+        : "percentage";
+
     setFormData({
       code: coupon.code || "",
-      type: coupon.type || "affiliate",
-      discountPercent: coupon.discountPercent || 10,
-      freeShipping: Boolean(coupon.freeShipping || coupon.type === "free_shipping"),
+      type: coupon.type === "brand" ? "brand" : "affiliate",
+      discountMode: mode,
+      discountPercent: coupon.discountPercent ?? 10,
+      fixedDiscountValue: coupon.fixedDiscountValue ?? 50,
+      freeShipping: Boolean(
+        coupon.freeShipping ||
+          coupon.type === "free_shipping" ||
+          mode === "free_shipping_only",
+      ),
       partnerName: coupon.partnerName || "",
       partnerPix: coupon.partnerPix || "",
-      validUntil: coupon.validUntil || "",
+      audienceMode: existingEmails.length > 0 ? "exclusive" : "public",
+      allowedEmails: existingEmails,
+      onlyFirstPurchase: Boolean(coupon.onlyFirstPurchase),
+      maxUsesPerUser:
+        coupon.maxUsesPerUser && Number(coupon.maxUsesPerUser) > 0
+          ? coupon.maxUsesPerUser
+          : "",
+      maxTotalUses:
+        coupon.maxTotalUses && Number(coupon.maxTotalUses) > 0
+          ? coupon.maxTotalUses
+          : "",
       minOrderValue: coupon.minOrderValue || "",
+      minItemsCount: coupon.minItemsCount || "",
+      startDate: coupon.startDate || "",
+      validUntil: coupon.validUntil || coupon.expirationDate || "",
       active: coupon.active ?? true,
     });
     setIsModalOpen(true);
+  };
+
+  const handleGenerateRandomCode = () => {
+    const prefixes = ["THR33", "DROP", "VIP", "CLUB", "STREET"];
+    const randomPrefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+    const randomSuffix = Math.random()
+      .toString(36)
+      .substring(2, 6)
+      .toUpperCase();
+    setFormData((prev) => ({
+      ...prev,
+      code: `${randomPrefix}${randomSuffix}`,
+    }));
+  };
+
+  const handleApplyPreset = (presetKey) => {
+    if (presetKey === "first_purchase") {
+      setFormData((prev) => ({
+        ...prev,
+        type: "brand",
+        partnerName: "THR33 Marca Oficial",
+        partnerPix: "",
+        code: prev.code || "BEMVINDO10",
+        discountMode: "percentage",
+        discountPercent: 10,
+        freeShipping: false,
+        audienceMode: "public",
+        allowedEmails: [],
+        onlyFirstPurchase: true,
+        maxUsesPerUser: 1,
+      }));
+    } else if (presetKey === "vip_email") {
+      setFormData((prev) => ({
+        ...prev,
+        type: "brand",
+        partnerName: "THR33 VIP Exclusivo",
+        partnerPix: "",
+        code: prev.code || "VIP20",
+        discountMode: "percentage",
+        discountPercent: 20,
+        audienceMode: "exclusive",
+        maxUsesPerUser: 1,
+      }));
+    } else if (presetKey === "affiliate_pix") {
+      setFormData((prev) => ({
+        ...prev,
+        type: "affiliate",
+        partnerName:
+          prev.partnerName === "THR33 Marca Oficial" ||
+          prev.partnerName === "THR33 VIP Exclusivo"
+            ? ""
+            : prev.partnerName,
+        discountMode: "percentage",
+        discountPercent: 10,
+        audienceMode: "public",
+        allowedEmails: [],
+        onlyFirstPurchase: false,
+        maxUsesPerUser: "",
+      }));
+    } else if (presetKey === "free_shipping") {
+      setFormData((prev) => ({
+        ...prev,
+        type: "brand",
+        partnerName: "THR33 Marca Oficial",
+        partnerPix: "",
+        code: prev.code || "FRETE33",
+        discountMode: "free_shipping_only",
+        discountPercent: 0,
+        freeShipping: true,
+      }));
+    }
+  };
+
+  const handleAddAllowedEmail = (e) => {
+    if (e) e.preventDefault();
+    const raw = String(emailInput || "").trim();
+    if (!raw) return;
+
+    const candidates = raw
+      .split(/[\s,;]+/)
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => s.includes("@") && s.includes("."));
+
+    if (candidates.length === 0) {
+      alert("Informe um endereço de e-mail válido (ex: cliente@email.com).");
+      return;
+    }
+
+    setFormData((prev) => {
+      const merged = Array.from(
+        new Set([...(prev.allowedEmails || []), ...candidates]),
+      );
+      return {
+        ...prev,
+        audienceMode: "exclusive",
+        allowedEmails: merged,
+      };
+    });
+    setEmailInput("");
+  };
+
+  const handleRemoveAllowedEmail = (targetEmail) => {
+    setFormData((prev) => ({
+      ...prev,
+      allowedEmails: (prev.allowedEmails || []).filter(
+        (em) => em !== targetEmail,
+      ),
+    }));
+  };
+
+  const handleExpirationShortcut = (days) => {
+    if (days === null) {
+      setFormData((prev) => ({ ...prev, validUntil: "" }));
+      return;
+    }
+    const target = new Date();
+    target.setDate(target.getDate() + days);
+    const yyyy = target.getFullYear();
+    const mm = String(target.getMonth() + 1).padStart(2, "0");
+    const dd = String(target.getDate()).padStart(2, "0");
+    setFormData((prev) => ({ ...prev, validUntil: `${yyyy}-${mm}-${dd}` }));
   };
 
   const handleSaveCoupon = async (e) => {
     e.preventDefault();
     if (!formData.code.trim()) return;
 
+    // Se o usuário digitou um e-mail no campo e não clicou em "+", adiciona automaticamente
+    let finalAllowedEmails =
+      formData.audienceMode === "exclusive"
+        ? [...(formData.allowedEmails || [])]
+        : [];
+    if (formData.audienceMode === "exclusive" && emailInput.trim()) {
+      const extra = emailInput
+        .split(/[\s,;]+/)
+        .map((s) => s.trim().toLowerCase())
+        .filter((s) => s.includes("@") && s.includes("."));
+      finalAllowedEmails = Array.from(
+        new Set([...finalAllowedEmails, ...extra]),
+      );
+    }
+
+    if (
+      formData.audienceMode === "exclusive" &&
+      finalAllowedEmails.length === 0
+    ) {
+      alert(
+        "Para um cupom exclusivo vinculado a contas, adicione pelo menos 1 e-mail autorizado.",
+      );
+      return;
+    }
+
     setSaving(true);
     const couponId =
       editingId || `coupon_${formData.code.trim().toLowerCase()}`;
     const isBrand = formData.type === "brand";
+    const discountMode = formData.discountMode || "percentage";
+    const isFreeShipping =
+      discountMode === "free_shipping_only"
+        ? true
+        : Boolean(formData.freeShipping);
 
     const payload = {
       code: formData.code.trim().toUpperCase(),
       type: formData.type,
-      discountPercent: Number(formData.discountPercent) || 0,
-      freeShipping: Boolean(formData.freeShipping),
+      discountMode,
+      discountPercent:
+        discountMode === "percentage"
+          ? Math.min(99, Math.max(0, Number(formData.discountPercent) || 0))
+          : 0,
+      fixedDiscountValue:
+        discountMode === "fixed"
+          ? Math.max(0, Number(formData.fixedDiscountValue) || 0)
+          : 0,
+      freeShipping: isFreeShipping,
       partnerName: isBrand
-        ? "THR33 Marca Oficial"
+        ? formData.partnerName.trim() || "THR33 Marca Oficial"
         : formData.partnerName.trim() || "Parceiro",
       partnerPix: isBrand ? "" : formData.partnerPix.trim() || "",
-      validUntil: formData.validUntil || "",
+      allowedEmails: finalAllowedEmails,
+      onlyFirstPurchase: Boolean(formData.onlyFirstPurchase),
+      maxUsesPerUser:
+        Number(formData.maxUsesPerUser) > 0
+          ? Number(formData.maxUsesPerUser)
+          : null,
+      maxTotalUses:
+        Number(formData.maxTotalUses) > 0
+          ? Number(formData.maxTotalUses)
+          : null,
       minOrderValue: Number(formData.minOrderValue) || 0,
+      minItemsCount: Number(formData.minItemsCount) || 0,
+      startDate: formData.startDate || "",
+      validUntil: formData.validUntil || "",
+      expirationDate: formData.validUntil || "",
       commissionRate: isBrand
         ? 0
         : editingId
@@ -1497,7 +1729,48 @@ export function CmsCupons() {
                 return (
                   <tr key={c.id}>
                     <td>
-                      <span className={styles.couponCode}>{c.code}</span>
+                      <div className={styles.codeCellGroup}>
+                        <span className={styles.couponCode}>{c.code}</span>
+                        <div className={styles.ruleTagsList}>
+                          {Array.isArray(c.allowedEmails) && c.allowedEmails.length > 0 && (
+                            <span
+                              className={`${styles.ruleMiniTag} ${styles.ruleTagVip}`}
+                              title={`Restrito a: ${c.allowedEmails.join(", ")}`}
+                            >
+                              <Lock size={9} />
+                              <span>
+                                VIP ({c.allowedEmails.length}{" "}
+                                {c.allowedEmails.length === 1 ? "conta" : "contas"})
+                              </span>
+                            </span>
+                          )}
+                          {Boolean(c.onlyFirstPurchase) && (
+                            <span className={`${styles.ruleMiniTag} ${styles.ruleTagFirst}`}>
+                              <Sparkles size={9} />
+                              <span>1ª COMPRA</span>
+                            </span>
+                          )}
+                          {Number(c.maxUsesPerUser) > 0 && (
+                            <span className={styles.ruleMiniTag}>
+                              <Users size={9} />
+                              <span>Máx: {c.maxUsesPerUser}/pessoa</span>
+                            </span>
+                          )}
+                          {Number(c.maxTotalUses) > 0 && (
+                            <span className={styles.ruleMiniTag}>
+                              <Hash size={9} />
+                              <span>
+                                Usos: {c.usageCount || 0}/{c.maxTotalUses}
+                              </span>
+                            </span>
+                          )}
+                          {Number(c.minOrderValue) > 0 && (
+                            <span className={styles.ruleMiniTag}>
+                              <span>Mín R$ {Number(c.minOrderValue).toFixed(0)}</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </td>
                     <td>
                       <strong className={styles.partnerName}>
@@ -1525,13 +1798,26 @@ export function CmsCupons() {
                     </td>
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '0.3rem', alignItems: 'flex-start' }}>
-                        <span className={styles.discountBadge}>
-                          -{c.discountPercent}% OFF
-                        </span>
-                        {Boolean(c.freeShipping || c.type === 'free_shipping') && (
+                        {c.discountMode === 'free_shipping_only' ? (
+                          <span className={styles.freeShipOnlyBadge}>
+                            <Truck size={11} />
+                            <span>FRETE GRÁTIS PURO</span>
+                          </span>
+                        ) : c.discountMode === 'fixed' ? (
+                          <span className={styles.discountBadge}>
+                            -R$ {Number(c.fixedDiscountValue || 0).toFixed(2)} OFF
+                          </span>
+                        ) : (
+                          <span className={styles.discountBadge}>
+                            -{c.discountPercent}% OFF
+                          </span>
+                        )}
+                        {c.discountMode !== 'free_shipping_only' &&
+                          Boolean(c.freeShipping || c.type === 'free_shipping') && (
                           <span style={{
                             display: 'inline-flex',
                             alignItems: 'center',
+                            gap: '0.25rem',
                             fontSize: '0.66rem',
                             fontWeight: 700,
                             letterSpacing: '0.5px',
@@ -1541,7 +1827,8 @@ export function CmsCupons() {
                             borderRadius: '3px',
                             border: '1px solid rgba(16, 185, 129, 0.35)'
                           }}>
-                            + FRETE GRÁTIS
+                            <Truck size={10} />
+                            <span>+ FRETE GRÁTIS</span>
                           </span>
                         )}
                       </div>
@@ -2391,15 +2678,20 @@ export function CmsCupons() {
         </div>
       )}
 
-      {/* MODAL CRIAÇÃO / EDIÇÃO */}
+      {/* MODAL CRIAÇÃO / EDIÇÃO — COUPON STUDIO */}
       {isModalOpen && (
         <div
           className={styles.modalBackdrop}
           onClick={() => setIsModalOpen(false)}
         >
-          <div className={styles.modal} onClick={(e) => e.stopPropagation()}>
+          <div className={styles.studioModal} onClick={(e) => e.stopPropagation()}>
             <div className={styles.modalTop}>
-              <h2>{editingId ? "EDITAR CUPOM" : "CRIAR NOVO CUPOM"}</h2>
+              <div>
+                <span className={styles.studioOverline}>
+                  THR33 COUPON STUDIO
+                </span>
+                <h2>{editingId ? "EDITAR CUPOM & REGRAS" : "CRIAR NOVO CUPOM"}</h2>
+              </div>
               <button
                 onClick={() => setIsModalOpen(false)}
                 className={styles.closeBtn}
@@ -2409,168 +2701,800 @@ export function CmsCupons() {
               </button>
             </div>
 
-            <form onSubmit={handleSaveCoupon} className={styles.form}>
-              <div className={styles.inputGroup}>
-                <label>
-                  TIPO DE CUPOM
-                  <InfoTooltip
-                    text="O comissionamento de parceiros sobe automaticamente conforme as metas de peças vendidas: 1-9 peças (8%), 10-19 peças (10%), 20+ peças (15%). Cupons da marca têm 0% de repasse."
-                    title="Meritocracia e Regras"
-                  />
-                </label>
-                <div className={styles.typeSelector}>
+            <div className={styles.studioScrollBody}>
+              {/* 1. TICKET LIVE PREVIEW */}
+              <div
+                className={`${styles.ticketPreview} ${
+                  formData.type === "brand"
+                    ? styles.ticketPreviewBrand
+                    : styles.ticketPreviewAffiliate
+                }`}
+              >
+                <div className={styles.ticketStubLeft}>
+                  <span className={styles.ticketTypeBadge}>
+                    {formData.type === "brand" ? (
+                      <>
+                        <ShieldCheck size={11} />
+                        <span>CUPOM MARCA</span>
+                      </>
+                    ) : (
+                      <>
+                        <Award size={11} />
+                        <span>PARCEIRO PIX</span>
+                      </>
+                    )}
+                  </span>
+                  <strong className={styles.ticketCodeDisplay}>
+                    {formData.code.trim() || "SEUCODIGO"}
+                  </strong>
+                  <small className={styles.ticketOwnerDisplay}>
+                    {formData.type === "brand"
+                      ? formData.partnerName || "THR33 Marca Oficial"
+                      : formData.partnerName || "Nome do Parceiro"}
+                  </small>
+                </div>
+
+                <div className={styles.ticketDividerLine} />
+
+                <div className={styles.ticketMainRight}>
+                  <div className={styles.ticketBenefitHeadline}>
+                    {formData.discountMode === "free_shipping_only" ? (
+                      <span>FRETE GRÁTIS LIBERADO</span>
+                    ) : formData.discountMode === "fixed" ? (
+                      <span>
+                        R$ {Number(formData.fixedDiscountValue || 0).toFixed(2)} OFF
+                        {formData.freeShipping ? " + FRETE GRÁTIS" : ""}
+                      </span>
+                    ) : (
+                      <span>
+                        {Number(formData.discountPercent || 0)}% OFF
+                        {formData.freeShipping ? " + FRETE GRÁTIS" : ""}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className={styles.ticketActiveRules}>
+                    {formData.audienceMode === "exclusive" ? (
+                      <span className={`${styles.ticketRulePill} ${styles.ticketRuleVip}`}>
+                        <Lock size={10} />
+                        <span>
+                          VIP: {formData.allowedEmails.length}{" "}
+                          {formData.allowedEmails.length === 1 ? "conta" : "contas"}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className={styles.ticketRulePill}>
+                        <Users size={10} />
+                        <span>Público Geral</span>
+                      </span>
+                    )}
+
+                    {formData.onlyFirstPurchase && (
+                      <span className={`${styles.ticketRulePill} ${styles.ticketRuleHighlight}`}>
+                        <Sparkles size={10} />
+                        <span>1ª Compra</span>
+                      </span>
+                    )}
+
+                    {Number(formData.maxUsesPerUser) > 0 && (
+                      <span className={styles.ticketRulePill}>
+                        <Users size={10} />
+                        <span>Limite: {formData.maxUsesPerUser}x por conta</span>
+                      </span>
+                    )}
+
+                    {Number(formData.maxTotalUses) > 0 && (
+                      <span className={styles.ticketRulePill}>
+                        <Hash size={10} />
+                        <span>Global: {formData.maxTotalUses} usos</span>
+                      </span>
+                    )}
+
+                    {Number(formData.minOrderValue) > 0 && (
+                      <span className={styles.ticketRulePill}>
+                        <span>Mín R$ {Number(formData.minOrderValue).toFixed(0)}</span>
+                      </span>
+                    )}
+
+                    {Number(formData.minItemsCount) > 0 && (
+                      <span className={styles.ticketRulePill}>
+                        <ShoppingBag size={10} />
+                        <span>Mín {formData.minItemsCount} pç(s)</span>
+                      </span>
+                    )}
+
+                    {formData.validUntil && (
+                      <span className={styles.ticketRulePill}>
+                        <Clock size={10} />
+                        <span>Até {formatShortDate(formData.validUntil)}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. PRESETS RÁPIDOS DE 1 CLIQUE */}
+              <div className={styles.presetsBar}>
+                <span className={styles.presetsLabel}>PRESETS RÁPIDOS:</span>
+                <div className={styles.presetsPills}>
                   <button
                     type="button"
-                    className={`${styles.typeBtn} ${formData.type === "affiliate" ? styles.activeTypeBtn : ""}`}
-                    onClick={() =>
-                      setFormData({ ...formData, type: "affiliate" })
-                    }
+                    onClick={() => handleApplyPreset("first_purchase")}
+                    className={styles.presetPillBtn}
                   >
-                    PARCEIRO / AFILIADO (COM COMISSÃO)
+                    <Sparkles size={12} />
+                    <span>1ª Compra (1x por Conta)</span>
                   </button>
                   <button
                     type="button"
-                    className={`${styles.typeBtn} ${formData.type === "brand" ? styles.activeTypeBtn : ""}`}
-                    onClick={() =>
-                      setFormData({
-                        ...formData,
-                        type: "brand",
-                        partnerName: "THR33 Marca Oficial",
-                        partnerPix: "",
-                      })
-                    }
+                    onClick={() => handleApplyPreset("vip_email")}
+                    className={styles.presetPillBtn}
                   >
-                    CUPOM DA MARCA (0% COMISSÃO)
+                    <Lock size={12} />
+                    <span>VIP Vinculado a E-mail</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset("affiliate_pix")}
+                    className={styles.presetPillBtn}
+                  >
+                    <DollarSign size={12} />
+                    <span>Afiliado / Parceiro Pix</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleApplyPreset("free_shipping")}
+                    className={styles.presetPillBtn}
+                  >
+                    <Truck size={12} />
+                    <span>Frete Grátis Puro</span>
                   </button>
                 </div>
               </div>
 
-              <div className={styles.gridTwo}>
-                <div className={styles.inputGroup}>
-                  <label>CÓDIGO DO CUPOM *</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: CUPOM10"
-                    value={formData.code}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        code: e.target.value.toUpperCase(),
-                      })
-                    }
-                    required
-                  />
-                </div>
-                <div className={styles.inputGroup}>
-                  <label>DESCONTO DO CLIENTE (% OFF) *</label>
-                  <input
-                    type="number"
-                    min="1"
-                    max="100"
-                    value={formData.discountPercent}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        discountPercent: e.target.value,
-                      })
-                    }
-                    required
-                  />
-                </div>
-              </div>
+              <form onSubmit={handleSaveCoupon} className={styles.form}>
+                {/* ORIGEM / CATEGORIA DO CUPOM */}
+                <div className={styles.studioSectionCard}>
+                  <div className={styles.studioSectionHeader}>
+                    <ShieldCheck size={14} />
+                    <span>MODALIDADE & COMISSIONAMENTO</span>
+                    <InfoTooltip
+                      text="O comissionamento de parceiros sobe automaticamente conforme as metas de peças vendidas: 1-9 peças (8%), 10-19 peças (10%), 20+ peças (15%). Cupons da marca têm 0% de repasse."
+                      title="Meritocracia e Regras"
+                    />
+                  </div>
 
-              {formData.type === "affiliate" && (
-                <div className={styles.gridTwo}>
+                  <div className={styles.typeSelector}>
+                    <button
+                      type="button"
+                      className={`${styles.typeBtn} ${formData.type === "affiliate" ? styles.activeTypeBtn : ""}`}
+                      onClick={() =>
+                        setFormData({ ...formData, type: "affiliate" })
+                      }
+                    >
+                      PARCEIRO / AFILIADO (COM COMISSÃO)
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.typeBtn} ${formData.type === "brand" ? styles.activeTypeBtn : ""}`}
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          type: "brand",
+                          partnerName:
+                            formData.partnerName || "THR33 Marca Oficial",
+                          partnerPix: "",
+                        })
+                      }
+                    >
+                      CUPOM DA MARCA (0% COMISSÃO)
+                    </button>
+                  </div>
+
+                  {formData.type === "affiliate" ? (
+                    <div className={styles.gridTwo}>
+                      <div className={styles.inputGroup}>
+                        <label>NOME DO PARCEIRO *</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Eduardo"
+                          value={formData.partnerName}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              partnerName: e.target.value,
+                            })
+                          }
+                          required={formData.type === "affiliate"}
+                        />
+                      </div>
+                      <div className={styles.inputGroup}>
+                        <label>CHAVE PIX PARA REPASSE</label>
+                        <input
+                          type="text"
+                          placeholder="CPF, E-mail, Telefone ou Aleatória"
+                          value={formData.partnerPix}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              partnerPix: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={styles.inputGroup}>
+                      <label>IDENTIFICAÇÃO INTERNA DA CAMPANHA (OPCIONAL)</label>
+                      <input
+                        type="text"
+                        placeholder="Ex: THR33 Marca Oficial / Campanha VIP"
+                        value={formData.partnerName}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            partnerName: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  )}
+                </div>
+
+                {/* BLOCO 1 — CÓDIGO & BENEFÍCIO */}
+                <div className={styles.studioSectionCard}>
+                  <div className={styles.studioSectionHeader}>
+                    <Tag size={14} />
+                    <span>BLOCO 1 — CÓDIGO & FORMATO DE BENEFÍCIO</span>
+                  </div>
+
                   <div className={styles.inputGroup}>
-                    <label>NOME DO PARCEIRO *</label>
+                    <div className={styles.labelRowWithAction}>
+                      <label>CÓDIGO DO CUPOM *</label>
+                      <button
+                        type="button"
+                        onClick={handleGenerateRandomCode}
+                        className={styles.inlineActionBtn}
+                      >
+                        <Shuffle size={11} />
+                        <span>Gerar Aleatório</span>
+                      </button>
+                    </div>
                     <input
                       type="text"
-                      placeholder="Ex: Eduardo"
-                      value={formData.partnerName}
+                      placeholder="Ex: EDU10, BEMVINDO10, VIP50"
+                      value={formData.code}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
-                          partnerName: e.target.value,
+                          code: e.target.value.toUpperCase().replace(/\s+/g, ""),
                         })
                       }
-                      required={formData.type === "affiliate"}
+                      required
                     />
                   </div>
+
                   <div className={styles.inputGroup}>
-                    <label>CHAVE PIX</label>
-                    <input
-                      type="text"
-                      placeholder="Chave Pix para repasse"
-                      value={formData.partnerPix}
-                      onChange={(e) =>
-                        setFormData({ ...formData, partnerPix: e.target.value })
+                    <label>MODO DE BENEFÍCIO</label>
+                    <div className={styles.benefitModeGrid}>
+                      <button
+                        type="button"
+                        className={`${styles.benefitModeBtn} ${
+                          formData.discountMode === "percentage"
+                            ? styles.activeBenefitMode
+                            : ""
+                        }`}
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            discountMode: "percentage",
+                          })
+                        }
+                      >
+                        <Percent size={13} />
+                        <span>% Porcentagem</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`${styles.benefitModeBtn} ${
+                          formData.discountMode === "fixed"
+                            ? styles.activeBenefitMode
+                            : ""
+                        }`}
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            discountMode: "fixed",
+                          })
+                        }
+                      >
+                        <DollarSign size={13} />
+                        <span>R$ Valor Fixo</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        className={`${styles.benefitModeBtn} ${
+                          formData.discountMode === "free_shipping_only"
+                            ? styles.activeBenefitMode
+                            : ""
+                        }`}
+                        onClick={() =>
+                          setFormData({
+                            ...formData,
+                            discountMode: "free_shipping_only",
+                            freeShipping: true,
+                          })
+                        }
+                      >
+                        <Truck size={13} />
+                        <span>Apenas Frete Grátis</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {formData.discountMode === "percentage" && (
+                    <div className={styles.inputGroup}>
+                      <label>DESCONTO DO CLIENTE (% OFF) *</label>
+                      <div className={styles.inputWithQuickBtns}>
+                        <input
+                          type="number"
+                          min="1"
+                          max="99"
+                          value={formData.discountPercent}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              discountPercent: e.target.value,
+                            })
+                          }
+                          required
+                        />
+                        <div className={styles.quickValueBtns}>
+                          {[5, 10, 15, 20, 30, 50].map((pct) => (
+                            <button
+                              key={pct}
+                              type="button"
+                              onClick={() =>
+                                setFormData({
+                                  ...formData,
+                                  discountPercent: pct,
+                                })
+                              }
+                              className={`${styles.quickValBtn} ${
+                                Number(formData.discountPercent) === pct
+                                  ? styles.activeQuickValBtn
+                                  : ""
+                              }`}
+                            >
+                              {pct}%
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.discountMode === "fixed" && (
+                    <div className={styles.inputGroup}>
+                      <label>VALOR FIXO DE DESCONTO (R$) *</label>
+                      <div className={styles.inputWithQuickBtns}>
+                        <input
+                          type="number"
+                          min="1"
+                          step="0.01"
+                          placeholder="50.00"
+                          value={formData.fixedDiscountValue}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              fixedDiscountValue: e.target.value,
+                            })
+                          }
+                          required
+                        />
+                        <div className={styles.quickValueBtns}>
+                          {[20, 30, 50, 80, 100].map((val) => (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() =>
+                                setFormData({
+                                  ...formData,
+                                  fixedDiscountValue: val,
+                                })
+                              }
+                              className={`${styles.quickValBtn} ${
+                                Number(formData.fixedDiscountValue) === val
+                                  ? styles.activeQuickValBtn
+                                  : ""
+                              }`}
+                            >
+                              R$ {val}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {formData.discountMode !== "free_shipping_only" && (
+                    <div className={styles.toggleFeatureCard}>
+                      <label className={styles.toggleFeatureLabel}>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(formData.freeShipping)}
+                          onChange={(e) =>
+                            setFormData({
+                              ...formData,
+                              freeShipping: e.target.checked,
+                            })
+                          }
+                        />
+                        <div>
+                          <span
+                            className={
+                              formData.freeShipping
+                                ? styles.toggleTitleActive
+                                : styles.toggleTitle
+                            }
+                          >
+                            ACUMULAR FRETE GRÁTIS NESTE CUPOM
+                          </span>
+                          <small className={styles.toggleSub}>
+                            Zera o valor do frete no carrinho e checkout sem cancelar o desconto configurado acima.
+                          </small>
+                        </div>
+                      </label>
+                    </div>
+                  )}
+                </div>
+
+                {/* BLOCO 2 — PÚBLICO-ALVO & VÍNCULO DE CONTA */}
+                <div className={styles.studioSectionCard}>
+                  <div className={styles.studioSectionHeader}>
+                    <Lock size={14} />
+                    <span>BLOCO 2 — PÚBLICO-ALVO & VÍNCULO DE CONTA</span>
+                  </div>
+
+                  <div className={styles.typeSelector}>
+                    <button
+                      type="button"
+                      className={`${styles.typeBtn} ${
+                        formData.audienceMode === "public"
+                          ? styles.activeTypeBtn
+                          : ""
+                      }`}
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          audienceMode: "public",
+                          allowedEmails: [],
+                        })
                       }
-                    />
+                    >
+                      <Users size={12} />
+                      <span>PÚBLICO GERAL (QUALQUER CONTA)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      className={`${styles.typeBtn} ${
+                        formData.audienceMode === "exclusive"
+                          ? styles.activeTypeBtn
+                          : ""
+                      }`}
+                      onClick={() =>
+                        setFormData({
+                          ...formData,
+                          audienceMode: "exclusive",
+                        })
+                      }
+                    >
+                      <Lock size={12} />
+                      <span>EXCLUSIVO PARA CONTAS (E-MAILS)</span>
+                    </button>
+                  </div>
+
+                  {formData.audienceMode === "exclusive" && (
+                    <div className={styles.exclusiveEmailsBox}>
+                      <label>
+                        CONTAS AUTORIZADAS (DIGITE O E-MAIL E PRESSIONE ENTER OU +)
+                      </label>
+                      <div className={styles.emailAdderRow}>
+                        <input
+                          type="email"
+                          placeholder="cliente@email.com (ou vários separados por vírgula)"
+                          value={emailInput}
+                          onChange={(e) => setEmailInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              e.preventDefault();
+                              handleAddAllowedEmail();
+                            }
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={handleAddAllowedEmail}
+                          className={styles.addEmailChipBtn}
+                        >
+                          <Plus size={13} />
+                          <span>Adicionar</span>
+                        </button>
+                      </div>
+
+                      {formData.allowedEmails.length > 0 ? (
+                        <div className={styles.emailChipsContainer}>
+                          {formData.allowedEmails.map((em) => (
+                            <span key={em} className={styles.emailChip}>
+                              <Lock size={10} />
+                              <span>{em}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAllowedEmail(em)}
+                                className={styles.removeChipBtn}
+                                title="Remover conta"
+                              >
+                                <X size={11} />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <small className={styles.emptyEmailsHint}>
+                          Nenhum e-mail adicionado ainda. Apenas os clientes listados aqui poderão aplicar este cupom.
+                        </small>
+                      )}
+                    </div>
+                  )}
+
+                  <div className={styles.toggleFeatureCard}>
+                    <label className={styles.toggleFeatureLabel}>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(formData.onlyFirstPurchase)}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            onlyFirstPurchase: e.target.checked,
+                          })
+                        }
+                      />
+                      <div>
+                        <span
+                          className={
+                            formData.onlyFirstPurchase
+                              ? styles.toggleTitleActivePurple
+                              : styles.toggleTitle
+                          }
+                        >
+                          VÁLIDO APENAS NA 1ª COMPRA DO CLIENTE
+                        </span>
+                        <small className={styles.toggleSub}>
+                          Bloqueia o uso se a conta (UID ou E-mail) já possuir qualquer pedido válido anterior na THR33.
+                        </small>
+                      </div>
+                    </label>
                   </div>
                 </div>
-              )}
 
-              <div className={styles.gridTwo}>
-                <div className={styles.inputGroup}>
-                  <label>VALIDADE (OPCIONAL)</label>
-                  <input
-                    type="date"
-                    value={formData.validUntil}
-                    onChange={(e) =>
-                      setFormData({ ...formData, validUntil: e.target.value })
-                    }
-                  />
+                {/* BLOCO 3 — LIMITES DE USO & REGRAS DE ESCASSEZ */}
+                <div className={styles.studioSectionCard}>
+                  <div className={styles.studioSectionHeader}>
+                    <Clock size={14} />
+                    <span>BLOCO 3 — LIMITES DE USO & REGRAS DE ESCASSEZ</span>
+                  </div>
+
+                  <div className={styles.gridTwo}>
+                    <div className={styles.inputGroup}>
+                      <label>LIMITE DE USOS POR CLIENTE (CONTA)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Ilimitado"
+                        value={formData.maxUsesPerUser}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            maxUsesPerUser: e.target.value,
+                          })
+                        }
+                      />
+                      <div className={styles.quickValueBtns}>
+                        {[
+                          { label: "1x", val: 1 },
+                          { label: "2x", val: 2 },
+                          { label: "3x", val: 3 },
+                          { label: "Ilimitado", val: "" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.label}
+                            type="button"
+                            onClick={() =>
+                              setFormData({
+                                ...formData,
+                                maxUsesPerUser: opt.val,
+                              })
+                            }
+                            className={`${styles.quickValBtn} ${
+                              String(formData.maxUsesPerUser || "") ===
+                              String(opt.val)
+                                ? styles.activeQuickValBtn
+                                : ""
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className={styles.inputGroup}>
+                      <label>LIMITE GLOBAL DO CUPOM (TOTAL NA LOJA)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Ilimitado (ex: 50 para Drop)"
+                        value={formData.maxTotalUses}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            maxTotalUses: e.target.value,
+                          })
+                        }
+                      />
+                      <div className={styles.quickValueBtns}>
+                        {[
+                          { label: "10", val: 10 },
+                          { label: "50", val: 50 },
+                          { label: "100", val: 100 },
+                          { label: "Ilimitado", val: "" },
+                        ].map((opt) => (
+                          <button
+                            key={opt.label}
+                            type="button"
+                            onClick={() =>
+                              setFormData({
+                                ...formData,
+                                maxTotalUses: opt.val,
+                              })
+                            }
+                            className={`${styles.quickValBtn} ${
+                              String(formData.maxTotalUses || "") ===
+                              String(opt.val)
+                                ? styles.activeQuickValBtn
+                                : ""
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={styles.gridTwo}>
+                    <div className={styles.inputGroup}>
+                      <label>PEDIDO MÍNIMO (R$)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00 (Sem mínimo)"
+                        value={formData.minOrderValue}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            minOrderValue: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className={styles.inputGroup}>
+                      <label>MÍNIMO DE PEÇAS NO CARRINHO</label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0 (Sem mínimo)"
+                        value={formData.minItemsCount}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            minItemsCount: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className={styles.gridTwo}>
+                    <div className={styles.inputGroup}>
+                      <label>DATA DE INÍCIO (OPCIONAL)</label>
+                      <input
+                        type="date"
+                        value={formData.startDate}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            startDate: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+
+                    <div className={styles.inputGroup}>
+                      <label>DATA DE EXPIRAÇÃO (OPCIONAL)</label>
+                      <input
+                        type="date"
+                        value={formData.validUntil}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            validUntil: e.target.value,
+                          })
+                        }
+                      />
+                      <div className={styles.quickValueBtns}>
+                        <button
+                          type="button"
+                          onClick={() => handleExpirationShortcut(1)}
+                          className={styles.quickValBtn}
+                        >
+                          +24h
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleExpirationShortcut(7)}
+                          className={styles.quickValBtn}
+                        >
+                          +7 dias
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleExpirationShortcut(30)}
+                          className={styles.quickValBtn}
+                        >
+                          +30 dias
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleExpirationShortcut(null)}
+                          className={`${styles.quickValBtn} ${
+                            !formData.validUntil ? styles.activeQuickValBtn : ""
+                          }`}
+                        >
+                          Sem fim
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div className={styles.inputGroup}>
-                  <label>PEDIDO MÍNIMO (R$)</label>
-                  <input
-                    type="number"
-                    placeholder="0.00"
-                    value={formData.minOrderValue}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        minOrderValue: e.target.value,
-                      })
-                    }
-                  />
+
+                <div className={styles.studioFooterActions}>
+                  <button
+                    type="button"
+                    onClick={() => setIsModalOpen(false)}
+                    className={styles.cancelStudioBtn}
+                  >
+                    CANCELAR
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={saving}
+                    className={styles.submitBtn}
+                  >
+                    {saving
+                      ? "SALVANDO NO FIRESTORE..."
+                      : editingId
+                        ? "SALVAR ALTERAÇÕES DO CUPOM"
+                        : "CRIAR E ATIVAR CUPOM"}
+                  </button>
                 </div>
-              </div>
-
-              <div className={styles.inputGroup} style={{ marginTop: '0.4rem', padding: '0.85rem', background: 'rgba(255, 255, 255, 0.02)', border: '1px solid rgba(255, 255, 255, 0.07)', borderRadius: '6px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', cursor: 'pointer', userSelect: 'none', margin: 0 }}>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(formData.freeShipping)}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        freeShipping: e.target.checked,
-                      })
-                    }
-                    style={{ width: '18px', height: '18px', accentColor: '#10b981', cursor: 'pointer' }}
-                  />
-                  <span style={{ fontSize: '0.85rem', fontWeight: 600, color: formData.freeShipping ? '#10b981' : 'inherit' }}>
-                    CONCEDER FRETE GRÁTIS NESTE CUPOM (ACUMULATIVO)
-                  </span>
-                </label>
-                <small style={{ color: 'var(--text-muted)', fontSize: '0.72rem', display: 'block', marginTop: '0.35rem', lineHeight: '1.4' }}>
-                  Ao habilitar, o cliente terá o frete zerado no carrinho e checkout, acumulando simultaneamente com a porcentagem de desconto configurada sem cancelamentos mútuos.
-                </small>
-              </div>
-
-              <button
-                type="submit"
-                disabled={saving}
-                className={styles.submitBtn}
-              >
-                {saving
-                  ? "SALVANDO..."
-                  : editingId
-                    ? "SALVAR ALTERAÇÕES"
-                    : "CRIAR CUPOM"}
-              </button>
-            </form>
+              </form>
+            </div>
           </div>
         </div>
       )}
