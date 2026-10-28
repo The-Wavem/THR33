@@ -7,10 +7,16 @@ import {
   updateProfile,
   updatePassword as fbUpdatePassword,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebaseConfig';
+
+// Configura o idioma do Firebase Auth para português para disparo de e-mails nativos em pt-BR
+auth.languageCode = 'pt-BR';
 
 const AuthContext = createContext();
 
@@ -275,6 +281,44 @@ export function AuthProvider({ children }) {
     }
   };
 
+  // Recuperação de Senha ("Esqueci minha senha") via Firebase Auth
+  const resetPassword = async (email) => {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    auth.languageCode = 'pt-BR';
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail, {
+        url: `${window.location.origin}/login`,
+        handleCodeInApp: false
+      });
+    } catch (err) {
+      // Fallback simples caso a URL ainda não esteja autorizada no console do Firebase
+      if (
+        err.code === 'auth/unauthorized-continue-uri' ||
+        err.code === 'auth/invalid-continue-uri' ||
+        err.code === 'auth/missing-continue-uri'
+      ) {
+        await sendPasswordResetEmail(auth, cleanEmail);
+      } else {
+        throw err;
+      }
+    }
+    return true;
+  };
+
+  // Verifica código oobCode de recuperação de senha e retorna o e-mail da conta
+  const verifyResetCode = async (oobCode) => {
+    auth.languageCode = 'pt-BR';
+    const accountEmail = await verifyPasswordResetCode(auth, oobCode);
+    return accountEmail;
+  };
+
+  // Confirma e salva a nova senha usando o oobCode diretamente na UI da THR33
+  const confirmNewPassword = async (oobCode, newPassword) => {
+    auth.languageCode = 'pt-BR';
+    await confirmPasswordReset(auth, oobCode, newPassword);
+    return true;
+  };
+
   // Função de Logout Real
   const logout = async () => {
     await signOut(auth);
@@ -321,6 +365,9 @@ export function AuthProvider({ children }) {
     completeProfile,
     updateUser,
     changePassword,
+    resetPassword,
+    verifyResetCode,
+    confirmNewPassword,
     logout,
     deleteAccount,
     loading,
