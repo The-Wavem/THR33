@@ -14,6 +14,8 @@ import {
   FileText,
   ArrowUpRight
 } from 'lucide-react';
+import { SEO } from '../../components/common/SEO';
+import { buildFaqSchema } from '../../utils/seoSchemas';
 import styles from './Suporte.module.css';
 
 const FAQ_DATA = [
@@ -63,6 +65,12 @@ export function Suporte() {
 
   return (
     <main className={styles.container}>
+      <SEO
+        title="Central de Atendimento, SAC & Suporte Oficial | THR33 Streetwear"
+        description="Tire dúvidas sobre pedidos, prazos de entrega, trocas e devoluções. Atendimento direto com a equipe THR33 Streetwear via WhatsApp e e-mail."
+        url="/suporte"
+        jsonLd={buildFaqSchema(FAQ_DATA)}
+      />
       <header className={styles.header}>
         <span className={styles.tag}>CENTRAL DE ATENDIMENTO & SAC</span>
         <h1 className={styles.title}>COMO PODEMOS TE AJUDAR?</h1>

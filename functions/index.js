@@ -2914,6 +2914,136 @@ exports.configureStorageCors = onCall({ region: FUNCTION_REGION }, async (reques
   }
 });
 
+/**
+ * Cloud Function HTTP: Gera Sitemap XML Dinâmico da THR33 Streetwear
+ * Consulta produtos e páginas públicas do Firestore com tags <image:image>
+ */
+exports.sitemap = onRequest(
+  {
+    region: FUNCTION_REGION,
+    cors: true,
+  },
+  async (req, res) => {
+    try {
+      const BASE_URL = "https://thr33-streetwear.web.app";
+
+      const escapeXml = (unsafe) => {
+        if (!unsafe) return "";
+        return String(unsafe)
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&apos;");
+      };
+
+      const formatDate = (dateVal) => {
+        try {
+          if (!dateVal) return new Date().toISOString().split("T")[0];
+          const d = dateVal.toDate ? dateVal.toDate() : new Date(dateVal);
+          if (isNaN(d.getTime())) return new Date().toISOString().split("T")[0];
+          return d.toISOString().split("T")[0];
+        } catch {
+          return new Date().toISOString().split("T")[0];
+        }
+      };
+
+      // 1. Rotas estáticas principais
+      const staticRoutes = [
+        { loc: `${BASE_URL}/`, priority: "1.0", changefreq: "daily" },
+        { loc: `${BASE_URL}/catalogo`, priority: "0.9", changefreq: "daily" },
+        { loc: `${BASE_URL}/brindes`, priority: "0.7", changefreq: "weekly" },
+        { loc: `${BASE_URL}/sobre`, priority: "0.7", changefreq: "monthly" },
+        { loc: `${BASE_URL}/como-funciona-a-entrega`, priority: "0.6", changefreq: "monthly" },
+        { loc: `${BASE_URL}/guia-de-tamanhos`, priority: "0.6", changefreq: "monthly" },
+        { loc: `${BASE_URL}/politicas`, priority: "0.5", changefreq: "monthly" },
+        { loc: `${BASE_URL}/suporte`, priority: "0.6", changefreq: "monthly" },
+      ];
+
+      const urlEntries = [];
+
+      // Adiciona rotas estáticas
+      const todayStr = new Date().toISOString().split("T")[0];
+      for (const r of staticRoutes) {
+        urlEntries.push(`  <url>
+    <loc>${escapeXml(r.loc)}</loc>
+    <lastmod>${todayStr}</lastmod>
+    <changefreq>${r.changefreq}</changefreq>
+    <priority>${r.priority}</priority>
+  </url>`);
+      }
+
+      // 2. Consulta produtos do Firestore
+      const db = getDb();
+      try {
+        const productsSnap = await db.collection("products").get();
+        productsSnap.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data.active === false) return;
+
+          const slug = data.slug || docSnap.id;
+          const productUrl = `${BASE_URL}/produto/${slug}`;
+          const lastmod = formatDate(data.updatedAt || data.createdAt);
+          const title = data.name || data.title || "Camiseta Streetwear THR33";
+          const image = data.image || (Array.isArray(data.images) && data.images[0]) || "";
+
+          let imageTag = "";
+          if (image && image.startsWith("http")) {
+            imageTag = `\n    <image:image>
+      <image:loc>${escapeXml(image)}</image:loc>
+      <image:title>${escapeXml(title)}</image:title>
+    </image:image>`;
+          }
+
+          urlEntries.push(`  <url>
+    <loc>${escapeXml(productUrl)}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>${imageTag}
+  </url>`);
+        });
+      } catch (prodErr) {
+        logger.warn("Aviso ao buscar produtos para o sitemap:", prodErr.message);
+      }
+
+      // 3. Consulta brindes colecionáveis
+      try {
+        const giftsSnap = await db.collection("gifts").get();
+        giftsSnap.forEach((docSnap) => {
+          const data = docSnap.data();
+          if (data.active === false) return;
+
+          const giftUrl = `${BASE_URL}/brindes/${docSnap.id}`;
+          const lastmod = formatDate(data.updatedAt || data.createdAt);
+
+          urlEntries.push(`  <url>
+    <loc>${escapeXml(giftUrl)}</loc>
+    <lastmod>${lastmod}</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>`);
+        });
+      } catch (giftErr) {
+        logger.warn("Aviso ao buscar brindes para o sitemap:", giftErr.message);
+      }
+
+      // Monta XML completo
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">
+${urlEntries.join("\n")}
+</urlset>`;
+
+      res.set("Content-Type", "application/xml; charset=utf-8");
+      res.set("Cache-Control", "public, max-age=3600, s-maxage=3600");
+      return res.status(200).send(xml);
+    } catch (err) {
+      logger.error("Erro ao gerar sitemap:", err);
+      return res.status(500).send("Erro interno ao gerar sitemap.xml");
+    }
+  },
+);
+
 
 
 

@@ -59,6 +59,7 @@ import {
   normalizeOrderStatus, 
   getOrderStatusMeta 
 } from '../../services/orderStateMachine';
+import { SEO } from '../../components/common/SEO';
 import styles from './Perfil.module.css';
 
 const parseItemPrice = (item) => {
@@ -1214,6 +1215,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
   return (
     <main className={styles.container}>
+      <SEO title="Minha Conta — Painel do Cliente | THR33 Streetwear" noindex={true} />
       {/* HEADER LIMPO DE BOAS-VINDAS */}
       <header className={styles.welcomeHeader}>
         <h1 className={styles.title}>Bem vindo de volta, {firstName}</h1>

@@ -15,6 +15,8 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { analyticsService } from '../../services/analyticsService';
 import { formatFitBadgeLabel, formatCategoryBadgeLabel } from '../../utils/fitUtils';
+import { SEO } from '../../components/common/SEO';
+import { buildProductSchema, buildBreadcrumbSchema } from '../../utils/seoSchemas';
 import styles from './ProdutoDetalhe.module.css';
 
 const DEFAULT_SIZE_CHART = [
@@ -275,6 +277,46 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
   const isFavorite = product?.id ? isInWishlist(product.id) : false;
 
+  const productSeoData = useMemo(() => {
+    if (!product) return null;
+    const name = product.name || product.title || 'Camiseta Streetwear THR33';
+    const desc =
+      product.description ||
+      `Camiseta ${name} com modelagem exclusiva THR33, alta gramatura e corte premium. Produção sob demanda for the few.`;
+    const image = product.image || (Array.isArray(product.images) && product.images[0]) || '';
+    const rawPrice = Number(product.discountPrice || product.price || 0);
+
+    const isOutOfStock =
+      product.inStock === false ||
+      product.active === false ||
+      (product.totalStock !== undefined && Number(product.totalStock) === 0);
+
+    const productSchema = buildProductSchema(product, approvedReviews);
+    const breadcrumbSchema = buildBreadcrumbSchema([
+      { name: 'Início', url: '/' },
+      { name: 'Catálogo', url: '/catalogo' },
+      { name: name, url: `/produto/${product.slug || product.id}` }
+    ]);
+
+    const combinedJsonLd = [];
+    if (productSchema) combinedJsonLd.push(productSchema);
+    if (breadcrumbSchema) combinedJsonLd.push(breadcrumbSchema);
+
+    return {
+      title: `${name} | THR33 Streetwear`,
+      description: desc,
+      image,
+      url: `/produto/${product.slug || product.id}`,
+      type: 'product',
+      productMeta: {
+        price: rawPrice.toFixed(2),
+        currency: 'BRL',
+        availability: isOutOfStock ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock'
+      },
+      jsonLd: combinedJsonLd
+    };
+  }, [product, approvedReviews]);
+
   const handlePrevImage = () => {
     setSelectedImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
   };
@@ -409,6 +451,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
   if (!product) {
     return (
       <main className={styles.container}>
+        <SEO title="Peça Não Encontrada | THR33 Streetwear" noindex={true} />
         <div className={styles.notFoundWrapper}>
           <motion.div 
             className={styles.notFoundCard}
@@ -491,6 +534,17 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
   return (
     <main className={styles.container}>
+      {productSeoData && (
+        <SEO
+          title={productSeoData.title}
+          description={productSeoData.description}
+          image={productSeoData.image}
+          url={productSeoData.url}
+          type="product"
+          productMeta={productSeoData.productMeta}
+          jsonLd={productSeoData.jsonLd}
+        />
+      )}
       {/* NAVEGAÇÃO BREADCRUMB */}
       <nav aria-label="Breadcrumb" className={styles.breadcrumb}>
         <Link to="/" className={styles.breadcrumbLink}>HOME</Link>

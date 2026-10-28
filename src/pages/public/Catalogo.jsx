@@ -8,6 +8,8 @@ import { catalogService, fetchProducts } from '../../services/catalogService';
 import { fetchActiveDiscounts } from '../../services/campaignService';
 import { logPageView } from '../../services/analyticsService';
 import { normalizeFitSlug, formatFitLabel } from '../../utils/fitUtils';
+import { SEO } from '../../components/common/SEO';
+import { buildBreadcrumbSchema } from '../../utils/seoSchemas';
 import styles from './Catalogo.module.css';
 
 export function Catalogo() {
@@ -290,8 +292,40 @@ export function Catalogo() {
     selectedFits.length + selectedSizes.length + (searchQuery.trim() ? 1 : 0);
   const totalActiveWithSort = activeFiltersCount + (sortOrder !== 'newest' ? 1 : 0);
 
+  const seoTitle = useMemo(() => {
+    if (categorySlug) {
+      return `${formatFitLabel(categorySlug)} — Catálogo`;
+    }
+    if (selectedFits.length === 1) {
+      return `${formatFitLabel(selectedFits[0])} — Catálogo`;
+    }
+    if (searchQuery.trim()) {
+      return `Busca por "${searchQuery.trim()}" — Catálogo`;
+    }
+    return 'Catálogo Completo — Streetwear Autoral & Lotes Limitados';
+  }, [categorySlug, selectedFits, searchQuery]);
+
+  const breadcrumbsSchema = useMemo(() => {
+    const list = [
+      { name: 'Início', url: '/' },
+      { name: 'Catálogo', url: '/catalogo' }
+    ];
+    if (categorySlug) {
+      list.push({ name: formatFitLabel(categorySlug), url: `/categoria/${categorySlug}` });
+    } else if (selectedFits.length === 1) {
+      list.push({ name: formatFitLabel(selectedFits[0]), url: `/catalogo?fit=${selectedFits[0]}` });
+    }
+    return buildBreadcrumbSchema(list);
+  }, [categorySlug, selectedFits]);
+
   return (
     <main className={styles.catalogPage} ref={topRef}>
+      <SEO
+        title={seoTitle}
+        description="Confira a coleção completa da THR33 Streetwear. Camisetas Boxy, Oversized Heavyweight e peças exclusivas produzidas sob demanda."
+        url={categorySlug ? `/categoria/${categorySlug}` : '/catalogo'}
+        jsonLd={breadcrumbsSchema}
+      />
       {/* HEADER DA PÁGINA COM BREADCRUMB DINÂMICO E VISÍVEL */}
       <header className={styles.header}>
         <div>

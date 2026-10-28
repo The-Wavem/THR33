@@ -18,6 +18,7 @@ import {
   Scale
 } from 'lucide-react';
 import { analyticsService } from '../../services/analyticsService';
+import { SEO } from '../../components/common/SEO';
 import styles from './Politicas.module.css';
 
 const SECTIONS = [
@@ -146,6 +147,11 @@ export function Politicas() {
 
   return (
     <main className={styles.container}>
+      <SEO
+        title="Termos de Uso, Políticas de Troca, Frete e Privacidade | THR33 Streetwear"
+        description="Consulte os Termos de Uso, Políticas de Troca (CDC), Privacidade (LGPD) e regras de frete e produção da THR33 Streetwear."
+        url="/politicas"
+      />
       {/* HEADER EDITORIAL BRUTALISTA */}
       <header className={styles.header}>
         <div className={styles.headerTopMeta}>

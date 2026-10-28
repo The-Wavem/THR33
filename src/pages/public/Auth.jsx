@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { validateEmail, validatePassword, validateMaxLength } from '../../utils/validators';
+import { SEO } from '../../components/common/SEO';
 import styles from './Auth.module.css';
 
 // Número oficial do WhatsApp de suporte da THR33 (mesmo utilizado em Suporte.jsx)
@@ -410,6 +411,18 @@ export function Auth() {
 
   return (
     <main className={styles.container}>
+      <SEO
+        title={
+          viewMode === 'register'
+            ? 'Criar Conta | THR33 Streetwear'
+            : viewMode === 'forgot'
+            ? 'Recuperar Acesso | THR33 Streetwear'
+            : viewMode === 'reset_confirm'
+            ? 'Definir Nova Senha | THR33 Streetwear'
+            : 'Acessar Conta | THR33 Streetwear'
+        }
+        noindex={true}
+      />
       <div className={styles.authCard}>
         {/* ABAS SUPERIORES: VISÍVEIS APENAS EM LOGIN E CADASTRO */}
         {showTabsAndSocial && (

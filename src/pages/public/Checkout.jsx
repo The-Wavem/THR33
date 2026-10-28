@@ -30,6 +30,7 @@ import {
   Clock
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { SEO } from '../../components/common/SEO';
 import { 
   validateCPF, 
   validateCNPJ,
@@ -1419,6 +1420,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   if (currentStep === 4) {
     return (
       <main className={styles.successContainer}>
+        <SEO title="Pedido Confirmado | THR33 Streetwear" noindex={true} />
         <motion.div 
           className={styles.successCard}
           initial={{ opacity: 0, scale: 0.95 }}
@@ -1625,6 +1627,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   // -------------------------------------------------------------
   return (
     <main className={styles.container}>
+      <SEO title="Finalizar Pedido — Checkout Seguro | THR33 Streetwear" noindex={true} />
       {/* HEADER & STEPPER PROGRESSIVO */}
       <header className={styles.header}>
         <div className={styles.tagGroup}>

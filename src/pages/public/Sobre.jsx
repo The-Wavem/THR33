@@ -8,6 +8,7 @@ import { db } from '../../services/firebaseConfig';
 import { getVitrineSettings, fetchProducts } from '../../services/catalogService';
 import { analyticsService } from '../../services/analyticsService';
 import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
+import { SEO } from '../../components/common/SEO';
 import styles from './Sobre.module.css';
 
 import largoDaOrdemBg from '@assets/images/largo-da-ordem-bg.jpeg';
@@ -373,6 +374,11 @@ export function Sobre() {
 
   return (
     <div className={styles.pageWrapper}>
+      <SEO
+        title="O Ateliê & Manifesto Curitiba | THR33 Streetwear"
+        description="Conheça a história da THR33 Streetwear. Nascida no Largo da Ordem em Curitiba, unindo modelagens Boxy pesadas, arquitetura brutalista e produção sob demanda."
+        url="/sobre"
+      />
       {/* =========================================================================
           1. HERO COM PARALLAX REAL: VIELAS DE PARALELEPÍPEDOS DE CURITIBA (LARGO DA ORDEM)
           ========================================================================= */}

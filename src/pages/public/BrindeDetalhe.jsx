@@ -5,6 +5,7 @@ import { catalogService } from '../../services/catalogService';
 import { GIFTS_DATA } from '../../data/giftsData';
 import { useCart } from '../../context/CartContext';
 import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
+import { SEO } from '../../components/common/SEO';
 import styles from './BrindeDetalhe.module.css';
 
 const DEFAULT_GIFT_VALUES = [150, 300, 500, 1000];
@@ -143,6 +144,12 @@ export function BrindeDetalhe() {
 
   return (
     <main className={styles.container}>
+      <SEO
+        title={`${giftItem.name} | THR33 Streetwear`}
+        description={giftItem.description || 'Brinde exclusivo e acessório oficial da marca de streetwear THR33.'}
+        image={giftItem.image}
+        url={`/brindes/${giftItem.id}`}
+      />
       <nav className={styles.breadcrumb} aria-label="Navegação">
         <Link to="/">HOME</Link>
         <span>/</span>

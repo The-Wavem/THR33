@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Ruler } from 'lucide-react';
+import { SEO } from '../../components/common/SEO';
 import styles from './GuiaTamanhos.module.css';
 
 const FITS_SPECS = {
@@ -50,6 +51,11 @@ export function GuiaTamanhos() {
 
   return (
     <main className={styles.container}>
+      <SEO
+        title="Guia de Medidas & Modelagens | THR33 Streetwear"
+        description="Consulte a tabela de medidas oficial das modelagens Boxy Fit, Oversized Heavyweight e Oversized Clássica da THR33 Streetwear."
+        url="/guia-de-tamanhos"
+      />
       <header className={styles.header}>
         <span className={styles.tag}>ESPECIFICAÇÕES DE CORTE</span>
         <h1 className={styles.title}>GUIA DE MEDIDAS OFICIAL</h1>

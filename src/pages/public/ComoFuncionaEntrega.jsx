@@ -9,6 +9,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { analyticsService } from '../../services/analyticsService';
+import { SEO } from '../../components/common/SEO';
 import styles from './ComoFuncionaEntrega.module.css';
 
 export function ComoFuncionaEntrega() {
@@ -18,6 +19,11 @@ export function ComoFuncionaEntrega() {
 
   return (
     <main className={styles.container}>
+      <SEO
+        title="Como Funciona a Entrega & Produção Sob Demanda | THR33 Streetwear"
+        description="Entenda como funciona a produção sob demanda, prazos de confecção, código de rastreio e garantia de entrega da THR33 Streetwear em parceria com Savvy Print."
+        url="/como-funciona-a-entrega"
+      />
       <header className={styles.header}>
         <span className={styles.tag}>LOGÍSTICA, PRODUÇÃO EM LOTES & GARANTIA TOTAL</span>
         <h1 className={styles.title}>COMO FUNCIONA A PRODUÇÃO E ENTREGA</h1>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
 import ProductCard from '../../components/catalog/ProductCard';
+import { SEO } from '../../components/common/SEO';
 import styles from './Favoritos.module.css';
 
 export function Favoritos() {
@@ -23,6 +24,7 @@ export function Favoritos() {
 
   return (
     <main className={styles.container}>
+      <SEO title="Meus Favoritos — Lista de Desejos | THR33 Streetwear" noindex={true} />
       <header className={styles.header}>
         <div>
           <span className={styles.breadcrumb}>HOME / WISHLIST</span>

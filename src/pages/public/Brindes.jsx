@@ -5,6 +5,7 @@ import { ArrowRight } from 'lucide-react';
 import { catalogService } from '../../services/catalogService';
 import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
 import ProductCardSkeleton from '../../components/catalog/ProductCardSkeleton';
+import { SEO } from '../../components/common/SEO';
 import styles from './Brindes.module.css';
 
 export function Brindes() {
@@ -41,6 +42,11 @@ export function Brindes() {
 
   return (
     <main className={styles.container}>
+      <SEO
+        title="Brindes Colecionáveis & Vales-Presente | THR33 Streetwear"
+        description="Conheça os brindes exclusivos, chaveiros colecionáveis e vales-presente oficiais da THR33 Streetwear. Edições limitadas do drop."
+        url="/brindes"
+      />
       <header className={styles.header}>
         <div>
           <span className={styles.breadcrumb}>HOME // BRINDES & VALES</span>

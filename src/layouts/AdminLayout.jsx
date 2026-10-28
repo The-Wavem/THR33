@@ -18,6 +18,7 @@ import {
   PanelLeftOpen
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { SEO } from '../components/common/SEO';
 import styles from './AdminLayout.module.css';
 
 export function AdminLayout() {
@@ -46,6 +47,7 @@ export function AdminLayout() {
 
   return (
     <div className={styles.adminContainer}>
+      <SEO title="Painel Administrativo CMS | THR33 Streetwear" noindex={true} />
       {/* SIDEBAR DO CMS */}
       <aside className={`${styles.sidebar} ${isCollapsed ? styles.sidebarCollapsed : ''}`}>
         <div className={styles.brandHeader}>
