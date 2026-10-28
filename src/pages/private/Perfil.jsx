@@ -447,6 +447,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   // ENDEREÇOS DO USUÁRIO
   const [addresses, setAddresses] = useState([]);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState(null);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [cepError, setCepError] = useState(null);
 
@@ -1012,17 +1013,23 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       return;
     }
 
-    const updated = [
-      ...addresses, 
-      { 
-        ...newAddress, 
-        id: Date.now(), 
-        isDefault: addresses.length === 0 
-      }
-    ];
+    let updated;
+    if (editingAddressId) {
+      updated = addresses.map(a => a.id === editingAddressId ? { ...a, ...newAddress } : a);
+    } else {
+      updated = [
+        ...addresses, 
+        { 
+          ...newAddress, 
+          id: Date.now(), 
+          isDefault: addresses.length === 0 
+        }
+      ];
+    }
 
     setAddresses(updated);
     setIsAddingAddress(false);
+    setEditingAddressId(null);
     setNewAddress({ title: '', street: '', number: '', complement: '', neighborhood: '', city: 'Curitiba', state: 'PR', cep: '' });
 
     const activeUid = currentUser?.uid || user?.uid;
@@ -1035,8 +1042,34 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     }
   };
 
+  const handleStartEditAddress = (addr) => {
+    setEditingAddressId(addr.id);
+    setNewAddress({
+      title: addr.title || '',
+      street: addr.street || '',
+      number: addr.number || '',
+      complement: addr.complement || '',
+      neighborhood: addr.neighborhood || '',
+      city: addr.city || 'Curitiba',
+      state: addr.state || 'PR',
+      cep: addr.cep || ''
+    });
+    setIsAddingAddress(true);
+    setCepError(null);
+  };
+
+  const handleCancelAddressForm = () => {
+    setIsAddingAddress(false);
+    setEditingAddressId(null);
+    setNewAddress({ title: '', street: '', number: '', complement: '', neighborhood: '', city: 'Curitiba', state: 'PR', cep: '' });
+    setCepError(null);
+  };
+
   const handleDeleteAddress = async (id) => {
     if (window.confirm('Deseja realmente excluir este endereço?')) {
+      if (editingAddressId === id) {
+        handleCancelAddressForm();
+      }
       const filtered = addresses.filter(a => a.id !== id);
       if (filtered.length > 0 && !filtered.some(a => a.isDefault)) {
         filtered[0].isDefault = true;
@@ -1683,7 +1716,15 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                 <h2 className={styles.panelTitle}>MEUS ENDEREÇOS DE ENTREGA</h2>
                 <button 
                   type="button"
-                  onClick={() => setIsAddingAddress(!isAddingAddress)} 
+                  onClick={() => {
+                    if (isAddingAddress) {
+                      handleCancelAddressForm();
+                    } else {
+                      setEditingAddressId(null);
+                      setNewAddress({ title: '', street: '', number: '', complement: '', neighborhood: '', city: 'Curitiba', state: 'PR', cep: '' });
+                      setIsAddingAddress(true);
+                    }
+                  }} 
                   className={styles.addBtn}
                 >
                   <Plus size={14} />
@@ -1693,7 +1734,9 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
               {isAddingAddress && (
                 <form onSubmit={handleAddAddress} className={styles.addressForm}>
-                  <h3 className={styles.formSectionTitle}>CADASTRAR NOVO ENDEREÇO</h3>
+                  <h3 className={styles.formSectionTitle}>
+                    {editingAddressId ? 'EDITAR ENDEREÇO' : 'CADASTRAR NOVO ENDEREÇO'}
+                  </h3>
                   
                   <div className={styles.inputField}>
                     <label>Identificação do Endereço (Ex: Casa, Trabalho, Estúdio) *</label>
@@ -1800,7 +1843,20 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     </div>
                   </div>
 
-                  <button type="submit" className={styles.saveBtn}>CADASTRAR ENDEREÇO</button>
+                  <div className={styles.formButtonRow}>
+                    <button type="submit" className={styles.saveBtn}>
+                      {editingAddressId ? 'SALVAR ALTERAÇÕES' : 'CADASTRAR ENDEREÇO'}
+                    </button>
+                    {editingAddressId && (
+                      <button 
+                        type="button" 
+                        onClick={handleCancelAddressForm} 
+                        className={styles.cancelFormBtn}
+                      >
+                        CANCELAR
+                      </button>
+                    )}
+                  </div>
                 </form>
               )}
 
@@ -1831,6 +1887,14 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                       <p className={styles.addrText}>{addr.neighborhood} — {addr.city}/{addr.state} | CEP: {addr.cep}</p>
                       
                       <div className={styles.cardActions}>
+                        <button 
+                          type="button"
+                          onClick={() => handleStartEditAddress(addr)} 
+                          className={styles.editLink}
+                        >
+                          <Edit3 size={13} />
+                          <span>Editar</span>
+                        </button>
                         <button 
                           type="button"
                           onClick={() => handleDeleteAddress(addr.id)} 

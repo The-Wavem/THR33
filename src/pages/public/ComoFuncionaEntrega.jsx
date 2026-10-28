@@ -1,6 +1,13 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Truck, Clock, PackageCheck, ShieldAlert } from 'lucide-react';
+import {
+  Truck,
+  PackageCheck,
+  ShieldCheck,
+  Lock,
+  ArrowRight,
+  MessageSquare
+} from 'lucide-react';
 import { analyticsService } from '../../services/analyticsService';
 import styles from './ComoFuncionaEntrega.module.css';
 
@@ -12,23 +19,23 @@ export function ComoFuncionaEntrega() {
   return (
     <main className={styles.container}>
       <header className={styles.header}>
-        <span className={styles.tag}>LOGÍSTICA & TRANSPARÊNCIA</span>
-        <h1 className={styles.title}>COMO FUNCIONA A ENTREGA</h1>
+        <span className={styles.tag}>LOGÍSTICA, PRODUÇÃO EM LOTES & GARANTIA TOTAL</span>
+        <h1 className={styles.title}>COMO FUNCIONA A PRODUÇÃO E ENTREGA</h1>
         <p className={styles.lead}>
-          Operamos em modelo sob demanda sustentável. Cada peça é confeccionada exclusivamente após a confirmação da sua compra, garantindo exclusividade e zero desperdício têxtil.
+          A THR33 opera com lotes periódicos sob demanda em parceria com a <strong>Savvy Print</strong> para garantir que cada peça saia recém-estampada, com malha 100% algodão intacta e zero desperdício têxtil — sempre com <strong>100% de responsabilidade e garantia da THR33</strong> até chegar na sua porta.
         </p>
       </header>
 
-      {/* ETAPAS DO CICLO DE PRODUÇÃO */}
+      {/* 4 ETAPAS DO CICLO REAL THR33 */}
       <section className={styles.stepsSection}>
         <div className={styles.stepCard}>
           <div className={styles.stepHeader}>
             <span className={styles.stepNumber}>01</span>
-            <Clock className={styles.stepIcon} size={20} />
+            <Lock className={styles.stepIcon} size={20} />
           </div>
-          <h3>FECHAMENTO SEMANAL</h3>
+          <h3>CONFIRMAÇÃO SEGURA (PAGBANK)</h3>
           <p>
-            Os pedidos confirmados são consolidados semanalmente e enviados diretamente para a linha de corte e costura do nosso fornecedor têxtil parceiro.
+            Seu pagamento é processado e aprovado via PIX, Cartão de Crédito ou Débito diretamente pelo ambiente criptografado do PagBank, sem que a THR33 armazene dados sensíveis do seu cartão.
           </p>
         </div>
 
@@ -37,9 +44,9 @@ export function ComoFuncionaEntrega() {
             <span className={styles.stepNumber}>02</span>
             <PackageCheck className={styles.stepIcon} size={20} />
           </div>
-          <h3>CONFECÇÃO & ESTAMPARIA</h3>
+          <h3>PRODUÇÃO & CURADORIA DO LOTE (SAVVY PRINT)</h3>
           <p>
-            As peças passam pelo processo de estamparia em alta resolução e aplicação de etiqueta interna. O tempo médio de produção é de 5 a 8 dias úteis.
+            Seu pedido entra no ciclo semanal de produção da nossa parceira oficial homologada (<strong>Savvy Print</strong>), garantindo estampa nova de alta definição, malha impecável e revisão individual de qualidade.
           </p>
         </div>
 
@@ -48,22 +55,43 @@ export function ComoFuncionaEntrega() {
             <span className={styles.stepNumber}>03</span>
             <Truck className={styles.stepIcon} size={20} />
           </div>
-          <h3>DESPACHO DIRETO</h3>
+          <h3>DESPACHO & CÓDIGO DE RASTREIO</h3>
           <p>
-            A expedição ocorre diretamente da fábrica para o seu endereço. O código de rastreamento é emitido e disponibilizado no seu painel de pedidos e via e-mail.
+            Assim que finalizado no lote, o pacote é postado diretamente para o seu endereço via Correios ou transportadora, e o código de rastreio fica disponível em <strong>"Meus Pedidos"</strong> e no seu e-mail/WhatsApp.
+          </p>
+        </div>
+
+        <div className={styles.stepCard}>
+          <div className={styles.stepHeader}>
+            <span className={styles.stepNumber}>04</span>
+            <ShieldCheck className={styles.stepIcon} size={20} />
+          </div>
+          <h3>ENTREGA GARANTIDA THR33</h3>
+          <p>
+            Acompanhamos o pacote até a sua porta. Se houver qualquer imprevisto ou extravio nos Correios, a THR33 assume 100% e você escolhe entre receber uma nova peça sem custo ou o reembolso integral.
           </p>
         </div>
       </section>
 
-      {/* AVISO DE TRANSPORTE */}
+      {/* GARANTIA CONTRA EXTRAVIO E RESPONSABILIDADE SOLIDÁRIA */}
       <section className={styles.noticeSection}>
         <div className={styles.noticeBox}>
-          <ShieldAlert className={styles.noticeIcon} size={24} />
-          <div>
-            <h4>ENVIO EXCLUSIVO VIA TRANSPORTADORA E CORREIOS</h4>
+          <ShieldCheck className={styles.noticeIcon} size={26} />
+          <div className={styles.noticeContent}>
+            <h4>COMPRA 100% PROTEGIDA PELA THR33 DO INÍCIO AO FIM</h4>
             <p>
-              Não mantemos ponto de retirada física nem atendimento presencial para entrega. Todo o transporte é intermediado pelas transportadoras parceiras e pelos Correios, com seguro de carga e rastreamento de ponta a ponta.
+              Operamos exclusivamente online e todo o envio é realizado via Correios e transportadoras homologadas. Caso ocorra atraso atípico, avaria ou extravio postal, você nunca fica no prejuízo: basta acionar nosso atendimento humano no WhatsApp (<strong>+55 41 8841-0374</strong>), Direct (<strong>@madebythr33</strong>) ou na página de <Link to="/suporte" className={styles.inlineLink}>Suporte</Link> que resolvemos tudo diretamente para você.
             </p>
+            <div className={styles.noticeLinksRow}>
+              <Link to="/politicas#frete" className={styles.policyLink}>
+                <span>Ler Política Completa de Frete e Extravio</span>
+                <ArrowRight size={13} />
+              </Link>
+              <Link to="/politicas#trocas" className={styles.policyLink}>
+                <span>Ver Regras de Trocas e Devoluções (7 e 30 dias)</span>
+                <ArrowRight size={13} />
+              </Link>
+            </div>
           </div>
         </div>
       </section>
@@ -72,9 +100,20 @@ export function ComoFuncionaEntrega() {
       <section className={styles.ctaSection}>
         <h2>PRONTO PARA GARANTIR SUA PEÇA?</h2>
         <p>Explore as modelagens Oversized e Boxy disponíveis no catálogo atual.</p>
-        <Link className={styles.ctaBtn} to="/catalogo">
-          VER CATÁLOGO COMPLETO
-        </Link>
+        <div className={styles.ctaBtnsRow}>
+          <Link className={styles.ctaBtn} to="/catalogo">
+            VER CATÁLOGO COMPLETO
+          </Link>
+          <a
+            href="https://wa.me/554188410374"
+            target="_blank"
+            rel="noreferrer"
+            className={styles.ctaSecondaryBtn}
+          >
+            <MessageSquare size={14} />
+            <span>DÚVIDAS NO WHATSAPP</span>
+          </a>
+        </div>
       </section>
     </main>
   );

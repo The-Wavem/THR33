@@ -149,6 +149,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState('');
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState(null);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [cepApiMessage, setCepApiMessage] = useState(null);
 
@@ -702,27 +703,53 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     if (!validateNewAddress()) return;
 
     const normalizedNum = addressForm.noNumber ? 'S/N' : normalizeAddressNumber(addressForm.number);
-    const newId = `addr_${Date.now()}`;
-    const newAddrObj = {
-      id: newId,
-      title: addressForm.complement ? `Apto ${addressForm.complement}` : `Endereço ${addressForm.neighborhood || 'Entrega'}`,
-      label: `Endereço (${addressForm.neighborhood || 'Entrega'})`,
-      cep: addressForm.cep,
-      street: addressForm.street,
-      number: normalizedNum,
-      complement: addressForm.complement || '',
-      neighborhood: addressForm.neighborhood,
-      city: addressForm.city,
-      state: addressForm.state,
-      ibge: addressForm.ibge || '',
-      isDefault: savedAddresses.length === 0
-    };
+    let updatedList;
+    let targetId;
 
-    const updatedList = [...savedAddresses, newAddrObj];
+    if (editingAddressId) {
+      targetId = editingAddressId;
+      updatedList = savedAddresses.map(a => {
+        if (a.id === editingAddressId) {
+          return {
+            ...a,
+            title: addressForm.title || a.title || (addressForm.complement ? `Apto ${addressForm.complement}` : `Endereço ${addressForm.neighborhood || 'Entrega'}`),
+            label: `Endereço (${addressForm.neighborhood || 'Entrega'})`,
+            cep: addressForm.cep,
+            street: addressForm.street,
+            number: normalizedNum,
+            complement: addressForm.complement || '',
+            neighborhood: addressForm.neighborhood,
+            city: addressForm.city,
+            state: addressForm.state,
+            ibge: addressForm.ibge || a.ibge || ''
+          };
+        }
+        return a;
+      });
+    } else {
+      targetId = `addr_${Date.now()}`;
+      const newAddrObj = {
+        id: targetId,
+        title: addressForm.complement ? `Apto ${addressForm.complement}` : `Endereço ${addressForm.neighborhood || 'Entrega'}`,
+        label: `Endereço (${addressForm.neighborhood || 'Entrega'})`,
+        cep: addressForm.cep,
+        street: addressForm.street,
+        number: normalizedNum,
+        complement: addressForm.complement || '',
+        neighborhood: addressForm.neighborhood,
+        city: addressForm.city,
+        state: addressForm.state,
+        ibge: addressForm.ibge || '',
+        isDefault: savedAddresses.length === 0
+      };
+      updatedList = [...savedAddresses, newAddrObj];
+    }
+
     setSavedAddresses(updatedList);
-    setSelectedAddressId(newId);
+    setSelectedAddressId(targetId);
     setIsAddingNewAddress(false);
-    setAddressForm({ cep: '', street: '', number: '', neighborhood: '', complement: '', city: 'Curitiba', state: 'PR' });
+    setEditingAddressId(null);
+    setAddressForm({ cep: '', street: '', number: '', noNumber: false, neighborhood: '', complement: '', city: 'Curitiba', state: 'PR', ibge: '4106902' });
     setCepApiMessage(null);
 
     if (user?.uid) {
@@ -737,6 +764,33 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         console.warn("Erro ao salvar endereço no perfil:", err);
       }
     }
+  };
+
+  const handleStartEditAddress = (addr) => {
+    setEditingAddressId(addr.id);
+    setAddressForm({
+      cep: addr.cep || '',
+      street: addr.street || '',
+      number: addr.number === 'S/N' ? '' : (addr.number || ''),
+      noNumber: addr.number === 'S/N',
+      neighborhood: addr.neighborhood || '',
+      complement: addr.complement || '',
+      city: addr.city || 'Curitiba',
+      state: addr.state || 'PR',
+      ibge: addr.ibge || '4106902',
+      title: addr.title || ''
+    });
+    setAddressErrors({});
+    setCepApiMessage(null);
+    setIsAddingNewAddress(true);
+  };
+
+  const handleCancelAddressForm = () => {
+    setIsAddingNewAddress(false);
+    setEditingAddressId(null);
+    setAddressForm({ cep: '', street: '', number: '', noNumber: false, neighborhood: '', complement: '', city: 'Curitiba', state: 'PR', ibge: '4106902' });
+    setAddressErrors({});
+    setCepApiMessage(null);
   };
 
   const handleNextToStep3 = (e) => {
@@ -1812,7 +1866,13 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                       <span className={styles.subSectionTitle}>SELECIONE UM ENDEREÇO DE ENTREGA:</span>
                       <button 
                         type="button" 
-                        onClick={() => setIsAddingNewAddress(true)} 
+                        onClick={() => {
+                          setEditingAddressId(null);
+                          setAddressForm({ cep: '', street: '', number: '', noNumber: false, neighborhood: '', complement: '', city: 'Curitiba', state: 'PR', ibge: '4106902' });
+                          setAddressErrors({});
+                          setCepApiMessage(null);
+                          setIsAddingNewAddress(true);
+                        }} 
                         className={styles.toggleAddressBtn}
                       >
                         <Plus size={13} />
@@ -1831,7 +1891,21 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                           >
                             <div className={styles.addressCardHeader}>
                               <strong>{(addr.title || addr.label || 'ENDEREÇO').toUpperCase()}</strong>
-                              {addr.isDefault && <span className={styles.defaultBadge}>PADRÃO</span>}
+                              <div className={styles.cardHeaderRight}>
+                                {addr.isDefault && <span className={styles.defaultBadge}>PADRÃO</span>}
+                                <button
+                                  type="button"
+                                  className={styles.editAddressCardBtn}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleStartEditAddress(addr);
+                                  }}
+                                  title="Editar este endereço"
+                                >
+                                  <Edit3 size={11} />
+                                  <span>Editar</span>
+                                </button>
+                              </div>
                             </div>
                             <p className={styles.addrLine1}>
                               {addr.street}, {addr.number} {addr.complement ? `• ${addr.complement}` : ''}
@@ -1856,14 +1930,16 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 {isAddingNewAddress && (
                   <div className={styles.newAddressBox}>
                     <div className={styles.newAddressHeader}>
-                      <span className={styles.subSectionTitle}>CADASTRAR NOVO ENDEREÇO</span>
+                      <span className={styles.subSectionTitle}>
+                        {editingAddressId ? 'EDITAR ENDEREÇO DE ENTREGA' : 'CADASTRAR NOVO ENDEREÇO'}
+                      </span>
                       {savedAddresses.length > 0 && (
                         <button 
                           type="button" 
-                          onClick={() => setIsAddingNewAddress(false)} 
+                          onClick={handleCancelAddressForm} 
                           className={styles.cancelLink}
                         >
-                          ← Cancelar e escolher dos salvos
+                          ← Cancelar e voltar aos salvos
                         </button>
                       )}
                     </div>
@@ -2004,7 +2080,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                       className={styles.saveAddressBtn}
                     >
                       <Check size={14} />
-                      <span>CONFIRMAR E USAR ESTE ENDEREÇO</span>
+                      <span>{editingAddressId ? 'SALVAR ALTERAÇÕES E USAR ESTE ENDEREÇO' : 'CONFIRMAR E USAR ESTE ENDEREÇO'}</span>
                     </button>
                   </div>
                 )}

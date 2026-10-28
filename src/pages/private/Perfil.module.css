@@ -529,9 +529,29 @@
 .cardActions {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
+  gap: 1.1rem;
   margin-top: 0.5rem;
   padding-top: 0.5rem;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.editLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+  transition: color var(--transition-fast);
+}
+
+.editLink:hover {
+  color: var(--text-primary);
 }
 
 .deleteLink {
@@ -542,11 +562,38 @@
   font-weight: 700;
   color: #f87171;
   cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
   transition: opacity var(--transition-fast);
 }
 
 .deleteLink:hover {
   opacity: 0.8;
+}
+
+.formButtonRow {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.cancelFormBtn {
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  padding: 0.85rem 1.4rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cancelFormBtn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
 }
 
 /* HISTÓRICO DE PEDIDOS */

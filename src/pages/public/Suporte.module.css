@@ -1,28 +1,189 @@
 .container {
   max-width: 1280px;
   margin: 0 auto;
-  padding: 3rem 1.5rem 6rem;
+  padding: 3.5rem 1.5rem 6rem;
   color: var(--text-primary);
 }
 
 .header {
   text-align: center;
-  margin-bottom: 3.5rem;
+  margin-bottom: 3rem;
 }
 
 .tag {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 800;
   letter-spacing: 2px;
   color: var(--text-muted);
+  display: inline-block;
+  border: 1px solid var(--border-color);
+  background: var(--bg-card);
+  padding: 0.35rem 0.75rem;
+  margin-bottom: 0.6rem;
 }
 
 .title {
   font-family: var(--font-heading);
-  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-size: clamp(1.8rem, 4vw, 3.2rem);
   font-weight: 800;
-  margin-top: 0.3rem;
+  margin-top: 0.2rem;
+  line-height: 1.1;
+  word-break: break-word;
 }
 
+.subtitle {
+  max-width: 660px;
+  margin: 0.75rem auto 0;
+  font-size: 0.94rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+/* BARRA DE COMUNICAÇÃO DIRETA (ATENDIMENTO HUMANO) */
+.directBanner {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-left: 3px solid var(--text-primary);
+  padding: 2rem;
+  margin-bottom: 3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.directBannerHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 1rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.directBannerTitleGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+}
+
+.directBannerIcon {
+  color: var(--text-primary);
+  flex-shrink: 0;
+}
+
+.directBannerEyebrow {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+}
+
+.directBannerTitle {
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  margin-top: 0.15rem;
+}
+
+.policiesQuickBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: var(--text-primary);
+  color: var(--bg-primary);
+  padding: 0.75rem 1.2rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1.2px;
+  text-decoration: none;
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.policiesQuickBtn:hover {
+  opacity: 0.9;
+  transform: translateY(-1px);
+}
+
+.directBannerDesc {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.65;
+}
+
+.directQuickLinks {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.directQuickCard {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1rem 1.15rem;
+  text-decoration: none;
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast), background-color var(--transition-fast);
+}
+
+.directQuickCard:hover {
+  border-color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.directQuickIcon {
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--text-primary);
+}
+
+.directQuickInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+  flex: 1;
+}
+
+.directQuickLabel {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-muted);
+}
+
+.directQuickValue {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.directQuickArrow {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  transition: transform var(--transition-fast), color var(--transition-fast);
+}
+
+.directQuickCard:hover .directQuickArrow {
+  color: var(--text-primary);
+  transform: translate(2px, -2px);
+}
+
+/* GRID DE CANAIS DE CONTATO */
 .channelsGrid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -67,13 +228,13 @@
 }
 
 .channelCard p {
-  font-size: 0.85rem;
+  font-size: 0.86rem;
   color: var(--text-secondary);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .hours {
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
   font-weight: 600;
 }
@@ -97,6 +258,7 @@
   border-color: var(--text-primary);
 }
 
+/* SEÇÃO FAQ */
 .faqSection {
   margin-bottom: 4rem;
 }
@@ -104,9 +266,9 @@
 .faqHeader {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.6rem;
   border-bottom: 1px solid var(--border-color);
-  padding-bottom: 0.75rem;
+  padding-bottom: 0.85rem;
   margin-bottom: 1.5rem;
   color: var(--text-primary);
 }
@@ -130,17 +292,18 @@
 
 .faqQuestion {
   width: 100%;
-  padding: 1.25rem 0;
+  padding: 1.35rem 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 0.95rem;
+  font-size: 0.96rem;
   font-weight: 700;
   text-align: left;
   background: transparent;
   border: none;
   color: var(--text-primary);
   cursor: pointer;
+  gap: 1rem;
   transition: color var(--transition-fast);
 }
 
@@ -150,13 +313,14 @@
 
 .activeQuestionText {
   color: var(--text-primary);
-  letter-spacing: 0.5px;
+  letter-spacing: 0.3px;
 }
 
 .chevron {
   display: flex;
   align-items: center;
   color: var(--text-muted);
+  flex-shrink: 0;
 }
 
 .faqAnswerWrapper {
@@ -164,12 +328,17 @@
 }
 
 .faqAnswer {
-  padding-bottom: 1.5rem;
+  padding-bottom: 1.6rem;
   font-size: 0.92rem;
-  color: var(--text-secondary);
-  line-height: 1.7;
+  color: #b5b5b5;
+  line-height: 1.75;
 }
 
+.faqAnswer p {
+  margin: 0;
+}
+
+/* FORMULÁRIO DE FEEDBACK */
 .feedbackSection {
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
@@ -177,7 +346,7 @@
 }
 
 .feedbackBox {
-  max-width: 700px;
+  max-width: 720px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -198,11 +367,13 @@
   font-size: 1.25rem;
   letter-spacing: 1px;
   font-weight: 800;
+  line-height: 1.3;
 }
 
 .feedbackBox p {
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   color: var(--text-secondary);
+  line-height: 1.6;
 }
 
 .feedbackForm {
@@ -224,8 +395,8 @@
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   color: var(--text-primary);
-  padding: 0.85rem 1rem;
-  font-size: 0.85rem;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.9rem;
   outline: none;
   font-family: var(--font-body);
   transition: border-color var(--transition-fast);
@@ -244,7 +415,7 @@
   gap: 0.5rem;
   background-color: var(--text-primary);
   color: var(--bg-primary);
-  padding: 0.95rem;
+  padding: 1rem;
   font-weight: 800;
   font-size: 0.8rem;
   letter-spacing: 1.5px;
@@ -267,23 +438,95 @@
   border: 1px solid #4ade80;
   color: #4ade80;
   padding: 1.1rem;
-  font-size: 0.85rem;
+  font-size: 0.88rem;
   font-weight: 600;
+}
+
+/* ==========================================================================
+   RESPONSIVIDADE ULTRA FLUIDA (MOBILE & TABLET)
+   ========================================================================== */
+@media (max-width: 980px) {
+  .directQuickLinks {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
 }
 
 @media (max-width: 850px) {
   .container {
-    padding: 1.5rem 0.85rem calc(4rem + env(safe-area-inset-bottom, 0px));
+    padding: 2rem 1rem calc(4rem + env(safe-area-inset-bottom, 0px));
   }
+
   .header {
     margin-bottom: 2rem;
   }
+
+  .title {
+    font-size: 1.7rem;
+    line-height: 1.15;
+  }
+
+  .subtitle {
+    font-size: 0.9rem;
+  }
+
+  .directBanner {
+    padding: 1.35rem 1.1rem;
+    margin-bottom: 2.25rem;
+  }
+
+  .directBannerHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .policiesQuickBtn {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+    padding: 0.85rem 1rem;
+  }
+
   .channelsGrid { 
     grid-template-columns: 1fr; 
     gap: 1rem;
-    margin-bottom: 2.5rem;
+    margin-bottom: 3rem;
   }
+
+  .channelCard {
+    padding: 1.85rem 1.25rem;
+  }
+
+  .channelBtn {
+    width: 100%;
+    text-align: center;
+    padding: 0.85rem 1rem;
+  }
+
+  .faqSection {
+    margin-bottom: 3rem;
+  }
+
+  .feedbackSection {
+    padding: 2rem 1.25rem;
+  }
+
   .inputRow { 
     grid-template-columns: 1fr; 
+    gap: 0.85rem;
+  }
+
+  /* Evita que o iOS Safari dê zoom automático nos inputs ao focar */
+  .feedbackForm input,
+  .selectInput,
+  .feedbackForm textarea {
+    font-size: 16px;
+    padding: 0.9rem 1rem;
+  }
+
+  .sendBtn {
+    width: 100%;
+    padding: 1.05rem;
   }
 }

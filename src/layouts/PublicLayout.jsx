@@ -37,18 +37,24 @@ export function PublicLayout({
       touchMultiplier: 2.0,
     });
 
+    window.__lenis = lenis;
+
+    let rafId;
     function raf(time) {
       lenis.raf(time);
-      requestAnimationFrame(raf);
+      rafId = requestAnimationFrame(raf);
     }
 
-    requestAnimationFrame(raf);
-    lenis.scrollTo(0, { immediate: true });
+    rafId = requestAnimationFrame(raf);
 
     return () => {
+      cancelAnimationFrame(rafId);
       lenis.destroy();
+      if (window.__lenis === lenis) {
+        window.__lenis = null;
+      }
     };
-  }, [location.pathname]);
+  }, []);
 
   return (
     <div className={styles.publicContainer}>
