@@ -3,6 +3,7 @@ import { Outlet, useLocation } from 'react-router-dom';
 import Lenis from 'lenis';
 import { Navbar } from '../components/layout/Navbar';
 import { Footer } from '../components/layout/Footer';
+import { analyticsService } from '../services/analyticsService';
 import styles from './PublicLayout.module.css';
 
 export function PublicLayout({ 
@@ -59,11 +60,12 @@ export function PublicLayout({
     };
   }, []);
 
-  // 3. RESET IMEDIATO DE INÉRCIA DO LENIS EM TROCAS DE ROTA
+  // 3. RESET IMEDIATO DE INÉRCIA DO LENIS E TELEMETRIA DE SESSÃO/PAGEVIEW (LGPD-COMPLIANT & ZERO LAG)
   useEffect(() => {
     if (!location.hash && lenisRef.current) {
       lenisRef.current.scrollTo(0, { immediate: true });
     }
+    analyticsService.trackSessionVisit(location.pathname);
   }, [location.pathname]);
 
   return (

@@ -1876,3 +1876,362 @@
     min-height: 270px;
   }
 }
+
+/* ============================================================
+   TD-141: GRÁFICOS SVG NATIVOS, TELEMETRIA DE DISPOSITIVOS & LGPD
+   ============================================================ */
+
+.metricSelectorGroup {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 0.2rem;
+  flex-shrink: 0;
+}
+
+.metricSelectorBtn {
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  padding: 0.38rem 0.7rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.metricSelectorBtn:hover {
+  color: var(--text-primary);
+}
+
+.metricSelectorBtnActiveGreen {
+  background-color: rgba(34, 197, 94, 0.14);
+  border-color: rgba(34, 197, 94, 0.45);
+  color: #22c55e;
+}
+
+.metricSelectorBtnActiveYellow {
+  background-color: rgba(250, 204, 21, 0.14);
+  border-color: rgba(250, 204, 21, 0.45);
+  color: #facc15;
+}
+
+.metricSelectorBtnActiveBlue {
+  background-color: rgba(59, 130, 246, 0.14);
+  border-color: rgba(59, 130, 246, 0.45);
+  color: #3b82f6;
+}
+
+.svgAreaChartWrapper {
+  position: relative;
+  width: 100%;
+  min-height: 240px;
+  background: radial-gradient(circle at 50% 0%, rgba(255, 255, 255, 0.025) 0%, transparent 75%);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 0.5rem 0.25rem;
+}
+
+.svgAreaChart {
+  width: 100%;
+  height: auto;
+  max-height: 270px;
+  display: block;
+  overflow: visible;
+}
+
+.svgInteractivePoint {
+  transition: r 0.15s ease, fill 0.15s ease;
+}
+
+.svgEvolutionTooltip {
+  position: absolute;
+  top: 12px;
+  transform: translateX(-50%);
+  background-color: rgba(10, 10, 10, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  padding: 0.65rem 0.85rem;
+  min-width: 195px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.85);
+  pointer-events: none;
+  z-index: 20;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+}
+
+.svgTooltipHeader {
+  color: #a3a3a3;
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+
+.svgTooltipRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.22rem;
+  color: #cccccc;
+}
+
+/* GRID 3 CARDS DE TELEMETRIA (DISPOSITIVOS, OS & ORIGEM) */
+.telemetryThreeCardsGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.25rem;
+  width: 100%;
+}
+
+.deviceDonutLayout {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  padding: 0.35rem 0;
+  flex-wrap: wrap;
+}
+
+.svgDonutBox {
+  position: relative;
+  width: 150px;
+  height: 150px;
+  flex-shrink: 0;
+  margin: 0 auto;
+}
+
+.svgDonutChart {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.svgDonutCenter {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 0.15rem;
+  pointer-events: none;
+}
+
+.svgDonutCenter strong {
+  font-family: var(--font-mono);
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: var(--text-primary);
+  line-height: 1.05;
+}
+
+.svgDonutCenter span {
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: var(--text-secondary);
+}
+
+.deviceBreakdownList {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  flex: 1;
+  min-width: 170px;
+}
+
+.deviceBreakdownItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.5rem 0.65rem;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+}
+
+.deviceBreakdownLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.deviceIconBadge {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.deviceName {
+  display: block;
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.deviceSubBadge {
+  display: block;
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+
+.deviceBreakdownRight {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: right;
+}
+
+.deviceBreakdownRight strong {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 800;
+}
+
+.deviceBreakdownRight small {
+  font-size: 0.62rem;
+  color: var(--text-muted);
+}
+
+/* BARRAS ESTILIZADAS DE OS, NAVEGADORES E ORIGEM DE TRÁFEGO */
+.telemetryBarsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  padding: 0.25rem 0;
+}
+
+.telemetryBarRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.32rem;
+}
+
+.telemetryBarMeta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.74rem;
+}
+
+.telemetryBarLabel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex-wrap: wrap;
+}
+
+.telemetryBarCount {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.telemetryBarCount small {
+  color: var(--text-muted);
+  font-size: 0.66rem;
+}
+
+.telemetryBarTrack {
+  width: 100%;
+  height: 7px;
+  background-color: var(--bg-primary);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.telemetryBarFill {
+  height: 100%;
+  transition: width 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.igInAppBadge {
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  padding: 0.12rem 0.38rem;
+  background-color: rgba(236, 72, 153, 0.15);
+  border: 1px solid rgba(236, 72, 153, 0.45);
+  color: #ec4899;
+  text-transform: uppercase;
+}
+
+.sourceChannelBadge {
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.1rem 0.35rem;
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+/* CONECTORES DO FUNIL COM PASSAGEM & DROP-OFF */
+.flowConnectorBox {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.28rem;
+  color: var(--text-muted);
+  padding: 0 0.2rem;
+  flex-shrink: 0;
+}
+
+.passRatePill {
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  font-weight: 800;
+  padding: 0.15rem 0.4rem;
+  background-color: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+  white-space: nowrap;
+}
+
+.dropOffPill {
+  font-family: var(--font-mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  padding: 0.12rem 0.38rem;
+  background-color: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.25);
+  color: #f87171;
+  white-space: nowrap;
+}
+
+/* RODAPÉ DE CONFORMIDADE LGPD */
+.lgpdComplianceFooter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.55rem;
+  padding: 1rem 1.25rem;
+  margin-top: 1rem;
+  background-color: rgba(34, 197, 94, 0.04);
+  border: 1px solid rgba(34, 197, 94, 0.18);
+  color: var(--text-secondary);
+  font-size: 0.74rem;
+  text-align: center;
+}
+
+@media (max-width: 1150px) {
+  .telemetryThreeCardsGrid {
+    grid-template-columns: 1fr;
+  }
+}

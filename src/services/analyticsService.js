@@ -533,8 +533,321 @@ export const analyticsService = {
     } catch (err) {
       console.warn("Aviso ao registrar simulação de frete:", err.message);
     }
+  },
+
+  /**
+   * Detector Leve e 100% Anônimo de Ambiente (LGPD Art. 12 — Zero IP ou dados pessoais)
+   */
+  getClientTelemetry() {
+    return getClientTelemetry();
+  },
+
+  /**
+   * Separação estrita entre Visitantes/Sessões Únicas (visits) e Visualizações de Página (pageViews)
+   * Coleta telemetria de Dispositivo, OS, Navegador e Origem de Tráfego apenas 1x por sessão
+   */
+  trackSessionVisit(path = '/') {
+    if (typeof window === 'undefined') return;
+    // Ignora rotas administrativas do CMS para não poluir métricas da loja
+    if (String(path).startsWith('/cms') || String(path).startsWith('/admin')) return;
+
+    const cleanPath =
+      String(path || '/')
+        .split('?')[0]
+        .split('#')[0]
+        .replace(/^\/+/, '')
+        .replace(/[./#$\[\]\/]/g, '_') || 'home';
+
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const dailyDocRef = doc(db, 'analytics_daily', todayKey);
+
+    try {
+      const isSessionActive = sessionStorage.getItem('thr33_session_active');
+      const lastTrackedPath = sessionStorage.getItem('thr33_last_tracked_path');
+
+      if (!isSessionActive) {
+        // 1. NOVA SESSÃO ÚNICA
+        sessionStorage.setItem('thr33_session_active', '1');
+        sessionStorage.setItem('thr33_last_tracked_path', cleanPath);
+
+        const { deviceType, os, browser, trafficSource } = getClientTelemetry();
+
+        const recordInitialSession = async () => {
+          try {
+            const nowIso = new Date().toISOString();
+            await setDoc(
+              dailyDocRef,
+              {
+                date: todayKey,
+                visits: increment(1),
+                pageViews: increment(1),
+                devices: { [deviceType]: increment(1) },
+                os: { [os]: increment(1) },
+                browsers: { [browser]: increment(1) },
+                sources: { [trafficSource]: increment(1) },
+                pages: { [cleanPath]: increment(1) },
+                updatedAt: nowIso
+              },
+              { merge: true }
+            );
+
+            // Sincroniza também no sumário global para resiliência de leitura
+            await setDoc(
+              SUMMARY_DOC_REF,
+              {
+                totalVisits: increment(1),
+                totalPageViews: increment(1),
+                devices: { [deviceType]: increment(1) },
+                os: { [os]: increment(1) },
+                browsers: { [browser]: increment(1) },
+                sources: { [trafficSource]: increment(1) },
+                lastUpdated: nowIso
+              },
+              { merge: true }
+            );
+          } catch (err) {
+            console.warn('Aviso ao registrar sessão inicial:', err.message);
+          }
+        };
+
+        if ('requestIdleCallback' in window) {
+          window.requestIdleCallback(() => recordInitialSession(), { timeout: 2000 });
+        } else {
+          setTimeout(recordInitialSession, 300);
+        }
+      } else if (lastTrackedPath !== cleanPath) {
+        // 2. NAVEGAÇÃO INTERNA NA MESMA SESSÃO (Apenas pageViews)
+        sessionStorage.setItem('thr33_last_tracked_path', cleanPath);
+
+        const recordInternalPageView = async () => {
+          try {
+            const nowIso = new Date().toISOString();
+            await setDoc(
+              dailyDocRef,
+              {
+                date: todayKey,
+                pageViews: increment(1),
+                pages: { [cleanPath]: increment(1) },
+                updatedAt: nowIso
+              },
+              { merge: true }
+            );
+
+            await setDoc(
+              SUMMARY_DOC_REF,
+              {
+                totalPageViews: increment(1),
+                lastUpdated: nowIso
+              },
+              { merge: true }
+            );
+          } catch (err) {
+            console.warn('Aviso ao registrar pageView interno:', err.message);
+          }
+        };
+
+        if ('requestIdleCallback' in window) {
+          window.requestIdleCallback(() => recordInternalPageView(), { timeout: 2500 });
+        } else {
+          setTimeout(recordInternalPageView, 1000);
+        }
+      }
+    } catch (e) {
+      // Fallback caso sessionStorage esteja restrito
+    }
+  },
+
+  /**
+   * Busca e normaliza o histórico diário da coleção analytics_daily com fallback seguro para dados legados
+   */
+  async getDailyAnalyticsRange(days = 30) {
+    return getDailyAnalyticsRange(days);
   }
 };
+
+/**
+ * Detector puro e instantâneo de Telemetria de Ambiente (100% Anônimo — LGPD Art. 12)
+ */
+export function getClientTelemetry() {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') {
+    return {
+      deviceType: 'desktop',
+      os: 'Outro',
+      browser: 'Outro',
+      trafficSource: 'Direto'
+    };
+  }
+
+  const ua = navigator.userAgent || '';
+  const width = window.innerWidth || 1024;
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+
+  // 1. Device Type ('mobile' | 'tablet' | 'desktop')
+  let deviceType = 'desktop';
+  const isTabletUA = /iPad|Tablet|PlayBook|Silk|(Android(?!.*Mobile))/i.test(ua);
+  const isMobileUA = /Mobi|iPhone|iPod|Android.*Mobile|BlackBerry|IEMobile|Opera Mini/i.test(ua);
+
+  if (isTabletUA || (width >= 768 && width <= 1024 && hasTouch && !isMobileUA)) {
+    deviceType = 'tablet';
+  } else if (isMobileUA || width < 768) {
+    deviceType = 'mobile';
+  }
+
+  // 2. Sistema Operacional ('iOS' | 'Android' | 'Windows' | 'macOS' | 'Linux' | 'Outro')
+  let os = 'Outro';
+  if (/iPhone|iPad|iPod/i.test(ua) || (/Mac/i.test(ua) && hasTouch)) {
+    os = 'iOS';
+  } else if (/Android/i.test(ua)) {
+    os = 'Android';
+  } else if (/Windows/i.test(ua)) {
+    os = 'Windows';
+  } else if (/Macintosh|Mac OS X/i.test(ua)) {
+    os = 'macOS';
+  } else if (/Linux/i.test(ua)) {
+    os = 'Linux';
+  }
+
+  // 3. Navegador ('Instagram/In-App' | 'Chrome' | 'Safari' | 'Edge' | 'Firefox' | 'Outro')
+  let browser = 'Outro';
+  if (/Instagram|FBAN|FBAV/i.test(ua)) {
+    browser = 'Instagram/In-App';
+  } else if (/Edg\//i.test(ua)) {
+    browser = 'Edge';
+  } else if (/Firefox|FxiOS/i.test(ua)) {
+    browser = 'Firefox';
+  } else if (/Chrome|CriOS/i.test(ua) && !/Edg\//i.test(ua)) {
+    browser = 'Chrome';
+  } else if (/Safari/i.test(ua) && !/Chrome|CriOS/i.test(ua)) {
+    browser = 'Safari';
+  }
+
+  // 4. Origem de Tráfego ('Instagram' | 'WhatsApp' | 'Google' | 'Direto' | 'Outro')
+  let trafficSource = 'Direto';
+  try {
+    const ref = (document.referrer || '').toLowerCase();
+    const params = new URLSearchParams(window.location.search);
+    const utmSource = (params.get('utm_source') || sessionStorage.getItem('thr33_utm_source') || '').toLowerCase();
+
+    if (
+      utmSource.includes('instagram') ||
+      utmSource.includes('ig') ||
+      ref.includes('instagram.com') ||
+      browser === 'Instagram/In-App'
+    ) {
+      trafficSource = 'Instagram';
+    } else if (
+      utmSource.includes('whatsapp') ||
+      utmSource.includes('wpp') ||
+      ref.includes('wa.me') ||
+      ref.includes('whatsapp.com')
+    ) {
+      trafficSource = 'WhatsApp';
+    } else if (utmSource.includes('google') || ref.includes('google.')) {
+      trafficSource = 'Google';
+    } else if (utmSource || (ref && !ref.includes(window.location.hostname))) {
+      trafficSource = 'Outro';
+    }
+  } catch (_) {
+    trafficSource = 'Direto';
+  }
+
+  return {
+    deviceType,
+    os,
+    browser,
+    trafficSource
+  };
+}
+
+/**
+ * Extrai sub-mapa de um documento do Firestore, suportando tanto objetos aninhados quanto chaves legadas com ponto
+ */
+function extractNormalizedSubMap(data, prefix, defaults = {}) {
+  const result = { ...defaults };
+  if (!data || typeof data !== 'object') return result;
+
+  if (data[prefix] && typeof data[prefix] === 'object') {
+    for (const [k, v] of Object.entries(data[prefix])) {
+      result[k] = (Number(result[k]) || 0) + (Number(v) || 0);
+    }
+  }
+
+  const dotPrefix = `${prefix}.`;
+  for (const [k, v] of Object.entries(data)) {
+    if (k.startsWith(dotPrefix)) {
+      const subKey = k.slice(dotPrefix.length);
+      if (subKey) {
+        result[subKey] = (Number(result[subKey]) || 0) + (Number(v) || 0);
+      }
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Busca e normaliza documentos de analytics_daily para o intervalo solicitado
+ */
+export async function getDailyAnalyticsRange(days = 30) {
+  try {
+    const snap = await getDocs(collection(db, 'analytics_daily'));
+    const docsByDate = {};
+
+    snap.forEach((docSnap) => {
+      const data = docSnap.data() || {};
+      const dateKey = data.date || docSnap.id;
+      const devices = extractNormalizedSubMap(data, 'devices', { mobile: 0, desktop: 0, tablet: 0 });
+      const os = extractNormalizedSubMap(data, 'os', {});
+      const browsers = extractNormalizedSubMap(data, 'browsers', {});
+      const sources = extractNormalizedSubMap(data, 'sources', {});
+      const pages = extractNormalizedSubMap(data, 'pages', {});
+
+      const visits = Number(data.visits || 0);
+      const pageViews = Number(data.pageViews || visits || 0);
+
+      docsByDate[dateKey] = {
+        id: docSnap.id,
+        date: dateKey,
+        visits,
+        pageViews,
+        devices,
+        os,
+        browsers,
+        sources,
+        pages
+      };
+    });
+
+    const result = [];
+    const now = new Date();
+    const count = Math.max(1, Number(days) || 30);
+
+    for (let i = count - 1; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const existing = docsByDate[key];
+      result.push(
+        existing || {
+          id: key,
+          date: key,
+          visits: 0,
+          pageViews: 0,
+          devices: { mobile: 0, desktop: 0, tablet: 0 },
+          os: {},
+          browsers: {},
+          sources: {},
+          pages: {}
+        }
+      );
+    }
+
+    return result;
+  } catch (err) {
+    console.warn('Aviso ao carregar analytics_daily:', err.message);
+    return [];
+  }
+}
 
 const DEFAULT_COLOR_HEX = {
   'preto_piano': '#000000',
