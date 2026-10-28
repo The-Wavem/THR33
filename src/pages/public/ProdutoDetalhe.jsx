@@ -315,7 +315,19 @@ export function ProdutoDetalhe({ onAddToCart }) {
       },
       jsonLd: combinedJsonLd
     };
-  }, [product, approvedReviews]);
+  }, [
+    product?.id,
+    product?.slug,
+    product?.name,
+    product?.title,
+    product?.price,
+    product?.discountPrice,
+    product?.inStock,
+    product?.active,
+    product?.totalStock,
+    product?.image,
+    approvedReviews.length
+  ]);
 
   const handlePrevImage = () => {
     setSelectedImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));

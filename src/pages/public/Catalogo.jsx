@@ -292,18 +292,22 @@ export function Catalogo() {
     selectedFits.length + selectedSizes.length + (searchQuery.trim() ? 1 : 0);
   const totalActiveWithSort = activeFiltersCount + (sortOrder !== 'newest' ? 1 : 0);
 
+  // Normalização primitiva para evitar recálculos do SEO em mudanças de paginação, tamanhos ou ordenação
+  const primaryFit = selectedFits.length === 1 ? selectedFits[0] : '';
+  const trimmedSearch = searchQuery.trim();
+
   const seoTitle = useMemo(() => {
     if (categorySlug) {
       return `${formatFitLabel(categorySlug)} — Catálogo`;
     }
-    if (selectedFits.length === 1) {
-      return `${formatFitLabel(selectedFits[0])} — Catálogo`;
+    if (primaryFit) {
+      return `${formatFitLabel(primaryFit)} — Catálogo`;
     }
-    if (searchQuery.trim()) {
-      return `Busca por "${searchQuery.trim()}" — Catálogo`;
+    if (trimmedSearch) {
+      return `Busca por "${trimmedSearch}" — Catálogo`;
     }
     return 'Catálogo Completo — Streetwear Autoral & Lotes Limitados';
-  }, [categorySlug, selectedFits, searchQuery]);
+  }, [categorySlug, primaryFit, trimmedSearch]);
 
   const breadcrumbsSchema = useMemo(() => {
     const list = [
@@ -312,11 +316,11 @@ export function Catalogo() {
     ];
     if (categorySlug) {
       list.push({ name: formatFitLabel(categorySlug), url: `/categoria/${categorySlug}` });
-    } else if (selectedFits.length === 1) {
-      list.push({ name: formatFitLabel(selectedFits[0]), url: `/catalogo?fit=${selectedFits[0]}` });
+    } else if (primaryFit) {
+      list.push({ name: formatFitLabel(primaryFit), url: `/catalogo?fit=${primaryFit}` });
     }
     return buildBreadcrumbSchema(list);
-  }, [categorySlug, selectedFits]);
+  }, [categorySlug, primaryFit]);
 
   return (
     <main className={styles.catalogPage} ref={topRef}>

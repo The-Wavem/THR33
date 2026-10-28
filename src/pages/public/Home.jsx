@@ -1,4 +1,4 @@
-import React, { Suspense, useMemo } from 'react';
+import React, { Suspense } from 'react';
 import { useHomeData } from '../../hooks/useHomeData';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 import Hero from '../../sections/home/Hero';
@@ -28,6 +28,9 @@ const HOME_FAQ_LIST = [
   }
 ];
 
+// Schema JSON-LD estático pré-calculado no escopo do módulo para custo ZERO de re-render
+const HOME_FAQ_SCHEMA = buildFaqSchema(HOME_FAQ_LIST);
+
 // Lazy loading assíncrono das seções abaixo da dobra com retry automático
 const BentoGrid = lazyWithRetry(() => import('../../sections/home/BentoGrid'));
 const BestSellers = lazyWithRetry(() => import('../../sections/home/BestSellers'));
@@ -38,15 +41,13 @@ const NewsletterVIP = lazyWithRetry(() => import('../../components/common/Newsle
 export function Home() {
   const { vitrine, featuredProducts, communityPosts, loading } = useHomeData(8);
 
-  const homeFaqSchema = useMemo(() => buildFaqSchema(HOME_FAQ_LIST), []);
-
   return (
     <main className={styles.homeContainer}>
       <SEO
         title="THR33 // FOR THE FEW — Streetwear Autoral & Drops Exclusivos"
         description="THR33 Streetwear — Moda urbana autoral em Curitiba com modelagens Boxy e Oversized exclusivas, malha heavyweight e produção sob demanda para todo o Brasil. For the few."
         url="/"
-        jsonLd={homeFaqSchema}
+        jsonLd={HOME_FAQ_SCHEMA}
       />
       <Hero bannerData={vitrine?.hero} isLoading={loading} />
 

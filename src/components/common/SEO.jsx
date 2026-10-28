@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 
 const BASE_URL = 'https://thr33-streetwear.web.app';
@@ -9,21 +9,27 @@ const DEFAULT_KEYWORDS =
   'streetwear curitiba, camisetas streetwear, oversized, moda urbana brasil, thr33 streetwear, drops exclusivos, camisetas boxy, moda autoral';
 
 /**
- * Utilitário interno para atualizar ou criar tags <meta> no document.head
+ * Utilitário com prevenção de DOM Thrashing:
+ * Só altera o DOM se a tag não existir ou se o atributo 'content' for diferente.
  */
 function setMetaTag(attributeName, attributeValue, content) {
   if (content === undefined || content === null) return;
+  const targetContent = String(content);
   let element = document.head.querySelector(`meta[${attributeName}="${attributeValue}"]`);
   if (!element) {
     element = document.createElement('meta');
     element.setAttribute(attributeName, attributeValue);
+    element.setAttribute('content', targetContent);
     document.head.appendChild(element);
+    return;
   }
-  element.setAttribute('content', content);
+  if (element.getAttribute('content') !== targetContent) {
+    element.setAttribute('content', targetContent);
+  }
 }
 
 /**
- * Remove tag <meta> específica
+ * Remove tag <meta> específica caso exista
  */
 function removeMetaTag(attributeName, attributeValue) {
   const element = document.head.querySelector(`meta[${attributeName}="${attributeValue}"]`);
@@ -33,23 +39,27 @@ function removeMetaTag(attributeName, attributeValue) {
 }
 
 /**
- * Utilitário para atualizar ou criar tag <link rel="canonical">
+ * Utilitário com prevenção de DOM Thrashing para tag <link rel="canonical">
  */
 function setCanonicalUrl(url) {
   let element = document.head.querySelector('link[rel="canonical"]');
   if (!element) {
     element = document.createElement('link');
     element.setAttribute('rel', 'canonical');
+    element.setAttribute('href', url);
     document.head.appendChild(element);
+    return;
   }
-  element.setAttribute('href', url);
+  if (element.getAttribute('href') !== url) {
+    element.setAttribute('href', url);
+  }
 }
 
 /**
  * Componente Reutilizável de SEO Tático & Rich Snippets JSON-LD
- * 100% nativo em React 19 (sem dependências externas obsoletas)
+ * 100% otimizado: Memoizado com React.memo, serialização de JSON-LD e deps estritamente primitivas
  */
-export function SEO({
+function SEOComponent({
   title,
   description,
   keywords,
@@ -62,6 +72,26 @@ export function SEO({
 }) {
   const location = useLocation();
 
+  // 1. Extração e serialização de primitivos para eliminar re-execuções desnecessárias
+  const keywordsStr = useMemo(() => {
+    if (Array.isArray(keywords)) return keywords.join(', ');
+    if (typeof keywords === 'string' && keywords.trim()) return keywords.trim();
+    return DEFAULT_KEYWORDS;
+  }, [keywords]);
+
+  const jsonLdStr = useMemo(() => {
+    if (!jsonLd) return '';
+    try {
+      return JSON.stringify(jsonLd);
+    } catch {
+      return '';
+    }
+  }, [jsonLd]);
+
+  const priceStr = productMeta?.price ? String(productMeta.price) : '';
+  const currencyStr = productMeta?.currency || 'BRL';
+  const availabilityStr = productMeta?.availability || '';
+
   useEffect(() => {
     // 1. FORMATAÇÃO DO TÍTULO
     let finalTitle = 'THR33 // FOR THE FEW — Streetwear Autoral & Drops Exclusivos';
@@ -72,27 +102,18 @@ export function SEO({
         finalTitle = `${title} | THR33 Streetwear`;
       }
     }
-    document.title = finalTitle;
+    if (document.title !== finalTitle) {
+      document.title = finalTitle;
+    }
 
     // 2. DESCRIÇÃO E PALAVRAS-CHAVE
     const rawDesc = description || DEFAULT_DESCRIPTION;
     const finalDescription = rawDesc.length > 165 ? `${rawDesc.slice(0, 162)}...` : rawDesc;
     setMetaTag('name', 'description', finalDescription);
-
-    let finalKeywords = DEFAULT_KEYWORDS;
-    if (Array.isArray(keywords)) {
-      finalKeywords = keywords.join(', ');
-    } else if (typeof keywords === 'string' && keywords.trim()) {
-      finalKeywords = keywords;
-    }
-    setMetaTag('name', 'keywords', finalKeywords);
+    setMetaTag('name', 'keywords', keywordsStr);
 
     // 3. DIRETIVAS DE INDEXAÇÃO (ROBOTS)
-    if (noindex) {
-      setMetaTag('name', 'robots', 'noindex, nofollow');
-    } else {
-      setMetaTag('name', 'robots', 'index, follow');
-    }
+    setMetaTag('name', 'robots', noindex ? 'noindex, nofollow' : 'index, follow');
 
     // 4. CANONICAL & URL
     let finalUrl = url;
@@ -126,13 +147,11 @@ export function SEO({
     setMetaTag('name', 'twitter:site', '@madebythr33');
 
     // 8. META TAGS ESPECÍFICAS DE PRODUTO
-    if (type === 'product' && productMeta) {
-      if (productMeta.price) {
-        setMetaTag('property', 'product:price:amount', String(productMeta.price));
-        setMetaTag('property', 'product:price:currency', productMeta.currency || 'BRL');
-      }
-      if (productMeta.availability) {
-        setMetaTag('property', 'product:availability', productMeta.availability);
+    if (type === 'product' && priceStr) {
+      setMetaTag('property', 'product:price:amount', priceStr);
+      setMetaTag('property', 'product:price:currency', currencyStr);
+      if (availabilityStr) {
+        setMetaTag('property', 'product:availability', availabilityStr);
       }
     } else {
       removeMetaTag('property', 'product:price:amount');
@@ -140,41 +159,38 @@ export function SEO({
       removeMetaTag('property', 'product:availability');
     }
 
-    // 9. INJEÇÃO DINÂMICA DE SCHEMA.ORG JSON-LD
+    // 9. INJEÇÃO DINÂMICA DE SCHEMA.ORG JSON-LD (Zero DOM thrashing)
     let scriptElement = document.getElementById('dynamic-json-ld');
-    if (jsonLd) {
+    if (jsonLdStr) {
       if (!scriptElement) {
         scriptElement = document.createElement('script');
         scriptElement.id = 'dynamic-json-ld';
         scriptElement.type = 'application/ld+json';
+        scriptElement.textContent = jsonLdStr;
         document.head.appendChild(scriptElement);
+      } else if (scriptElement.textContent !== jsonLdStr) {
+        scriptElement.textContent = jsonLdStr;
       }
-      scriptElement.textContent = JSON.stringify(jsonLd);
     } else if (scriptElement) {
       scriptElement.remove();
     }
-
-    // LIMPEZA AO DESMONTAR
-    return () => {
-      const activeScript = document.getElementById('dynamic-json-ld');
-      if (activeScript) {
-        activeScript.remove();
-      }
-    };
   }, [
     title,
     description,
-    keywords,
+    keywordsStr,
     image,
     url,
     type,
     noindex,
-    jsonLd,
-    productMeta,
+    jsonLdStr,
+    priceStr,
+    currencyStr,
+    availabilityStr,
     location.pathname
   ]);
 
   return null;
 }
 
+export const SEO = React.memo(SEOComponent);
 export default SEO;
