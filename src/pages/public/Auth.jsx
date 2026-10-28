@@ -10,6 +10,7 @@ import {
   Lock,
   MailCheck,
   ShieldAlert,
+  ShieldCheck,
   MessageCircle,
   RefreshCw,
   CheckCircle2,
@@ -480,6 +481,12 @@ export function Auth() {
               <span>{viewMode === 'login' ? 'CONTINUAR COM O GOOGLE' : 'CRIAR CONTA COM GOOGLE'}</span>
             </button>
 
+            {viewMode === 'register' && (
+              <p className={styles.googleNotice}>
+                Ao continuar com o Google, você também declara ciência e concordância com nossas políticas.
+              </p>
+            )}
+
             <div className={styles.divider}>
               <span>OU VIA E-MAIL</span>
             </div>
@@ -629,6 +636,21 @@ export function Auth() {
                 </span>
                 <span className={`${styles.ruleBadge} ${/[0-9]/.test(registerData.password) ? styles.ruleMet : ''}`}>
                   {/[0-9]/.test(registerData.password) ? '✓' : '○'} 1 Número (0-9)
+                </span>
+              </div>
+
+              {/* TERMO DE ACEITE DAS POLÍTICAS (TD-148) */}
+              <div className={styles.legalNotice}>
+                <ShieldCheck size={14} className={styles.legalIcon} />
+                <span>
+                  Ao criar sua conta, você concorda com nossos{' '}
+                  <Link to="/politicas" target="_blank" rel="noopener noreferrer" className={styles.legalLink}>
+                    Termos de Uso
+                  </Link>{' '}
+                  e{' '}
+                  <Link to="/politicas#privacidade" target="_blank" rel="noopener noreferrer" className={styles.legalLink}>
+                    Políticas de Privacidade
+                  </Link>.
                 </span>
               </div>
 

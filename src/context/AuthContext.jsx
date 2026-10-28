@@ -109,6 +109,9 @@ export function AuthProvider({ children }) {
               isAdmin: isAdminFinal,
               addresses: [],
               wishlist: [],
+              acceptedTerms: true,
+              acceptedTermsAt: new Date().toISOString(),
+              termsVersion: '1.0',
               createdAt: new Date().toISOString(),
               provider: user.providerData?.[0]?.providerId || 'firebase'
             }, { merge: true });
@@ -154,6 +157,9 @@ export function AuthProvider({ children }) {
         isAdmin: isAdminUser,
         addresses: [], // Começa zerado
         wishlist: [],  // Começa zerado
+        acceptedTerms: true,
+        acceptedTermsAt: new Date().toISOString(),
+        termsVersion: '1.0',
         createdAt: new Date().toISOString(),
         provider: 'password'
       });
@@ -190,6 +196,9 @@ export function AuthProvider({ children }) {
           isAdmin: isAdminUser,
           addresses: [], // Começa zerado
           wishlist: [],  // Começa zerado
+          acceptedTerms: true,
+          acceptedTermsAt: new Date().toISOString(),
+          termsVersion: '1.0',
           createdAt: new Date().toISOString(),
           provider: 'google'
         });

@@ -93,6 +93,16 @@
   cursor: not-allowed;
 }
 
+.googleNotice {
+  text-align: center;
+  font-size: 0.7rem;
+  color: #888888;
+  margin-top: -0.75rem;
+  margin-bottom: 1.25rem;
+  line-height: 1.4;
+  padding: 0 0.5rem;
+}
+
 /* DIVISOR OU */
 .divider {
   display: flex;
@@ -293,6 +303,35 @@
   background-color: rgba(74, 222, 128, 0.1);
   border-color: rgba(74, 222, 128, 0.35);
   color: #4ade80;
+}
+
+/* TERMO DE ACEITE DAS POLÍTICAS (TD-148) */
+.legalNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  font-size: 0.75rem;
+  color: #888888;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.legalIcon {
+  color: #22c55e;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.legalLink {
+  color: #ffffff;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  font-weight: 600;
+  transition: color var(--transition-fast);
+}
+
+.legalLink:hover {
+  color: var(--accent-primary, #22c55e);
 }
 
 .submitBtn {
