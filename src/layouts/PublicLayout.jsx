@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Lenis from 'lenis';
 import { Navbar } from '../components/layout/Navbar';
@@ -13,6 +13,7 @@ export function PublicLayout({
   onOpenAuthModal 
 }) {
   const location = useLocation();
+  const lenisRef = useRef(null);
 
   // 1. GERENCIAMENTO DINÂMICO DO TEMA DA SCROLLBAR
   useEffect(() => {
@@ -37,6 +38,7 @@ export function PublicLayout({
       touchMultiplier: 2.0,
     });
 
+    lenisRef.current = lenis;
     window.__lenis = lenis;
 
     let rafId;
@@ -50,11 +52,19 @@ export function PublicLayout({
     return () => {
       cancelAnimationFrame(rafId);
       lenis.destroy();
+      lenisRef.current = null;
       if (window.__lenis === lenis) {
         window.__lenis = null;
       }
     };
   }, []);
+
+  // 3. RESET IMEDIATO DE INÉRCIA DO LENIS EM TROCAS DE ROTA
+  useEffect(() => {
+    if (!location.hash && lenisRef.current) {
+      lenisRef.current.scrollTo(0, { immediate: true });
+    }
+  }, [location.pathname]);
 
   return (
     <div className={styles.publicContainer}>

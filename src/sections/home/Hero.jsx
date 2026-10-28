@@ -142,17 +142,6 @@ export function Hero({ bannerData, isLoading = false, children }) {
     }
   }, [bannerData]);
 
-  // Pré-carrega imagens para transição instantânea
-  useEffect(() => {
-    slides.forEach((s) => {
-      const url = s.bgImage || s.mediaUrl;
-      if (url && !s.type?.includes('video')) {
-        const img = new Image();
-        img.src = url;
-      }
-    });
-  }, [slides]);
-
   const nextSlide = useCallback(() => {
     setDirection(1);
     setCurrentSlide((prev) => (prev + 1) % slides.length);

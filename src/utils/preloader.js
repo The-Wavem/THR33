@@ -1,9 +1,9 @@
-// UTILITÁRIO DE PRELOADING INTELIGENTE DE ROTAS (HOVER / TOUCH)
+// UTILITÁRIO DE PRELOADING INTELIGENTE E ESCALONADO DE ROTAS (IDLE CALLBACK)
+// Evita travamentos na thread principal e picos de EvaluateScript / GPUTask
 
 const routeLoaders = {
   '/': () => import('../pages/public/Home'),
   '/catalogo': () => import('../pages/public/Catalogo'),
-  // '/lancamentos' redirecionado para /catalogo
   '/checkout': () => import('../pages/public/Checkout'),
   '/auth': () => import('../pages/public/Auth'),
   '/login': () => import('../pages/public/Auth'),
@@ -22,9 +22,58 @@ const routeLoaders = {
 };
 
 const preloadedCache = new Set();
+const preloadQueue = [];
+let isProcessingQueue = false;
 
 /**
- * Pré-carrega o chunk JavaScript da página ao passar o mouse ou tocar no link
+ * Wrapper seguro para requestIdleCallback com fallback leve
+ */
+function runWhenIdle(callback) {
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    return window.requestIdleCallback(callback, { timeout: 2500 });
+  }
+  return setTimeout(callback, 200);
+}
+
+/**
+ * Processa a fila de chunks de forma escalonada (um por período ocioso do navegador)
+ */
+function processNextInQueue() {
+  if (preloadQueue.length === 0) {
+    isProcessingQueue = false;
+    return;
+  }
+
+  isProcessingQueue = true;
+  runWhenIdle(() => {
+    const nextLoader = preloadQueue.shift();
+    if (nextLoader) {
+      Promise.resolve()
+        .then(() => nextLoader())
+        .catch(() => {
+          // Falha silenciosa em background preload
+        })
+        .finally(() => {
+          processNextInQueue();
+        });
+    } else {
+      processNextInQueue();
+    }
+  });
+}
+
+function enqueueLoader(key, loaderFn) {
+  if (preloadedCache.has(key) || typeof loaderFn !== 'function') return;
+  preloadedCache.add(key);
+  preloadQueue.push(loaderFn);
+
+  if (!isProcessingQueue) {
+    processNextInQueue();
+  }
+}
+
+/**
+ * Pré-carrega o chunk JavaScript da página de maneira escalonada quando o navegador estiver ocioso
  */
 export function preloadRoute(path) {
   if (!path) return;
@@ -32,29 +81,18 @@ export function preloadRoute(path) {
 
   // Rota dinâmica de produto
   if (cleanPath.startsWith('/produto/')) {
-    if (!preloadedCache.has('produto-detalhe')) {
-      preloadedCache.add('produto-detalhe');
-      import('../pages/public/ProdutoDetalhe');
-    }
+    enqueueLoader('produto-detalhe', () => import('../pages/public/ProdutoDetalhe'));
     return;
   }
 
   // Rota dinâmica de categoria
   if (cleanPath.startsWith('/categoria/')) {
-    if (!preloadedCache.has('/catalogo')) {
-      preloadedCache.add('/catalogo');
-      import('../pages/public/Catalogo');
-    }
+    enqueueLoader('/catalogo', routeLoaders['/catalogo']);
     return;
   }
 
   const loader = routeLoaders[cleanPath];
-  if (loader && !preloadedCache.has(cleanPath)) {
-    preloadedCache.add(cleanPath);
-    try {
-      loader();
-    } catch (e) {
-      console.warn('Erro no preload da rota:', cleanPath, e);
-    }
+  if (loader) {
+    enqueueLoader(cleanPath, loader);
   }
 }

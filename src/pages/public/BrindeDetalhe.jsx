@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Check, ShoppingBag, ShieldCheck, ArrowLeft, Package } from 'lucide-react';
 import { catalogService } from '../../services/catalogService';
@@ -6,6 +6,7 @@ import { GIFTS_DATA } from '../../data/giftsData';
 import { useCart } from '../../context/CartContext';
 import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
 import { SEO } from '../../components/common/SEO';
+import { buildBreadcrumbSchema } from '../../utils/seoSchemas';
 import styles from './BrindeDetalhe.module.css';
 
 const DEFAULT_GIFT_VALUES = [150, 300, 500, 1000];
@@ -66,6 +67,15 @@ export function BrindeDetalhe() {
     }
     loadGift();
   }, [id]);
+
+  const giftJsonLd = useMemo(() => {
+    if (!giftItem?.id) return null;
+    return buildBreadcrumbSchema([
+      { name: 'Início', url: '/' },
+      { name: 'Brindes & Vales', url: '/brindes' },
+      { name: giftItem.name || 'Brinde THR33', url: `/brindes/${giftItem.id}` }
+    ]);
+  }, [giftItem?.id, giftItem?.name]);
 
   if (loading) {
     return (
@@ -149,6 +159,7 @@ export function BrindeDetalhe() {
         description={giftItem.description || 'Brinde exclusivo e acessório oficial da marca de streetwear THR33.'}
         image={giftItem.image}
         url={`/brindes/${giftItem.id}`}
+        jsonLd={giftJsonLd}
       />
       <nav className={styles.breadcrumb} aria-label="Navegação">
         <Link to="/">HOME</Link>

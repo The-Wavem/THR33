@@ -8,48 +8,72 @@ const DEFAULT_DESCRIPTION =
 const DEFAULT_KEYWORDS =
   'streetwear curitiba, camisetas streetwear, oversized, moda urbana brasil, thr33 streetwear, drops exclusivos, camisetas boxy, moda autoral';
 
+// Cache em memória de elementos <meta>, <link rel="canonical"> e <script id="dynamic-json-ld">
+// Evita varreduras repetidas de document.head.querySelector em cada transição de rota
+const metaCache = new Map();
+
 /**
- * Utilitário com prevenção de DOM Thrashing:
- * Só altera o DOM se a tag não existir ou se o atributo 'content' for diferente.
+ * Utilitário com cache em memória (Map) e prevenção de DOM Thrashing:
+ * Só consulta o DOM 1 única vez por chave e só altera o atributo 'content' se houver mudança real.
  */
 function setMetaTag(attributeName, attributeValue, content) {
   if (content === undefined || content === null) return;
   const targetContent = String(content);
-  let element = document.head.querySelector(`meta[${attributeName}="${attributeValue}"]`);
-  if (!element) {
-    element = document.createElement('meta');
-    element.setAttribute(attributeName, attributeValue);
-    element.setAttribute('content', targetContent);
-    document.head.appendChild(element);
-    return;
+  const cacheKey = `${attributeName}:${attributeValue}`;
+
+  let element = metaCache.get(cacheKey);
+  if (!element || !element.isConnected) {
+    element = document.head.querySelector(`meta[${attributeName}="${attributeValue}"]`);
+    if (!element) {
+      element = document.createElement('meta');
+      element.setAttribute(attributeName, attributeValue);
+      element.setAttribute('content', targetContent);
+      document.head.appendChild(element);
+      metaCache.set(cacheKey, element);
+      return;
+    }
+    metaCache.set(cacheKey, element);
   }
+
   if (element.getAttribute('content') !== targetContent) {
     element.setAttribute('content', targetContent);
   }
 }
 
 /**
- * Remove tag <meta> específica caso exista
+ * Remove tag <meta> específica caso exista e limpa referência do cache
  */
 function removeMetaTag(attributeName, attributeValue) {
-  const element = document.head.querySelector(`meta[${attributeName}="${attributeValue}"]`);
+  const cacheKey = `${attributeName}:${attributeValue}`;
+  let element = metaCache.get(cacheKey);
+  if (!element) {
+    element = document.head.querySelector(`meta[${attributeName}="${attributeValue}"]`);
+  }
   if (element) {
     element.remove();
   }
+  metaCache.delete(cacheKey);
 }
 
 /**
- * Utilitário com prevenção de DOM Thrashing para tag <link rel="canonical">
+ * Utilitário com cache em memória e prevenção de DOM Thrashing para tag <link rel="canonical">
  */
 function setCanonicalUrl(url) {
-  let element = document.head.querySelector('link[rel="canonical"]');
-  if (!element) {
-    element = document.createElement('link');
-    element.setAttribute('rel', 'canonical');
-    element.setAttribute('href', url);
-    document.head.appendChild(element);
-    return;
+  const cacheKey = 'link:canonical';
+  let element = metaCache.get(cacheKey);
+  if (!element || !element.isConnected) {
+    element = document.head.querySelector('link[rel="canonical"]');
+    if (!element) {
+      element = document.createElement('link');
+      element.setAttribute('rel', 'canonical');
+      element.setAttribute('href', url);
+      document.head.appendChild(element);
+      metaCache.set(cacheKey, element);
+      return;
+    }
+    metaCache.set(cacheKey, element);
   }
+
   if (element.getAttribute('href') !== url) {
     element.setAttribute('href', url);
   }
@@ -159,8 +183,13 @@ function SEOComponent({
       removeMetaTag('property', 'product:availability');
     }
 
-    // 9. INJEÇÃO DINÂMICA DE SCHEMA.ORG JSON-LD (Zero DOM thrashing)
-    let scriptElement = document.getElementById('dynamic-json-ld');
+    // 9. INJEÇÃO DINÂMICA DE SCHEMA.ORG JSON-LD (Cache em memória + Zero DOM thrashing)
+    const scriptKey = 'script:dynamic-json-ld';
+    let scriptElement = metaCache.get(scriptKey);
+    if (!scriptElement || !scriptElement.isConnected) {
+      scriptElement = document.getElementById('dynamic-json-ld');
+    }
+
     if (jsonLdStr) {
       if (!scriptElement) {
         scriptElement = document.createElement('script');
@@ -171,8 +200,10 @@ function SEOComponent({
       } else if (scriptElement.textContent !== jsonLdStr) {
         scriptElement.textContent = jsonLdStr;
       }
+      metaCache.set(scriptKey, scriptElement);
     } else if (scriptElement) {
       scriptElement.remove();
+      metaCache.delete(scriptKey);
     }
   }, [
     title,

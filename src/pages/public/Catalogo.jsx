@@ -292,41 +292,42 @@ export function Catalogo() {
     selectedFits.length + selectedSizes.length + (searchQuery.trim() ? 1 : 0);
   const totalActiveWithSort = activeFiltersCount + (sortOrder !== 'newest' ? 1 : 0);
 
-  // Normalização primitiva para evitar recálculos do SEO em mudanças de paginação, tamanhos ou ordenação
-  const primaryFit = selectedFits.length === 1 ? selectedFits[0] : '';
-  const trimmedSearch = searchQuery.trim();
+  // Categoria / modelagem selecionada estável para SEO (evita recálculos em busca, paginação ou sliders)
+  const selectedCategory = categorySlug || (selectedFits.length === 1 ? selectedFits[0] : '');
 
   const seoTitle = useMemo(() => {
-    if (categorySlug) {
-      return `${formatFitLabel(categorySlug)} — Catálogo`;
-    }
-    if (primaryFit) {
-      return `${formatFitLabel(primaryFit)} — Catálogo`;
-    }
-    if (trimmedSearch) {
-      return `Busca por "${trimmedSearch}" — Catálogo`;
+    if (selectedCategory) {
+      return `${formatFitLabel(selectedCategory)} — Catálogo`;
     }
     return 'Catálogo Completo — Streetwear Autoral & Lotes Limitados';
-  }, [categorySlug, primaryFit, trimmedSearch]);
+  }, [selectedCategory]);
+
+  const seoDescription = useMemo(() => {
+    if (selectedCategory) {
+      return `Explore peças ${formatFitLabel(selectedCategory)} da THR33 Streetwear. Modelagens autorais exclusivas e alta gramatura produzidas sob demanda.`;
+    }
+    return 'Confira a coleção completa da THR33 Streetwear. Camisetas Boxy, Oversized Heavyweight e peças exclusivas produzidas sob demanda.';
+  }, [selectedCategory]);
 
   const breadcrumbsSchema = useMemo(() => {
     const list = [
       { name: 'Início', url: '/' },
       { name: 'Catálogo', url: '/catalogo' }
     ];
-    if (categorySlug) {
-      list.push({ name: formatFitLabel(categorySlug), url: `/categoria/${categorySlug}` });
-    } else if (primaryFit) {
-      list.push({ name: formatFitLabel(primaryFit), url: `/catalogo?fit=${primaryFit}` });
+    if (selectedCategory) {
+      list.push({
+        name: formatFitLabel(selectedCategory),
+        url: categorySlug ? `/categoria/${selectedCategory}` : `/catalogo?fit=${selectedCategory}`
+      });
     }
     return buildBreadcrumbSchema(list);
-  }, [categorySlug, primaryFit]);
+  }, [selectedCategory, categorySlug]);
 
   return (
     <main className={styles.catalogPage} ref={topRef}>
       <SEO
         title={seoTitle}
-        description="Confira a coleção completa da THR33 Streetwear. Camisetas Boxy, Oversized Heavyweight e peças exclusivas produzidas sob demanda."
+        description={seoDescription}
         url={categorySlug ? `/categoria/${categorySlug}` : '/catalogo'}
         jsonLd={breadcrumbsSchema}
       />

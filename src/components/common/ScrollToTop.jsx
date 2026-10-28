@@ -48,17 +48,13 @@ export function ScrollToTop() {
     };
 
     if (!hash) {
-      // Execução síncrona imediata
+      // Execução síncrona imediata antes do paint
       performReset();
 
-      // Execução no próximo frame para cobrir troca de rotas com Suspense / Lazy Loading
+      // Execução no próximo frame para cobrir troca de rotas com Suspense / Lazy Loading sem travar inércia posterior
       rafId = requestAnimationFrame(() => {
         performReset();
       });
-
-      // Checagens adicionais para páginas com carregamento assíncrono de dados ou imagens
-      timeoutId1 = setTimeout(performReset, 50);
-      timeoutId2 = setTimeout(performReset, 150);
     } else {
       // Caso haja âncora/hash (ex: /politicas#trocas)
       const tryScrollToHash = (retryCount = 0) => {
