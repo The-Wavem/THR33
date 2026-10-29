@@ -5,7 +5,8 @@ import {
   collection, 
   getDocs, 
   query, 
-  where 
+  where,
+  serverTimestamp 
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 
@@ -562,19 +563,18 @@ export const analyticsService = {
     const dailyDocRef = doc(db, 'analytics_daily', todayKey);
 
     try {
-      const isSessionActive = sessionStorage.getItem('thr33_session_active');
+      const isSessionRecorded = sessionStorage.getItem('thr33_telemetry_v2_recorded');
       const lastTrackedPath = sessionStorage.getItem('thr33_last_tracked_path');
 
-      if (!isSessionActive) {
-        // 1. NOVA SESSÃO ÚNICA
-        sessionStorage.setItem('thr33_session_active', '1');
+      if (!isSessionRecorded) {
+        // 1. NOVA SESSÃO ÚNICA (Força coleta imediata de telemetria mesmo em abas já abertas)
+        sessionStorage.setItem('thr33_telemetry_v2_recorded', '1');
         sessionStorage.setItem('thr33_last_tracked_path', cleanPath);
 
         const { deviceType, os, browser, trafficSource } = getClientTelemetry();
 
         const recordInitialSession = async () => {
           try {
-            const nowIso = new Date().toISOString();
             await setDoc(
               dailyDocRef,
               {
@@ -586,7 +586,7 @@ export const analyticsService = {
                 browsers: { [browser]: increment(1) },
                 sources: { [trafficSource]: increment(1) },
                 pages: { [cleanPath]: increment(1) },
-                updatedAt: nowIso
+                updatedAt: serverTimestamp()
               },
               { merge: true }
             );
@@ -601,7 +601,7 @@ export const analyticsService = {
                 os: { [os]: increment(1) },
                 browsers: { [browser]: increment(1) },
                 sources: { [trafficSource]: increment(1) },
-                lastUpdated: nowIso
+                lastUpdated: new Date().toISOString()
               },
               { merge: true }
             );
@@ -610,25 +610,21 @@ export const analyticsService = {
           }
         };
 
-        if ('requestIdleCallback' in window) {
-          window.requestIdleCallback(() => recordInitialSession(), { timeout: 2000 });
-        } else {
-          setTimeout(recordInitialSession, 300);
-        }
+        // Disparo imediato sem atraso na montagem
+        recordInitialSession();
       } else if (lastTrackedPath !== cleanPath) {
         // 2. NAVEGAÇÃO INTERNA NA MESMA SESSÃO (Apenas pageViews)
         sessionStorage.setItem('thr33_last_tracked_path', cleanPath);
 
         const recordInternalPageView = async () => {
           try {
-            const nowIso = new Date().toISOString();
             await setDoc(
               dailyDocRef,
               {
                 date: todayKey,
                 pageViews: increment(1),
                 pages: { [cleanPath]: increment(1) },
-                updatedAt: nowIso
+                updatedAt: serverTimestamp()
               },
               { merge: true }
             );
@@ -637,7 +633,7 @@ export const analyticsService = {
               SUMMARY_DOC_REF,
               {
                 totalPageViews: increment(1),
-                lastUpdated: nowIso
+                lastUpdated: new Date().toISOString()
               },
               { merge: true }
             );
@@ -646,11 +642,7 @@ export const analyticsService = {
           }
         };
 
-        if ('requestIdleCallback' in window) {
-          window.requestIdleCallback(() => recordInternalPageView(), { timeout: 2500 });
-        } else {
-          setTimeout(recordInternalPageView, 1000);
-        }
+        recordInternalPageView();
       }
     } catch (e) {
       // Fallback caso sessionStorage esteja restrito
@@ -760,30 +752,20 @@ export function getClientTelemetry() {
 }
 
 /**
- * Extrai sub-mapa de um documento do Firestore, suportando tanto objetos aninhados quanto chaves legadas com ponto
+ * Helper de normalização que recupera tanto objetos aninhados reais quanto campos gravados com ponto
  */
-function extractNormalizedSubMap(data, prefix, defaults = {}) {
-  const result = { ...defaults };
+export const extractNested = (data, prefix, defaults = {}) => {
+  const result = { ...defaults, ...(data && typeof data[prefix] === 'object' ? data[prefix] : {}) };
   if (!data || typeof data !== 'object') return result;
 
-  if (data[prefix] && typeof data[prefix] === 'object') {
-    for (const [k, v] of Object.entries(data[prefix])) {
-      result[k] = (Number(result[k]) || 0) + (Number(v) || 0);
+  Object.keys(data).forEach(k => {
+    if (k.startsWith(`${prefix}.`)) {
+      const subKey = k.slice(prefix.length + 1);
+      result[subKey] = (result[subKey] || 0) + (Number(data[k]) || 0);
     }
-  }
-
-  const dotPrefix = `${prefix}.`;
-  for (const [k, v] of Object.entries(data)) {
-    if (k.startsWith(dotPrefix)) {
-      const subKey = k.slice(dotPrefix.length);
-      if (subKey) {
-        result[subKey] = (Number(result[subKey]) || 0) + (Number(v) || 0);
-      }
-    }
-  }
-
+  });
   return result;
-}
+};
 
 /**
  * Busca e normaliza documentos de analytics_daily para o intervalo solicitado
@@ -796,11 +778,11 @@ export async function getDailyAnalyticsRange(days = 30) {
     snap.forEach((docSnap) => {
       const data = docSnap.data() || {};
       const dateKey = data.date || docSnap.id;
-      const devices = extractNormalizedSubMap(data, 'devices', { mobile: 0, desktop: 0, tablet: 0 });
-      const os = extractNormalizedSubMap(data, 'os', {});
-      const browsers = extractNormalizedSubMap(data, 'browsers', {});
-      const sources = extractNormalizedSubMap(data, 'sources', {});
-      const pages = extractNormalizedSubMap(data, 'pages', {});
+      const devices = extractNested(data, 'devices', { mobile: 0, desktop: 0, tablet: 0 });
+      const os = extractNested(data, 'os', {});
+      const browsers = extractNested(data, 'browsers', {});
+      const sources = extractNested(data, 'sources', {});
+      const pages = extractNested(data, 'pages', {});
 
       const visits = Number(data.visits || 0);
       const pageViews = Number(data.pageViews || visits || 0);
@@ -847,6 +829,148 @@ export async function getDailyAnalyticsRange(days = 30) {
     console.warn('Aviso ao carregar analytics_daily:', err.message);
     return [];
   }
+}
+
+/**
+ * Identifica com 100% de precisão para qual Estado (UF) a encomenda do cliente está sendo enviada.
+ * Verifica os campos de endereço de entrega e, como fallback seguro, extrai o CEP e converte pela faixa postal dos Correios.
+ * NUNCA recorre a fallback cego de 'SP'. Retorna null se não identificado.
+ */
+export function resolveOrderDestinationUF(order) {
+  if (!order || typeof order !== 'object') return null;
+
+  // 1. Primeiro verifica os campos de endereço de entrega do pedido
+  const rawState =
+    order.shipping?.state ||
+    order.shipping?.uf ||
+    order.shippingAddress?.state ||
+    order.shippingAddress?.region_code ||
+    order.shippingAddress?.uf ||
+    order.address?.state ||
+    order.address?.uf ||
+    order.shipping?.address?.state ||
+    order.shipping?.address?.region_code ||
+    order.shipping?.address?.uf ||
+    order.customer?.state ||
+    order.customer?.uf ||
+    order.clientState ||
+    order.nfe?.destinatario?.uf ||
+    order.uf ||
+    order.state;
+
+  if (rawState && typeof rawState === 'string') {
+    const cleanState = rawState
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toUpperCase()
+      .trim();
+
+    const STATE_NAME_TO_UF = {
+      ACRE: 'AC',
+      ALAGOAS: 'AL',
+      AMAPA: 'AP',
+      AMAZONAS: 'AM',
+      BAHIA: 'BA',
+      CEARA: 'CE',
+      'DISTRITO FEDERAL': 'DF',
+      'ESPIRITO SANTO': 'ES',
+      GOIAS: 'GO',
+      MARANHAO: 'MA',
+      'MATO GROSSO': 'MT',
+      'MATO GROSSO DO SUL': 'MS',
+      'MINAS GERAIS': 'MG',
+      PARA: 'PA',
+      PARAIBA: 'PB',
+      PARANA: 'PR',
+      PERNAMBUCO: 'PE',
+      PIAUI: 'PI',
+      'RIO DE JANEIRO': 'RJ',
+      'RIO GRANDE DO NORTE': 'RN',
+      'RIO GRANDE DO SUL': 'RS',
+      RONDONIA: 'RO',
+      RORAIMA: 'RR',
+      'SANTA CATARINA': 'SC',
+      'SAO PAULO': 'SP',
+      SERGIPE: 'SE',
+      TOCANTINS: 'TO'
+    };
+
+    if (STATE_NAME_TO_UF[cleanState]) {
+      return STATE_NAME_TO_UF[cleanState];
+    }
+
+    const VALID_UFS = new Set([
+      'AC', 'AL', 'AP', 'AM', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA',
+      'MT', 'MS', 'MG', 'PA', 'PB', 'PR', 'PE', 'PI', 'RJ', 'RN',
+      'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
+    ]);
+
+    if (VALID_UFS.has(cleanState)) {
+      return cleanState;
+    }
+  }
+
+  // 2. Se não houver state explícito, extrai o CEP de destino do cliente e deduz pela faixa postal oficial dos Correios
+  const rawCep =
+    order.shipping?.cep ||
+    order.shipping?.postal_code ||
+    order.shippingAddress?.cep ||
+    order.shippingAddress?.postal_code ||
+    order.shipping?.address?.cep ||
+    order.shipping?.address?.postal_code ||
+    order.address?.cep ||
+    order.address?.postal_code ||
+    order.customer?.cep ||
+    order.customer?.postal_code ||
+    order.nfe?.destinatario?.cep ||
+    order.cep;
+
+  const cep = String(rawCep || '').replace(/\D/g, '');
+  if (cep.length >= 2) {
+    const prefix2 = parseInt(cep.slice(0, 2), 10);
+    const prefix5 = cep.length >= 5 ? parseInt(cep.slice(0, 5), 10) : prefix2 * 1000;
+
+    if (prefix2 >= 1 && prefix2 <= 19) return 'SP';
+    if (prefix2 >= 20 && prefix2 <= 28) return 'RJ';
+    if (prefix2 === 29) return 'ES';
+    if (prefix2 >= 30 && prefix2 <= 39) return 'MG';
+    if (prefix2 >= 40 && prefix2 <= 48) return 'BA';
+    if (prefix2 === 49) return 'SE';
+    if (prefix2 >= 50 && prefix2 <= 56) return 'PE';
+    if (prefix2 === 57) return 'AL';
+    if (prefix2 === 58) return 'PB';
+    if (prefix2 === 59) return 'RN';
+    if (prefix2 >= 60 && prefix2 <= 63) return 'CE';
+    if (prefix2 === 64) return 'PI';
+    if (prefix2 === 65) return 'MA';
+    if (prefix2 >= 66 && prefix2 <= 68) {
+      if (prefix5 >= 68900 && prefix5 <= 68999) return 'AP';
+      return 'PA';
+    }
+    if (prefix2 === 69) {
+      if (prefix5 >= 69300 && prefix5 <= 69399) return 'RR';
+      if (prefix5 >= 69900 && prefix5 <= 69999) return 'AC';
+      return 'AM';
+    }
+    if (prefix2 >= 70 && prefix2 <= 73) {
+      if (prefix5 >= 72800 && prefix5 <= 72999) return 'GO';
+      if (prefix5 >= 73700 && prefix5 <= 76799) return 'GO';
+      return 'DF';
+    }
+    if (prefix2 >= 74 && prefix2 <= 76) return 'GO';
+    if (prefix2 === 77) return 'TO';
+    if (prefix2 === 78) {
+      if (prefix5 >= 76800 && prefix5 <= 76999) return 'RO';
+      return 'MT';
+    }
+    if (prefix2 === 79) return 'MS';
+    if (prefix2 >= 80 && prefix2 <= 87) return 'PR';
+    if (prefix2 >= 88 && prefix2 <= 89) return 'SC';
+    if (prefix2 >= 90 && prefix2 <= 99) return 'RS';
+  }
+
+  // 3. Sem fallback cego para 'SP'!
+  return null;
 }
 
 const DEFAULT_COLOR_HEX = {

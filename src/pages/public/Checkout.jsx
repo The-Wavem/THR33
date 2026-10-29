@@ -55,7 +55,7 @@ import { useAuth } from '../../context/AuthContext';
 import { doc, getDoc, setDoc, collection, addDoc, onSnapshot, runTransaction } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
 import { couponService } from '../../services/couponService';
-import { analyticsService } from '../../services/analyticsService';
+import { analyticsService, resolveOrderDestinationUF } from '../../services/analyticsService';
 import { catalogService } from '../../services/catalogService';
 import { pagbankService, PAGBANK_TEST_CARDS, detectCardBrand, encryptCardData } from '../../services/pagbankService';
 import { CardBrandIcon } from '../../components/ui/CardBrandIcon';
@@ -942,6 +942,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         installments: paymentMethod === 'Cartão de Débito' ? 1 : (Number(installments) || 1),
         cardType: paymentMethod === 'Cartão de Débito' ? 'DEBIT_CARD' : 'CREDIT_CARD'
       } : null,
+      shipping: {
+        ...addressToSave,
+        state: addressToSave.state || resolveOrderDestinationUF({ shippingAddress: addressToSave }) || '',
+        cep: addressToSave.cep || ''
+      },
       shippingAddress: {
         cep: addressToSave.cep || '',
         postal_code: String(addressToSave.cep || '').replace(/\D/g, ''),
@@ -949,13 +954,13 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         number: addressToSave.number || '',
         neighborhood: addressToSave.neighborhood || '',
         locality: addressToSave.neighborhood || '',
-        city: addressToSave.city || 'Itaquaquecetuba',
-        state: addressToSave.state || 'SP',
-        region_code: addressToSave.state || 'SP',
+        city: addressToSave.city || '',
+        state: addressToSave.state || resolveOrderDestinationUF({ shippingAddress: addressToSave }) || '',
+        region_code: addressToSave.state || resolveOrderDestinationUF({ shippingAddress: addressToSave }) || '',
         ibge: addressToSave.ibge || '',
         complement: addressToSave.complement || ''
       },
-      clientState: addressToSave.state || 'SP',
+      clientState: addressToSave.state || resolveOrderDestinationUF({ shippingAddress: addressToSave }) || '',
       clientCity: addressToSave.city || '',
       trackingCode: null,
       trackingUrl: null,
@@ -1234,7 +1239,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             paymentDetails: cleanPayload.paymentDetails,
             items: cleanPayload.items,
             shippingAddress: cleanPayload.shippingAddress,
-            clientState: cleanPayload.clientState || cleanPayload.shippingAddress?.state || 'SP',
+            clientState: cleanPayload.clientState || cleanPayload.shippingAddress?.state || resolveOrderDestinationUF(cleanPayload) || '',
             clientCity: cleanPayload.clientCity || cleanPayload.shippingAddress?.city || ''
           }, { merge: true });
         } catch (syncDocErr) {
@@ -1349,7 +1354,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       // 5. Registra a conversão de compra por produto, atribuição UTM e telemetria logística/pagamento
       await analyticsService.trackPurchase(cartItems, total, {
         paymentMethod: finalAmountToPay === 0 ? 'Carteira Digital THR33' : (paymentMethod || 'PIX'),
-        shippingState: addressToSave?.state || 'SP',
+        shippingState: addressToSave?.state || resolveOrderDestinationUF({ shippingAddress: addressToSave }) || '',
         shippingCity: addressToSave?.city || '',
         shippingMethod: selectedShippingMethod || 'padrao',
         carrier: selectedShippingOption?.carrier || selectedShippingOption?.name || (isFreeShippingActive ? 'Frete Grátis' : 'Transportadora')

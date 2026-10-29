@@ -2235,3 +2235,956 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================================
+   STATUS TRANSPARENCY RIBBON (PAGOS VS PENDENTES VS CANCELADOS)
+   ============================================================ */
+.orderStatusRibbon {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.statusRibbonItemPaid,
+.statusRibbonItemPending,
+.statusRibbonItemCancelled {
+  background-color: #0d0d0f;
+  border-radius: 4px;
+  padding: 1.15rem 1.35rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  box-sizing: border-box;
+}
+
+.statusRibbonItemPaid {
+  border: 1px solid rgba(34, 197, 94, 0.28);
+  box-shadow: 0 4px 20px rgba(34, 197, 94, 0.06);
+}
+
+.statusRibbonItemPending {
+  border: 1px solid rgba(250, 204, 21, 0.28);
+  box-shadow: 0 4px 20px rgba(250, 204, 21, 0.06);
+}
+
+.statusRibbonItemCancelled {
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  box-shadow: 0 4px 20px rgba(248, 113, 113, 0.04);
+}
+
+.statusRibbonHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.68rem;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.statusRibbonDotGreen {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
+}
+
+.statusRibbonDotYellow {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #facc15;
+  box-shadow: 0 0 8px rgba(250, 204, 21, 0.8);
+}
+
+.statusRibbonDotRed {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #f87171;
+  box-shadow: 0 0 8px rgba(248, 113, 113, 0.7);
+}
+
+.statusRibbonValueGreen {
+  font-family: var(--font-heading);
+  font-size: 1.55rem;
+  color: #4ade80;
+  letter-spacing: 0.5px;
+}
+
+.statusRibbonValueYellow {
+  font-family: var(--font-heading);
+  font-size: 1.55rem;
+  color: #facc15;
+  letter-spacing: 0.5px;
+}
+
+.statusRibbonValueRed {
+  font-family: var(--font-heading);
+  font-size: 1.55rem;
+  color: #f87171;
+  letter-spacing: 0.5px;
+}
+
+.statusRibbonSub {
+  font-size: 0.72rem;
+  color: #888888;
+}
+
+/* ============================================================
+   ENGENHARIA FINANCEIRA, CAIXA & DIVISÃO DE LUCROS
+   ============================================================ */
+.profitSectionContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 1.75rem;
+  background-color: #0a0a0c;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 1.75rem;
+  margin-top: 1.5rem;
+  box-sizing: border-box;
+}
+
+.profitHeaderRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 1.25rem;
+}
+
+.profitTitleGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.profitBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 1.5px;
+  color: #22c55e;
+  text-transform: uppercase;
+}
+
+.profitTitle {
+  font-family: var(--font-heading);
+  font-size: 1.35rem;
+  letter-spacing: 1px;
+  color: #ffffff;
+  margin: 0;
+}
+
+.profitSub {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  max-width: 680px;
+  line-height: 1.45;
+  margin: 0;
+}
+
+.profitHeaderActions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.profitModeToggleBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.55rem 0.85rem;
+  background-color: #141416;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 3px;
+  color: #cccccc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.profitModeToggleBtn:hover {
+  background-color: #1c1c20;
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+.profitModeToggleBtnActive {
+  background-color: rgba(250, 204, 21, 0.12);
+  border-color: rgba(250, 204, 21, 0.5);
+  color: #facc15;
+}
+
+.profitWhatsAppBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 0.55rem 0.85rem;
+  background-color: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.4);
+  border-radius: 3px;
+  color: #4ade80;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.profitWhatsAppBtn:hover {
+  background-color: rgba(34, 197, 94, 0.22);
+  border-color: #22c55e;
+}
+
+.profitResetBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.55rem;
+  background-color: #141416;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 3px;
+  color: #888888;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.profitResetBtn:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* ALERTA DE MODO MANUAL */
+.manualModeAlertBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.25rem;
+  background-color: rgba(250, 204, 21, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  border-radius: 4px;
+  padding: 0.85rem 1.15rem;
+  flex-wrap: wrap;
+}
+
+.manualModeLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.manualModeLeft strong {
+  display: block;
+  font-size: 0.78rem;
+  color: #facc15;
+  letter-spacing: 0.5px;
+}
+
+.manualModeLeft p {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #cccccc;
+}
+
+.manualInputGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.manualInputGroup label {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: #facc15;
+}
+
+.manualValueInput {
+  background-color: #000000;
+  border: 1px solid rgba(250, 204, 21, 0.5);
+  border-radius: 3px;
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0.4rem 0.65rem;
+  width: 140px;
+}
+
+.manualInputsContainer {
+  display: flex;
+  align-items: center;
+  gap: 1.15rem;
+  flex-wrap: wrap;
+}
+
+.manualTypeToggle {
+  display: flex;
+  background-color: #000000;
+  border: 1px solid rgba(250, 204, 21, 0.35);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.manualTypeBtn {
+  background: transparent;
+  border: none;
+  color: #a1a1aa;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.4rem 0.75rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+}
+
+.manualTypeBtn:hover {
+  color: #ffffff;
+}
+
+.manualTypeBtnActive {
+  background-color: #facc15;
+  color: #000000;
+}
+
+.manualUnitsInput {
+  background-color: #000000;
+  border: 1px solid rgba(250, 204, 21, 0.5);
+  border-radius: 3px;
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0.4rem 0.5rem;
+  width: 75px;
+  text-align: center;
+}
+
+.manualUnitsLabel {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #facc15;
+}
+
+/* GRID DE FLUXO DE CAIXA (6 CARDS) */
+.cashFlowGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.cashFlowCard {
+  background-color: #0e0e12;
+  border-radius: 4px;
+  padding: 1.15rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  box-sizing: border-box;
+}
+
+.cashFlowCardGross {
+  border: 1px solid rgba(34, 197, 94, 0.28);
+}
+
+.cashFlowCardShipping {
+  border: 1px solid rgba(250, 204, 21, 0.25);
+}
+
+.cashFlowCardGateway {
+  border: 1px solid rgba(249, 115, 22, 0.25);
+}
+
+.cashFlowCardReplenish {
+  border: 1px solid rgba(96, 165, 250, 0.35);
+  background-color: rgba(96, 165, 250, 0.04);
+}
+
+.cashFlowCardReserve {
+  border: 1px solid rgba(167, 139, 250, 0.28);
+}
+
+.cashFlowCardNetProfit {
+  border: 1px solid #22c55e;
+  background-color: rgba(34, 197, 94, 0.06);
+  box-shadow: 0 4px 20px rgba(34, 197, 94, 0.1);
+}
+
+.cashFlowCardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.cashFlowCardTitleWithIcon {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.8px;
+}
+
+.cashFlowTagGreen,
+.cashFlowTagYellow,
+.cashFlowTagOrange,
+.cashFlowTagBlue,
+.cashFlowTagPurple,
+.cashFlowTagNeon {
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+  font-weight: 700;
+  padding: 0.15rem 0.45rem;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+
+.cashFlowTagGreen {
+  background-color: rgba(34, 197, 94, 0.12);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+}
+
+.cashFlowTagYellow {
+  background-color: rgba(250, 204, 21, 0.12);
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  color: #facc15;
+}
+
+.cashFlowTagOrange {
+  background-color: rgba(249, 115, 22, 0.12);
+  border: 1px solid rgba(249, 115, 22, 0.3);
+  color: #fb923c;
+}
+
+.cashFlowTagBlue {
+  background-color: rgba(96, 165, 250, 0.12);
+  border: 1px solid rgba(96, 165, 250, 0.3);
+  color: #60a5fa;
+}
+
+.cashFlowTagPurple {
+  background-color: rgba(167, 139, 250, 0.12);
+  border: 1px solid rgba(167, 139, 250, 0.3);
+  color: #c084fc;
+}
+
+.cashFlowTagNeon {
+  background-color: rgba(34, 197, 94, 0.2);
+  border: 1px solid #22c55e;
+  color: #4ade80;
+}
+
+.cashFlowValueGreen {
+  font-family: var(--font-heading);
+  font-size: 1.45rem;
+  color: #4ade80;
+}
+
+.cashFlowValueYellow {
+  font-family: var(--font-heading);
+  font-size: 1.45rem;
+  color: #facc15;
+}
+
+.cashFlowValueOrange {
+  font-family: var(--font-heading);
+  font-size: 1.45rem;
+  color: #fb923c;
+}
+
+.cashFlowValueBlue {
+  font-family: var(--font-heading);
+  font-size: 1.45rem;
+  color: #60a5fa;
+}
+
+.cashFlowValuePurple {
+  font-family: var(--font-heading);
+  font-size: 1.45rem;
+  color: #c084fc;
+}
+
+.cashFlowValueNeon {
+  font-family: var(--font-heading);
+  font-size: 1.65rem;
+  color: #4ade80;
+  text-shadow: 0 0 10px rgba(34, 197, 94, 0.35);
+}
+
+.cashFlowDesc {
+  font-size: 0.72rem;
+  color: #888888;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.cashFlowDescWarning {
+  font-size: 0.72rem;
+  color: #93c5fd;
+  line-height: 1.4;
+  margin: 0;
+}
+
+.inlineRateConfig {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: #aaaaaa;
+}
+
+.rateNumberInput {
+  background-color: #000000;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.35rem;
+  width: 48px;
+  text-align: right;
+}
+
+.rateNumberInputWide {
+  background-color: #000000;
+  border: 1px solid rgba(96, 165, 250, 0.4);
+  border-radius: 2px;
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 0.15rem 0.35rem;
+  width: 58px;
+  text-align: right;
+}
+
+/* ============================================================
+   SIMULADOR DE SÓCIOS / INTEGRANTES
+   ============================================================ */
+.partnersSimulatorBox {
+  display: flex;
+  flex-direction: column;
+  gap: 1.35rem;
+  background-color: #0d0d10;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 1.5rem;
+}
+
+.simulatorTopBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.simulatorTag {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 1px;
+  color: #22c55e;
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.simulatorTitle {
+  font-family: var(--font-heading);
+  font-size: 1.15rem;
+  color: #ffffff;
+  margin: 0.25rem 0 0.35rem 0;
+  letter-spacing: 0.5px;
+}
+
+.simulatorSub {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  max-width: 600px;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.presetButtonsRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.presetBtn {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.45rem 0.75rem;
+  background-color: #16161a;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 3px;
+  color: #cccccc;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.presetBtn:hover {
+  background-color: #222228;
+  border-color: rgba(255, 255, 255, 0.3);
+  color: #ffffff;
+}
+
+.presetBtnHighlight {
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #4ade80;
+}
+
+.presetBtnAdd {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.45rem 0.75rem;
+  background-color: rgba(59, 130, 246, 0.12);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 3px;
+  color: #60a5fa;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.presetBtnAdd:hover {
+  background-color: rgba(59, 130, 246, 0.22);
+}
+
+/* VALIDADOR DE SOMA & BARRA MULTIPART */
+.allocationMonitorBox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  background-color: #121216;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 0.95rem 1.15rem;
+}
+
+.allocationHeaderRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.allocationStatusGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+
+.allocationLabel {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.allocationStatusSuccess {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #4ade80;
+}
+
+.allocationStatusWarning {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #facc15;
+}
+
+.allocationStatusError {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: #f87171;
+}
+
+.allocationActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.autoFixBtn {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+  background-color: #1f1f24;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  color: #ffffff;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.autoFixBtn:hover {
+  background-color: #2c2c34;
+}
+
+.multipartProgressBar {
+  width: 100%;
+  height: 8px;
+  border-radius: 4px;
+  background-color: rgba(255, 255, 255, 0.06);
+  overflow: hidden;
+  display: flex;
+}
+
+.multipartSegment {
+  height: 100%;
+  transition: width 0.3s ease;
+}
+
+.multipartSegmentLeftover {
+  height: 100%;
+  background-color: rgba(250, 204, 21, 0.35);
+  transition: width 0.3s ease;
+}
+
+/* CARDS DE CADA INTEGRANTE */
+.membersGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+}
+
+.memberCard {
+  background-color: #121216;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 1.15rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+  box-sizing: border-box;
+  transition: border-color 0.2s ease;
+}
+
+.memberCard:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.memberCardTop {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.65rem;
+}
+
+.memberNameRoleBox {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+  position: relative;
+  padding-left: 1rem;
+}
+
+.memberDot {
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.memberNameInput {
+  background: transparent;
+  border: 1px solid transparent;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  padding: 0.15rem 0.25rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.memberNameInput:focus {
+  outline: none;
+  border-bottom-color: #22c55e;
+}
+
+.memberRoleInput {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  padding: 0.1rem 0.25rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.memberRoleInput:focus {
+  outline: none;
+  color: #cccccc;
+}
+
+.removeMemberBtn {
+  background: transparent;
+  border: none;
+  color: #666666;
+  cursor: pointer;
+  padding: 0.25rem;
+  transition: color 0.2s ease;
+}
+
+.removeMemberBtn:hover {
+  color: #f87171;
+}
+
+.memberShareValueRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0.45rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.memberShareReais {
+  font-family: var(--font-heading);
+  font-size: 1.4rem;
+  color: #4ade80;
+  letter-spacing: 0.5px;
+}
+
+.memberShareSub {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.memberControlRow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.memberSlider {
+  width: 100%;
+  height: 5px;
+  cursor: pointer;
+}
+
+.memberPercentInputs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
+.stepBtn {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  padding: 0.25rem 0.5rem;
+  background-color: #1a1a20;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  color: #aaaaaa;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.stepBtn:hover {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.percentBox {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: #cccccc;
+}
+
+.percentNumberInput {
+  background-color: #000000;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.2rem 0.4rem;
+  width: 54px;
+  text-align: right;
+}
+
+.percentNumberInput:focus {
+  outline: none;
+  border-color: #22c55e;
+}
+
+.memberMiniBar {
+  width: 100%;
+  height: 4px;
+  background-color: rgba(255, 255, 255, 0.05);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.memberMiniBar div {
+  height: 100%;
+  transition: width 0.2s ease;
+}
+
+.financeTabSection {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  width: 100%;
+}
+
+@media (max-width: 900px) {
+  .orderStatusRibbon {
+    grid-template-columns: 1fr;
+  }
+  .cashFlowGrid {
+    grid-template-columns: 1fr;
+  }
+}

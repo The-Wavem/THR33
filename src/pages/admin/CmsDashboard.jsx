@@ -30,6 +30,7 @@ import {
   formatShortDate 
 } from '../../hooks/useCmsPeriodFilter';
 import { ORDER_STATUSES, normalizeOrderStatus, isOrderPaid } from '../../services/orderStateMachine';
+import { resolveOrderDestinationUF } from '../../services/analyticsService';
 import styles from './CmsDashboard.module.css';
 
 export function CmsDashboard() {
@@ -156,21 +157,43 @@ export function CmsDashboard() {
 
   // 2. MÉTRICAS FINANCEIRAS DO PERÍODO (Apenas pedidos com pagamento aprovado em diante)
   const financialMetrics = useMemo(() => {
+    const PAID_STATUSES = new Set([
+      'pago', 'paid', 'aprovado', 'approved', 'pagamento_aprovado',
+      'em_separacao', 'preparando', 'processing', 'em_producao',
+      'enviado', 'shipped', 'saiu_para_entrega', 'entregue', 'delivered', 'concluido'
+    ]);
     const paidOrders = filteredOrders.filter(o => {
-      const norm = normalizeOrderStatus(o.status || o.statusCode);
-      return norm !== ORDER_STATUSES.AGUARDANDO_PAGAMENTO && norm !== ORDER_STATUSES.CANCELADO;
+      const raw = String(o?.status || o?.statusCode || '').toLowerCase().trim();
+      if (PAID_STATUSES.has(raw)) return true;
+      return isOrderPaid(raw);
     });
     const revenue = paidOrders.reduce((acc, o) => acc + (Number(o.total) || Number(o.amount) || 0), 0);
-    const orderCount = filteredOrders.length;
     const paidCount = paidOrders.length;
     const aov = paidCount > 0 ? (revenue / paidCount) : 0;
 
     return {
       revenue,
-      orderCount,
+      orderCount: paidCount,
       paidCount,
       aov
     };
+  }, [filteredOrders]);
+
+  // 2.1 MAPEAMENTO TERRITORIAL DE VENDAS POR ESTADO (UF REAL VIA resolveOrderDestinationUF)
+  const salesByState = useMemo(() => {
+    const statesMap = {};
+    filteredOrders
+      .filter(o => isOrderPaid(o.status || o.statusCode))
+      .forEach(o => {
+        const uf = resolveOrderDestinationUF(o);
+        if (!uf) return;
+        if (!statesMap[uf]) {
+          statesMap[uf] = { uf, ordersCount: 0, revenue: 0 };
+        }
+        statesMap[uf].ordersCount += 1;
+        statesMap[uf].revenue += Number(o.total) || Number(o.amount) || 0;
+      });
+    return Object.values(statesMap).sort((a, b) => b.revenue - a.revenue);
   }, [filteredOrders]);
 
   // 3. INVENTÁRIO & ALERTA DE ESTOQUE BAIXO / CRÍTICO

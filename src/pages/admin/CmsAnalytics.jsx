@@ -54,6 +54,13 @@ import {
   Compass,
   Users,
   FileText,
+  DollarSign,
+  Plus,
+  Trash2,
+  SlidersHorizontal,
+  Calculator,
+  Building2,
+  Coins,
 } from "lucide-react";
 import { db } from "../../services/firebaseConfig";
 import { InfoTooltip } from "../../components/ui/InfoTooltip";
@@ -61,6 +68,7 @@ import { BrazilHeatmap } from "../../components/ui/BrazilHeatmap";
 import {
   calculateDynamicMetrics,
   getDailyAnalyticsRange,
+  resolveOrderDestinationUF,
 } from "../../services/analyticsService";
 import {
   useCmsPeriodFilter,
@@ -68,7 +76,11 @@ import {
   getTodayStr,
   formatShortDate,
 } from "../../hooks/useCmsPeriodFilter";
-import { isOrderPaid } from "../../services/orderStateMachine";
+import {
+  normalizeOrderStatus,
+  ORDER_STATUSES,
+  isOrderPaid,
+} from "../../services/orderStateMachine";
 import styles from "./CmsAnalytics.module.css";
 import {
   ResponsiveContainer,
@@ -328,28 +340,62 @@ export function CmsAnalytics() {
     }
   }, [selectedSkuDetail]);
 
-  // Filtra e unifica apenas pedidos/sessões finalizadas com sucesso no período selecionado
-  const completedOrders = useMemo(() => {
+  // 0. BLINDAGEM FINANCEIRA: Definição Estrita de Status de Pedido (Máquina de Estados THR33)
+  const PAID_STATUSES = useMemo(() => new Set([
+    'pago', 'paid', 'aprovado', 'approved', 'pagamento_aprovado',
+    'em_separacao', 'preparando', 'processing', 'em_producao',
+    'enviado', 'shipped', 'saiu_para_entrega', 'entregue', 'delivered', 'concluido'
+  ]), []);
+
+  const PENDING_STATUSES = useMemo(() => new Set([
+    'aguardando_pagamento', 'pendente', 'pending', 'em_analise', 'waiting'
+  ]), []);
+
+  const CANCELLED_STATUSES = useMemo(() => new Set([
+    'cancelado', 'cancelled', 'pagamento_recusado', 'recusado', 'declined', 'reembolsado', 'refunded', 'expirado'
+  ]), []);
+
+  const checkIsPaid = (order) => {
+    if (!order) return false;
+    const raw = String(order.status || order.statusCode || order.paymentStatus || '').toLowerCase().trim();
+    if (PAID_STATUSES.has(raw)) return true;
+    if (order.paymentApproved === true) return true;
+    return isOrderPaid(raw);
+  };
+
+  const checkIsPending = (order) => {
+    if (!order) return false;
+    const raw = String(order.status || order.statusCode || order.paymentStatus || '').toLowerCase().trim();
+    if (PENDING_STATUSES.has(raw)) return true;
+    const norm = normalizeOrderStatus(raw);
+    return norm === ORDER_STATUSES.AGUARDANDO_PAGAMENTO && !CANCELLED_STATUSES.has(raw);
+  };
+
+  const checkIsCancelled = (order) => {
+    if (!order) return false;
+    const raw = String(order.status || order.statusCode || order.paymentStatus || '').toLowerCase().trim();
+    if (CANCELLED_STATUSES.has(raw)) return true;
+    const norm = normalizeOrderStatus(raw);
+    return norm === ORDER_STATUSES.CANCELADO;
+  };
+
+  // Unifica todos os pedidos e sessões de checkout no período selecionado
+  const allPeriodOrders = useMemo(() => {
     const combined = [];
     const seenIds = new Set();
 
-    // Pedidos da coleção 'orders' com pagamento confirmado/efetuado
     (orders || []).forEach((ord) => {
-      if (isOrderPaid(ord.status || ord.statusCode)) {
-        if (ord.id && !seenIds.has(ord.id)) {
-          seenIds.add(ord.id);
-          combined.push(ord);
-        }
+      if (ord.id && !seenIds.has(ord.id)) {
+        seenIds.add(ord.id);
+        combined.push(ord);
       }
     });
 
-    // Sessões da coleção 'checkout_sessions' apenas se tiverem pagamento confirmado
     (checkoutSessions || []).forEach((session) => {
-      const isPaid =
-        isOrderPaid(session.status || session.paymentStatus) ||
-        session.paymentApproved === true;
-      if (isPaid && session.id && !seenIds.has(session.id)) {
-        seenIds.add(session.id);
+      const sessionId = session.id;
+      const orderRef = session.orderId || session.orderRefId;
+      if (sessionId && !seenIds.has(sessionId) && (!orderRef || !seenIds.has(orderRef))) {
+        seenIds.add(sessionId);
         combined.push(session);
       }
     });
@@ -357,24 +403,8 @@ export function CmsAnalytics() {
     if (periodFilter === "all") return combined;
 
     const now = new Date();
-    const startOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      0,
-      0,
-      0,
-      0,
-    );
-    const endOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-      23,
-      59,
-      59,
-      999,
-    );
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
     return combined.filter((order) => {
       const orderDate = parseOrderDate(order);
@@ -383,19 +413,16 @@ export function CmsAnalytics() {
       if (periodFilter === "today") {
         return orderDate >= startOfToday && orderDate <= endOfToday;
       }
-
       if (periodFilter === "7days") {
         const start7DaysAgo = new Date(startOfToday);
         start7DaysAgo.setDate(start7DaysAgo.getDate() - 6);
         return orderDate >= start7DaysAgo && orderDate <= endOfToday;
       }
-
       if (periodFilter === "30days") {
         const start30DaysAgo = new Date(startOfToday);
         start30DaysAgo.setDate(start30DaysAgo.getDate() - 29);
         return orderDate >= start30DaysAgo && orderDate <= endOfToday;
       }
-
       if (periodFilter === "custom") {
         if (!customStartDate || !customEndDate) return true;
         const [sYear, sMonth, sDay] = customStartDate.split("-").map(Number);
@@ -404,10 +431,294 @@ export function CmsAnalytics() {
         const end = new Date(eYear, eMonth - 1, eDay, 23, 59, 59, 999);
         return orderDate >= start && orderDate <= end;
       }
-
       return true;
     });
   }, [orders, checkoutSessions, periodFilter, customStartDate, customEndDate]);
+
+  // Separação Estrita de Pedidos: Pagos vs Aguardando Pagamento vs Cancelados
+  const paidOrders = useMemo(() => allPeriodOrders.filter(checkIsPaid), [allPeriodOrders]);
+  const pendingOrders = useMemo(() => allPeriodOrders.filter(checkIsPending), [allPeriodOrders]);
+  const cancelledOrders = useMemo(() => allPeriodOrders.filter(checkIsCancelled), [allPeriodOrders]);
+
+  const paidRevenue = useMemo(() => {
+    return paidOrders.reduce((sum, o) => sum + Number(o.totalAmount || o.total || o.subtotal || o.amount || 0), 0);
+  }, [paidOrders]);
+
+  const pendingRevenue = useMemo(() => {
+    return pendingOrders.reduce((sum, o) => sum + Number(o.totalAmount || o.total || o.subtotal || o.amount || 0), 0);
+  }, [pendingOrders]);
+
+  const cancelledRevenue = useMemo(() => {
+    return cancelledOrders.reduce((sum, o) => sum + Number(o.totalAmount || o.total || o.subtotal || o.amount || 0), 0);
+  }, [cancelledOrders]);
+
+  // Peças realmente vendidas e pagas
+  const totalItemsSold = useMemo(() => {
+    return paidOrders.reduce((acc, ord) => {
+      if (Array.isArray(ord.items) && ord.items.length > 0) {
+        return acc + ord.items.reduce((s, it) => s + Math.max(1, Number(it.quantity || 1)), 0);
+      }
+      return acc + Math.max(1, Number(ord.itemsCount || 1));
+    }, 0);
+  }, [paidOrders]);
+
+  // Frete arrecadado nos pedidos pagos (repassado a fretes, não é lucro)
+  const totalShippingCollected = useMemo(() => {
+    return paidOrders.reduce((sum, ord) => {
+      const ship = Number(ord.shipping?.price || ord.shippingCost || ord.freightCost || ord.shipping?.cost || 0);
+      return sum + (isNaN(ship) ? 0 : ship);
+    }, 0);
+  }, [paidOrders]);
+
+  // Alias para retrocompatibilidade em todos os módulos analíticos (consome estritamente apenas paidOrders!)
+  const completedOrders = paidOrders;
+
+  // CONFIGURAÇÃO DO SIMULADOR FINANCEIRO & DIVISÃO DE LUCROS (Persistência no localStorage)
+  const DEFAULT_SIMULATOR_CONFIG = {
+    gatewayRatePct: 3.5,
+    productionCostPerUnit: 42.0,
+    companyReservePct: 20.0,
+    isManualMode: false,
+    manualModeType: 'gross', // 'gross' (Faturamento com deduções reais) ou 'net' (Lucro Líquido Direto)
+    manualProfitValue: 10000.0,
+    manualUnits: undefined,
+    members: [
+      { id: 'm1', name: 'Integrante 1', role: 'Direção Criativa & Marca', percent: 25 },
+      { id: 'm2', name: 'Integrante 2', role: 'Marketing & Drops', percent: 25 },
+      { id: 'm3', name: 'Integrante 3', role: 'Dev / Tech & E-com', percent: 25 },
+      { id: 'm4', name: 'Integrante 4', role: 'Operações & Logística', percent: 25 }
+    ]
+  };
+
+  const [profitConfig, setProfitConfig] = useState(() => {
+    try {
+      const stored = localStorage.getItem('thr33_profit_simulator_v1');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (parsed && Array.isArray(parsed.members) && parsed.members.length > 0) {
+          return { ...DEFAULT_SIMULATOR_CONFIG, ...parsed };
+        }
+      }
+    } catch (_) {}
+    return DEFAULT_SIMULATOR_CONFIG;
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('thr33_profit_simulator_v1', JSON.stringify(profitConfig));
+    } catch (_) {}
+  }, [profitConfig]);
+
+  // Cálculo do Fluxo de Caixa Real e Lucro Distribuível
+  const financialFlow = useMemo(() => {
+    const isManual = Boolean(profitConfig.isManualMode);
+    const manualModeType = profitConfig.manualModeType || 'gross';
+    const isDirectNet = isManual && manualModeType === 'net';
+
+    const grossRevenue = isManual
+      ? Math.max(0, Number(profitConfig.manualProfitValue || 0))
+      : paidRevenue;
+
+    const shippingCost = isManual ? 0 : totalShippingCollected;
+    const gatewayTaxRate = Math.max(0, Number(profitConfig.gatewayRatePct || 0)) / 100;
+    const gatewayTax = isDirectNet ? 0 : grossRevenue * gatewayTaxRate;
+
+    const costPerUnit = Math.max(0, Number(profitConfig.productionCostPerUnit || 0));
+    const effectiveItemsSold = isManual
+      ? (profitConfig.manualUnits !== undefined
+          ? Math.max(0, Number(profitConfig.manualUnits))
+          : (totalItemsSold > 0 ? totalItemsSold : Math.max(1, Math.round(grossRevenue / 160))))
+      : totalItemsSold;
+
+    const replenishmentFund = isDirectNet ? 0 : effectiveItemsSold * costPerUnit;
+
+    const operatingProfit = isDirectNet
+      ? grossRevenue
+      : Math.max(0, grossRevenue - shippingCost - gatewayTax - replenishmentFund);
+
+    const reserveRate = Math.max(0, Math.min(100, Number(profitConfig.companyReservePct || 0))) / 100;
+    const companyReserve = isDirectNet ? 0 : operatingProfit * reserveRate;
+    const distributableProfit = isDirectNet
+      ? grossRevenue
+      : Math.max(0, operatingProfit - companyReserve);
+
+    const totalAllocatedPercent = (profitConfig.members || []).reduce(
+      (sum, m) => sum + Number(m.percent || 0),
+      0
+    );
+
+    return {
+      isManual,
+      manualModeType,
+      isDirectNet,
+      grossRevenue,
+      shippingCost,
+      gatewayTax,
+      costPerUnit,
+      effectiveItemsSold,
+      replenishmentFund,
+      operatingProfit,
+      companyReserve,
+      distributableProfit,
+      totalAllocatedPercent,
+      leftoverPercent: Math.max(0, Math.round((100 - totalAllocatedPercent) * 10) / 10),
+      excessPercent: Math.max(0, Math.round((totalAllocatedPercent - 100) * 10) / 10)
+    };
+  }, [profitConfig, paidRevenue, totalShippingCollected, totalItemsSold]);
+
+  // Handlers do Simulador de Sócios
+  const handleApplyPreset = (type) => {
+    if (type === 'equal4') {
+      setProfitConfig((prev) => ({
+        ...prev,
+        members: [
+          { id: 'm1', name: 'Integrante 1', role: 'Direção Criativa & Marca', percent: 25 },
+          { id: 'm2', name: 'Integrante 2', role: 'Marketing & Drops', percent: 25 },
+          { id: 'm3', name: 'Integrante 3', role: 'Dev / Tech & E-com', percent: 25 },
+          { id: 'm4', name: 'Integrante 4', role: 'Operações & Logística', percent: 25 }
+        ]
+      }));
+    } else if (type === 'techFocus') {
+      setProfitConfig((prev) => ({
+        ...prev,
+        members: [
+          { id: 'm1', name: 'Integrante 1', role: 'Direção Criativa', percent: 20 },
+          { id: 'm2', name: 'Integrante 2', role: 'Marketing & Drops', percent: 20 },
+          { id: 'm3', name: 'Integrante 3', role: 'Dev / Tech (Lead)', percent: 40 },
+          { id: 'm4', name: 'Integrante 4', role: 'Operações & Logística', percent: 20 }
+        ]
+      }));
+    } else if (type === 'equal3') {
+      setProfitConfig((prev) => ({
+        ...prev,
+        members: [
+          { id: 'm1', name: 'Integrante 1', role: 'Direção Criativa', percent: 33.34 },
+          { id: 'm2', name: 'Integrante 2', role: 'Marketing & Drops', percent: 33.33 },
+          { id: 'm3', name: 'Integrante 3', role: 'Dev / Tech & E-com', percent: 33.33 }
+        ]
+      }));
+    }
+  };
+
+  const handleAddMember = () => {
+    setProfitConfig((prev) => {
+      const newId = `m_${Date.now()}`;
+      const nextNum = (prev.members || []).length + 1;
+      return {
+        ...prev,
+        members: [
+          ...prev.members,
+          { id: newId, name: `Integrante ${nextNum}`, role: 'Operações', percent: 0 }
+        ]
+      };
+    });
+  };
+
+  const handleRemoveMember = (id) => {
+    setProfitConfig((prev) => {
+      if (prev.members.length <= 1) return prev;
+      return {
+        ...prev,
+        members: prev.members.filter((m) => m.id !== id)
+      };
+    });
+  };
+
+  const handleUpdateMember = (id, fields) => {
+    setProfitConfig((prev) => ({
+      ...prev,
+      members: prev.members.map((m) => (m.id === id ? { ...m, ...fields } : m))
+    }));
+  };
+
+  const handleAdjustMemberPercent = (id, delta) => {
+    setProfitConfig((prev) => ({
+      ...prev,
+      members: prev.members.map((m) => {
+        if (m.id !== id) return m;
+        const current = Number(m.percent || 0);
+        const adjusted = Math.min(100, Math.max(0, Math.round((current + delta) * 10) / 10));
+        return { ...m, percent: adjusted };
+      })
+    }));
+  };
+
+  const handleNormalizeTo100 = () => {
+    setProfitConfig((prev) => {
+      const sum = prev.members.reduce((acc, m) => acc + Number(m.percent || 0), 0);
+      if (sum === 0) return prev;
+      const count = prev.members.length;
+      let runningTotal = 0;
+      const normalized = prev.members.map((m, idx) => {
+        if (idx === count - 1) {
+          const finalVal = Math.max(0, Math.round((100 - runningTotal) * 10) / 10);
+          return { ...m, percent: finalVal };
+        }
+        const val = Math.round((Number(m.percent || 0) / sum) * 1000) / 10;
+        runningTotal += val;
+        return { ...m, percent: val };
+      });
+      return { ...prev, members: normalized };
+    });
+  };
+
+  const handleEqualize100 = () => {
+    setProfitConfig((prev) => {
+      const count = prev.members.length;
+      if (count === 0) return prev;
+      const share = Math.round((100 / count) * 10) / 10;
+      let allocated = 0;
+      const equalized = prev.members.map((m, idx) => {
+        if (idx === count - 1) {
+          return { ...m, percent: Math.max(0, Math.round((100 - allocated) * 10) / 10) };
+        }
+        allocated += share;
+        return { ...m, percent: share };
+      });
+      return { ...prev, members: equalized };
+    });
+  };
+
+  const [copyFeedback, setCopyFeedback] = useState(false);
+  const handleCopyWhatsAppReport = () => {
+    const formatBRL = (val) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+    const dateRangeStr = periodLabel;
+
+    let text = `*RELATÓRIO FINANCEIRO & REPASSE // THR33 STREETWEAR*\n`;
+    text += `*Período:* ${dateRangeStr}${financialFlow.isManual ? ' (SIMULAÇÃO MANUAL)' : ''}\n`;
+    text += `-------------------------------------------\n`;
+    text += `*1. ENTRADAS & FATURAMENTO:*\n`;
+    text += `• ${financialFlow.isManual ? 'Receita Bruta Simulada' : 'Receita Bruta Paga'}: ${formatBRL(financialFlow.grossRevenue)} (${financialFlow.isManual ? `Projeção / ${financialFlow.effectiveItemsSold} peças` : `${paidOrders.length} pedidos / ${totalItemsSold} peças`})\n`;
+    if (!financialFlow.isManual && pendingOrders.length > 0) {
+      text += `• Aguardando Pagamento: ${formatBRL(pendingRevenue)} (${pendingOrders.length} pedidos no PIX/Boleto)\n`;
+    }
+    text += `\n*2. DEDUÇÕES OPERACIONAIS:*\n`;
+    text += `• (-) Fretes Arrecadados: ${formatBRL(financialFlow.shippingCost)}\n`;
+    text += `• (-) Taxas PagBank (${profitConfig.gatewayRatePct}%): ${formatBRL(financialFlow.gatewayTax)}\n`;
+    text += `• (-) Fundo de Reposição (${financialFlow.effectiveItemsSold} un x ${formatBRL(profitConfig.productionCostPerUnit)}): ${formatBRL(financialFlow.replenishmentFund)}\n`;
+    text += `\n*3. CAIXA DA EMPRESA & LUCRO:*\n`;
+    text += `• Lucro Operacional: ${formatBRL(financialFlow.operatingProfit)}\n`;
+    text += `• (-) Reserva de Caixa THR33 (${profitConfig.companyReservePct}%): ${formatBRL(financialFlow.companyReserve)}\n`;
+    text += `*• Lucro Líquido Distribuível: ${formatBRL(financialFlow.distributableProfit)}*\n`;
+    text += `-------------------------------------------\n`;
+    text += `*4. DIVISÃO ENTRE OS INTEGRANTES:*\n`;
+    profitConfig.members.forEach((m) => {
+      const share = financialFlow.distributableProfit * (Number(m.percent || 0) / 100);
+      text += `• ${m.name} (${m.role}): *${m.percent}%* -> *${formatBRL(share)}*\n`;
+    });
+    if (financialFlow.leftoverPercent > 0) {
+      const leftover = financialFlow.distributableProfit * (financialFlow.leftoverPercent / 100);
+      text += `• Sobra Retida no Caixa da Marca (${financialFlow.leftoverPercent}%): *${formatBRL(leftover)}*\n`;
+    }
+    text += `-------------------------------------------\n`;
+    text += `Gerado automaticamente pelo CMS THR33 em ${new Date().toLocaleDateString('pt-BR')}`;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text);
+      setCopyFeedback(true);
+      setTimeout(() => setCopyFeedback(false), 2500);
+    }
+  };
 
   // 1. Carrega dados consolidados do Firestore
   async function loadFullAnalytics() {
@@ -2035,119 +2346,17 @@ export function CmsAnalytics() {
       Norte: { regiao: "Norte", pedidos: 0, pecas: 0, receita: 0, fill: "#a78bfa" },
     };
 
-    const STATE_NAME_TO_UF = {
-      ACRE: "AC",
-      ALAGOAS: "AL",
-      AMAPA: "AP",
-      AMAZONAS: "AM",
-      BAHIA: "BA",
-      CEARA: "CE",
-      "DISTRITO FEDERAL": "DF",
-      "ESPIRITO SANTO": "ES",
-      GOIAS: "GO",
-      MARANHAO: "MA",
-      "MATO GROSSO": "MT",
-      "MATO GROSSO DO SUL": "MS",
-      "MINAS GERAIS": "MG",
-      PARA: "PA",
-      PARAIBA: "PB",
-      PARANA: "PR",
-      PERNAMBUCO: "PE",
-      PIAUI: "PI",
-      "RIO DE JANEIRO": "RJ",
-      "RIO GRANDE DO NORTE": "RN",
-      "RIO GRANDE DO SUL": "RS",
-      RONDONIA: "RO",
-      RORAIMA: "RR",
-      "SANTA CATARINA": "SC",
-      "SAO PAULO": "SP",
-      SERGIPE: "SE",
-      TOCANTINS: "TO",
-    };
-
-    const resolveUfFromCep = (rawCep) => {
-      const clean = String(rawCep || "").replace(/\D/g, "");
-      if (clean.length < 5) return null;
-      const prefix = parseInt(clean.slice(0, 5), 10);
-      if (isNaN(prefix)) return null;
-      if (prefix >= 1000 && prefix <= 19999) return "SP";
-      if (prefix >= 20000 && prefix <= 28999) return "RJ";
-      if (prefix >= 29000 && prefix <= 29999) return "ES";
-      if (prefix >= 30000 && prefix <= 39999) return "MG";
-      if (prefix >= 40000 && prefix <= 48999) return "BA";
-      if (prefix >= 49000 && prefix <= 49999) return "SE";
-      if (prefix >= 50000 && prefix <= 56999) return "PE";
-      if (prefix >= 57000 && prefix <= 57999) return "AL";
-      if (prefix >= 58000 && prefix <= 58999) return "PB";
-      if (prefix >= 59000 && prefix <= 59999) return "RN";
-      if (prefix >= 60000 && prefix <= 63999) return "CE";
-      if (prefix >= 64000 && prefix <= 64999) return "PI";
-      if (prefix >= 65000 && prefix <= 65999) return "MA";
-      if (prefix >= 66000 && prefix <= 68899) return "PA";
-      if (prefix >= 68900 && prefix <= 68999) return "AP";
-      if (prefix >= 69000 && prefix <= 69299) return "AM";
-      if (prefix >= 69300 && prefix <= 69399) return "RR";
-      if (prefix >= 69400 && prefix <= 69899) return "AM";
-      if (prefix >= 69900 && prefix <= 69999) return "AC";
-      if (prefix >= 70000 && prefix <= 72799) return "DF";
-      if (prefix >= 72800 && prefix <= 72999) return "GO";
-      if (prefix >= 73000 && prefix <= 73699) return "DF";
-      if (prefix >= 73700 && prefix <= 76799) return "GO";
-      if (prefix >= 76800 && prefix <= 76999) return "RO";
-      if (prefix >= 77000 && prefix <= 77999) return "TO";
-      if (prefix >= 78000 && prefix <= 78899) return "MT";
-      if (prefix >= 79000 && prefix <= 79999) return "MS";
-      if (prefix >= 80000 && prefix <= 87999) return "PR";
-      if (prefix >= 88000 && prefix <= 89999) return "SC";
-      if (prefix >= 90000 && prefix <= 99999) return "RS";
-      return null;
-    };
-
     let globalPiecesCount = 0;
 
     completedOrders.forEach((ord) => {
-      // 1. Extrai a UF real do endereço de envio do cliente em qualquer formato persistido
-      const rawStateCandidate = String(
-        ord.shippingAddress?.state ||
-          ord.shippingAddress?.region_code ||
-          ord.shippingAddress?.uf ||
-          ord.nfe?.destinatario?.uf ||
-          ord.shipping?.address?.state ||
-          ord.shipping?.address?.region_code ||
-          ord.address?.state ||
-          ord.address?.uf ||
-          ord.clientState ||
-          ord.state ||
-          "",
-      )
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toUpperCase()
-        .trim();
+      // 1. Identifica com 100% de precisão a UF de entrega do cliente via resolveOrderDestinationUF
+      const uf = resolveOrderDestinationUF(ord);
+      if (!uf || !BRAZIL_REGIONS[uf]) return;
 
-      let uf = rawStateCandidate;
-      if (STATE_NAME_TO_UF[uf]) {
-        uf = STATE_NAME_TO_UF[uf];
-      }
-
-      // 2. Caso o campo textual não seja uma UF válida, deduz pelo CEP de entrega do cliente
-      if (!BRAZIL_REGIONS[uf]) {
-        const rawCep =
-          ord.shippingAddress?.cep ||
-          ord.shippingAddress?.postal_code ||
-          ord.nfe?.destinatario?.cep ||
-          ord.shipping?.address?.cep ||
-          ord.shipping?.address?.postal_code ||
-          ord.address?.cep ||
-          ord.cep ||
-          "";
-        const cepUf = resolveUfFromCep(rawCep);
-        uf = cepUf && BRAZIL_REGIONS[cepUf] ? cepUf : "SP";
-      }
-
-      // 3. Extrai a cidade do endereço de entrega e a quantidade de peças de roupa enviadas
+      // 2. Extrai a cidade do endereço de entrega e a quantidade de peças de roupa enviadas
       const rawCity = String(
-        ord.shippingAddress?.city ||
+        ord.shipping?.city ||
+          ord.shippingAddress?.city ||
           ord.nfe?.destinatario?.municipio ||
           ord.shipping?.address?.city ||
           ord.address?.city ||
@@ -2173,7 +2382,7 @@ export function CmsAnalytics() {
           pedidos: 0,
           pecas: 0,
           receita: 0,
-          regiao: BRAZIL_REGIONS[uf] || "Sudeste",
+          regiao: BRAZIL_REGIONS[uf] || "Outros",
           cidadesCount: {},
         };
       }
@@ -2186,7 +2395,7 @@ export function CmsAnalytics() {
           (statesMap[uf].cidadesCount[rawCity] || 0) + 1;
       }
 
-      const reg = BRAZIL_REGIONS[uf] || "Sudeste";
+      const reg = BRAZIL_REGIONS[uf] || "Outros";
       if (regionsMap[reg]) {
         regionsMap[reg].pedidos += 1;
         regionsMap[reg].pecas += piecesInOrder;
@@ -2211,21 +2420,21 @@ export function CmsAnalytics() {
       );
 
     const fallbackStates = [
+      { uf: "PR", estado: "PR", pedidos: 0, pecas: 0, receita: 0, regiao: "Sul", cidades: [] },
       { uf: "SP", estado: "SP", pedidos: 0, pecas: 0, receita: 0, regiao: "Sudeste", cidades: [] },
       { uf: "RJ", estado: "RJ", pedidos: 0, pecas: 0, receita: 0, regiao: "Sudeste", cidades: [] },
-      { uf: "MG", estado: "MG", pedidos: 0, pecas: 0, receita: 0, regiao: "Sudeste", cidades: [] },
-      { uf: "PR", estado: "PR", pedidos: 0, pecas: 0, receita: 0, regiao: "Sul", cidades: [] },
       { uf: "SC", estado: "SC", pedidos: 0, pecas: 0, receita: 0, regiao: "Sul", cidades: [] },
     ];
 
     const displayStates =
       statesList.length > 0 ? statesList.slice(0, 8) : fallbackStates;
     const top = statesList[0] || {
-      uf: "SP",
+      uf: "N/I",
+      estado: "N/I",
       pedidos: 0,
       pecas: 0,
       receita: 0,
-      regiao: "Sudeste",
+      regiao: "-",
       cidades: [],
     };
 
@@ -2458,6 +2667,587 @@ export function CmsAnalytics() {
     };
   }, [summaryData, paymentTelemetryLogs, completedOrders]);
 
+  // 2. Renderizador do Simulador Financeiro, Reposição de Estoque & Divisão Societária
+  const renderProfitSimulator = () => {
+    const formatBRL = (val) =>
+      new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(val) || 0);
+
+    const is100 = Math.abs(financialFlow.totalAllocatedPercent - 100) < 0.05;
+    const isOver100 = financialFlow.totalAllocatedPercent > 100.05;
+    const isUnder100 = financialFlow.totalAllocatedPercent < 99.95;
+
+    const MEMBER_PALETTE = [
+      '#22c55e', '#3b82f6', '#facc15', '#a855f7',
+      '#ec4899', '#06b6d4', '#f97316', '#10b981'
+    ];
+
+    return (
+      <div className={styles.profitSectionContainer}>
+        {/* CABEÇALHO DA SEÇÃO DE ENGENHARIA FINANCEIRA */}
+        <div className={styles.profitHeaderRow}>
+          <div className={styles.profitTitleGroup}>
+            <span className={styles.profitBadge}>
+              <DollarSign size={13} color="#22c55e" />
+              FINANCIAL ENGINEERING // CAIXA, CMV & DIVISÃO SOCIETÁRIA
+            </span>
+            <h2 className={styles.profitTitle}>
+              ENGENHARIA FINANCEIRA, CAIXA & DIVISÃO DE LUCROS
+            </h2>
+            <p className={styles.profitSub}>
+              Contabilização em tempo real de faturamento líquido, reserva de reposição têxtil (CMV), retenção da marca e simulação societária ({periodLabel}).
+            </p>
+          </div>
+
+          <div className={styles.profitHeaderActions}>
+            <button
+              onClick={() =>
+                setProfitConfig((prev) => ({
+                  ...prev,
+                  isManualMode: !prev.isManualMode,
+                }))
+              }
+              className={`${styles.profitModeToggleBtn} ${profitConfig.isManualMode ? styles.profitModeToggleBtnActive : ''}`}
+              title="Alternar entre faturamento real do período e valor manual para metas"
+            >
+              <Calculator size={13} />
+              <span>
+                {profitConfig.isManualMode ? 'Modo Manual (Meta R$)' : 'Modo Faturamento Real'}
+              </span>
+            </button>
+
+            <button
+              onClick={handleCopyWhatsAppReport}
+              className={styles.profitWhatsAppBtn}
+              title="Copiar fechamento detalhado formatado para enviar no WhatsApp dos sócios"
+            >
+              <Share2 size={13} />
+              <span>{copyFeedback ? 'Copiado para WhatsApp!' : 'Copiar p/ WhatsApp'}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                if (window.confirm('Deseja resetar os parâmetros e integrantes para o padrão da THR33?')) {
+                  setProfitConfig(DEFAULT_SIMULATOR_CONFIG);
+                }
+              }}
+              className={styles.profitResetBtn}
+              title="Restaurar parâmetros padrão"
+            >
+              <RotateCw size={13} />
+            </button>
+          </div>
+        </div>
+
+        {/* INPUT DE MODO MANUAL QUANDO ATIVADO */}
+        {profitConfig.isManualMode && (
+          <div className={styles.manualModeAlertBar}>
+            <div className={styles.manualModeLeft}>
+              <Calculator size={15} color="#facc15" />
+              <div>
+                <strong>SIMULAÇÃO COM VALOR MANUAL ATIVADA</strong>
+                <p>
+                  {profitConfig.manualModeType === 'net'
+                    ? 'Distribuindo lucro líquido direto entre os integrantes (sem deduções operacionais).'
+                    : 'Calculando deduções de Gateway, CMV Têxtil e Reserva de Caixa sobre o Faturamento Simulado.'}
+                </p>
+              </div>
+            </div>
+
+            <div className={styles.manualInputsContainer}>
+              {/* SELETOR DE MODALIDADE DE SIMULAÇÃO */}
+              <div className={styles.manualTypeToggle}>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setProfitConfig((prev) => ({
+                      ...prev,
+                      manualModeType: 'gross',
+                    }))
+                  }
+                  className={`${styles.manualTypeBtn} ${
+                    (profitConfig.manualModeType || 'gross') === 'gross'
+                      ? styles.manualTypeBtnActive
+                      : ''
+                  }`}
+                  title="Simular faturamento de drop: desconta taxas de gateway, reposição de peças e reserva de caixa"
+                >
+                  Faturamento (Com Deduções)
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setProfitConfig((prev) => ({
+                      ...prev,
+                      manualModeType: 'net',
+                    }))
+                  }
+                  className={`${styles.manualTypeBtn} ${
+                    profitConfig.manualModeType === 'net'
+                      ? styles.manualTypeBtnActive
+                      : ''
+                  }`}
+                  title="Simular valor líquido direto: divide o valor integral sem deduções operacionais"
+                >
+                  Lucro Líquido Direto
+                </button>
+              </div>
+
+              {/* VALOR EM REAIS */}
+              <div className={styles.manualInputGroup}>
+                <label>
+                  {profitConfig.manualModeType === 'net'
+                    ? 'LUCRO LÍQUIDO (R$):'
+                    : 'VALOR SIMULADO (R$):'}
+                </label>
+                <input
+                  type="number"
+                  min="0"
+                  step="500"
+                  value={profitConfig.manualProfitValue}
+                  onChange={(e) =>
+                    setProfitConfig((prev) => ({
+                      ...prev,
+                      manualProfitValue: Math.max(0, Number(e.target.value) || 0),
+                    }))
+                  }
+                  className={styles.manualValueInput}
+                />
+              </div>
+
+              {/* PEÇAS ESTIMADAS (VISÍVEL QUANDO HÁ DEDUÇÃO DE CMV) */}
+              {profitConfig.manualModeType !== 'net' && (
+                <div className={styles.manualInputGroup}>
+                  <label>PEÇAS SIMULADAS:</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="1"
+                    value={
+                      profitConfig.manualUnits !== undefined
+                        ? profitConfig.manualUnits
+                        : (totalItemsSold > 0 ? totalItemsSold : 1)
+                    }
+                    onChange={(e) =>
+                      setProfitConfig((prev) => ({
+                        ...prev,
+                        manualUnits: Math.max(0, parseInt(e.target.value, 10) || 0),
+                      }))
+                    }
+                    className={styles.manualUnitsInput}
+                  />
+                  <span className={styles.manualUnitsLabel}>un</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* PARTE A: DEMONSTRATIVO DE FLUXO DE CAIXA REAL (6 CARDS INTERATIVOS EM CASCATA) */}
+        <div className={styles.cashFlowGrid}>
+          {/* CARD 1: RECEITA BRUTA CONFIRMADA */}
+          <div className={`${styles.cashFlowCard} ${styles.cashFlowCardGross}`}>
+            <div className={styles.cashFlowCardHeader}>
+              <div className={styles.cashFlowCardTitleWithIcon}>
+                <Coins size={15} color="#22c55e" />
+                <span>1. RECEITA BRUTA CONFIRMADA</span>
+              </div>
+              <span className={styles.cashFlowTagGreen}>Caiu na Conta</span>
+            </div>
+            <strong className={styles.cashFlowValueGreen}>
+              {formatBRL(financialFlow.grossRevenue)}
+            </strong>
+            <p className={styles.cashFlowDesc}>
+              {profitConfig.isManualMode
+                ? (profitConfig.manualModeType === 'net'
+                    ? 'Meta de Lucro Líquido direto para distribuição societária'
+                    : 'Faturamento bruto simulado para projeção do drop')
+                : `${paidOrders.length} pedidos confirmados e pagos (${totalItemsSold} peças)`}
+            </p>
+          </div>
+
+          {/* CARD 2: FRETE ARRECADADO */}
+          <div className={`${styles.cashFlowCard} ${styles.cashFlowCardShipping}`}>
+            <div className={styles.cashFlowCardHeader}>
+              <div className={styles.cashFlowCardTitleWithIcon}>
+                <Truck size={15} color="#facc15" />
+                <span>2. FRETE ARRECADADO</span>
+              </div>
+              <span className={styles.cashFlowTagYellow}>Repasse Correios</span>
+            </div>
+            <strong className={styles.cashFlowValueYellow}>
+              (-) {formatBRL(financialFlow.shippingCost)}
+            </strong>
+            <p className={styles.cashFlowDesc}>
+              {profitConfig.isManualMode
+                ? 'Isento ou repassado diretamente às transportadoras'
+                : 'Valor pago pelos clientes repassado às transportadoras (não é lucro)'}
+            </p>
+          </div>
+
+          {/* CARD 3: TAXAS DE GATEWAY (PAGBANK) */}
+          <div className={`${styles.cashFlowCard} ${styles.cashFlowCardGateway}`}>
+            <div className={styles.cashFlowCardHeader}>
+              <div className={styles.cashFlowCardTitleWithIcon}>
+                <CreditCard size={15} color="#f97316" />
+                <span>3. TAXAS GATEWAY (PAGBANK)</span>
+              </div>
+              <div className={styles.inlineRateConfig}>
+                <input
+                  type="number"
+                  min="0"
+                  max="15"
+                  step="0.1"
+                  value={profitConfig.gatewayRatePct}
+                  onChange={(e) =>
+                    setProfitConfig((prev) => ({
+                      ...prev,
+                      gatewayRatePct: Math.max(0, Math.min(25, Number(e.target.value) || 0)),
+                    }))
+                  }
+                  className={styles.rateNumberInput}
+                />
+                <span>%</span>
+              </div>
+            </div>
+            <strong className={styles.cashFlowValueOrange}>
+              (-) {formatBRL(financialFlow.gatewayTax)}
+            </strong>
+            <p className={styles.cashFlowDesc}>
+              {profitConfig.isManualMode
+                ? (profitConfig.manualModeType === 'net'
+                    ? 'Isento no modo de lucro direto'
+                    : `Taxa PagBank (${profitConfig.gatewayRatePct}%) deduzida na simulação`)
+                : `Custo médio do adquirente (${profitConfig.gatewayRatePct}% da receita bruta)`}
+            </p>
+          </div>
+
+          {/* CARD 4: REPOSIÇÃO DE ESTOQUE (CMV DE CAMISAS) */}
+          <div className={`${styles.cashFlowCard} ${styles.cashFlowCardReplenish}`}>
+            <div className={styles.cashFlowCardHeader}>
+              <div className={styles.cashFlowCardTitleWithIcon}>
+                <Package size={15} color="#60a5fa" />
+                <span>4. REPOSIÇÃO TÊXTIL (CMV)</span>
+              </div>
+              <div className={styles.inlineRateConfig}>
+                <span>R$</span>
+                <input
+                  type="number"
+                  min="0"
+                  max="200"
+                  step="1"
+                  value={profitConfig.productionCostPerUnit}
+                  onChange={(e) =>
+                    setProfitConfig((prev) => ({
+                      ...prev,
+                      productionCostPerUnit: Math.max(0, Number(e.target.value) || 0),
+                    }))
+                  }
+                  className={styles.rateNumberInputWide}
+                />
+                <span>/un</span>
+              </div>
+            </div>
+            <strong className={styles.cashFlowValueBlue}>
+              (-) {formatBRL(financialFlow.replenishmentFund)}
+            </strong>
+            <p className={styles.cashFlowDescWarning}>
+              {profitConfig.isManualMode ? (
+                profitConfig.manualModeType === 'net' ? (
+                  'Isento no modo de lucro direto'
+                ) : (
+                  <>
+                    Reserva calculada para repor <strong>{financialFlow.effectiveItemsSold} peças</strong> a R$ {Number(profitConfig.productionCostPerUnit).toFixed(2)} cada na projeção.
+                  </>
+                )
+              ) : (
+                <>
+                  Intocável para repor as <strong>{totalItemsSold} peças</strong> vendidas no período a R$ {Number(profitConfig.productionCostPerUnit).toFixed(2)} cada e manter o estoque vivo.
+                </>
+              )}
+            </p>
+          </div>
+
+          {/* CARD 5: RESERVA DE CAIXA DA EMPRESA */}
+          <div className={`${styles.cashFlowCard} ${styles.cashFlowCardReserve}`}>
+            <div className={styles.cashFlowCardHeader}>
+              <div className={styles.cashFlowCardTitleWithIcon}>
+                <Building2 size={15} color="#a78bfa" />
+                <span>5. RESERVA CAIXA THR33</span>
+              </div>
+              <div className={styles.inlineRateConfig}>
+                <input
+                  type="number"
+                  min="0"
+                  max="80"
+                  step="1"
+                  value={profitConfig.companyReservePct}
+                  onChange={(e) =>
+                    setProfitConfig((prev) => ({
+                      ...prev,
+                      companyReservePct: Math.max(0, Math.min(90, Number(e.target.value) || 0)),
+                    }))
+                  }
+                  className={styles.rateNumberInput}
+                />
+                <span>%</span>
+              </div>
+            </div>
+            <strong className={styles.cashFlowValuePurple}>
+              (-) {formatBRL(financialFlow.companyReserve)}
+            </strong>
+            <p className={styles.cashFlowDesc}>
+              {profitConfig.isManualMode && profitConfig.manualModeType === 'net'
+                ? 'Isento no modo de lucro direto'
+                : `${profitConfig.companyReservePct}% do lucro operacional retido no cofre da marca para capital de giro, tráfego e confecção do próximo drop.`}
+            </p>
+          </div>
+
+          {/* CARD 6: LUCRO LÍQUIDO DISTRIBUÍVEL */}
+          <div className={`${styles.cashFlowCard} ${styles.cashFlowCardNetProfit}`}>
+            <div className={styles.cashFlowCardHeader}>
+              <div className={styles.cashFlowCardTitleWithIcon}>
+                <Coins size={15} color="#22c55e" />
+                <span>6. LUCRO LÍQUIDO DISTRIBUÍVEL</span>
+              </div>
+              <span className={styles.cashFlowTagNeon}>Pronto p/ Sócios</span>
+            </div>
+            <strong className={styles.cashFlowValueNeon}>
+              {formatBRL(financialFlow.distributableProfit)}
+            </strong>
+            <p className={styles.cashFlowDesc}>
+              {profitConfig.isManualMode && profitConfig.manualModeType === 'net'
+                ? 'Valor líquido definido manualmente para repasse integral imediato aos sócios.'
+                : 'Receita Bruta - Frete - Gateway - CMV Reposição - Reserva de Caixa. Pronto para repasse imediato.'}
+            </p>
+          </div>
+        </div>
+
+        {/* PARTE B: SIMULADOR INTERATIVO DE DIVISÃO SOCIETÁRIA */}
+        <div className={styles.partnersSimulatorBox}>
+          <div className={styles.simulatorTopBar}>
+            <div>
+              <span className={styles.simulatorTag}>REPARTIÇÃO DE LUCROS</span>
+              <h3 className={styles.simulatorTitle}>DIVISÃO ENTRE OS INTEGRANTES</h3>
+              <p className={styles.simulatorSub}>
+                Distribua os 100% do Lucro Líquido Distribuível ({formatBRL(financialFlow.distributableProfit)}) entre os integrantes da equipe com cálculo automático e em tempo real.
+              </p>
+            </div>
+
+            {/* PRESETS RÁPIDOS (1 CLIQUE) */}
+            <div className={styles.presetButtonsRow}>
+              <button
+                onClick={() => handleApplyPreset('equal4')}
+                className={styles.presetBtn}
+                title="Dividir igualmente 25% para cada um dos 4 integrantes"
+              >
+                4 Sócios (25% cada)
+              </button>
+              <button
+                onClick={() => handleApplyPreset('techFocus')}
+                className={`${styles.presetBtn} ${styles.presetBtnHighlight}`}
+                title="Cenário Operacional: 20% / 20% / 40% (Dev/Tech Lead) / 20%"
+              >
+                Foco Operacional (3º Sócio 40%)
+              </button>
+              <button
+                onClick={() => handleApplyPreset('equal3')}
+                className={styles.presetBtn}
+                title="Dividir igualmente entre 3 integrantes"
+              >
+                3 Sócios (33.3% cada)
+              </button>
+              <button
+                onClick={handleAddMember}
+                className={styles.presetBtnAdd}
+                title="Adicionar novo integrante à divisão societária"
+              >
+                <Plus size={12} />
+                <span>Adicionar Integrante</span>
+              </button>
+            </div>
+          </div>
+
+          {/* BARRA DE ALOCAÇÃO TOTAL MULTIPART E VALIDADOR DE 100% */}
+          <div className={styles.allocationMonitorBox}>
+            <div className={styles.allocationHeaderRow}>
+              <div className={styles.allocationStatusGroup}>
+                <span className={styles.allocationLabel}>ALOCAÇÃO SOCIETÁRIA TOTAL:</span>
+                {is100 ? (
+                  <span className={styles.allocationStatusSuccess}>
+                    <CheckCircle2 size={13} color="#22c55e" />
+                    ✓ 100% Alocado Perfeitamente
+                  </span>
+                ) : isOver100 ? (
+                  <span className={styles.allocationStatusError}>
+                    <AlertTriangle size={13} color="#f87171" />
+                    Soma em {financialFlow.totalAllocatedPercent}% (Excedeu em {financialFlow.excessPercent}%)
+                  </span>
+                ) : (
+                  <span className={styles.allocationStatusWarning}>
+                    <AlertCircle size={13} color="#facc15" />
+                    Soma em {financialFlow.totalAllocatedPercent}% • {financialFlow.leftoverPercent}% (R$ {formatBRL(financialFlow.distributableProfit * (financialFlow.leftoverPercent / 100))}) retido como bônus no Caixa da Marca
+                  </span>
+                )}
+              </div>
+
+              <div className={styles.allocationActions}>
+                {isOver100 && (
+                  <button
+                    onClick={handleNormalizeTo100}
+                    className={styles.autoFixBtn}
+                    title="Ajustar proporcionalmente todas as cotas para somarem exatamente 100%"
+                  >
+                    Normalizar para 100%
+                  </button>
+                )}
+                {isUnder100 && (
+                  <button
+                    onClick={handleEqualize100}
+                    className={styles.autoFixBtn}
+                    title="Dividir 100% igualmente entre todos os integrantes cadastrados"
+                  >
+                    Equalizar 100%
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* BARRA DE PROGRESSO MULTIPART VISUAL */}
+            <div className={styles.multipartProgressBar}>
+              {(profitConfig.members || []).map((m, idx) => {
+                const color = MEMBER_PALETTE[idx % MEMBER_PALETTE.length];
+                const width = Math.min(100, Math.max(0, Number(m.percent || 0)));
+                return (
+                  <div
+                    key={m.id}
+                    className={styles.multipartSegment}
+                    style={{ width: `${width}%`, backgroundColor: color }}
+                    title={`${m.name}: ${m.percent}%`}
+                  />
+                );
+              })}
+              {isUnder100 && (
+                <div
+                  className={styles.multipartSegmentLeftover}
+                  style={{ width: `${financialFlow.leftoverPercent}%` }}
+                  title={`Sobra no Caixa: ${financialFlow.leftoverPercent}%`}
+                />
+              )}
+            </div>
+          </div>
+
+          {/* LISTA DE INTEGRANTES INTERATIVOS */}
+          <div className={styles.membersGrid}>
+            {(profitConfig.members || []).map((member, idx) => {
+              const color = MEMBER_PALETTE[idx % MEMBER_PALETTE.length];
+              const shareReais = financialFlow.distributableProfit * (Number(member.percent || 0) / 100);
+
+              return (
+                <div key={member.id} className={styles.memberCard}>
+                  <div className={styles.memberCardTop}>
+                    <div className={styles.memberNameRoleBox}>
+                      <span className={styles.memberDot} style={{ backgroundColor: color }} />
+                      <input
+                        type="text"
+                        value={member.name}
+                        onChange={(e) => handleUpdateMember(member.id, { name: e.target.value })}
+                        className={styles.memberNameInput}
+                        placeholder="Nome do Integrante"
+                      />
+                      <input
+                        type="text"
+                        value={member.role}
+                        onChange={(e) => handleUpdateMember(member.id, { role: e.target.value })}
+                        className={styles.memberRoleInput}
+                        placeholder="Atribuição / Cargo"
+                      />
+                    </div>
+
+                    {profitConfig.members.length > 1 && (
+                      <button
+                        onClick={() => handleRemoveMember(member.id)}
+                        className={styles.removeMemberBtn}
+                        title="Remover integrante"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* VALOR A RECEBER EM REAIS (NEON) */}
+                  <div className={styles.memberShareValueRow}>
+                    <div className={styles.memberShareReais}>
+                      {formatBRL(shareReais)}
+                    </div>
+                    <span className={styles.memberShareSub}>recebimento líquido</span>
+                  </div>
+
+                  {/* SLIDER + INPUT NUMÉRICO + BOTÕES RÁPIDOS */}
+                  <div className={styles.memberControlRow}>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={member.percent}
+                      onChange={(e) => handleUpdateMember(member.id, { percent: Number(e.target.value) })}
+                      className={styles.memberSlider}
+                      style={{ accentColor: color }}
+                    />
+
+                    <div className={styles.memberPercentInputs}>
+                      <button
+                        onClick={() => handleAdjustMemberPercent(member.id, -5)}
+                        className={styles.stepBtn}
+                        title="Diminuir 5%"
+                      >
+                        -5%
+                      </button>
+                      <div className={styles.percentBox}>
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="0.5"
+                          value={member.percent}
+                          onChange={(e) =>
+                            handleUpdateMember(member.id, {
+                              percent: Math.min(100, Math.max(0, Number(e.target.value) || 0)),
+                            })
+                          }
+                          className={styles.percentNumberInput}
+                        />
+                        <span>%</span>
+                      </div>
+                      <button
+                        onClick={() => handleAdjustMemberPercent(member.id, 5)}
+                        className={styles.stepBtn}
+                        title="Aumentar 5%"
+                      >
+                        +5%
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* MINI BARRA INDIVIDUAL */}
+                  <div className={styles.memberMiniBar}>
+                    <div
+                      style={{
+                        width: `${Math.min(100, Math.max(0, Number(member.percent || 0)))}%`,
+                        backgroundColor: color,
+                      }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+
   // Renderizador unificado do dashboard de gráficos e predição
   const renderChartsDashboard = () => (
     <div className={styles.chartsSuite}>
@@ -2485,6 +3275,48 @@ export function CmsAnalytics() {
         >
           <Target size={12} color="#facc15" />
           <span>MODELO PREDITIVO ATIVO</span>
+        </div>
+      </div>
+
+      {/* FAIXA DE TRANSPARÊNCIA: STATUS REAL DE PEDIDOS & RECEITA */}
+      <div className={styles.orderStatusRibbon}>
+        <div className={styles.statusRibbonItemPaid}>
+          <div className={styles.statusRibbonHeader}>
+            <span className={styles.statusRibbonDotGreen} />
+            <strong>PAGOS & APROVADOS (CAIXA REAL)</strong>
+          </div>
+          <div className={styles.statusRibbonValueGreen}>
+            R$ {paidRevenue.toFixed(2).replace(".", ",")}
+          </div>
+          <span className={styles.statusRibbonSub}>
+            {paidOrders.length} pedidos confirmados ({totalItemsSold} peças)
+          </span>
+        </div>
+
+        <div className={styles.statusRibbonItemPending}>
+          <div className={styles.statusRibbonHeader}>
+            <span className={styles.statusRibbonDotYellow} />
+            <strong>AGUARDANDO PAGAMENTO</strong>
+          </div>
+          <div className={styles.statusRibbonValueYellow}>
+            R$ {pendingRevenue.toFixed(2).replace(".", ",")}
+          </div>
+          <span className={styles.statusRibbonSub}>
+            {pendingOrders.length} pedidos pendentes no PIX / Boleto
+          </span>
+        </div>
+
+        <div className={styles.statusRibbonItemCancelled}>
+          <div className={styles.statusRibbonHeader}>
+            <span className={styles.statusRibbonDotRed} />
+            <strong>CANCELADOS / RECUSADOS</strong>
+          </div>
+          <div className={styles.statusRibbonValueRed}>
+            R$ {cancelledRevenue.toFixed(2).replace(".", ",")}
+          </div>
+          <span className={styles.statusRibbonSub}>
+            {cancelledOrders.length} pedidos não convertidos ou expirados
+          </span>
         </div>
       </div>
 
@@ -2985,6 +3817,9 @@ export function CmsAnalytics() {
           </div>
         </div>
       </div>
+
+      {/* SEÇÃO DESTAQUE: ENGENHARIA FINANCEIRA, CAIXA & DIVISÃO DE LUCROS */}
+      {renderProfitSimulator()}
 
       {/* GRID 2 COLUNAS */}
       <div className={styles.chartsGridTwoCols}>
@@ -3981,6 +4816,13 @@ export function CmsAnalytics() {
             <Activity size={13} />
             <span>Gráficos & Projeções (BI)</span>
           </button>
+          <button
+            className={`${styles.tabBtn} ${activeTab === "finance" ? styles.activeTab : ""}`}
+            onClick={() => setActiveTab("finance")}
+          >
+            <DollarSign size={13} color="#22c55e" />
+            <span>Engenharia Financeira & Sócios</span>
+          </button>
         </div>
       </header>
 
@@ -4881,6 +5723,13 @@ export function CmsAnalytics() {
       {activeTab === "charts" && (
         <section className={styles.chartsTabSection}>
           {renderChartsDashboard()}
+        </section>
+      )}
+
+      {/* TAB 6: ABA DEDICADA DE ENGENHARIA FINANCEIRA, CAIXA & DIVISÃO DE LUCROS */}
+      {activeTab === "finance" && (
+        <section className={styles.financeTabSection}>
+          {renderProfitSimulator()}
         </section>
       )}
 
