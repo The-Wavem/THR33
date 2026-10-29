@@ -1,3 +1,5 @@
+import { fetchAddressByCep } from './viaCepService';
+
 /**
  * shippingService.js - Serviço de Cotação de Frete em Tempo Real da THR33
  * 
@@ -31,23 +33,12 @@ export const SHIPPING_ORIGIN = {
  */
 function getClientFallbackShipping(cleanCep, totalQty) {
   const prefix2 = parseInt(cleanCep.substring(0, 2), 10);
+  const prefix5 = parseInt(cleanCep.substring(0, 5), 10);
+  if (isNaN(prefix2) || prefix5 < 1000 || /^(\d)\1{7}$/.test(cleanCep)) {
+    return [];
+  }
   const additionalQty = Math.max(0, totalQty - 1);
   const quotes = [];
-
-  // Retirada Presencial no Ateliê para cidades vizinhas (Itaquaquecetuba, Mogi, Poá, Suzano, Ferraz)
-  const prefix5 = parseInt(cleanCep.substring(0, 5), 10);
-  if (prefix5 >= 8500 && prefix5 <= 8799) {
-    quotes.push({
-      id: 'retirada_atelie',
-      name: 'RETIRADA NO ATELIÊ (ITAQUAQUECETUBA - SP)',
-      carrier: 'THR33 Ateliê',
-      serviceName: 'Retirada Presencial',
-      deadline: 'Disponível em 24h úteis',
-      deliveryDays: 1,
-      price: 0,
-      source: 'local'
-    });
-  }
 
   // Faixa 1: Grande SP e Capital (01 a 09)
   if (prefix2 >= 1 && prefix2 <= 9) {
@@ -150,7 +141,7 @@ function getClientFallbackShipping(cleanCep, totalQty) {
     );
   }
   // Faixa 5: Norte (AM 69, RR 69, PA 66-68, AP 68, AC 69, RO 76)
-  else {
+  else if ((prefix2 >= 66 && prefix2 <= 69) || prefix2 === 76) {
     quotes.push(
       {
         id: 'pac_norte',
@@ -173,6 +164,9 @@ function getClientFallbackShipping(cleanCep, totalQty) {
         source: 'contingencia'
       }
     );
+  } else {
+    // Fora de qualquer faixa válida de CEP brasileira
+    return [];
   }
 
   quotes.sort((a, b) => a.price - b.price);
@@ -182,17 +176,39 @@ function getClientFallbackShipping(cleanCep, totalQty) {
 export const shippingService = {
   /**
    * Calcula as opções de cotação de frete para o CEP informado.
-   * Consulta a Cloud Function /api/calculateShipping e possui fallback inteligente instantâneo.
+   * Valida previamente a existência do CEP no ViaCEP e consulta a Cloud Function oficial.
    * 
    * @param {string} cep CEP de 8 dígitos numéricos
    * @param {Array} items Lista de itens do carrinho ou produto unitário
    * @param {number} subtotal Valor total em reais para fins de seguro de carga
-   * @returns {Promise<{ success: boolean, options: Array, source: string, package: Object }>}
+   * @returns {Promise<{ success: boolean, options: Array, source: string, package: Object, destinationLocation?: string }>}
    */
   calculateShipping: async (cep, items = [], subtotal = 0) => {
     const cleanCep = String(cep || '').replace(/\D/g, '');
     if (cleanCep.length !== 8) {
       throw new Error('Digite um CEP válido com 8 dígitos.');
+    }
+
+    if (/^(\d)\1{7}$/.test(cleanCep) || parseInt(cleanCep.substring(0, 5), 10) < 1000) {
+      throw new Error('CEP inexistente ou inválido. Digite um CEP brasileiro válido.');
+    }
+
+    // 1. Verificação instantânea de existência do CEP na base oficial dos Correios (ViaCEP)
+    let destinationLocation = null;
+    let viaCepAddress = null;
+    try {
+      const addrRes = await fetchAddressByCep(cleanCep);
+      if (addrRes && addrRes.success === false && addrRes.error?.includes('não encontrado')) {
+        throw new Error('CEP não encontrado na base oficial dos Correios. Verifique o número digitado.');
+      }
+      if (addrRes?.success && addrRes?.data) {
+        viaCepAddress = addrRes.data;
+        destinationLocation = `${addrRes.data.city} - ${addrRes.data.state}`;
+      }
+    } catch (viaCepErr) {
+      if (viaCepErr.message?.includes('não encontrado')) {
+        throw viaCepErr;
+      }
     }
 
     const totalQty = Array.isArray(items) && items.length > 0
@@ -237,18 +253,35 @@ export const shippingService = {
       if (response.ok) {
         const data = await response.json();
         if (data && Array.isArray(data.options) && data.options.length > 0) {
-          return data;
+          return {
+            ...data,
+            destinationLocation: data.destinationLocation || destinationLocation,
+            address: data.address || viaCepAddress
+          };
+        }
+      } else {
+        const errData = await response.json().catch(() => null);
+        if (errData?.error && (errData.error.includes('inválido') || errData.error.includes('inexistente') || errData.error.includes('não encontrado'))) {
+          throw new Error(errData.error);
         }
       }
     } catch (apiErr) {
+      if (apiErr.message?.includes('não encontrado') || apiErr.message?.includes('inválido') || apiErr.message?.includes('inexistente')) {
+        throw apiErr;
+      }
       console.warn('Aviso: Falha na cotação remota, acionando matriz de contingência local:', apiErr.message);
     }
 
     // Se a API externa falhar ou não retornar opções, aciona a matriz de contingência
     const fallbackOptions = getClientFallbackShipping(cleanCep, totalQty);
+    if (!fallbackOptions || fallbackOptions.length === 0) {
+      throw new Error('Nenhuma opção de entrega encontrada para este CEP. Verifique se o CEP foi digitado corretamente.');
+    }
+
     return {
       success: true,
       destinationCep: cleanCep,
+      destinationLocation,
       originCep: SHIPPING_ORIGIN.cep,
       originAddress: SHIPPING_ORIGIN.address,
       package: {

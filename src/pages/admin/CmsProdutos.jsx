@@ -26,7 +26,8 @@ import {
   GripVertical,
   ChevronLeft,
   ChevronRight,
-  Link as LinkIcon
+  Link as LinkIcon,
+  Infinity as InfinityIcon
 } from 'lucide-react';
 import { db, storage } from '../../services/firebaseConfig';
 import { catalogService } from '../../services/catalogService';
@@ -110,6 +111,7 @@ export function CmsProdutos() {
     colors: [
       { id: 'preto', name: 'Preto', hex: '#000000' }
     ],
+    unlimitedStock: false,
     hasColorStock: false,
     colorStock: {
       preto: { PP: 5, P: 15, M: 20, G: 15, GG: 5 }
@@ -256,6 +258,7 @@ export function CmsProdutos() {
       colors: [
         { id: 'preto', name: 'Preto', hex: '#000000' }
       ],
+      unlimitedStock: false,
       hasColorStock: false,
       colorStock: {
         preto: { PP: 10, P: 15, M: 20, G: 15, GG: 5 }
@@ -331,6 +334,7 @@ export function CmsProdutos() {
       description: product.description || '',
       stock: product.stock || { PP: 0, P: 0, M: 0, G: 0, GG: 0 },
       colors: initialColors,
+      unlimitedStock: Boolean(product.unlimitedStock || product.isUnlimitedStock),
       hasColorStock: product.hasColorStock ?? false,
       colorStock: initialColorStock
     });
@@ -719,8 +723,12 @@ export function CmsProdutos() {
       hasColorStock: formData.hasColorStock,
       colorStock: formData.colorStock,
       description: formData.description.trim(),
+      unlimitedStock: Boolean(formData.unlimitedStock),
+      isUnlimitedStock: Boolean(formData.unlimitedStock),
       stock: aggregatedStock,
-      sizes: Object.keys(aggregatedStock).filter(size => (aggregatedStock[size] || 0) > 0),
+      sizes: formData.unlimitedStock
+        ? ['PP', 'P', 'M', 'G', 'GG']
+        : Object.keys(aggregatedStock).filter(size => (aggregatedStock[size] || 0) > 0),
       variants,
       createdAt: existingProd?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -1056,9 +1064,10 @@ export function CmsProdutos() {
         const origPrice = parseFloat(p.originalPrice || 0);
         const hasDiscount = origPrice > priceValue;
 
-        if (statusFilter === 'in_stock') return totalStock > 5;
-        if (statusFilter === 'low_stock') return totalStock > 0 && totalStock <= 5;
-        if (statusFilter === 'out_of_stock') return totalStock === 0;
+        if (statusFilter === 'unlimited') return Boolean(p.unlimitedStock || p.isUnlimitedStock);
+        if (statusFilter === 'in_stock') return (p.unlimitedStock || p.isUnlimitedStock) ? true : totalStock > 5;
+        if (statusFilter === 'low_stock') return (p.unlimitedStock || p.isUnlimitedStock) ? false : (totalStock > 0 && totalStock <= 5);
+        if (statusFilter === 'out_of_stock') return (p.unlimitedStock || p.isUnlimitedStock) ? false : totalStock === 0;
         if (statusFilter === 'on_sale') return hasDiscount;
         if (statusFilter === 'release') return p.isRelease === true;
         if (statusFilter === 'featured') return p.isFeatured === true;
@@ -1197,6 +1206,7 @@ export function CmsProdutos() {
                 title="Filtrar por Status de Estoque e Destaque"
               >
                 <option value="all">Todos os Status</option>
+                <option value="unlimited">Estoque Ilimitado (Sob Demanda)</option>
                 <option value="in_stock">Estoque Saudável (&gt; 5 un.)</option>
                 <option value="low_stock">Estoque Baixo (≤ 5 un.)</option>
                 <option value="out_of_stock">Esgotados (0 un.)</option>
@@ -1373,9 +1383,16 @@ export function CmsProdutos() {
                       </div>
                     </td>
                     <td>
-                      <span className={`${styles.stockBadge} ${totalUnits === 0 ? styles.outOfStock : ''}`}>
-                        {totalUnits > 0 ? `${totalUnits} un.` : 'ESGOTADO'}
-                      </span>
+                      {prod.unlimitedStock || prod.isUnlimitedStock ? (
+                        <span className={styles.unlimitedStockTag}>
+                          <InfinityIcon size={12} />
+                          <span>ILIMITADO</span>
+                        </span>
+                      ) : (
+                        <span className={`${styles.stockBadge} ${totalUnits === 0 ? styles.outOfStock : ''}`}>
+                          {totalUnits > 0 ? `${totalUnits} un.` : 'ESGOTADO'}
+                        </span>
+                      )}
                     </td>
                     <td>
                       <div className={styles.actionsGroup}>
@@ -1966,14 +1983,40 @@ export function CmsProdutos() {
                 <div className={styles.stockHeader}>
                   <Package size={14} className={styles.stockIcon} />
                   <label>
-                    {formData.hasColorStock 
-                      ? 'GRADE DE ESTOQUE POR COR & TAMANHO (SKUs)' 
-                      : 'ESTOQUE POR TAMANHO (GRADE COMPARTILHADA)'}
-                    <InfoTooltip text="Define a quantidade disponível de cada tamanho. Se zerar, o botão de compra fica bloqueado." title="Inventário por SKU" />
+                    {formData.unlimitedStock
+                      ? 'ESTOQUE DO PRODUTO (MODO SOB DEMANDA)'
+                      : formData.hasColorStock 
+                        ? 'GRADE DE ESTOQUE POR COR & TAMANHO (SKUs)' 
+                        : 'ESTOQUE POR TAMANHO (GRADE COMPARTILHADA)'}
+                    <InfoTooltip text="No modo ilimitado, a peça fica sempre disponível para venda sem travas de inventário. Desmarque para controlar quantidades por tamanho." title="Controle de Estoque" />
                   </label>
                 </div>
 
-                {formData.hasColorStock ? (
+                {/* OPÇÃO DE ESTOQUE ILIMITADO / SOB DEMANDA */}
+                <div className={styles.unlimitedStockToggleBox}>
+                  <label className={styles.checkboxLabel}>
+                    <input 
+                      type="checkbox" 
+                      name="unlimitedStock" 
+                      checked={formData.unlimitedStock}
+                      onChange={(e) => setFormData(prev => ({ ...prev, unlimitedStock: e.target.checked }))}
+                    />
+                    <div className={styles.unlimitedStockLabelCol}>
+                      <strong>Estoque Ilimitado / Sob Demanda (Venda Contínua)</strong>
+                      <small>Permite vender sem limite de peças, não exibe contadores de estoque no PDP e mantém a peça ativa até você decidir pausar.</small>
+                    </div>
+                  </label>
+                </div>
+
+                {formData.unlimitedStock ? (
+                  <div className={styles.unlimitedActiveBanner}>
+                    <InfinityIcon size={20} />
+                    <div>
+                      <strong>Modo Ilimitado Ativo</strong>
+                      <p>Todos os tamanhos (PP, P, M, G, GG) ficarão liberados para compra no site sem restrições ou contadores regressivos.</p>
+                    </div>
+                  </div>
+                ) : formData.hasColorStock ? (
                   <div className={styles.colorStockTabsContainer}>
                     {/* ABAS POR COR */}
                     <div className={styles.colorStockTabsList}>

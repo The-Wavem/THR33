@@ -973,16 +973,124 @@ export function resolveOrderDestinationUF(order) {
   return null;
 }
 
-const DEFAULT_COLOR_HEX = {
-  'preto_piano': '#000000',
-  'preto': '#000000',
+export const DEFAULT_COLOR_HEX = {
+  'preto': '#27272a',
+  'preto_piano': '#27272a',
   'off_white': '#f5f5f0',
   'off-white': '#f5f5f0',
-  'grafite': '#383838',
-  'grafite_/_chumbo': '#383838',
-  'cinza_mescla': '#7a7a7a',
-  'cinza': '#7a7a7a'
+  'branco': '#ffffff',
+  'grafite': '#52525b',
+  'grafite_/_chumbo': '#52525b',
+  'chumbo': '#52525b',
+  'cinza_mescla': '#9ca3af',
+  'cinza': '#9ca3af',
+  'mescla': '#9ca3af',
+  'marrom_terra': '#92400e',
+  'marrom': '#92400e',
+  'bege_areia': '#d4b996',
+  'bege': '#d4b996',
+  'azul_noite': '#3b82f6',
+  'azul': '#3b82f6',
+  'verde_militar': '#16a34a',
+  'verde': '#16a34a'
 };
+
+export function normalizeCanonicalColorName(raw) {
+  if (!raw) return 'Preto';
+  const clean = String(raw).trim();
+  const lower = clean.toLowerCase();
+
+  if (['padrao', 'padrão', 'default', 'standard', 'unica', 'única', 'none', 'null', 'undefined'].includes(lower)) {
+    return 'Preto';
+  }
+  if (lower === 'preto' || lower === 'black' || lower === 'preto_piano' || lower === 'preto piano') return 'Preto';
+  if (lower === 'branco' || lower === 'white') return 'Branco';
+  if (lower === 'off-white' || lower === 'offwhite' || lower === 'off white' || lower === 'off_white') return 'Off-White';
+  if (lower === 'grafite' || lower === 'graphite' || lower.includes('chumbo')) return 'Grafite';
+  if (lower === 'cinza mescla' || lower === 'cinza_mescla' || lower === 'cinza' || lower === 'mescla' || lower === 'grey' || lower === 'gray') return 'Cinza Mescla';
+  if (lower === 'marrom terra' || lower === 'marrom_terra' || lower === 'marrom' || lower === 'brown') return 'Marrom Terra';
+  if (lower === 'bege areia' || lower === 'bege_areia' || lower === 'bege' || lower === 'sand') return 'Bege Areia';
+  if (lower === 'azul noite' || lower === 'azul_noite' || lower === 'azul' || lower === 'blue' || lower === 'navy') return 'Azul Noite';
+  if (lower === 'verde militar' || lower === 'verde_militar' || lower === 'verde' || lower === 'green' || lower === 'olive') return 'Verde Militar';
+
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
+}
+
+export function extractOrderItemColor(item, currentProduct = null) {
+  if (!item) return 'Preto';
+
+  // 1. item.color (objeto { name, id, hex } ou string direta)
+  let raw = '';
+  if (typeof item.color === 'object' && item.color !== null) {
+    raw = item.color.name || item.color.label || item.color.id || '';
+  } else if (typeof item.color === 'string') {
+    raw = item.color;
+  } else if (item.selectedColor) {
+    raw = typeof item.selectedColor === 'object' ? (item.selectedColor.name || item.selectedColor.label || item.selectedColor.id) : item.selectedColor;
+  } else if (item.colorName || item.color_name) {
+    raw = item.colorName || item.color_name;
+  } else if (item.cor) {
+    raw = item.cor;
+  } else if (item.colorId || item.color_id) {
+    raw = item.colorId || item.color_id;
+  }
+
+  const clean = String(raw || '').trim();
+  const isPlaceholder = !clean || ['padrao', 'padrão', 'default', 'standard', 'unica', 'única', 'none', 'null', 'undefined'].includes(clean.toLowerCase());
+
+  if (!isPlaceholder) {
+    return normalizeCanonicalColorName(clean);
+  }
+
+  // 2. Extração via Nome ou Título do Item
+  const title = String(item.name || item.title || '').toLowerCase();
+  if (title.includes('off-white') || title.includes('off white')) return 'Off-White';
+  if (title.includes('preta') || title.includes('preto') || title.includes('black')) return 'Preto';
+  if (title.includes('branca') || title.includes('branco') || title.includes('white')) return 'Branco';
+  if (title.includes('grafite') || title.includes('graphite') || title.includes('chumbo')) return 'Grafite';
+  if (title.includes('cinza') || title.includes('mescla') || title.includes('grey') || title.includes('gray')) return 'Cinza Mescla';
+  if (title.includes('marrom') || title.includes('brown')) return 'Marrom Terra';
+  if (title.includes('bege') || title.includes('sand')) return 'Bege Areia';
+  if (title.includes('azul') || title.includes('blue') || title.includes('navy')) return 'Azul Noite';
+  if (title.includes('verde') || title.includes('green') || title.includes('olive')) return 'Verde Militar';
+
+  // 3. Imagem associada a cor no catálogo
+  if (item.image && currentProduct?.images && Array.isArray(currentProduct.images)) {
+    const matchedImg = currentProduct.images.find(img => img.url === item.image || (img.url && item.image && img.url.includes(item.image)));
+    if (matchedImg?.colorId) {
+      return normalizeCanonicalColorName(matchedImg.colorId);
+    }
+  }
+
+  // 4. Se o produto tem apenas 1 cor cadastrada no catálogo, usa essa cor
+  if (currentProduct) {
+    if (Array.isArray(currentProduct.colors) && currentProduct.colors.length === 1) {
+      const c = currentProduct.colors[0];
+      const cName = typeof c === 'object' ? (c.name || c.id) : c;
+      if (cName) return normalizeCanonicalColorName(cName);
+    } else if (currentProduct.color) {
+      const cName = typeof currentProduct.color === 'object' ? (currentProduct.color.name || currentProduct.color.id) : currentProduct.color;
+      if (cName) return normalizeCanonicalColorName(cName);
+    }
+  }
+
+  // 5. SKU ou Variação
+  const sku = String(item.sku || '').toUpperCase();
+  if (sku.includes('-OFF-') || sku.includes('-OW-')) return 'Off-White';
+  if (sku.includes('-PR-') || sku.includes('-BK-')) return 'Preto';
+  if (sku.includes('-BR-') || sku.includes('-WH-')) return 'Branco';
+  if (sku.includes('-GF-') || sku.includes('-GR-')) return 'Grafite';
+  if (sku.includes('-CZ-') || sku.includes('-MC-')) return 'Cinza Mescla';
+
+  // 6. Se o produto tiver lista de cores e não foi identificada nenhuma variação específica
+  if (currentProduct?.colors && currentProduct.colors[0]) {
+    const c0 = currentProduct.colors[0];
+    const c0Name = typeof c0 === 'object' ? (c0.name || c0.id) : c0;
+    if (c0Name) return normalizeCanonicalColorName(c0Name);
+  }
+
+  return 'Preto';
+}
 
 const CATEGORY_NAMES = {
   'camisa': 'Camisetas / Camisas',
@@ -1030,19 +1138,25 @@ export function calculateDynamicMetrics(activeProducts = [], completedOrders = [
     // Cores cadastradas no produto
     if (Array.isArray(product.colors)) {
       product.colors.forEach((color) => {
-        const colorName = typeof color === 'string' ? color : (color?.name || color?.id);
-        const cleanKey = String(colorName).toLowerCase().replace(/\s+/g, '_');
-        const colorHex = typeof color === 'object' ? (color?.hex || DEFAULT_COLOR_HEX[cleanKey] || '#ffffff') : (DEFAULT_COLOR_HEX[cleanKey] || '#ffffff');
-        if (colorName && !colorsMap[colorName]) {
-          colorsMap[colorName] = { key: cleanKey, name: colorName, units: 0, hex: colorHex };
+        const rawName = typeof color === 'string' ? color : (color?.name || color?.id);
+        const normName = normalizeCanonicalColorName(rawName);
+        const cleanKey = String(normName).toLowerCase().replace(/[\s\-_/]+/g, '_');
+        const colorHex = (typeof color === 'object' && color?.hex && color.hex !== '#000000')
+          ? color.hex
+          : (DEFAULT_COLOR_HEX[cleanKey] || '#27272a');
+        if (normName && !colorsMap[normName]) {
+          colorsMap[normName] = { key: cleanKey, name: normName, units: 0, hex: colorHex };
         }
       });
     } else if (product.color) {
-      const colorName = typeof product.color === 'string' ? product.color : (product.color?.name || product.color?.id);
-      const cleanKey = String(colorName).toLowerCase().replace(/\s+/g, '_');
-      const colorHex = typeof product.color === 'object' ? (product.color?.hex || DEFAULT_COLOR_HEX[cleanKey] || '#ffffff') : (DEFAULT_COLOR_HEX[cleanKey] || '#ffffff');
-      if (colorName && !colorsMap[colorName]) {
-        colorsMap[colorName] = { key: cleanKey, name: colorName, units: 0, hex: colorHex };
+      const rawName = typeof product.color === 'string' ? product.color : (product.color?.name || product.color?.id);
+      const normName = normalizeCanonicalColorName(rawName);
+      const cleanKey = String(normName).toLowerCase().replace(/[\s\-_/]+/g, '_');
+      const colorHex = (typeof product.color === 'object' && product.color?.hex && product.color.hex !== '#000000')
+        ? product.color.hex
+        : (DEFAULT_COLOR_HEX[cleanKey] || '#27272a');
+      if (normName && !colorsMap[normName]) {
+        colorsMap[normName] = { key: cleanKey, name: normName, units: 0, hex: colorHex };
       }
     }
   });
@@ -1053,9 +1167,13 @@ export function calculateDynamicMetrics(activeProducts = [], completedOrders = [
 
   // 2. Itera sobre pedidos e sessões completas
   completedOrders.forEach((order) => {
-    if (!Array.isArray(order.items)) return;
+    const orderItems = Array.isArray(order.items) && order.items.length > 0
+      ? order.items
+      : (Array.isArray(order.cartItems) ? order.cartItems : (Array.isArray(order.products) ? order.products : []));
 
-    order.items.forEach((item) => {
+    if (!Array.isArray(orderItems) || orderItems.length === 0) return;
+
+    orderItems.forEach((item) => {
       const itemId = String(item.id || item.slug || '');
       const itemName = item.name ? String(item.name).trim().toLowerCase() : '';
 
@@ -1065,7 +1183,7 @@ export function calculateDynamicMetrics(activeProducts = [], completedOrders = [
         (p.name && String(p.name).trim().toLowerCase() === itemName)
       );
 
-      const qty = Number(item.quantity || item.qty || 1);
+      const qty = Math.max(1, Number(item.quantity || item.qty || 1));
       const price = Number(item.price || currentProduct?.price || 0);
 
       // Soma na Categoria
@@ -1086,23 +1204,18 @@ export function calculateDynamicMetrics(activeProducts = [], completedOrders = [
         sizesMap[rawSize] = qty;
       }
 
-      // Soma na Cor
-      let rawColorName = typeof item.color === 'object' ? (item.color?.name || item.color?.id) : item.color;
-      if (!rawColorName && currentProduct) {
-        rawColorName = typeof currentProduct.color === 'object' ? (currentProduct.color?.name || currentProduct.color?.id) : currentProduct.color;
-      }
-      if (!rawColorName && currentProduct?.colors && currentProduct.colors[0]) {
-        rawColorName = typeof currentProduct.colors[0] === 'object' ? (currentProduct.colors[0]?.name || currentProduct.colors[0]?.id) : currentProduct.colors[0];
-      }
-      if (!rawColorName) rawColorName = 'Preto Piano';
+      // Soma na Cor com Extração Robusta
+      const colorName = extractOrderItemColor(item, currentProduct);
+      const cleanKey = String(colorName).toLowerCase().replace(/[\s\-_/]+/g, '_');
+      const hex = (currentProduct?.colors && Array.isArray(currentProduct.colors))
+        ? (currentProduct.colors.find(c => (c.name || c.id)?.toLowerCase() === colorName.toLowerCase())?.hex || DEFAULT_COLOR_HEX[cleanKey] || '#27272a')
+        : (DEFAULT_COLOR_HEX[cleanKey] || '#27272a');
 
-      const colorMatchKey = Object.keys(colorsMap).find(k => k.toLowerCase() === String(rawColorName).toLowerCase());
-      if (colorMatchKey && colorsMap[colorMatchKey]) {
-        colorsMap[colorMatchKey].units += qty;
+      const matchKey = Object.keys(colorsMap).find(k => k.toLowerCase() === colorName.toLowerCase());
+      if (matchKey && colorsMap[matchKey]) {
+        colorsMap[matchKey].units += qty;
       } else {
-        const cleanKey = String(rawColorName).toLowerCase().replace(/\s+/g, '_');
-        const hex = DEFAULT_COLOR_HEX[cleanKey] || '#000000';
-        colorsMap[rawColorName] = { key: cleanKey, name: rawColorName, units: qty, hex };
+        colorsMap[colorName] = { key: cleanKey, name: colorName, units: qty, hex: hex === '#000000' ? '#27272a' : hex };
       }
     });
   });

@@ -224,7 +224,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         items: cartItems.map(i => ({ 
           id: i.id || i.slug, 
           name: i.name, 
-          size: i.size || 'M', 
+          size: i.size || 'M',
+          color: i.color || null,
           qty: i.quantity || 1, 
           price: i.price 
         })),
@@ -909,6 +910,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         id: String(item.id || item.slug || `item_${Date.now()}`),
         name: item.name || 'Produto THR33',
         size: item.size || 'M',
+        color: item.color || null,
         fit: item.fit || 'boxy',
         price: Number(item.price) || 0,
         quantity: Number(item.quantity) || 1,
@@ -931,6 +933,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         : null,
       shippingMethod: selectedShippingMethod || 'padrao',
       carrier: selectedShippingOption?.carrier || selectedShippingOption?.name || 'Transportadora',
+      serviceName: selectedShippingOption?.serviceName || selectedShippingOption?.name || '',
       shippingDeadline: selectedShippingOption?.deadline || null,
       total: Number(finalAmountToPay) || 0,
       originalTotal: Number(total) || 0,
@@ -1014,6 +1017,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             id: String(item.id || item.slug || `item_${Date.now()}`),
             name: item.name || 'Produto THR33',
             size: item.size || 'M',
+            color: item.color || null,
             fit: item.fit || 'boxy',
             price: Number(item.price) || 0,
             quantity: Number(item.quantity) || 1,
@@ -1189,6 +1193,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
             const size = String(item.size || 'M').toUpperCase();
 
+            const isUnlimited = Boolean(pData.unlimitedStock || pData.isUnlimitedStock);
+            if (isUnlimited) {
+              continue;
+            }
+
             let avail = 0;
             if (pData.stock && typeof pData.stock === 'object') {
               avail = Number(pData.stock[size] ?? pData.stock[item.size] ?? 0);
@@ -1204,6 +1213,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           for (const { pRef, pSnap, item } of prodSnaps) {
             if (!pSnap.exists()) continue;
             const pData = pSnap.data();
+            const isUnlimited = Boolean(pData.unlimitedStock || pData.isUnlimitedStock);
+            if (isUnlimited) {
+              continue;
+            }
             const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
             const size = String(item.size || 'M').toUpperCase();
             const updates = { updatedAt: new Date().toISOString() };
@@ -1232,6 +1245,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         // Enriquece o pedido já gravado no backend com metadados complementares (UTMs, endereço normalizado e detalhes visuais)
         try {
           await setDoc(doc(db, 'orders', finalDocId), {
+            carrier: cleanPayload.carrier || selectedShippingOption?.carrier || selectedShippingOption?.name || '',
+            serviceName: cleanPayload.serviceName || selectedShippingOption?.serviceName || '',
+            shippingDeadline: cleanPayload.shippingDeadline || selectedShippingOption?.deadline || '',
             paymentMethod: cleanPayload.paymentMethod,
             utm_source: utmSource,
             utm_medium: utmMedium,

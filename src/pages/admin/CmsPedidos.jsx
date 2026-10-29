@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, doc, updateDoc, setDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, updateDoc, setDoc, onSnapshot } from 'firebase/firestore';
 import { 
   RotateCw, 
   Search, 
@@ -34,12 +34,18 @@ import {
   Scissors,
   Eye,
   EyeOff,
-  Tag
+  Tag,
+  Volume2,
+  VolumeX,
+  Bell,
+  Radio,
+  Share2
 } from 'lucide-react';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../services/firebaseConfig';
 import { maskCPF } from '../../utils/validators';
 import { formatFitBadgeLabel } from '../../utils/fitUtils';
+import { resolveCarrierAndService } from '../../utils/carrierUtils';
 import { 
   ORDER_STATUSES, 
   normalizeOrderStatus, 
@@ -108,17 +114,14 @@ export const resolveOrderFinancials = (order) => {
   const rawShippingCost = order.shippingCost ?? order.freightCost;
   const shippingCost = Number(rawShippingCost || 0);
 
-  const isRetirada = order.shippingMethod === 'retirada_atelie' || String(order.carrier || '').toLowerCase().includes('retirada');
   const isFreeShipping = Boolean(
     order.freeShippingApplied || 
     order.isFreeShipping || 
-    (shippingCost === 0 && (order.freeShippingReason || isRetirada || subtotal > 0))
+    (shippingCost === 0 && Boolean(order.freeShippingReason))
   );
 
   let freeReasonLabel = '';
-  if (isRetirada) {
-    freeReasonLabel = 'Retirada no Ateliê';
-  } else if (order.freeShippingReason === 'item_and_coupon') {
+  if (order.freeShippingReason === 'item_and_coupon') {
     freeReasonLabel = 'Item promocional + Cupom';
   } else if (order.freeShippingReason === 'coupon') {
     freeReasonLabel = 'Cupom de frete grátis';
@@ -130,23 +133,9 @@ export const resolveOrderFinancials = (order) => {
     freeReasonLabel = 'Frete Grátis';
   }
 
-  let carrierName = order.carrier || '';
-  if (!carrierName) {
-    if (isRetirada) carrierName = 'Retirada';
-    else if (order.shippingMethod?.toLowerCase().includes('jadlog')) carrierName = 'Jadlog';
-    else if (order.shippingMethod?.toLowerCase().includes('correios') || order.shippingMethod === 'pac' || order.shippingMethod === 'sedex') carrierName = 'Correios';
-    else if (order.shippingMethod?.toLowerCase().includes('loggi')) carrierName = 'Loggi';
-    else carrierName = 'Transportadora';
-  }
-
-  let serviceName = order.shippingMethod || '';
-  if (serviceName.toLowerCase() === 'retirada_atelie') serviceName = 'Retirada no Ateliê';
-  else if (serviceName.toLowerCase() === 'padrao') serviceName = 'Econômico / Padrão';
-  else if (serviceName.toLowerCase() === 'expresso') serviceName = 'Expresso';
-  else if (serviceName.toUpperCase() === 'PAC') serviceName = 'PAC';
-  else if (serviceName.toUpperCase() === 'SEDEX') serviceName = 'SEDEX';
-  else if (serviceName.toLowerCase() === '.package') serviceName = '.Package';
-  else if (serviceName.toLowerCase() === '.com') serviceName = '.Com';
+  const carrierInfo = resolveCarrierAndService(order);
+  const carrierName = carrierInfo.carrierName;
+  const serviceName = carrierInfo.serviceName;
 
   const deadline = order.shippingDeadline || order.deliveryTime || '';
 
@@ -263,6 +252,28 @@ const formatOrderDate = (order) => {
   return d.toLocaleDateString('pt-BR');
 };
 
+// Sintetizador Nativo Web Audio API para Alerta de Vendas em Tempo Real (Zero dependências externas)
+const playNewOrderNotification = () => {
+  try {
+    const AudioCtxClass = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtxClass) return;
+    const audioCtx = new AudioCtxClass();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, audioCtx.currentTime); // D5
+    osc.frequency.exponentialRampToValueAtTime(880, audioCtx.currentTime + 0.15); // A5
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.4);
+  } catch (e) {
+    console.warn('AudioContext bloqueado ou indisponível', e);
+  }
+};
+
 export function CmsPedidos() {
   const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
@@ -270,6 +281,35 @@ export function CmsPedidos() {
   const [refreshing, setRefreshing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Alerta sonoro de vendas e Radar em Tempo Real
+  const [soundEnabled, setSoundEnabled] = useState(() => {
+    try {
+      const saved = localStorage.getItem('thr33_order_sound');
+      return saved !== null ? saved === 'true' : true;
+    } catch (_) {
+      return true;
+    }
+  });
+  const soundEnabledRef = useRef(soundEnabled);
+  useEffect(() => {
+    soundEnabledRef.current = soundEnabled;
+    try {
+      localStorage.setItem('thr33_order_sound', String(soundEnabled));
+    } catch (_) {}
+  }, [soundEnabled]);
+
+  const [newOrderAlert, setNewOrderAlert] = useState(null);
+  const isInitialOrdersLoadRef = useRef(true);
+
+  useEffect(() => {
+    if (newOrderAlert) {
+      const timer = setTimeout(() => {
+        setNewOrderAlert(null);
+      }, 10000);
+      return () => clearTimeout(timer);
+    }
+  }, [newOrderAlert]);
 
   // Filtros de Data & Período
   const [dateRangePreset, setDateRangePreset] = useState('all'); // '1d' | '7d' | '30d' | 'custom' | 'all'
@@ -332,13 +372,10 @@ export function CmsPedidos() {
     }
   }, [selectedOrder]);
 
-  // 1. Busca os pedidos reais no Firestore e vincula histórico de chamados de suporte
-  const fetchOrders = async () => {
-    setLoading(true);
-    setRefreshing(true);
-    try {
-      // Busca tickets de suporte para vincular histórico com cada pedido
-      const ticketOrderIds = new Set();
+  // 1. Radar em Tempo Real com Firestore onSnapshot e histórico de chamados de suporte
+  useEffect(() => {
+    const ticketOrderIds = new Set();
+    const loadSupportTickets = async () => {
       try {
         const tSnap = await getDocs(collection(db, 'support_tickets'));
         tSnap.forEach(tDoc => {
@@ -348,40 +385,80 @@ export function CmsPedidos() {
       } catch (tErr) {
         console.warn("Aviso ao carregar chamados de suporte para métricas:", tErr.message);
       }
+    };
+    loadSupportTickets();
 
-      const snap = await getDocs(collection(db, 'orders'));
-      if (!snap.empty) {
-        const list = [];
-        snap.forEach(d => {
-          const oData = d.data();
-          const hasSupportRequest = Boolean(
-            oData.hasOpenTicket ||
-            oData.supportTicket ||
-            oData.lastTicketId ||
-            (Array.isArray(oData.supportHistory) && oData.supportHistory.length > 0) ||
-            ticketOrderIds.has(d.id) ||
-            oData.status === 'Troca Solicitada' ||
-            oData.status === 'Devolvido'
-          );
-          list.push({ id: d.id, ...oData, hasSupportRequest });
+    setLoading(true);
+
+    const unsubscribe = onSnapshot(collection(db, 'orders'), (snap) => {
+      const list = [];
+      let newestOrder = null;
+      let hasNewPaidOrder = false;
+
+      snap.forEach(d => {
+        const oData = d.data();
+        const hasSupportRequest = Boolean(
+          oData.hasOpenTicket ||
+          oData.supportTicket ||
+          oData.lastTicketId ||
+          (Array.isArray(oData.supportHistory) && oData.supportHistory.length > 0) ||
+          ticketOrderIds.has(d.id) ||
+          oData.status === 'Troca Solicitada' ||
+          oData.status === 'Devolvido'
+        );
+        list.push({ id: d.id, ...oData, hasSupportRequest });
+      });
+
+      list.sort((a, b) => parseOrderTimestamp(b) - parseOrderTimestamp(a));
+
+      if (!isInitialOrdersLoadRef.current) {
+        snap.docChanges().forEach(change => {
+          if (change.type === 'added' || change.type === 'modified') {
+            const changedData = change.doc.data();
+            const norm = normalizeOrderStatus(changedData.status || changedData.statusCode);
+            const isApproved = norm === ORDER_STATUSES.PAGAMENTO_APROVADO || norm === ORDER_STATUSES.EM_PRODUCAO;
+            if (change.type === 'added' || isApproved) {
+              newestOrder = { id: change.doc.id, ...changedData };
+              hasNewPaidOrder = true;
+            }
+          }
         });
-        list.sort((a, b) => parseOrderTimestamp(b) - parseOrderTimestamp(a));
-        setOrders(list);
+
+        if (hasNewPaidOrder && newestOrder) {
+          if (soundEnabledRef.current) {
+            playNewOrderNotification();
+          }
+          setNewOrderAlert({
+            id: newestOrder.id,
+            client: newestOrder.clientName || newestOrder.customerName || 'Cliente',
+            total: Number(newestOrder.total || 0).toFixed(2),
+            rawOrder: newestOrder
+          });
+        }
       } else {
-        setOrders([]);
+        isInitialOrdersLoadRef.current = false;
       }
-    } catch (err) {
-      console.warn("Aviso ao carregar pedidos do Firestore:", err.message);
-      setOrders([]);
-    } finally {
+
+      setOrders(list);
       setLoading(false);
       setRefreshing(false);
-    }
-  };
+    }, (err) => {
+      console.warn("Aviso ao escutar pedidos do Firestore em tempo real:", err.message);
+      setLoading(false);
+      setRefreshing(false);
+    });
 
-  useEffect(() => {
-    fetchOrders();
+    return () => {
+      unsubscribe();
+    };
   }, []);
+
+  const fetchOrders = async () => {
+    setRefreshing(true);
+    setTimeout(() => {
+      setRefreshing(false);
+    }, 600);
+  };
 
   // Trava a rolagem do fundo (eixo Y) quando o drawer de detalhes do pedido estiver aberto
   useEffect(() => {
@@ -466,7 +543,8 @@ export function CmsPedidos() {
     if (!order) return;
     setDispatchTargetOrder(order);
     const existingCode = order.trackingCode && !order.trackingCode.toLowerCase().includes('processando') && !order.trackingCode.toLowerCase().includes('aguardando') ? order.trackingCode : '';
-    const carrier = order.carrier || 'Correios SEDEX';
+    const carrierInfo = resolveCarrierAndService(order);
+    const carrier = carrierInfo.fullName || order.carrier || 'Correios SEDEX';
     setDispatchForm({
       trackingCode: existingCode,
       carrier: carrier,
@@ -912,6 +990,79 @@ export function CmsPedidos() {
     };
   }, [orders, startDate, endDate]);
 
+  // Tempo decorrido desde a última venda aprovada para o Radar ao Vivo
+  const lastSaleMinutesAgo = useMemo(() => {
+    const paid = orders.filter(o => {
+      const norm = normalizeOrderStatus(o.status || o.statusCode);
+      return norm !== ORDER_STATUSES.AGUARDANDO_PAGAMENTO && norm !== ORDER_STATUSES.CANCELADO;
+    });
+    if (paid.length === 0) return null;
+    const latestTs = Math.max(...paid.map(o => parseOrderTimestamp(o)));
+    if (!latestTs || isNaN(latestTs) || latestTs <= 0) return null;
+    const diffMs = Date.now() - latestTs;
+    const diffMin = Math.floor(diffMs / 60000);
+    if (diffMin < 1) return 'menos de 1 min';
+    if (diffMin === 1) return '1 min';
+    if (diffMin < 60) return `${diffMin} min`;
+    const diffHours = Math.floor(diffMin / 60);
+    if (diffHours < 24) return `${diffHours}h ${diffMin % 60}m`;
+    const diffDays = Math.floor(diffHours / 24);
+    return `${diffDays}d atrás`;
+  }, [orders]);
+
+  // Estatísticas operacionais para a régua contínua (Streamline Strip)
+  const productionQueueStats = useMemo(() => {
+    const queue = orders.filter(o => {
+      if (startDate || endDate) {
+        const dStr = getOrderDateISO(o);
+        if (!dStr) return false;
+        if (startDate && endDate && (dStr < startDate || dStr > endDate)) return false;
+        if (startDate && dStr < startDate) return false;
+        if (endDate && dStr > endDate) return false;
+      }
+      const norm = normalizeOrderStatus(o.status);
+      return norm === ORDER_STATUSES.PAGAMENTO_APROVADO || norm === ORDER_STATUSES.EM_PRODUCAO;
+    });
+    let pieces = 0;
+    queue.forEach(o => {
+      (o.items || []).forEach(it => {
+        pieces += Number(it.quantity || 1);
+      });
+    });
+    return { ordersCount: queue.length, piecesCount: pieces };
+  }, [orders, startDate, endDate]);
+
+  const readyForShippingStats = useMemo(() => {
+    const readyOrders = orders.filter(o => {
+      if (startDate || endDate) {
+        const dStr = getOrderDateISO(o);
+        if (!dStr) return false;
+        if (startDate && endDate && (dStr < startDate || dStr > endDate)) return false;
+        if (startDate && dStr < startDate) return false;
+        if (endDate && dStr > endDate) return false;
+      }
+      const norm = normalizeOrderStatus(o.status);
+      return norm === ORDER_STATUSES.SAIU_PARA_ENTREGA;
+    });
+    return { count: readyOrders.length };
+  }, [orders, startDate, endDate]);
+
+  const pendingStats = useMemo(() => {
+    const pendingOrders = orders.filter(o => {
+      if (startDate || endDate) {
+        const dStr = getOrderDateISO(o);
+        if (!dStr) return false;
+        if (startDate && endDate && (dStr < startDate || dStr > endDate)) return false;
+        if (startDate && dStr < startDate) return false;
+        if (endDate && dStr > endDate) return false;
+      }
+      const norm = normalizeOrderStatus(o.status);
+      return norm === ORDER_STATUSES.AGUARDANDO_PAGAMENTO;
+    });
+    const totalAmount = pendingOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
+    return { count: pendingOrders.length, totalAmount };
+  }, [orders, startDate, endDate]);
+
   // Pedidos selecionados ou em fila de produção para o Lote
   const batchOrders = useMemo(() => {
     if (selectedOrderIds.length > 0) {
@@ -1019,6 +1170,63 @@ export function CmsPedidos() {
       return;
     }
     setProductionModalOpen(true);
+  };
+
+  const handleSendWhatsAppQueue = () => {
+    if (!batchOrders || batchOrders.length === 0) {
+      alert('Nenhum pedido selecionado ou na fila de produção.');
+      return;
+    }
+
+    const dateNow = new Date().toLocaleDateString('pt-BR');
+    const timeNow = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+    let text = `⚡ *THR33 STREETWEAR — ORDEM DE PRODUÇÃO & CORTE*\n`;
+    text += `📅 *Lote:* ${productionSummary.batchId} • ${dateNow} às ${timeNow}\n`;
+    text += `📦 *Total de Peças:* ${productionSummary.totalPieces} un.\n`;
+    text += `🧾 *Total de Pedidos:* ${batchOrders.length} pedido(s)\n\n`;
+
+    text += `✂️ *1. GRADE CONSOLIDADA DE CONFECÇÃO (CORTE & SILK)*\n`;
+    text += `─────────────────────────\n`;
+
+    productionSummary.groupedItems.forEach((item, idx) => {
+      text += `*${idx + 1}. ${item.name.toUpperCase()}*\n`;
+      text += `   • Cor: *${item.color}* | Modelagem: ${item.fit}\n`;
+      const sizeBreakdown = [];
+      ['PP', 'P', 'M', 'G', 'GG', 'XG'].forEach(s => {
+        if (item.sizes[s] > 0) sizeBreakdown.push(`${s}: ${item.sizes[s]}`);
+      });
+      if (item.sizes.OUTROS > 0) sizeBreakdown.push(`OUTROS: ${item.sizes.OUTROS}`);
+      text += `   • Grade: [ ${sizeBreakdown.join(' | ')} ]\n`;
+      text += `   • Subtotal: *${item.total} peças*\n\n`;
+    });
+
+    text += `🧵 *RESUMO TOTAL DE BLANKS/CORES:*\n`;
+    Object.entries(productionSummary.colorTotals || {}).forEach(([color, qty]) => {
+      text += `   • ${color}: *${qty} peças*\n`;
+    });
+
+    text += `\n📦 *2. ROMANEIO RÁPIDO DE EXPEDIÇÃO:*\n`;
+    text += `─────────────────────────\n`;
+    batchOrders.forEach((ord, i) => {
+      const idClean = ord.id.toUpperCase().startsWith('THR-') ? ord.id.toUpperCase() : ord.id.slice(0, 8).toUpperCase();
+      const client = ord.clientName || ord.customerName || 'Cliente';
+      const carrierInfo = resolveCarrierAndService(ord);
+      const shippingMethod = carrierInfo.fullName;
+      const addr = ord.shippingAddress || ord.shipping || ord.address;
+      const state = addr?.state || addr?.uf || 'UF';
+      const city = addr?.city || 'Cidade';
+
+      text += `• *#${idClean}* - ${client} (${city}/${state} - ${shippingMethod})\n`;
+      (ord.items || []).forEach(it => {
+        text += `   ↳ ${it.quantity || 1}x ${it.name} [${extractItemColor(it)} | ${it.size || 'M'}]\n`;
+      });
+    });
+
+    text += `\n_Mensagem automática gerada pelo painel de controle THR33._`;
+
+    const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+    window.open(url, '_blank');
   };
 
   const handleExportBatchCsv = () => {
@@ -1328,6 +1536,30 @@ export function CmsPedidos() {
 
           <button 
             type="button"
+            onClick={handleSendWhatsAppQueue}
+            className={styles.whatsappBatchBtn}
+            title="Disparar ordem consolidada de confecção/corte para o WhatsApp da equipe"
+          >
+            <Share2 size={13} />
+            <span>WhatsApp Produção</span>
+          </button>
+
+          <button 
+            type="button"
+            onClick={() => {
+              const next = !soundEnabled;
+              setSoundEnabled(next);
+              if (next) playNewOrderNotification();
+            }}
+            className={`${styles.soundToggleBtn} ${soundEnabled ? styles.soundActive : ''}`}
+            title={soundEnabled ? "Alerta sonoro ativo para novas vendas (Clique para silenciar)" : "Alerta sonoro silenciado (Clique para ativar)"}
+          >
+            {soundEnabled ? <Volume2 size={14} className={styles.soundOnIcon} /> : <VolumeX size={14} />}
+            <span>{soundEnabled ? 'Alerta Sonoro: Ativo' : 'Alerta Sonoro: Mudo'}</span>
+          </button>
+
+          <button 
+            type="button"
             onClick={handleOpenProductionModal}
             className={styles.exportBatchBtn}
             title="Gerar Ordem de Produção e Separação em Lote (PDF)"
@@ -1347,10 +1579,60 @@ export function CmsPedidos() {
             title="Sincronizar Pedidos"
           >
             <RotateCw size={14} className={refreshing ? styles.spinning : ''} />
-            <span>{refreshing ? 'Sincronizando...' : 'Sincronizar Pedidos'}</span>
+            <span>{refreshing ? 'Sincronizando...' : 'Sincronizar'}</span>
           </button>
         </div>
       </header>
+
+      {/* BANNER NEON QUANDO UM NOVO PEDIDO É CONFIRMADO */}
+      {newOrderAlert && (
+        <div className={styles.neonOrderAlertBanner}>
+          <div className={styles.neonAlertContent}>
+            <span className={styles.neonAlertPulse} />
+            <Bell size={16} className={styles.neonAlertBell} />
+            <span>
+              <strong>NOVO PEDIDO RECEBIDO!</strong> #{newOrderAlert.id.slice(0, 8).toUpperCase()} — {newOrderAlert.client} (R$ {newOrderAlert.total})
+            </span>
+          </div>
+          <div className={styles.neonAlertActions}>
+            <button 
+              type="button" 
+              className={styles.neonAlertViewBtn}
+              onClick={() => {
+                const target = orders.find(o => o.id === newOrderAlert.id) || newOrderAlert.rawOrder;
+                if (target) setSelectedOrder(target);
+                setNewOrderAlert(null);
+              }}
+            >
+              Ver Pedido
+            </button>
+            <button 
+              type="button" 
+              className={styles.neonAlertCloseBtn}
+              onClick={() => setNewOrderAlert(null)}
+              aria-label="Fechar alerta"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* RADAR AO VIVO COM STATUS FIRESTORE */}
+      <div className={styles.liveRadarBar}>
+        <div className={styles.radarStatus}>
+          <span className={styles.radarPulseDot} />
+          <span className={styles.radarText}>
+            <strong>RADAR AO VIVO:</strong> Conectado ao Firestore em tempo real
+            {lastSaleMinutesAgo && (
+              <> • Última venda aprovada há <strong>{lastSaleMinutesAgo}</strong></>
+            )}
+          </span>
+        </div>
+        <div className={styles.radarRightSide}>
+          <span className={styles.radarBadge}>ESTOQUE & CORTE SOB DEMANDA</span>
+        </div>
+      </div>
 
       {/* FEEDBACK VISUAL DO PERÍODO SELECIONADO */}
       {(startDate || endDate) && (
@@ -1362,50 +1644,60 @@ export function CmsPedidos() {
         </div>
       )}
 
-      {/* CARDS DE KPIS */}
-      <section className={styles.kpiGrid}>
-        <div className={styles.kpiCard}>
-          <div className={styles.kpiHeader}>
-            <DollarSign size={16} className={styles.kpiIconGreen} />
-            <span className={styles.kpiLabel}>FATURAMENTO TOTAL</span>
+      {/* RÉGUA OPERACIONAL CONTÍNUA DE ALTO IMPACTO (DE-BOXING STRIP) */}
+      <section className={styles.ordersStreamlineStrip}>
+        <div className={styles.streamlineCol}>
+          <div className={styles.streamlineHeader}>
+            <span className={styles.streamlineDotGreen} />
+            <span className={styles.streamlineLabel}>FATURAMENTO APROVADO</span>
           </div>
-          <strong className={styles.kpiValue}>R$ {metrics.total.toFixed(2)}</strong>
-          <small className={styles.kpiSub}>
-            {metrics.paidCount} {metrics.paidCount === 1 ? 'pedido aprovado' : 'pedidos aprovados'} no período
-          </small>
+          <div className={styles.streamlineMainValGreen}>
+            R$ {metrics.total.toFixed(2)}
+          </div>
+          <div className={styles.streamlineSubtext}>
+            {metrics.paidCount} {metrics.paidCount === 1 ? 'pedido aprovado' : 'pedidos aprovados'}
+            {metrics.averageTicket && Number(metrics.averageTicket) > 0 ? ` • Ticket R$ ${metrics.averageTicket}` : ''}
+          </div>
         </div>
 
-        <div className={styles.kpiCard}>
-          <div className={styles.kpiHeader}>
-            <Package size={16} className={styles.kpiIconBlue} />
-            <span className={styles.kpiLabel}>TOTAL DE PEDIDOS</span>
+        <div className={styles.streamlineCol}>
+          <div className={styles.streamlineHeader}>
+            <span className={styles.streamlineDotCyan} />
+            <span className={styles.streamlineLabel}>FILA DE PRODUÇÃO</span>
           </div>
-          <strong className={styles.kpiValue}>{metrics.count}</strong>
-          <small className={styles.kpiSub}>
-            {metrics.paidCount} {metrics.paidCount === 1 ? 'pago' : 'pagos'} • {metrics.count - metrics.paidCount} pendentes/cancelados
-          </small>
+          <div className={styles.streamlineMainValCyan}>
+            {productionQueueStats.piecesCount} PEÇAS
+          </div>
+          <div className={styles.streamlineSubtext}>
+            {productionQueueStats.ordersCount} {productionQueueStats.ordersCount === 1 ? 'pedido em confecção' : 'pedidos em confecção'}
+          </div>
         </div>
 
-        <div className={styles.kpiCard}>
-          <div className={styles.kpiHeader}>
-            <TrendingUp size={16} className={styles.kpiIconYellow} />
-            <span className={styles.kpiLabel}>TICKET MÉDIO</span>
+        <div className={styles.streamlineCol}>
+          <div className={styles.streamlineHeader}>
+            <span className={styles.streamlineDotYellow} />
+            <span className={styles.streamlineLabel}>PRONTOS P/ ENVIO</span>
           </div>
-          <strong className={styles.kpiValue}>R$ {metrics.averageTicket}</strong>
-          <small className={styles.kpiSub}>Média por pedido aprovado</small>
+          <div className={styles.streamlineMainValYellow}>
+            {readyForShippingStats.count} {readyForShippingStats.count === 1 ? 'PACOTE' : 'PACOTES'}
+          </div>
+          <div className={styles.streamlineSubtext}>
+            Prontos para postagem / entrega
+          </div>
         </div>
 
-        <div className={`${styles.kpiCard} ${Number(metrics.supportRate) > 10 ? styles.alertKpi : ''}`}>
-          <div className={styles.kpiHeader}>
-            <Headphones size={16} className={styles.kpiIconPurple} />
-            <span className={styles.kpiLabel}>TAXA DE SOLICITAÇÃO DE SUPORTE</span>
+        <div className={styles.streamlineCol}>
+          <div className={styles.streamlineHeader}>
+            <span className={styles.streamlineDotPurple} />
+            <span className={styles.streamlineLabel}>PIX PENDENTE</span>
           </div>
-          <strong className={styles.kpiValue}>{metrics.supportRate}%</strong>
-          <small className={styles.kpiSub}>
-            {metrics.supportCount > 0 
-              ? `${metrics.supportCount} ${metrics.supportCount === 1 ? 'pedido com chamado' : 'pedidos com chamados'} • Média 1 a cada ${metrics.avgOrdersPerSupport} pedidos`
-              : '0 solicitações no período'}
-          </small>
+          <div className={styles.streamlineMainValPurple}>
+            R$ {pendingStats.totalAmount.toFixed(2)}
+          </div>
+          <div className={styles.streamlineSubtext}>
+            {pendingStats.count} {pendingStats.count === 1 ? 'pedido aguardando' : 'pedidos aguardando'}
+            {Number(metrics.supportRate) > 0 ? ` • Suporte: ${metrics.supportRate}%` : ''}
+          </div>
         </div>
       </section>
 
@@ -1973,7 +2265,7 @@ export function CmsPedidos() {
                       <div className={styles.financialRow}>
                         <div className={styles.financialLabelCol}>
                           <span className={styles.financialLabel}>
-                            Frete Selecionado: <strong>{fin.carrierName}</strong> {fin.serviceName ? `(${fin.serviceName})` : ''}
+                            Frete Selecionado: <strong>{fin.carrierName}</strong> {fin.serviceName && fin.serviceName.toLowerCase() !== fin.carrierName.toLowerCase() ? `(${fin.serviceName})` : ''}
                           </span>
                           {fin.deadline && (
                             <span className={styles.financialSubtext}>
@@ -2549,6 +2841,17 @@ export function CmsPedidos() {
 
                 <button
                   type="button"
+                  onClick={handleSendWhatsAppQueue}
+                  className={styles.actionCsvBtn}
+                  style={{ borderColor: 'rgba(37, 211, 102, 0.5)', color: '#25d366' }}
+                  title="Disparar resumo do lote para o WhatsApp da Produção"
+                >
+                  <Share2 size={14} />
+                  <span>Disparar WhatsApp</span>
+                </button>
+
+                <button
+                  type="button"
                   onClick={handleExportBatchCsv}
                   className={styles.actionCsvBtn}
                   title="Exportar planilha Excel/CSV dos pedidos selecionados"
@@ -2666,6 +2969,7 @@ export function CmsPedidos() {
                   <table className={styles.docTable}>
                     <thead>
                       <tr>
+                        <th style={{ width: '45px', textAlign: 'center' }}>CORTE</th>
                         <th>ITEM / MODELO</th>
                         <th>MODELAGEM</th>
                         <th>COR</th>
@@ -2681,6 +2985,7 @@ export function CmsPedidos() {
                     <tbody>
                       {productionSummary.groupedItems.map((prod, pIdx) => (
                         <tr key={pIdx}>
+                          <td style={{ textAlign: 'center' }}><span className={styles.printCheckbox}>[ ]</span></td>
                           <td><strong>{prod.name}</strong></td>
                           <td>{prod.fit}</td>
                           <td><span className={styles.docColorTag}>{prod.color}</span></td>
@@ -2696,6 +3001,7 @@ export function CmsPedidos() {
                     </tbody>
                     <tfoot>
                       <tr className={styles.docTableFooterRow}>
+                        <td style={{ textAlign: 'center' }}>-</td>
                         <td colSpan="3"><strong>TOTAL CONSOLIDADO DO LOTE</strong></td>
                         <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.PP}</strong></td>
                         <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.P}</strong></td>
@@ -2721,10 +3027,17 @@ export function CmsPedidos() {
 
                   <div className={styles.docOrdersList}>
                     {productionSummary.orders.map((ord, oIdx) => {
-                      const addr = ord.shippingAddress;
-                      const addrLine = addr 
-                        ? `${addr.street || ''}, ${addr.number || ''}${addr.complement ? ` (${addr.complement})` : ''} - ${addr.neighborhood || ''}, ${addr.city || ''}/${addr.state || ''} - CEP ${addr.cep || ''}`
-                        : 'Endereço não informado';
+                      const addr = ord.shippingAddress || ord.shipping || ord.address;
+                      const rawCep = addr?.cep ? String(addr.cep).replace(/\D/g, '') : '';
+                      const cepFormatted = rawCep.length === 8 ? rawCep.replace(/(\d{5})(\d{3})/, '$1-$2') : (addr?.cep || 'Não informado');
+                      const state = (addr?.state || addr?.uf || 'SP').toUpperCase();
+                      const city = addr?.city || '';
+                      const street = addr?.street || addr?.logradouro || '';
+                      const number = addr?.number || addr?.numero || 'S/N';
+                      const complement = addr?.complement || addr?.complemento ? ` (${addr?.complement || addr?.complemento})` : '';
+                      const neighborhood = addr?.neighborhood || addr?.bairro || '';
+                      const carrierInfo = resolveCarrierAndService(ord);
+                      const shippingMethodLabel = carrierInfo.fullName;
 
                       return (
                         <div key={ord.id} className={styles.docOrderCard}>
@@ -2742,9 +3055,17 @@ export function CmsPedidos() {
                             </div>
                           </div>
 
-                          <div className={styles.docOrderAddress}>
-                            <MapPin size={11} />
-                            <span><strong>Destino:</strong> {addrLine}</span>
+                          <div className={styles.docOrderShippingRow}>
+                            <div className={styles.docOrderAddress} style={{ margin: 0 }}>
+                              <MapPin size={12} className={styles.docOrderPinIcon} />
+                              <span>
+                                <strong>Destino:</strong> {street ? `${street}, ${number}${complement} - ${neighborhood}, ${city}` : 'Endereço não informado'} / <strong className={styles.docStateHighlight}>{state}</strong> • <strong className={styles.docCepHighlight}>CEP {cepFormatted}</strong>
+                              </span>
+                            </div>
+                            <div className={styles.docOrderCarrierBadge}>
+                              <Truck size={11} />
+                              <span>{shippingMethodLabel}</span>
+                            </div>
                           </div>
 
                           <table className={styles.docOrderItemsTable}>

@@ -168,7 +168,6 @@ export const pagbankService = {
     const isFree = Boolean(
       isFreeShippingActive ||
       rawOrderData?.freeShippingApplied ||
-      shippingCost === 0 ||
       hasFreeShippingItem ||
       hasFreeShippingCoupon ||
       (items || []).some(i => i.freeShipping || i.hasFreeShipping)
@@ -318,6 +317,9 @@ export const pagbankService = {
               freeShipping: isFree,
               isFreeShippingActive: isFree,
               method: String(rawOrderData?.shippingMethod || 'padrao'),
+              carrier: String(rawOrderData?.carrier || ''),
+              serviceName: String(rawOrderData?.serviceName || ''),
+              shippingDeadline: String(rawOrderData?.shippingDeadline || rawOrderData?.deadline || ''),
               address: {
                 street: shippingAddress.street || 'Rua',
                 number: shippingAddress.number || 'S/N',

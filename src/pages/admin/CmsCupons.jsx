@@ -2860,7 +2860,7 @@ export function CmsCupons() {
                     <span>MODALIDADE & COMISSIONAMENTO</span>
                     <InfoTooltip
                       text="O comissionamento de parceiros sobe automaticamente conforme as metas de peças vendidas: 1-9 peças (8%), 10-19 peças (10%), 20+ peças (15%). Cupons da marca têm 0% de repasse."
-                      title="Meritocracia e Regras"
+                      title="Regras de Revendas"
                     />
                   </div>
 

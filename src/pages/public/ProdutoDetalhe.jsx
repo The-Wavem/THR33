@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Truck, Star, Plus, Heart, ShoppingBag, ArrowLeft, Check, Package, 
-  ShieldCheck, Flame, HelpCircle, Maximize2, X, ChevronLeft, ChevronRight 
+  ShieldCheck, Flame, HelpCircle, Maximize2, X, ChevronLeft, ChevronRight, MapPin 
 } from 'lucide-react';
 import ProductCard from '../../components/catalog/ProductCard';
 import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
@@ -58,6 +58,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
   // Cálculo de Frete
   const [cepInput, setCepInput] = useState('');
   const [shippingOptions, setShippingOptions] = useState(null);
+  const [destinationLocation, setDestinationLocation] = useState(null);
   const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
   const [shippingError, setShippingError] = useState(null);
 
@@ -117,7 +118,9 @@ export function ProdutoDetalhe({ onAddToCart }) {
           }
           setProduct(data);
           let defaultSize = 'M';
-          if (data.stock && typeof data.stock === 'object') {
+          if (data.unlimitedStock || data.isUnlimitedStock) {
+            defaultSize = 'M';
+          } else if (data.stock && typeof data.stock === 'object') {
             const firstAvail = ['PP', 'P', 'M', 'G', 'GG'].find(sz => Number(data.stock[sz] ?? 0) > 0);
             if (firstAvail) defaultSize = firstAvail;
           }
@@ -172,8 +175,13 @@ export function ProdutoDetalhe({ onAddToCart }) {
     };
   }, [currentParam]);
 
-  // Consolidação da grade de estoque (com suporte a estoque individual por cor)
+  const isUnlimitedStock = Boolean(product?.unlimitedStock || product?.isUnlimitedStock);
+
+  // Consolidação da grade de estoque (com suporte a estoque individual por cor e modo ilimitado)
   const parsedStock = useMemo(() => {
+    if (isUnlimitedStock) {
+      return { PP: 9999, P: 9999, M: 9999, G: 9999, GG: 9999 };
+    }
     if (product?.hasColorStock && product?.colorStock && selectedColor?.id && product.colorStock[selectedColor.id]) {
       const cStock = product.colorStock[selectedColor.id];
       return {
@@ -213,8 +221,8 @@ export function ProdutoDetalhe({ onAddToCart }) {
     return { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
   }, [product, selectedColor]);
 
-  const availableStock = parsedStock[selectedSize] ?? 0;
-  const isAllOutOfStock = Object.values(parsedStock).every(q => q <= 0);
+  const availableStock = isUnlimitedStock ? 9999 : (parsedStock[selectedSize] ?? 0);
+  const isAllOutOfStock = isUnlimitedStock ? false : Object.values(parsedStock).every(q => q <= 0);
 
   // Dados consolidados do produto e galeria com suporte a vínculos de cor
   const imagesGallery = useMemo(() => {
@@ -337,6 +345,54 @@ export function ProdutoDetalhe({ onAddToCart }) {
     setSelectedImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
   };
 
+  // Gesto de Swipe / Arrastar Touch no Carrossel de Imagens (Mobile e Desktop)
+  const touchStartXRef = useRef(0);
+  const touchStartYRef = useRef(0);
+  const touchStartTimeRef = useRef(0);
+  const isSwipingRef = useRef(false);
+
+  const handleTouchStart = (e) => {
+    if (e.touches && e.touches.length === 1) {
+      touchStartXRef.current = e.touches[0].clientX;
+      touchStartYRef.current = e.touches[0].clientY;
+      touchStartTimeRef.current = Date.now();
+      isSwipingRef.current = false;
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (!e.touches || e.touches.length !== 1) return;
+    const deltaX = e.touches[0].clientX - touchStartXRef.current;
+    const deltaY = e.touches[0].clientY - touchStartYRef.current;
+
+    // Se o movimento horizontal for predominante em relacao ao vertical, marca como swipe
+    if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      isSwipingRef.current = true;
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!e.changedTouches || e.changedTouches.length === 0) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
+    const deltaY = e.changedTouches[0].clientY - touchStartYRef.current;
+
+    // Distancia minima para acionar a troca de imagem (35px)
+    if (Math.abs(deltaX) > 35 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      if (deltaX < 0) {
+        handleNextImage();
+      } else {
+        handlePrevImage();
+      }
+    }
+
+    // Mantem isSwiping ativo por 150ms para evitar que o clique no container dispare zoom de tela cheia
+    if (isSwipingRef.current) {
+      setTimeout(() => {
+        isSwipingRef.current = false;
+      }, 150);
+    }
+  };
+
   // Bloqueio de scroll da página (eixo Y) e atalhos de teclado (Esc, Setas) para modal de tela cheia
   useEffect(() => {
     if (!isFullscreen) return;
@@ -377,6 +433,14 @@ export function ProdutoDetalhe({ onAddToCart }) {
     if (cleanCep.length !== 8) {
       setShippingError('Digite um CEP válido com 8 dígitos.');
       setShippingOptions(null);
+      setDestinationLocation(null);
+      return;
+    }
+
+    if (/^(\d)\1{7}$/.test(cleanCep) || parseInt(cleanCep.substring(0, 5), 10) < 1000) {
+      setShippingError('CEP inexistente ou inválido. Digite um CEP brasileiro válido.');
+      setShippingOptions(null);
+      setDestinationLocation(null);
       return;
     }
 
@@ -394,13 +458,16 @@ export function ProdutoDetalhe({ onAddToCart }) {
       const result = await shippingService.calculateShipping(cleanCep, items, effectivePrice * (quantity || 1));
       if (result.options && result.options.length > 0) {
         setShippingOptions(result.options);
+        setDestinationLocation(result.destinationLocation || null);
       } else {
         setShippingError('Nenhuma opção de entrega encontrada para este CEP.');
         setShippingOptions(null);
+        setDestinationLocation(null);
       }
     } catch (err) {
       setShippingError(err.message || 'Falha ao cotar frete.');
       setShippingOptions(null);
+      setDestinationLocation(null);
     } finally {
       setIsCalculatingShipping(false);
     }
@@ -572,7 +639,13 @@ export function ProdutoDetalhe({ onAddToCart }) {
         <section className={styles.gallerySection} aria-label="Galeria de fotos do produto">
           <div 
             className={styles.mainImageWrapper}
-            onClick={() => setIsFullscreen(true)}
+            onClick={() => {
+              if (isSwipingRef.current) return;
+              setIsFullscreen(true);
+            }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
             role="button"
             tabIndex={0}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsFullscreen(true); } }}
@@ -594,7 +667,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
                 className={`${styles.navArrow} ${styles.prevArrow}`} 
                 aria-label="Imagem anterior"
               >
-                &#10094;
+                <ChevronLeft size={18} />
               </button>
             )}
             <ImageWithSkeleton 
@@ -612,8 +685,20 @@ export function ProdutoDetalhe({ onAddToCart }) {
                 className={`${styles.navArrow} ${styles.nextArrow}`} 
                 aria-label="Próxima imagem"
               >
-                &#10095;
+                <ChevronRight size={18} />
               </button>
+            )}
+
+            {/* INDICADOR DISCRETO DE PÁGINAS NO MOBILE */}
+            {images.length > 1 && (
+              <div className={styles.mobileDotsIndicator} aria-hidden="true">
+                {images.map((_, idx) => (
+                  <span 
+                    key={idx} 
+                    className={`${styles.mobileDot} ${idx === selectedImageIndex ? styles.mobileDotActive : ''}`} 
+                  />
+                ))}
+              </div>
             )}
             <button 
               type="button" 
@@ -705,13 +790,13 @@ export function ProdutoDetalhe({ onAddToCart }) {
             <div className={styles.selectorHeader}>
               <span className={styles.selectorLabel}>TAMANHO:</span>
               <span className={styles.selectedValue}>
-                {selectedSize} {availableStock <= 0 ? '(ESGOTADO)' : ''}
+                {selectedSize} {!isUnlimitedStock && availableStock <= 0 ? '(ESGOTADO)' : ''}
               </span>
             </div>
             <div className={styles.sizeOptions}>
               {['PP', 'P', 'M', 'G', 'GG'].map((size) => {
                 const stockQty = parsedStock[size] ?? 0;
-                const isOutOfStock = stockQty <= 0;
+                const isOutOfStock = !isUnlimitedStock && stockQty <= 0;
 
                 return (
                   <button
@@ -720,7 +805,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
                     disabled={isOutOfStock}
                     className={`${styles.sizeBtn} ${selectedSize === size ? styles.activeSize : ''} ${isOutOfStock ? styles.disabledSize : ''}`}
                     onClick={() => !isOutOfStock && setSelectedSize(size)}
-                    title={isOutOfStock ? `Tamanho ${size} ESGOTADO` : `Tamanho ${size} (${stockQty} un. em estoque)`}
+                    title={isUnlimitedStock ? `Tamanho ${size}` : (isOutOfStock ? `Tamanho ${size} ESGOTADO` : `Tamanho ${size} (${stockQty} un. em estoque)`)}
                     aria-label={`Tamanho ${size} ${isOutOfStock ? 'Esgotado' : ''}`}
                   >
                     <span>{size}</span>
@@ -729,13 +814,15 @@ export function ProdutoDetalhe({ onAddToCart }) {
                 );
               })}
             </div>
-            <small className={`${styles.stockNotice} ${availableStock <= 0 ? styles.stockNoticeAlert : ''}`}>
-              {availableStock > 0 
-                ? `${availableStock} unidades disponíveis no tamanho ${selectedSize}` 
-                : isAllOutOfStock
-                  ? 'Todos os tamanhos estão esgotados no momento.'
-                  : `Tamanho ${selectedSize} esgotado no estoque.`}
-            </small>
+            {!isUnlimitedStock && (
+              <small className={`${styles.stockNotice} ${availableStock <= 0 ? styles.stockNoticeAlert : ''}`}>
+                {availableStock > 0 
+                  ? `${availableStock} unidades disponíveis no tamanho ${selectedSize}` 
+                  : isAllOutOfStock
+                    ? 'Todos os tamanhos estão esgotados no momento.'
+                    : `Tamanho ${selectedSize} esgotado no estoque.`}
+              </small>
+            )}
           </div>
 
           {/* Bloco de Ações e Quantidade */}
@@ -744,7 +831,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
               <button 
                 type="button" 
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                disabled={quantity <= 1 || availableStock === 0}
+                disabled={quantity <= 1 || (!isUnlimitedStock && availableStock === 0)}
                 aria-label="Diminuir quantidade"
               >
                 -
@@ -752,8 +839,8 @@ export function ProdutoDetalhe({ onAddToCart }) {
               <span className={styles.quantityValue}>{quantity}</span>
               <button 
                 type="button" 
-                onClick={() => setQuantity(Math.min(availableStock, quantity + 1))}
-                disabled={quantity >= availableStock || availableStock === 0}
+                onClick={() => setQuantity(isUnlimitedStock ? quantity + 1 : Math.min(availableStock, quantity + 1))}
+                disabled={!isUnlimitedStock && (quantity >= availableStock || availableStock === 0)}
                 aria-label="Aumentar quantidade"
               >
                 +
@@ -762,17 +849,17 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
             <button 
               type="button"
-              className={`${styles.addToBagButton} ${isAddedFeedback ? styles.addedSuccess : ''} ${availableStock <= 0 ? styles.disabledBagBtn : ''}`}
+              className={`${styles.addToBagButton} ${isAddedFeedback ? styles.addedSuccess : ''} ${(!isUnlimitedStock && availableStock <= 0) ? styles.disabledBagBtn : ''}`}
               onClick={handleAddToCart}
-              disabled={availableStock <= 0}
+              disabled={!isUnlimitedStock && availableStock <= 0}
             >
               <ShoppingBag size={18} />
               <span>
                 {isAddedFeedback 
                   ? 'ADICIONADO À SACOLA!' 
-                  : availableStock > 0 
-                    ? 'ADICIONAR À SACOLA' 
-                    : 'TAMANHO ESGOTADO'}
+                  : (!isUnlimitedStock && availableStock <= 0) 
+                    ? 'TAMANHO ESGOTADO' 
+                    : 'ADICIONAR À SACOLA'}
               </span>
             </button>
 
@@ -828,6 +915,12 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
             {shippingOptions && (
               <div className={styles.shippingResultsCompact}>
+                {destinationLocation && (
+                  <div className={styles.destinationLocationBadge}>
+                    <MapPin size={12} />
+                    <span>Entrega para: <strong>{destinationLocation}</strong></span>
+                  </div>
+                )}
                 {shippingOptions.map(opt => (
                   <div key={opt.id} className={styles.shippingRowCompact}>
                     <div className={styles.shippingInfoCompact}>
@@ -1088,7 +1181,12 @@ export function ProdutoDetalhe({ onAddToCart }) {
               </button>
             </div>
 
-            <div className={styles.lightboxContent}>
+            <div 
+              className={styles.lightboxContent}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
               {images.length > 1 && (
                 <button 
                   type="button"

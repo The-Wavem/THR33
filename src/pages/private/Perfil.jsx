@@ -49,6 +49,7 @@ import {
   validatePasswordStrength 
 } from '../../utils/validators';
 import { fetchAddressByCep } from '../../services/viaCepService';
+import { resolveCarrierAndService } from '../../utils/carrierUtils';
 import { supportService } from '../../services/supportService';
 import { reviewService } from '../../services/reviewService';
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
@@ -2513,7 +2514,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     CEP: {selectedOrderDetails.address.cep}
                   </p>
                   <span className={styles.shippingMethodBadge}>
-                    <Truck size={13} /> {selectedOrderDetails.shippingMethod}
+                    <Truck size={13} /> {resolveCarrierAndService(selectedOrderDetails).fullName || selectedOrderDetails.shippingMethod}
                   </span>
                 </div>
 

@@ -61,6 +61,7 @@ import {
   Calculator,
   Building2,
   Coins,
+  Printer,
 } from "lucide-react";
 import { db } from "../../services/firebaseConfig";
 import { InfoTooltip } from "../../components/ui/InfoTooltip";
@@ -188,10 +189,16 @@ function CustomChartTooltip({
 }
 
 const COLOR_CONFIG = {
-  preto_piano: { name: "Preto Piano", hex: "#000000" },
+  preto: { name: "Preto", hex: "#27272a" },
+  preto_piano: { name: "Preto Piano", hex: "#27272a" },
   off_white: { name: "Off-White", hex: "#f5f5f0" },
-  grafite: { name: "Grafite / Chumbo", hex: "#383838" },
-  cinza_mescla: { name: "Cinza Mescla", hex: "#7a7a7a" },
+  branco: { name: "Branco", hex: "#ffffff" },
+  grafite: { name: "Grafite / Chumbo", hex: "#52525b" },
+  cinza_mescla: { name: "Cinza Mescla", hex: "#9ca3af" },
+  marrom_terra: { name: "Marrom Terra", hex: "#92400e" },
+  bege_areia: { name: "Bege Areia", hex: "#d4b996" },
+  azul_noite: { name: "Azul Noite", hex: "#3b82f6" },
+  verde_militar: { name: "Verde Militar", hex: "#16a34a" },
 };
 
 const CATEGORY_LABELS = {
@@ -307,7 +314,7 @@ export function CmsAnalytics() {
   } = useCmsPeriodFilter();
 
   // Controle de Tabs e Modal de Raio-X
-  const [activeTab, setActiveTab] = useState("attributes"); // 'attributes' | 'products' | 'deadstock' | 'funnel'
+  const [activeTab, setActiveTab] = useState("funnel"); // 'funnel' | 'charts' | 'finance'
   const [selectedSkuDetail, setSelectedSkuDetail] = useState(null);
   const [editableStock, setEditableStock] = useState({
     PP: 0,
@@ -534,13 +541,18 @@ export function CmsAnalytics() {
 
     const operatingProfit = isDirectNet
       ? grossRevenue
-      : Math.max(0, grossRevenue - shippingCost - gatewayTax - replenishmentFund);
+      : grossRevenue - shippingCost - gatewayTax - replenishmentFund;
+
+    const isLoss = operatingProfit < 0;
 
     const reserveRate = Math.max(0, Math.min(100, Number(profitConfig.companyReservePct || 0))) / 100;
-    const companyReserve = isDirectNet ? 0 : operatingProfit * reserveRate;
+    // Reserva da marca só é retida se houver lucro operacional positivo
+    const companyReserve = isDirectNet || isLoss ? 0 : operatingProfit * reserveRate;
     const distributableProfit = isDirectNet
       ? grossRevenue
-      : Math.max(0, operatingProfit - companyReserve);
+      : isLoss
+      ? operatingProfit
+      : operatingProfit - companyReserve;
 
     const totalAllocatedPercent = (profitConfig.members || []).reduce(
       (sum, m) => sum + Number(m.percent || 0),
@@ -551,6 +563,7 @@ export function CmsAnalytics() {
       isManual,
       manualModeType,
       isDirectNet,
+      isLoss,
       grossRevenue,
       shippingCost,
       gatewayTax,
@@ -690,23 +703,27 @@ export function CmsAnalytics() {
     text += `*1. ENTRADAS & FATURAMENTO:*\n`;
     text += `• ${financialFlow.isManual ? 'Receita Bruta Simulada' : 'Receita Bruta Paga'}: ${formatBRL(financialFlow.grossRevenue)} (${financialFlow.isManual ? `Projeção / ${financialFlow.effectiveItemsSold} peças` : `${paidOrders.length} pedidos / ${totalItemsSold} peças`})\n`;
     if (!financialFlow.isManual && pendingOrders.length > 0) {
-      text += `• Aguardando Pagamento: ${formatBRL(pendingRevenue)} (${pendingOrders.length} pedidos no PIX/Boleto)\n`;
+      text += `• Aguardando Pagamento: ${formatBRL(pendingRevenue)} (${pendingOrders.length} pedidos no PIX)\n`;
     }
     text += `\n*2. DEDUÇÕES OPERACIONAIS:*\n`;
     text += `• (-) Fretes Arrecadados: ${formatBRL(financialFlow.shippingCost)}\n`;
     text += `• (-) Taxas PagBank (${profitConfig.gatewayRatePct}%): ${formatBRL(financialFlow.gatewayTax)}\n`;
     text += `• (-) Fundo de Reposição (${financialFlow.effectiveItemsSold} un x ${formatBRL(profitConfig.productionCostPerUnit)}): ${formatBRL(financialFlow.replenishmentFund)}\n`;
-    text += `\n*3. CAIXA DA EMPRESA & LUCRO:*\n`;
-    text += `• Lucro Operacional: ${formatBRL(financialFlow.operatingProfit)}\n`;
-    text += `• (-) Reserva de Caixa THR33 (${profitConfig.companyReservePct}%): ${formatBRL(financialFlow.companyReserve)}\n`;
-    text += `*• Lucro Líquido Distribuível: ${formatBRL(financialFlow.distributableProfit)}*\n`;
+    text += `\n*3. CAIXA DA EMPRESA & ${financialFlow.isLoss ? 'RESULTADO OPERACIONAL' : 'LUCRO'}:*\n`;
+    text += `• ${financialFlow.isLoss ? 'Prejuízo Operacional' : 'Lucro Operacional'}: ${formatBRL(financialFlow.operatingProfit)}\n`;
+    if (!financialFlow.isLoss) {
+      text += `• (-) Reserva de Caixa THR33 (${profitConfig.companyReservePct}%): ${formatBRL(financialFlow.companyReserve)}\n`;
+      text += `*• Lucro Líquido Distribuível: ${formatBRL(financialFlow.distributableProfit)}*\n`;
+    } else {
+      text += `*• Prejuízo Líquido a Cobrir: ${formatBRL(financialFlow.distributableProfit)}*\n`;
+    }
     text += `-------------------------------------------\n`;
-    text += `*4. DIVISÃO ENTRE OS INTEGRANTES:*\n`;
+    text += `*4. DIVISÃO ${financialFlow.isLoss ? 'DO PREJUÍZO' : 'DE LUCROS'} ENTRE OS INTEGRANTES:*\n`;
     profitConfig.members.forEach((m) => {
       const share = financialFlow.distributableProfit * (Number(m.percent || 0) / 100);
-      text += `• ${m.name} (${m.role}): *${m.percent}%* -> *${formatBRL(share)}*\n`;
+      text += `• ${m.name} (${m.role}): *${m.percent}%* -> *${formatBRL(share)}* (${financialFlow.isLoss ? 'cota aporte' : 'recebimento'})\n`;
     });
-    if (financialFlow.leftoverPercent > 0) {
+    if (!financialFlow.isLoss && financialFlow.leftoverPercent > 0) {
       const leftover = financialFlow.distributableProfit * (financialFlow.leftoverPercent / 100);
       text += `• Sobra Retida no Caixa da Marca (${financialFlow.leftoverPercent}%): *${formatBRL(leftover)}*\n`;
     }
@@ -718,6 +735,521 @@ export function CmsAnalytics() {
       setCopyFeedback(true);
       setTimeout(() => setCopyFeedback(false), 2500);
     }
+  };
+
+  // Gerador de Relatório Executivo em PDF formatado para A4
+  const handleExportExecutivePdf = () => {
+    const prevFrame = document.getElementById("thr33-analytics-print-frame");
+    if (prevFrame) prevFrame.remove();
+
+    const formatBRL = (val) =>
+      new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(val) || 0);
+
+    const now = new Date();
+    const formattedDate = now.toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
+    const reportId = `THR33-ANL-${now.getFullYear()}${(now.getMonth() + 1).toString().padStart(2, "0")}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
+
+    const tabName =
+      activeTab === "funnel"
+        ? "1. Funil de Conversão & Telemetria"
+        : activeTab === "charts"
+        ? "2. Vendas, Catálogo & Business Intelligence (BI)"
+        : "3. Engenharia Financeira, Caixa & Sócios";
+
+    let specificContentHtml = "";
+
+    if (activeTab === "finance") {
+      specificContentHtml = `
+        <div class="print-section">
+          <h3 class="print-section-title">DEMONSTRATIVO DE FLUXO DE CAIXA REAL (DRE OPERACIONAL)</h3>
+          <table class="print-table">
+            <thead>
+              <tr>
+                <th>Item Operacional</th>
+                <th>Critério / Base de Cálculo</th>
+                <th style="text-align: right;">Impacto no Caixa</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>1. Receita Bruta Confirmada</strong></td>
+                <td>${financialFlow.isManual ? 'Meta Simulada de Faturamento' : `${paidOrders.length} pedidos confirmados e pagos (${totalItemsSold} peças)`}</td>
+                <td style="text-align: right; color: #16a34a; font-weight: 700;">${formatBRL(financialFlow.grossRevenue)}</td>
+              </tr>
+              <tr>
+                <td><strong>2. (-) Fretes Pagos a Transportadoras</strong></td>
+                <td>Repasse Melhor Envio / Correios (custo logístico repassado)</td>
+                <td style="text-align: right; color: #ca8a04;">(-) ${formatBRL(financialFlow.shippingCost)}</td>
+              </tr>
+              <tr>
+                <td><strong>3. (-) Taxas de Gateway (PagBank)</strong></td>
+                <td>Taxa média do adquirente (${profitConfig.gatewayRatePct}% sobre a receita)</td>
+                <td style="text-align: right; color: #ea580c;">(-) ${formatBRL(financialFlow.gatewayTax)}</td>
+              </tr>
+              <tr>
+                <td><strong>4. (-) Fundo de Reposição Têxtil (CMV)</strong></td>
+                <td>${financialFlow.effectiveItemsSold} peças a ${formatBRL(profitConfig.productionCostPerUnit)}/un (Capital Intocável)</td>
+                <td style="text-align: right; color: #2563eb;">(-) ${formatBRL(financialFlow.replenishmentFund)}</td>
+              </tr>
+              <tr style="background: ${financialFlow.isLoss ? '#fef2f2' : '#f4f4f5'}; font-weight: 700;">
+                <td><strong>(=) ${financialFlow.isLoss ? 'Prejuízo Operacional da Marca' : 'Lucro Operacional da Marca'}</strong></td>
+                <td>${financialFlow.isLoss ? 'Déficit entre faturamento e custos operacionais' : 'Saldo líquido operacional antes da reserva institucional'}</td>
+                <td style="text-align: right; color: ${financialFlow.isLoss ? '#dc2626' : 'inherit'};">${formatBRL(financialFlow.operatingProfit)}</td>
+              </tr>
+              ${!financialFlow.isLoss ? `
+              <tr>
+                <td><strong>5. (-) Reserva de Caixa da Empresa (THR33)</strong></td>
+                <td>${profitConfig.companyReservePct}% retido para capital de giro, tráfego e confecção do próximo drop</td>
+                <td style="text-align: right; color: #9333ea;">(-) ${formatBRL(financialFlow.companyReserve)}</td>
+              </tr>` : ''}
+              <tr style="background: ${financialFlow.isLoss ? '#fee2e2' : '#ecfdf5'}; font-weight: 700; border-top: 2px solid ${financialFlow.isLoss ? '#dc2626' : '#16a34a'};">
+                <td style="color: ${financialFlow.isLoss ? '#dc2626' : '#16a34a'}; font-size: 12px;"><strong>6. (=) ${financialFlow.isLoss ? 'PREJUÍZO LÍQUIDO A COBRIR' : 'LUCRO LÍQUIDO DISTRIBUÍVEL'}</strong></td>
+                <td style="color: ${financialFlow.isLoss ? '#dc2626' : '#16a34a'};">${financialFlow.isLoss ? 'Déficit a ser rateado/suportado pelos integrantes' : 'Pronto para repasse imediato aos integrantes'}</td>
+                <td style="text-align: right; color: ${financialFlow.isLoss ? '#dc2626' : '#16a34a'}; font-size: 13px;">${formatBRL(financialFlow.distributableProfit)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="print-section" style="margin-top: 18px;">
+          <h3 class="print-section-title">REPARTIÇÃO SOCIETÁRIA ENTRE OS INTEGRANTES</h3>
+          <table class="print-table">
+            <thead>
+              <tr>
+                <th>Integrante</th>
+                <th>Atribuição / Cargo</th>
+                <th style="text-align: center;">Cota (%)</th>
+                <th style="text-align: right;">Valor a Receber (R$)</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${(profitConfig.members || []).map((m) => {
+                const share = financialFlow.distributableProfit * (Number(m.percent || 0) / 100);
+                return `
+                  <tr>
+                    <td><strong>${m.name}</strong></td>
+                    <td>${m.role}</td>
+                    <td style="text-align: center; font-weight: 700;">${m.percent}%</td>
+                    <td style="text-align: right; font-weight: 700; color: #16a34a;">${formatBRL(share)}</td>
+                  </tr>
+                `;
+              }).join("")}
+              ${financialFlow.leftoverPercent > 0 ? `
+                <tr style="background: #fefce8;">
+                  <td><strong>Sobra Retida no Caixa da Marca</strong></td>
+                  <td>Fundo de Reserva / Bônus Institucional</td>
+                  <td style="text-align: center; font-weight: 700;">${financialFlow.leftoverPercent}%</td>
+                  <td style="text-align: right; font-weight: 700; color: #ca8a04;">${formatBRL(financialFlow.distributableProfit * (financialFlow.leftoverPercent / 100))}</td>
+                </tr>
+              ` : ""}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else if (activeTab === "funnel") {
+      specificContentHtml = `
+        <div class="print-section">
+          <h3 class="print-section-title">FUNIL DE CONVERSÃO & JORNADA DO CLIENTE</h3>
+          <table class="print-table">
+            <thead>
+              <tr>
+                <th>Etapa do Funil</th>
+                <th style="text-align: center;">Volume Absoluto</th>
+                <th style="text-align: center;">Taxa de Passagem</th>
+                <th style="text-align: center;">Taxa de Drop-off</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>1. Sessões Únicas (Loja)</strong></td>
+                <td style="text-align: center; font-weight: 700;">${funnel.visits}</td>
+                <td style="text-align: center;">100%</td>
+                <td style="text-align: center;">-</td>
+              </tr>
+              <tr>
+                <td><strong>2. Visualizações de Produto (PDP)</strong></td>
+                <td style="text-align: center; font-weight: 700;">${funnel.views}</td>
+                <td style="text-align: center;">${funnel.stepVisitsToPdpRate}%</td>
+                <td style="text-align: center; color: #dc2626;">-${funnel.dropVisitsToPdp}%</td>
+              </tr>
+              <tr>
+                <td><strong>3. Adições à Sacola (Carrinho)</strong></td>
+                <td style="text-align: center; font-weight: 700;">${funnel.cartAdds}</td>
+                <td style="text-align: center;">${funnel.step2Rate}%</td>
+                <td style="text-align: center; color: #dc2626;">-${funnel.drop1to2}%</td>
+              </tr>
+              <tr>
+                <td><strong>4. Início de Checkout</strong></td>
+                <td style="text-align: center; font-weight: 700;">${funnel.checkoutStarts}</td>
+                <td style="text-align: center;">${funnel.step3Rate}%</td>
+                <td style="text-align: center; color: #dc2626;">-${funnel.drop2to3}%</td>
+              </tr>
+              <tr style="background: #ecfdf5; font-weight: 700;">
+                <td style="color: #16a34a;"><strong>5. Pedidos Pagos & Concluídos</strong></td>
+                <td style="text-align: center; color: #16a34a;">${funnel.purchases}</td>
+                <td style="text-align: center; color: #16a34a;">${funnel.step4Rate}%</td>
+                <td style="text-align: center; color: #dc2626;">-${funnel.drop3to4}%</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 18px;">
+          <div class="print-section">
+            <h3 class="print-section-title">DISPOSITIVOS DE ACESSO</h3>
+            <table class="print-table">
+              <thead>
+                <tr>
+                  <th>Dispositivo</th>
+                  <th style="text-align: center;">Participação</th>
+                  <th style="text-align: right;">Sessões</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${telemetryBreakdown.devicesList.map((d) => `
+                  <tr>
+                    <td><strong>${d.label}</strong></td>
+                    <td style="text-align: center; font-weight: 700;">${d.pct}%</td>
+                    <td style="text-align: right;">${d.count}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="print-section">
+            <h3 class="print-section-title">ORIGEM DE TRÁFEGO & AQUISIÇÃO</h3>
+            <table class="print-table">
+              <thead>
+                <tr>
+                  <th>Canal</th>
+                  <th style="text-align: center;">Participação</th>
+                  <th style="text-align: right;">Sessões</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${telemetryBreakdown.trafficSourcesList.map((s) => `
+                  <tr>
+                    <td><strong>${s.label}</strong></td>
+                    <td style="text-align: center; font-weight: 700;">${s.pct}%</td>
+                    <td style="text-align: right;">${s.count}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    } else {
+      specificContentHtml = `
+        <div class="print-section">
+          <h3 class="print-section-title">TOP PRODUTOS MAIS VENDIDOS NO PERÍODO</h3>
+          <table class="print-table">
+            <thead>
+              <tr>
+                <th>Produto / SKU</th>
+                <th>Categoria / Fit</th>
+                <th style="text-align: center;">Peças Vendidas</th>
+                <th style="text-align: right;">Receita Acumulada</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${productMetrics.slice(0, 8).map((p) => `
+                <tr>
+                  <td><strong>${p.name}</strong></td>
+                  <td>${p.category || "Camisa"} • ${p.fit || "Boxy"}</td>
+                  <td style="text-align: center; font-weight: 700;">${p.salesCount} un</td>
+                  <td style="text-align: right; font-weight: 700; color: #16a34a;">${formatBRL(p.revenue)}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 18px;">
+          <div class="print-section">
+            <h3 class="print-section-title">RAIO-X TERRITORIAL (TOP DESTINOS)</h3>
+            <table class="print-table">
+              <thead>
+                <tr>
+                  <th>UF / Estado</th>
+                  <th style="text-align: center;">Pedidos</th>
+                  <th style="text-align: right;">Receita</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${salesByState.slice(0, 6).map((st) => `
+                  <tr>
+                    <td><strong>${st.state}</strong></td>
+                    <td style="text-align: center; font-weight: 700;">${st.ordersCount}</td>
+                    <td style="text-align: right; font-weight: 700; color: #16a34a;">${formatBRL(st.revenue)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="print-section">
+            <h3 class="print-section-title">DISTRIBUIÇÃO DE TAMANHOS</h3>
+            <table class="print-table">
+              <thead>
+                <tr>
+                  <th>Tamanho</th>
+                  <th style="text-align: center;">Peças</th>
+                  <th style="text-align: right;">Faturamento</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${sizeMetrics.map((sz) => `
+                  <tr>
+                    <td><strong>${sz.size}</strong></td>
+                    <td style="text-align: center; font-weight: 700;">${sz.salesCount} un</td>
+                    <td style="text-align: right; font-weight: 700;">${formatBRL(sz.revenue)}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+    }
+
+    const iframe = document.createElement("iframe");
+    iframe.id = "thr33-analytics-print-frame";
+    iframe.setAttribute("style", "position:fixed;right:0;bottom:0;width:0;height:0;border:0;opacity:0;pointer-events:none;");
+    document.body.appendChild(iframe);
+
+    const iframeDoc = iframe.contentWindow.document;
+    iframeDoc.open();
+    iframeDoc.write(`
+      <!DOCTYPE html>
+      <html lang="pt-BR">
+      <head>
+        <meta charset="utf-8" />
+        <title>THR33_Relatorio_${activeTab}_${periodFilter}</title>
+        <style>
+          @page {
+            size: A4 portrait;
+            margin: 12mm 12mm 12mm 12mm;
+          }
+          * {
+            box-sizing: border-box !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+          body {
+            margin: 0;
+            padding: 0;
+            background: #ffffff;
+            color: #111827;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-size: 11px;
+            line-height: 1.4;
+          }
+          .print-header {
+            border-bottom: 2px solid #09090b;
+            padding-bottom: 10px;
+            margin-bottom: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+          }
+          .print-header-brand h1 {
+            margin: 0;
+            font-size: 19px;
+            font-weight: 900;
+            letter-spacing: -0.5px;
+            color: #09090b;
+          }
+          .print-header-brand p {
+            margin: 2px 0 0 0;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 0.8px;
+            color: #71717a;
+            text-transform: uppercase;
+          }
+          .print-meta-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            background: #f4f4f5;
+            padding: 9px 12px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            border: 1px solid #e4e4e7;
+          }
+          .print-meta-item strong {
+            display: block;
+            font-size: 8px;
+            color: #71717a;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          .print-meta-item span {
+            font-size: 11px;
+            font-weight: 700;
+            color: #09090b;
+          }
+          .print-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(6, 1fr);
+            gap: 8px;
+            margin-bottom: 18px;
+          }
+          .print-kpi-card {
+            border: 1px solid #e4e4e7;
+            padding: 7px 9px;
+            border-radius: 4px;
+            background: #fafafa;
+          }
+          .print-kpi-card span {
+            display: block;
+            font-size: 8px;
+            color: #71717a;
+            text-transform: uppercase;
+            font-weight: 700;
+          }
+          .print-kpi-card strong {
+            display: block;
+            font-size: 13px;
+            font-weight: 900;
+            color: #09090b;
+            margin-top: 2px;
+          }
+          .print-section-title {
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #09090b;
+            margin: 0 0 8px 0;
+            border-left: 3px solid #09090b;
+            padding-left: 6px;
+          }
+          .print-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 10px;
+          }
+          .print-table th {
+            background: #f4f4f5;
+            color: #3f3f46;
+            font-weight: 700;
+            text-align: left;
+            padding: 6px 8px;
+            border-bottom: 1px solid #d4d4d8;
+            font-size: 9px;
+            text-transform: uppercase;
+          }
+          .print-table td {
+            padding: 6px 8px;
+            border-bottom: 1px solid #e4e4e7;
+            color: #18181b;
+          }
+          .print-footer {
+            margin-top: 25px;
+            padding-top: 10px;
+            border-top: 1px solid #e4e4e7;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 8px;
+            color: #71717a;
+          }
+        </style>
+      </head>
+      <body>
+        <div class="print-header">
+          <div class="print-header-brand">
+            <h1>THR33 STREETWEAR</h1>
+            <p>RELATÓRIO EXECUTIVO DE OPERAÇÃO & BUSINESS INTELLIGENCE</p>
+          </div>
+          <div style="text-align: right; font-size: 9px; color: #71717a;">
+            <div><strong>ID DE CONTROLE:</strong> ${reportId}</div>
+            <div>STATUS: CONFIDENCIAL // DIRETORIA</div>
+          </div>
+        </div>
+
+        <div class="print-meta-grid">
+          <div class="print-meta-item">
+            <strong>MÓDULO ANALISADO</strong>
+            <span>${tabName}</span>
+          </div>
+          <div class="print-meta-item">
+            <strong>INTERVALO DE TEMPO</strong>
+            <span>${periodLabel}</span>
+          </div>
+          <div class="print-meta-item">
+            <strong>EMISSÃO</strong>
+            <span>${formattedDate}</span>
+          </div>
+          <div class="print-meta-item">
+            <strong>RESPONSÁVEL</strong>
+            <span>Diretoria & Gestão THR33</span>
+          </div>
+        </div>
+
+        <div class="print-kpi-grid">
+          <div class="print-kpi-card">
+            <span>Faturamento Pago</span>
+            <strong style="color: #16a34a;">${formatBRL(paidRevenue)}</strong>
+          </div>
+          <div class="print-kpi-card">
+            <span>Pedidos Pagos</span>
+            <strong>${paidOrders.length} ped.</strong>
+          </div>
+          <div class="print-kpi-card">
+            <span>Peças Vendidas</span>
+            <strong>${totalItemsSold} un.</strong>
+          </div>
+          <div class="print-kpi-card">
+            <span>Ticket Médio</span>
+            <strong>${formatBRL(paidOrders.length > 0 ? paidRevenue / paidOrders.length : 0)}</strong>
+          </div>
+          <div class="print-kpi-card">
+            <span>Sessões Únicas</span>
+            <strong>${funnel.visits}</strong>
+          </div>
+          <div class="print-kpi-card">
+            <span>Conversão Geral</span>
+            <strong style="color: #16a34a;">${funnel.overallConversionRate}%</strong>
+          </div>
+        </div>
+
+        ${specificContentHtml}
+
+        <div class="print-footer">
+          <div>
+            <strong>THR33 STREETWEAR // RELATÓRIO EXECUTIVO DE AUDITORIA</strong><br />
+            Conformidade LGPD (Lei 13.709/18, Art. 12) — Dados agregados, anonimizados e de uso estritamente corporativo.
+          </div>
+          <div style="text-align: right;">
+            Emitido em ${formattedDate}<br />
+            Hash de Auditoria: <code>${reportId}</code>
+          </div>
+        </div>
+      </body>
+      </html>
+    `);
+    iframeDoc.close();
+
+    setTimeout(() => {
+      try {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+      } catch (err) {
+        console.warn("Aviso ao imprimir via iframe, utilizando fallback direto:", err);
+        window.print();
+      }
+    }, 400);
   };
 
   // 1. Carrega dados consolidados do Firestore
@@ -2121,25 +2653,20 @@ export function CmsAnalytics() {
     }));
   }, [categoryMetrics]);
 
-  // 4. Donut de preferência de cores
+  // 4. Donut de preferência de cores (estritamente peças vendidas no período selecionado)
   const colorDonutData = useMemo(() => {
-    const list = colorMetrics
-      .map((c) => ({
-        name: c.name || "Outra",
-        value: Number(c.units || 0),
-        color: c.hex || COLOR_CONFIG[c.key]?.hex || "#4ade80",
-      }))
+    return (colorMetrics || [])
+      .map((c) => {
+        const cleanKey = String(c.name || c.key || "").toLowerCase().replace(/[\s\-_/]+/g, "_");
+        const fallback = COLOR_CONFIG[cleanKey]?.hex || "#27272a";
+        const finalColor = (c.hex && c.hex !== "#000000") ? c.hex : fallback;
+        return {
+          name: c.name || "Outra",
+          value: Number(c.units || 0),
+          color: finalColor === "#000000" ? "#27272a" : finalColor,
+        };
+      })
       .filter((c) => c.value > 0);
-
-    if (list.length === 0) {
-      return [
-        { name: "Preto Piano", value: 1, color: "#1a1a1a" },
-        { name: "Off-White", value: 1, color: "#f5f5f0" },
-        { name: "Grafite / Chumbo", value: 1, color: "#383838" },
-        { name: "Cinza Mescla", value: 1, color: "#7a7a7a" },
-      ];
-    }
-    return list;
   }, [colorMetrics]);
 
   // 5. Demanda por grade de tamanhos
@@ -2491,11 +3018,11 @@ export function CmsAnalytics() {
     let totalCount = 0;
 
     completedOrders.forEach((ord) => {
-      const isFree =
-        Boolean(ord.freeShippingApplied) || Number(ord.shippingCost) === 0;
       const rawCarrier = String(
         ord.carrier || ord.shippingMethod || "",
       ).toLowerCase();
+      const isFree =
+        Boolean(ord.freeShippingApplied) || Boolean(ord.freeShippingReason) || (Number(ord.shippingCost) === 0 && Boolean(ord.freeShippingReason));
 
       let key = "PAC (Econômico)";
       if (
@@ -2842,185 +3369,284 @@ export function CmsAnalytics() {
           </div>
         )}
 
-        {/* PARTE A: DEMONSTRATIVO DE FLUXO DE CAIXA REAL (6 CARDS INTERATIVOS EM CASCATA) */}
-        <div className={styles.cashFlowGrid}>
-          {/* CARD 1: RECEITA BRUTA CONFIRMADA */}
-          <div className={`${styles.cashFlowCard} ${styles.cashFlowCardGross}`}>
-            <div className={styles.cashFlowCardHeader}>
-              <div className={styles.cashFlowCardTitleWithIcon}>
-                <Coins size={15} color="#22c55e" />
-                <span>1. RECEITA BRUTA CONFIRMADA</span>
-              </div>
-              <span className={styles.cashFlowTagGreen}>Caiu na Conta</span>
-            </div>
-            <strong className={styles.cashFlowValueGreen}>
-              {formatBRL(financialFlow.grossRevenue)}
-            </strong>
-            <p className={styles.cashFlowDesc}>
-              {profitConfig.isManualMode
-                ? (profitConfig.manualModeType === 'net'
-                    ? 'Meta de Lucro Líquido direto para distribuição societária'
-                    : 'Faturamento bruto simulado para projeção do drop')
-                : `${paidOrders.length} pedidos confirmados e pagos (${totalItemsSold} peças)`}
-            </p>
-          </div>
+        {/* PARTE A: RÉGUA DE FLUXO CONTÍNUA (WATERFALL STRIP) & PROPORÇÃO DE CAIXA */}
+        {(() => {
+          const gross = financialFlow.grossRevenue || 1;
+          const pctNet = Math.max(0, Math.min(100, (financialFlow.distributableProfit / gross) * 100));
+          const pctReplenish = Math.max(0, Math.min(100, (financialFlow.replenishmentFund / gross) * 100));
+          const pctGateway = Math.max(0, Math.min(100, (financialFlow.gatewayTax / gross) * 100));
+          const pctShipping = Math.max(0, Math.min(100, (financialFlow.shippingCost / gross) * 100));
+          const pctReserve = Math.max(0, Math.min(100, (financialFlow.companyReserve / gross) * 100));
 
-          {/* CARD 2: FRETE ARRECADADO */}
-          <div className={`${styles.cashFlowCard} ${styles.cashFlowCardShipping}`}>
-            <div className={styles.cashFlowCardHeader}>
-              <div className={styles.cashFlowCardTitleWithIcon}>
-                <Truck size={15} color="#facc15" />
-                <span>2. FRETE ARRECADADO</span>
-              </div>
-              <span className={styles.cashFlowTagYellow}>Repasse Correios</span>
-            </div>
-            <strong className={styles.cashFlowValueYellow}>
-              (-) {formatBRL(financialFlow.shippingCost)}
-            </strong>
-            <p className={styles.cashFlowDesc}>
-              {profitConfig.isManualMode
-                ? 'Isento ou repassado diretamente às transportadoras'
-                : 'Valor pago pelos clientes repassado às transportadoras (não é lucro)'}
-            </p>
-          </div>
+          return (
+            <div className={styles.waterfallContainer}>
+              <div className={styles.waterfallStrip}>
+                {/* 1. RECEITA BRUTA */}
+                <div className={styles.waterfallItem}>
+                  <div className={styles.waterfallItemHeader}>
+                    <div className={styles.waterfallItemTitleGroup}>
+                      <Coins size={13} color="#22c55e" />
+                      <span className={styles.waterfallLabel}>RECEITA BRUTA</span>
+                    </div>
+                  </div>
+                  <strong className={styles.waterfallValueGross}>
+                    {formatBRL(financialFlow.grossRevenue)}
+                  </strong>
+                  <span className={styles.waterfallSub}>
+                    {profitConfig.isManualMode
+                      ? (profitConfig.manualModeType === 'net' ? 'Meta Líquida' : 'Simulação')
+                      : `${paidOrders.length} pedidos pagos`}
+                  </span>
+                </div>
 
-          {/* CARD 3: TAXAS DE GATEWAY (PAGBANK) */}
-          <div className={`${styles.cashFlowCard} ${styles.cashFlowCardGateway}`}>
-            <div className={styles.cashFlowCardHeader}>
-              <div className={styles.cashFlowCardTitleWithIcon}>
-                <CreditCard size={15} color="#f97316" />
-                <span>3. TAXAS GATEWAY (PAGBANK)</span>
-              </div>
-              <div className={styles.inlineRateConfig}>
-                <input
-                  type="number"
-                  min="0"
-                  max="15"
-                  step="0.1"
-                  value={profitConfig.gatewayRatePct}
-                  onChange={(e) =>
-                    setProfitConfig((prev) => ({
-                      ...prev,
-                      gatewayRatePct: Math.max(0, Math.min(25, Number(e.target.value) || 0)),
-                    }))
-                  }
-                  className={styles.rateNumberInput}
-                />
-                <span>%</span>
-              </div>
-            </div>
-            <strong className={styles.cashFlowValueOrange}>
-              (-) {formatBRL(financialFlow.gatewayTax)}
-            </strong>
-            <p className={styles.cashFlowDesc}>
-              {profitConfig.isManualMode
-                ? (profitConfig.manualModeType === 'net'
-                    ? 'Isento no modo de lucro direto'
-                    : `Taxa PagBank (${profitConfig.gatewayRatePct}%) deduzida na simulação`)
-                : `Custo médio do adquirente (${profitConfig.gatewayRatePct}% da receita bruta)`}
-            </p>
-          </div>
+                {/* 2. FRETE */}
+                <div className={styles.waterfallItem}>
+                  <div className={styles.waterfallItemHeader}>
+                    <div className={styles.waterfallItemTitleGroup}>
+                      <Truck size={13} color="#facc15" />
+                      <span className={styles.waterfallLabel}>FRETE</span>
+                    </div>
+                  </div>
+                  <strong className={styles.waterfallValueYellow}>
+                    (-) {formatBRL(financialFlow.shippingCost)}
+                  </strong>
+                  <span className={styles.waterfallSub}>
+                    {profitConfig.isManualMode ? 'Isento' : 'Repasse Correios'}
+                  </span>
+                </div>
 
-          {/* CARD 4: REPOSIÇÃO DE ESTOQUE (CMV DE CAMISAS) */}
-          <div className={`${styles.cashFlowCard} ${styles.cashFlowCardReplenish}`}>
-            <div className={styles.cashFlowCardHeader}>
-              <div className={styles.cashFlowCardTitleWithIcon}>
-                <Package size={15} color="#60a5fa" />
-                <span>4. REPOSIÇÃO TÊXTIL (CMV)</span>
+                {/* 3. TAXAS GATEWAY */}
+                <div className={styles.waterfallItem}>
+                  <div className={styles.waterfallItemHeader}>
+                    <div className={styles.waterfallItemTitleGroup}>
+                      <CreditCard size={13} color="#f97316" />
+                      <span className={styles.waterfallLabel}>TAXAS</span>
+                    </div>
+                    <div className={styles.discreetRateInline}>
+                      <input
+                        type="number"
+                        min="0"
+                        max="25"
+                        step="0.1"
+                        value={profitConfig.gatewayRatePct}
+                        onChange={(e) =>
+                          setProfitConfig((prev) => ({
+                            ...prev,
+                            gatewayRatePct: Math.max(0, Math.min(25, Number(e.target.value) || 0)),
+                          }))
+                        }
+                        className={styles.discreetRateInput}
+                      />
+                      <span>%</span>
+                    </div>
+                  </div>
+                  <strong className={styles.waterfallValueOrange}>
+                    (-) {formatBRL(financialFlow.gatewayTax)}
+                  </strong>
+                  <span className={styles.waterfallSub}>
+                    {financialFlow.isDirectNet ? 'Isento' : `${profitConfig.gatewayRatePct}% PagBank`}
+                  </span>
+                </div>
+
+                {/* 4. REPOSIÇÃO (CMV) */}
+                <div className={styles.waterfallItem}>
+                  <div className={styles.waterfallItemHeader}>
+                    <div className={styles.waterfallItemTitleGroup}>
+                      <Package size={13} color="#60a5fa" />
+                      <span className={styles.waterfallLabel}>REPOSIÇÃO (CMV)</span>
+                    </div>
+                    <div className={styles.discreetRateInline}>
+                      <span>R$</span>
+                      <input
+                        type="number"
+                        min="0"
+                        max="200"
+                        step="1"
+                        value={profitConfig.productionCostPerUnit}
+                        onChange={(e) =>
+                          setProfitConfig((prev) => ({
+                            ...prev,
+                            productionCostPerUnit: Math.max(0, Number(e.target.value) || 0),
+                          }))
+                        }
+                        className={styles.discreetRateInputWide}
+                      />
+                      <span>/un</span>
+                    </div>
+                  </div>
+                  <strong className={styles.waterfallValueBlue}>
+                    (-) {formatBRL(financialFlow.replenishmentFund)}
+                  </strong>
+                  <span className={styles.waterfallSub}>
+                    {financialFlow.isDirectNet ? 'Isento' : `${financialFlow.effectiveItemsSold} peças repor`}
+                  </span>
+                </div>
+
+                {/* 5. RESERVA DA MARCA */}
+                <div className={styles.waterfallItem}>
+                  <div className={styles.waterfallItemHeader}>
+                    <div className={styles.waterfallItemTitleGroup}>
+                      <Building2 size={13} color="#a78bfa" />
+                      <span className={styles.waterfallLabel}>RESERVA CAIXA</span>
+                    </div>
+                    <div className={styles.discreetRateInline}>
+                      <input
+                        type="number"
+                        min="0"
+                        max="90"
+                        step="1"
+                        value={profitConfig.companyReservePct}
+                        onChange={(e) =>
+                          setProfitConfig((prev) => ({
+                            ...prev,
+                            companyReservePct: Math.max(0, Math.min(90, Number(e.target.value) || 0)),
+                          }))
+                        }
+                        className={styles.discreetRateInput}
+                      />
+                      <span>%</span>
+                    </div>
+                  </div>
+                  <strong className={styles.waterfallValuePurple}>
+                    (-) {formatBRL(financialFlow.companyReserve)}
+                  </strong>
+                  <span className={styles.waterfallSub}>
+                    {financialFlow.isDirectNet ? 'Isento' : `${profitConfig.companyReservePct}% retenção`}
+                  </span>
+                </div>
+
+                {/* 6. LUCRO OU PREJUÍZO LÍQUIDO */}
+                <div
+                  className={`${styles.waterfallItem} ${
+                    financialFlow.isLoss ? styles.waterfallItemLoss : styles.waterfallItemNet
+                  }`}
+                >
+                  <div className={styles.waterfallItemHeader}>
+                    <div className={styles.waterfallItemTitleGroup}>
+                      <Coins
+                        size={13}
+                        color={financialFlow.isLoss ? "#f87171" : "#22c55e"}
+                      />
+                      <span
+                        className={styles.waterfallLabel}
+                        style={{ color: financialFlow.isLoss ? "#f87171" : "#22c55e" }}
+                      >
+                        {financialFlow.isLoss ? "PREJUÍZO LÍQUIDO" : "LUCRO LÍQUIDO"}
+                      </span>
+                    </div>
+                  </div>
+                  <strong
+                    className={
+                      financialFlow.isLoss
+                        ? styles.waterfallValueLoss
+                        : styles.waterfallValueNeon
+                    }
+                  >
+                    {formatBRL(financialFlow.distributableProfit)}
+                  </strong>
+                  <span
+                    className={styles.waterfallSub}
+                    style={{ color: financialFlow.isLoss ? "#fca5a5" : "#4ade80" }}
+                  >
+                    {financialFlow.isLoss ? "Déficit a cobrir" : "Pronto p/ sócios"}
+                  </span>
+                </div>
               </div>
-              <div className={styles.inlineRateConfig}>
-                <span>R$</span>
-                <input
-                  type="number"
-                  min="0"
-                  max="200"
-                  step="1"
-                  value={profitConfig.productionCostPerUnit}
-                  onChange={(e) =>
-                    setProfitConfig((prev) => ({
-                      ...prev,
-                      productionCostPerUnit: Math.max(0, Number(e.target.value) || 0),
-                    }))
-                  }
-                  className={styles.rateNumberInputWide}
-                />
-                <span>/un</span>
-              </div>
-            </div>
-            <strong className={styles.cashFlowValueBlue}>
-              (-) {formatBRL(financialFlow.replenishmentFund)}
-            </strong>
-            <p className={styles.cashFlowDescWarning}>
-              {profitConfig.isManualMode ? (
-                profitConfig.manualModeType === 'net' ? (
-                  'Isento no modo de lucro direto'
-                ) : (
-                  <>
-                    Reserva calculada para repor <strong>{financialFlow.effectiveItemsSold} peças</strong> a R$ {Number(profitConfig.productionCostPerUnit).toFixed(2)} cada na projeção.
-                  </>
-                )
-              ) : (
-                <>
-                  Intocável para repor as <strong>{totalItemsSold} peças</strong> vendidas no período a R$ {Number(profitConfig.productionCostPerUnit).toFixed(2)} cada e manter o estoque vivo.
-                </>
+
+              {/* BARRA SEGMENTADA DE FLUXO DE CAIXA (CASH BREAKDOWN BAR) */}
+              {financialFlow.grossRevenue > 0 && (
+                <div className={styles.cashBreakdownWrapper}>
+                  <div className={styles.cashBreakdownBar}>
+                    {financialFlow.isLoss ? (
+                      <div
+                        className={styles.cashSegmentLoss}
+                        style={{ width: "100%" }}
+                        title={`Prejuízo Operacional: ${formatBRL(financialFlow.distributableProfit)}`}
+                      />
+                    ) : (
+                      <>
+                        {pctNet > 0 && (
+                          <div
+                            className={styles.cashSegmentNet}
+                            style={{ width: `${pctNet}%` }}
+                            title={`Lucro Líquido: ${pctNet.toFixed(1)}%`}
+                          />
+                        )}
+                        {pctReplenish > 0 && (
+                          <div
+                            className={styles.cashSegmentReplenish}
+                            style={{ width: `${pctReplenish}%` }}
+                            title={`Reposição CMV: ${pctReplenish.toFixed(1)}%`}
+                          />
+                        )}
+                        {pctGateway > 0 && (
+                          <div
+                            className={styles.cashSegmentGateway}
+                            style={{ width: `${pctGateway}%` }}
+                            title={`Taxas Gateway: ${pctGateway.toFixed(1)}%`}
+                          />
+                        )}
+                        {pctShipping > 0 && (
+                          <div
+                            className={styles.cashSegmentShipping}
+                            style={{ width: `${pctShipping}%` }}
+                            title={`Frete: ${pctShipping.toFixed(1)}%`}
+                          />
+                        )}
+                        {pctReserve > 0 && (
+                          <div
+                            className={styles.cashSegmentReserve}
+                            style={{ width: `${pctReserve}%` }}
+                            title={`Reserva Caixa: ${pctReserve.toFixed(1)}%`}
+                          />
+                        )}
+                      </>
+                    )}
+                  </div>
+
+                  <div className={styles.cashBreakdownLegend}>
+                    {financialFlow.isLoss ? (
+                      <>
+                        <span className={styles.cashLegendItem}>
+                          <span className={styles.dotLoss} /> Prejuízo ({formatBRL(financialFlow.distributableProfit)})
+                        </span>
+                        <span className={styles.cashLegendItem}>
+                          <span className={styles.dotReplenish} /> Custos e reposição excedem o faturamento
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <span className={styles.cashLegendItem}>
+                          <span className={styles.dotNet} /> Lucro Líquido ({pctNet.toFixed(1)}%)
+                        </span>
+                        {pctReplenish > 0 && (
+                          <span className={styles.cashLegendItem}>
+                            <span className={styles.dotReplenish} /> Reposição CMV ({pctReplenish.toFixed(1)}%)
+                          </span>
+                        )}
+                        {pctGateway > 0 && (
+                          <span className={styles.cashLegendItem}>
+                            <span className={styles.dotGateway} /> Gateway ({pctGateway.toFixed(1)}%)
+                          </span>
+                        )}
+                        {pctShipping > 0 && (
+                          <span className={styles.cashLegendItem}>
+                            <span className={styles.dotShipping} /> Frete ({pctShipping.toFixed(1)}%)
+                          </span>
+                        )}
+                        {pctReserve > 0 && (
+                          <span className={styles.cashLegendItem}>
+                            <span className={styles.dotReserve} /> Reserva ({pctReserve.toFixed(1)}%)
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
               )}
-            </p>
-          </div>
-
-          {/* CARD 5: RESERVA DE CAIXA DA EMPRESA */}
-          <div className={`${styles.cashFlowCard} ${styles.cashFlowCardReserve}`}>
-            <div className={styles.cashFlowCardHeader}>
-              <div className={styles.cashFlowCardTitleWithIcon}>
-                <Building2 size={15} color="#a78bfa" />
-                <span>5. RESERVA CAIXA THR33</span>
-              </div>
-              <div className={styles.inlineRateConfig}>
-                <input
-                  type="number"
-                  min="0"
-                  max="80"
-                  step="1"
-                  value={profitConfig.companyReservePct}
-                  onChange={(e) =>
-                    setProfitConfig((prev) => ({
-                      ...prev,
-                      companyReservePct: Math.max(0, Math.min(90, Number(e.target.value) || 0)),
-                    }))
-                  }
-                  className={styles.rateNumberInput}
-                />
-                <span>%</span>
-              </div>
             </div>
-            <strong className={styles.cashFlowValuePurple}>
-              (-) {formatBRL(financialFlow.companyReserve)}
-            </strong>
-            <p className={styles.cashFlowDesc}>
-              {profitConfig.isManualMode && profitConfig.manualModeType === 'net'
-                ? 'Isento no modo de lucro direto'
-                : `${profitConfig.companyReservePct}% do lucro operacional retido no cofre da marca para capital de giro, tráfego e confecção do próximo drop.`}
-            </p>
-          </div>
-
-          {/* CARD 6: LUCRO LÍQUIDO DISTRIBUÍVEL */}
-          <div className={`${styles.cashFlowCard} ${styles.cashFlowCardNetProfit}`}>
-            <div className={styles.cashFlowCardHeader}>
-              <div className={styles.cashFlowCardTitleWithIcon}>
-                <Coins size={15} color="#22c55e" />
-                <span>6. LUCRO LÍQUIDO DISTRIBUÍVEL</span>
-              </div>
-              <span className={styles.cashFlowTagNeon}>Pronto p/ Sócios</span>
-            </div>
-            <strong className={styles.cashFlowValueNeon}>
-              {formatBRL(financialFlow.distributableProfit)}
-            </strong>
-            <p className={styles.cashFlowDesc}>
-              {profitConfig.isManualMode && profitConfig.manualModeType === 'net'
-                ? 'Valor líquido definido manualmente para repasse integral imediato aos sócios.'
-                : 'Receita Bruta - Frete - Gateway - CMV Reposição - Reserva de Caixa. Pronto para repasse imediato.'}
-            </p>
-          </div>
-        </div>
+          );
+        })()}
 
         {/* PARTE B: SIMULADOR INTERATIVO DE DIVISÃO SOCIETÁRIA */}
         <div className={styles.partnersSimulatorBox}>
@@ -3174,12 +3800,17 @@ export function CmsAnalytics() {
                     )}
                   </div>
 
-                  {/* VALOR A RECEBER EM REAIS (NEON) */}
+                  {/* VALOR A RECEBER OU COTA DE PREJUÍZO EM REAIS */}
                   <div className={styles.memberShareValueRow}>
-                    <div className={styles.memberShareReais}>
+                    <div
+                      className={styles.memberShareReais}
+                      style={{ color: financialFlow.isLoss ? "#f87171" : "#4ade80" }}
+                    >
                       {formatBRL(shareReais)}
                     </div>
-                    <span className={styles.memberShareSub}>recebimento líquido</span>
+                    <span className={styles.memberShareSub}>
+                      {financialFlow.isLoss ? "cota prejuízo / aporte" : "recebimento líquido"}
+                    </span>
                   </div>
 
                   {/* SLIDER + INPUT NUMÉRICO + BOTÕES RÁPIDOS */}
@@ -3247,6 +3878,304 @@ export function CmsAnalytics() {
     );
   };
 
+  // Faixa de Transparência: Status Real de Pedidos com Barra de Conversão Integrada
+  const renderOrderStatusRibbon = () => {
+    const totalVolume = paidRevenue + pendingRevenue + cancelledRevenue;
+    const paidPct = totalVolume > 0 ? (paidRevenue / totalVolume) * 100 : 0;
+    const pendingPct = totalVolume > 0 ? (pendingRevenue / totalVolume) * 100 : 0;
+    const cancelledPct = totalVolume > 0 ? (cancelledRevenue / totalVolume) * 100 : 0;
+
+    return (
+      <div className={styles.orderMetricBarContainer}>
+        <div className={styles.orderMetricBar}>
+          {/* COLUNA 1: PAGOS & APROVADOS */}
+          <div className={styles.orderMetricCol}>
+            <div className={styles.orderMetricHeader}>
+              <span className={styles.statusDotGreen} />
+              <span className={styles.orderMetricLabel}>PAGOS & APROVADOS</span>
+            </div>
+            <strong className={styles.orderMetricValueGreen}>
+              R$ {paidRevenue.toFixed(2).replace(".", ",")}
+            </strong>
+            <span className={styles.orderMetricSub}>
+              {paidOrders.length} pedidos confirmados ({totalItemsSold} peças)
+            </span>
+          </div>
+
+          {/* COLUNA 2: AGUARDANDO COMPENSAÇÃO */}
+          <div className={styles.orderMetricCol}>
+            <div className={styles.orderMetricHeader}>
+              <span className={styles.statusDotYellow} />
+              <span className={styles.orderMetricLabel}>AGUARDANDO COMPENSAÇÃO</span>
+            </div>
+            <strong className={styles.orderMetricValueYellow}>
+              R$ {pendingRevenue.toFixed(2).replace(".", ",")}
+            </strong>
+            <span className={styles.orderMetricSub}>
+              {pendingOrders.length} pedidos pendentes (PIX / Boleto)
+            </span>
+          </div>
+
+          {/* COLUNA 3: CANCELADOS & EXPIRADOS */}
+          <div className={`${styles.orderMetricCol} ${styles.orderMetricColLast}`}>
+            <div className={styles.orderMetricHeader}>
+              <span className={styles.statusDotRed} />
+              <span className={styles.orderMetricLabel}>CANCELADOS & EXPIRADOS</span>
+            </div>
+            <strong className={styles.orderMetricValueRed}>
+              R$ {cancelledRevenue.toFixed(2).replace(".", ",")}
+            </strong>
+            <span className={styles.orderMetricSub}>
+              {cancelledOrders.length} pedidos não convertidos
+            </span>
+          </div>
+        </div>
+
+        {/* BARRA DE CONVERSÃO DE PEDIDOS (PROPORÇÃO DO VOLUME FINANCEIRO) */}
+        {totalVolume > 0 && (
+          <div className={styles.orderConversionBarWrapper}>
+            <div className={styles.orderConversionBar}>
+              {paidPct > 0 && (
+                <div
+                  className={styles.conversionSegmentPaid}
+                  style={{ width: `${paidPct}%` }}
+                  title={`Pagos: ${paidPct.toFixed(1)}%`}
+                />
+              )}
+              {pendingPct > 0 && (
+                <div
+                  className={styles.conversionSegmentPending}
+                  style={{ width: `${pendingPct}%` }}
+                  title={`Aguardando: ${pendingPct.toFixed(1)}%`}
+                />
+              )}
+              {cancelledPct > 0 && (
+                <div
+                  className={styles.conversionSegmentCancelled}
+                  style={{ width: `${cancelledPct}%` }}
+                  title={`Cancelados: ${cancelledPct.toFixed(1)}%`}
+                />
+              )}
+            </div>
+            <div className={styles.orderConversionLegend}>
+              <span>
+                <span className={styles.legendDotGreen} /> {paidPct.toFixed(1)}% Aprovado
+              </span>
+              <span>
+                <span className={styles.legendDotYellow} /> {pendingPct.toFixed(1)}% Em Espera
+              </span>
+              <span>
+                <span className={styles.legendDotRed} /> {cancelledPct.toFixed(1)}% Cancelado
+              </span>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Painel de Telemetria SVG: Dispositivos, Sistemas Operacionais & Origem de Tráfego
+  const renderTelemetryCards = () => (
+    <>
+      <div className={styles.chartsSubSectionHeader} style={{ marginTop: "2rem" }}>
+        <div className={styles.chartsSuiteTitleGroup}>
+          <span className={styles.chartsSuiteBadge}>
+            <Smartphone size={13} color="#22c55e" />
+            CLIENT ENVIRONMENT // LGPD ANONYMOUS TELEMETRY
+          </span>
+          <h3 className={styles.chartsSuiteTitle}>
+            DISPOSITIVOS, SISTEMAS OPERACIONAIS & ORIGEM DE TRÁFEGO
+          </h3>
+          <p className={styles.chartsSuiteSub}>
+            Mapeamento anônimo de sessões únicas por dispositivo, navegador (incluindo Instagram In-App) e canal de aquisição.
+          </p>
+        </div>
+      </div>
+
+      <div className={styles.telemetryThreeCardsGrid}>
+        {/* CARD 1: DISPOSITIVOS DE ACESSO (SVG DONUT CHART INTERATIVO + DETALHAMENTO) */}
+        <div className={styles.chartCard}>
+          <div className={styles.chartCardHeader}>
+            <div className={styles.chartCardHeaderLeft}>
+              <h3 className={styles.chartCardTitle}>
+                <Smartphone size={15} color="#22c55e" />
+                DISPOSITIVOS DE ACESSO
+              </h3>
+              <p className={styles.chartCardDesc}>
+                Divisão percentual de sessões entre Smartphone, Desktop e Tablet.
+              </p>
+            </div>
+          </div>
+
+          <div className={styles.deviceDonutLayout}>
+            <div className={styles.svgDonutBox}>
+              <svg viewBox="0 0 180 180" className={styles.svgDonutChart}>
+                <circle
+                  cx="90"
+                  cy="90"
+                  r="68"
+                  fill="none"
+                  stroke="rgba(255, 255, 255, 0.06)"
+                  strokeWidth="18"
+                />
+                {telemetryBreakdown.donutSegments.map((seg) => (
+                  <circle
+                    key={`donut-seg-${seg.key}`}
+                    cx="90"
+                    cy="90"
+                    r="68"
+                    fill="none"
+                    stroke={seg.color}
+                    strokeWidth="18"
+                    strokeDasharray={seg.strokeDasharray}
+                    strokeDashoffset={seg.strokeDashoffset}
+                    transform="rotate(-90 90 90)"
+                    style={{ transition: "stroke-dasharray 0.5s ease, stroke-dashoffset 0.5s ease" }}
+                  />
+                ))}
+              </svg>
+              <div className={styles.svgDonutCenter}>
+                {telemetryBreakdown.dominantDevice.key === "desktop" ? (
+                  <Monitor size={18} color={telemetryBreakdown.dominantDevice.color} />
+                ) : telemetryBreakdown.dominantDevice.key === "tablet" ? (
+                  <Tablet size={18} color={telemetryBreakdown.dominantDevice.color} />
+                ) : (
+                  <Smartphone size={18} color={telemetryBreakdown.dominantDevice.color} />
+                )}
+                <strong>{telemetryBreakdown.dominantDevice.pct}%</strong>
+                <span>{telemetryBreakdown.dominantDevice.shortLabel}</span>
+              </div>
+            </div>
+
+            <div className={styles.deviceBreakdownList}>
+              {telemetryBreakdown.devicesList.map((dev) => (
+                <div key={`dev-row-${dev.key}`} className={styles.deviceBreakdownItem}>
+                  <div className={styles.deviceBreakdownLeft}>
+                    <span
+                      className={styles.deviceIconBadge}
+                      style={{
+                        borderColor: `${dev.color}55`,
+                        backgroundColor: `${dev.color}18`,
+                        color: dev.color,
+                      }}
+                    >
+                      {dev.key === "desktop" ? (
+                        <Monitor size={14} />
+                      ) : dev.key === "tablet" ? (
+                        <Tablet size={14} />
+                      ) : (
+                        <Smartphone size={14} />
+                      )}
+                    </span>
+                    <div>
+                      <strong className={styles.deviceName}>{dev.label}</strong>
+                      <small className={styles.deviceSubBadge}>{dev.badge}</small>
+                    </div>
+                  </div>
+                  <div className={styles.deviceBreakdownRight}>
+                    <strong style={{ color: dev.color }}>{dev.pct}%</strong>
+                    <small>{dev.count} sessões</small>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* CARD 2: SISTEMAS OPERACIONAIS & NAVEGADORES (DESTAQUE INSTAGRAM IN-APP) */}
+        <div className={styles.chartCard}>
+          <div className={styles.chartCardHeader}>
+            <div className={styles.chartCardHeaderLeft}>
+              <h3 className={styles.chartCardTitle}>
+                <Globe size={15} color="#3b82f6" />
+                SISTEMAS & NAVEGADORES
+              </h3>
+              <p className={styles.chartCardDesc}>
+                Plataformas utilizadas pelos clientes, destacando acessos via navegador interno do Instagram.
+              </p>
+            </div>
+          </div>
+
+          <div className={styles.telemetryBarsContainer}>
+            {telemetryBreakdown.osAndBrowsersList.map((item) => (
+              <div key={`os-item-${item.key}`} className={styles.telemetryBarRow}>
+                <div className={styles.telemetryBarMeta}>
+                  <span className={styles.telemetryBarLabel}>
+                    <span
+                      className={styles.chartLegendDot}
+                      style={{ backgroundColor: item.color }}
+                    />
+                    <span>{item.label}</span>
+                    {item.isHighlight && (
+                      <span className={styles.igInAppBadge}>SOCIAL BROWSER</span>
+                    )}
+                  </span>
+                  <span className={styles.telemetryBarCount}>
+                    <strong>{item.count}</strong> <small>({item.sharePct}%)</small>
+                  </span>
+                </div>
+                <div className={styles.telemetryBarTrack}>
+                  <div
+                    className={styles.telemetryBarFill}
+                    style={{
+                      width: `${item.barPct}%`,
+                      background: `linear-gradient(90deg, ${item.color}99, ${item.color})`,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* CARD 3: ORIGEM DE TRÁFEGO & AQUISIÇÃO */}
+        <div className={styles.chartCard}>
+          <div className={styles.chartCardHeader}>
+            <div className={styles.chartCardHeaderLeft}>
+              <h3 className={styles.chartCardTitle}>
+                <Share2 size={15} color="#ec4899" />
+                ORIGEM DE TRÁFEGO & AQUISIÇÃO
+              </h3>
+              <p className={styles.chartCardDesc}>
+                Canais de entrada dos visitantes para medir retorno de Stories/Posts no Instagram e disparos no WhatsApp.
+              </p>
+            </div>
+          </div>
+
+          <div className={styles.telemetryBarsContainer}>
+            {telemetryBreakdown.trafficSourcesList.map((src) => (
+              <div key={`src-item-${src.key}`} className={styles.telemetryBarRow}>
+                <div className={styles.telemetryBarMeta}>
+                  <span className={styles.telemetryBarLabel}>
+                    <span
+                      className={styles.chartLegendDot}
+                      style={{ backgroundColor: src.color }}
+                    />
+                    <span>{src.label}</span>
+                    <span className={styles.sourceChannelBadge}>{src.tag}</span>
+                  </span>
+                  <span className={styles.telemetryBarCount}>
+                    <strong style={{ color: src.color }}>{src.pct}%</strong>{" "}
+                    <small>({src.count} vis.)</small>
+                  </span>
+                </div>
+                <div className={styles.telemetryBarTrack}>
+                  <div
+                    className={styles.telemetryBarFill}
+                    style={{
+                      width: `${src.barPct}%`,
+                      background: `linear-gradient(90deg, ${src.color}88, ${src.color})`,
+                    }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+
 
   // Renderizador unificado do dashboard de gráficos e predição
   const renderChartsDashboard = () => (
@@ -3264,59 +4193,6 @@ export function CmsAnalytics() {
             Métricas calculadas exclusivamente com base em transações pagas e
             telemetria comportamental ({periodLabel}).
           </p>
-        </div>
-        <div
-          className={styles.chartTagPill}
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.4rem",
-          }}
-        >
-          <Target size={12} color="#facc15" />
-          <span>MODELO PREDITIVO ATIVO</span>
-        </div>
-      </div>
-
-      {/* FAIXA DE TRANSPARÊNCIA: STATUS REAL DE PEDIDOS & RECEITA */}
-      <div className={styles.orderStatusRibbon}>
-        <div className={styles.statusRibbonItemPaid}>
-          <div className={styles.statusRibbonHeader}>
-            <span className={styles.statusRibbonDotGreen} />
-            <strong>PAGOS & APROVADOS (CAIXA REAL)</strong>
-          </div>
-          <div className={styles.statusRibbonValueGreen}>
-            R$ {paidRevenue.toFixed(2).replace(".", ",")}
-          </div>
-          <span className={styles.statusRibbonSub}>
-            {paidOrders.length} pedidos confirmados ({totalItemsSold} peças)
-          </span>
-        </div>
-
-        <div className={styles.statusRibbonItemPending}>
-          <div className={styles.statusRibbonHeader}>
-            <span className={styles.statusRibbonDotYellow} />
-            <strong>AGUARDANDO PAGAMENTO</strong>
-          </div>
-          <div className={styles.statusRibbonValueYellow}>
-            R$ {pendingRevenue.toFixed(2).replace(".", ",")}
-          </div>
-          <span className={styles.statusRibbonSub}>
-            {pendingOrders.length} pedidos pendentes no PIX / Boleto
-          </span>
-        </div>
-
-        <div className={styles.statusRibbonItemCancelled}>
-          <div className={styles.statusRibbonHeader}>
-            <span className={styles.statusRibbonDotRed} />
-            <strong>CANCELADOS / RECUSADOS</strong>
-          </div>
-          <div className={styles.statusRibbonValueRed}>
-            R$ {cancelledRevenue.toFixed(2).replace(".", ",")}
-          </div>
-          <span className={styles.statusRibbonSub}>
-            {cancelledOrders.length} pedidos não convertidos ou expirados
-          </span>
         </div>
       </div>
 
@@ -3608,271 +4484,8 @@ export function CmsAnalytics() {
         </div>
       </div>
 
-      {/* NOVA SEÇÃO ESTRATÉGICA: DISPOSITIVOS, SISTEMAS & ORIGEM DE TRÁFEGO (3 CARDS VISUAIS SVG) */}
-      <div className={styles.chartsSubSectionHeader}>
-        <div className={styles.chartsSuiteTitleGroup}>
-          <span className={styles.chartsSuiteBadge}>
-            <Smartphone size={13} color="#22c55e" />
-            CLIENT ENVIRONMENT // LGPD ANONYMOUS TELEMETRY
-          </span>
-          <h3 className={styles.chartsSuiteTitle}>
-            DISPOSITIVOS, SISTEMAS OPERACIONAIS & ORIGEM DE TRÁFEGO
-          </h3>
-          <p className={styles.chartsSuiteSub}>
-            Mapeamento anônimo de sessões únicas por dispositivo, navegador (incluindo Instagram In-App) e canal de aquisição.
-          </p>
-        </div>
-        <span className={`${styles.chartTagPill} ${styles.chartTagGreen}`}>
-          SVG Nativo 0 KB
-        </span>
-      </div>
-
-      <div className={styles.telemetryThreeCardsGrid}>
-        {/* CARD 1: DISPOSITIVOS DE ACESSO (SVG DONUT CHART INTERATIVO + DETALHAMENTO) */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartCardHeader}>
-            <div className={styles.chartCardHeaderLeft}>
-              <h3 className={styles.chartCardTitle}>
-                <Smartphone size={15} color="#22c55e" />
-                DISPOSITIVOS DE ACESSO
-              </h3>
-              <p className={styles.chartCardDesc}>
-                Divisão percentual de sessões entre Smartphone, Desktop e Tablet.
-              </p>
-            </div>
-            <span className={`${styles.chartTagPill} ${styles.chartTagGreen}`}>
-              Donut SVG
-            </span>
-          </div>
-
-          <div className={styles.deviceDonutLayout}>
-            <div className={styles.svgDonutBox}>
-              <svg viewBox="0 0 180 180" className={styles.svgDonutChart}>
-                <circle
-                  cx="90"
-                  cy="90"
-                  r="68"
-                  fill="none"
-                  stroke="rgba(255, 255, 255, 0.06)"
-                  strokeWidth="18"
-                />
-                {telemetryBreakdown.donutSegments.map((seg) => (
-                  <circle
-                    key={`donut-seg-${seg.key}`}
-                    cx="90"
-                    cy="90"
-                    r="68"
-                    fill="none"
-                    stroke={seg.color}
-                    strokeWidth="18"
-                    strokeDasharray={seg.strokeDasharray}
-                    strokeDashoffset={seg.strokeDashoffset}
-                    transform="rotate(-90 90 90)"
-                    style={{ transition: "stroke-dasharray 0.5s ease, stroke-dashoffset 0.5s ease" }}
-                  />
-                ))}
-              </svg>
-              <div className={styles.svgDonutCenter}>
-                {telemetryBreakdown.dominantDevice.key === "desktop" ? (
-                  <Monitor size={18} color={telemetryBreakdown.dominantDevice.color} />
-                ) : telemetryBreakdown.dominantDevice.key === "tablet" ? (
-                  <Tablet size={18} color={telemetryBreakdown.dominantDevice.color} />
-                ) : (
-                  <Smartphone size={18} color={telemetryBreakdown.dominantDevice.color} />
-                )}
-                <strong>{telemetryBreakdown.dominantDevice.pct}%</strong>
-                <span>{telemetryBreakdown.dominantDevice.shortLabel}</span>
-              </div>
-            </div>
-
-            <div className={styles.deviceBreakdownList}>
-              {telemetryBreakdown.devicesList.map((dev) => (
-                <div key={`dev-row-${dev.key}`} className={styles.deviceBreakdownItem}>
-                  <div className={styles.deviceBreakdownLeft}>
-                    <span
-                      className={styles.deviceIconBadge}
-                      style={{
-                        borderColor: `${dev.color}55`,
-                        backgroundColor: `${dev.color}18`,
-                        color: dev.color,
-                      }}
-                    >
-                      {dev.key === "desktop" ? (
-                        <Monitor size={14} />
-                      ) : dev.key === "tablet" ? (
-                        <Tablet size={14} />
-                      ) : (
-                        <Smartphone size={14} />
-                      )}
-                    </span>
-                    <div>
-                      <strong className={styles.deviceName}>{dev.label}</strong>
-                      <small className={styles.deviceSubBadge}>{dev.badge}</small>
-                    </div>
-                  </div>
-                  <div className={styles.deviceBreakdownRight}>
-                    <strong style={{ color: dev.color }}>{dev.pct}%</strong>
-                    <small>{dev.count} sessões</small>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* CARD 2: SISTEMAS OPERACIONAIS & NAVEGADORES (DESTAQUE INSTAGRAM IN-APP) */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartCardHeader}>
-            <div className={styles.chartCardHeaderLeft}>
-              <h3 className={styles.chartCardTitle}>
-                <Globe size={15} color="#3b82f6" />
-                SISTEMAS & NAVEGADORES
-              </h3>
-              <p className={styles.chartCardDesc}>
-                Plataformas utilizadas pelos clientes, destacando acessos via navegador interno do Instagram.
-              </p>
-            </div>
-            <span className={`${styles.chartTagPill} ${styles.chartTagBlue}`}>
-              OS + In-App
-            </span>
-          </div>
-
-          <div className={styles.telemetryBarsContainer}>
-            {telemetryBreakdown.osAndBrowsersList.map((item) => (
-              <div key={`os-item-${item.key}`} className={styles.telemetryBarRow}>
-                <div className={styles.telemetryBarMeta}>
-                  <span className={styles.telemetryBarLabel}>
-                    <span
-                      className={styles.chartLegendDot}
-                      style={{ backgroundColor: item.color }}
-                    />
-                    <span>{item.label}</span>
-                    {item.isHighlight && (
-                      <span className={styles.igInAppBadge}>SOCIAL BROWSER</span>
-                    )}
-                  </span>
-                  <span className={styles.telemetryBarCount}>
-                    <strong>{item.count}</strong> <small>({item.sharePct}%)</small>
-                  </span>
-                </div>
-                <div className={styles.telemetryBarTrack}>
-                  <div
-                    className={styles.telemetryBarFill}
-                    style={{
-                      width: `${item.barPct}%`,
-                      background: `linear-gradient(90deg, ${item.color}99, ${item.color})`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* CARD 3: ORIGEM DE TRÁFEGO & AQUISIÇÃO */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartCardHeader}>
-            <div className={styles.chartCardHeaderLeft}>
-              <h3 className={styles.chartCardTitle}>
-                <Share2 size={15} color="#ec4899" />
-                ORIGEM DE TRÁFEGO & AQUISIÇÃO
-              </h3>
-              <p className={styles.chartCardDesc}>
-                Canais de entrada dos visitantes para medir retorno de Stories/Posts no Instagram e disparos no WhatsApp.
-              </p>
-            </div>
-            <span className={`${styles.chartTagPill} ${styles.chartTagPurple}`}>
-              Canais UTM & Ref
-            </span>
-          </div>
-
-          <div className={styles.telemetryBarsContainer}>
-            {telemetryBreakdown.trafficSourcesList.map((src) => (
-              <div key={`src-item-${src.key}`} className={styles.telemetryBarRow}>
-                <div className={styles.telemetryBarMeta}>
-                  <span className={styles.telemetryBarLabel}>
-                    <span
-                      className={styles.chartLegendDot}
-                      style={{ backgroundColor: src.color }}
-                    />
-                    <span>{src.label}</span>
-                    <span className={styles.sourceChannelBadge}>{src.tag}</span>
-                  </span>
-                  <span className={styles.telemetryBarCount}>
-                    <strong style={{ color: src.color }}>{src.pct}%</strong>{" "}
-                    <small>({src.count} vis.)</small>
-                  </span>
-                </div>
-                <div className={styles.telemetryBarTrack}>
-                  <div
-                    className={styles.telemetryBarFill}
-                    style={{
-                      width: `${src.barPct}%`,
-                      background: `linear-gradient(90deg, ${src.color}88, ${src.color})`,
-                    }}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* SEÇÃO DESTAQUE: ENGENHARIA FINANCEIRA, CAIXA & DIVISÃO DE LUCROS */}
-      {renderProfitSimulator()}
-
-      {/* GRID 2 COLUNAS */}
+      {/* GRID 2 COLUNAS DE CATEGORIAS, CORES & TAMANHOS */}
       <div className={styles.chartsGridTwoCols}>
-        {/* 2. JORNADA VISUAL DO FUNIL */}
-        <div className={styles.chartCard}>
-          <div className={styles.chartCardHeader}>
-            <div className={styles.chartCardHeaderLeft}>
-              <h3 className={styles.chartCardTitle}>
-                <Layers size={15} color="#60a5fa" />
-                VOLUME POR ETAPA DO FUNIL
-              </h3>
-              <p className={styles.chartCardDesc}>
-                Comparação direta do volume e retenção de usuários etapa por
-                etapa.
-              </p>
-            </div>
-            <span className={styles.chartTagPill}>Bar Chart</span>
-          </div>
-          <div className={styles.chartContainer}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={funnelChartData}
-                margin={{ top: 15, right: 15, left: -10, bottom: 5 }}
-              >
-                <CartesianGrid
-                  strokeDasharray="3 3"
-                  stroke="rgba(255, 255, 255, 0.06)"
-                  vertical={false}
-                />
-                <XAxis
-                  dataKey="etapa"
-                  stroke="#666666"
-                  tick={{ fill: "#888888", fontSize: 10 }}
-                />
-                <YAxis
-                  stroke="#666666"
-                  tick={{ fill: "#888888", fontSize: 11 }}
-                />
-                <RechartsTooltip content={<CustomChartTooltip />} />
-                <Bar
-                  dataKey="volume"
-                  name="Usuários / Ações"
-                  radius={[4, 4, 0, 0]}
-                >
-                  {funnelChartData.map((entry, index) => (
-                    <Cell key={`funnel-cell-${index}`} fill={entry.fill} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
         {/* 3. PERFORMANCE POR CATEGORIA */}
         <div className={styles.chartCard}>
           <div className={styles.chartCardHeader}>
@@ -3937,51 +4550,72 @@ export function CmsAnalytics() {
                 Share de preferência dos clientes em peças aprovadas.
               </p>
             </div>
-            <span className={styles.chartTagPill}>Donut Pie</span>
           </div>
           <div className={styles.chartContainer}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <RechartsTooltip
-                  content={<CustomChartTooltip valueSuffix=" un." />}
-                />
-                <Pie
-                  data={colorDonutData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={95}
-                  paddingAngle={4}
-                  dataKey="value"
-                  nameKey="name"
-                >
-                  {colorDonutData.map((entry, index) => (
-                    <Cell
-                      key={`color-cell-${index}`}
-                      fill={entry.color}
-                      stroke="#0a0a0a"
-                      strokeWidth={2}
-                    />
-                  ))}
-                </Pie>
-              </PieChart>
-            </ResponsiveContainer>
+            {colorDonutData.length === 0 ? (
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  height: "100%",
+                  flexDirection: "column",
+                  gap: "0.5rem",
+                  color: "#71717a",
+                  fontSize: "0.78rem",
+                }}
+              >
+                <Sparkles size={22} color="#52525b" />
+                <span>Nenhuma peça vendida no período selecionado.</span>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <RechartsTooltip
+                    content={<CustomChartTooltip valueSuffix=" un." />}
+                  />
+                  <Pie
+                    data={colorDonutData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={60}
+                    outerRadius={95}
+                    paddingAngle={4}
+                    dataKey="value"
+                    nameKey="name"
+                  >
+                    {colorDonutData.map((entry, index) => (
+                      <Cell
+                        key={`color-cell-${index}`}
+                        fill={entry.color}
+                        stroke="rgba(255, 255, 255, 0.18)"
+                        strokeWidth={1.5}
+                      />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </div>
           <div className={styles.chartLegendRow}>
-            {colorDonutData.map((entry, idx) => (
-              <div key={`legend-col-${idx}`} className={styles.chartLegendItem}>
-                <span
-                  className={styles.chartLegendDot}
-                  style={{
-                    backgroundColor: entry.color,
-                    border: "1px solid rgba(255,255,255,0.2)",
-                  }}
-                />
-                <span>
-                  {entry.name} ({entry.value} un.)
-                </span>
-              </div>
-            ))}
+            {colorDonutData.map((entry, idx) => {
+              const totalDonutPieces = colorDonutData.reduce((acc, c) => acc + c.value, 0);
+              const pct = totalDonutPieces > 0 ? Math.round((entry.value / totalDonutPieces) * 100) : 0;
+              return (
+                <div key={`legend-col-${idx}`} className={styles.chartLegendItem}>
+                  <span
+                    className={styles.chartLegendDot}
+                    style={{
+                      backgroundColor: entry.color,
+                      border: "1px solid rgba(255,255,255,0.25)",
+                    }}
+                  />
+                  <span>
+                    {entry.name}: <strong>{entry.value} un.</strong> ({pct}%)
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -4049,7 +4683,6 @@ export function CmsAnalytics() {
               turno (Madrugada, Manhã, Tarde e Noite).
             </p>
           </div>
-          <span className={styles.chartTagPill}>Turnos Streetwear</span>
         </div>
 
         <div className={styles.chartContainer}>
@@ -4240,9 +4873,6 @@ export function CmsAnalytics() {
                 pagamentos.
               </p>
             </div>
-            <span className={`${styles.chartTagPill} ${styles.chartTagGreen}`}>
-              Share de Gateway
-            </span>
           </div>
           <div className={styles.chartContainer}>
             <ResponsiveContainer width="100%" height="100%">
@@ -4303,9 +4933,6 @@ export function CmsAnalytics() {
                 pelo cliente.
               </p>
             </div>
-            <span className={`${styles.chartTagPill} ${styles.chartTagBlue}`}>
-              Logística
-            </span>
           </div>
           <div className={styles.chartContainer}>
             <ResponsiveContainer width="100%" height="100%">
@@ -4459,49 +5086,52 @@ export function CmsAnalytics() {
         </div>
       </div>
 
-      {/* 3 CARDS DE KPIS DE SAÚDE DA API */}
-      <div className={styles.kpiGridThreeCols}>
-        <div
-          className={`${styles.predictiveKpiCard} ${styles.predictiveKpiCardGlow}`}
-        >
-          <div className={styles.predictiveKpiHeader}>
-            <span className={styles.predictiveKpiLabel}>Taxa de Aprovação</span>
+      {/* MÉTRICAS DE RESILIÊNCIA DO GATEWAY (LINHA CONTÍNUA DE-BOXED) */}
+      <div className={styles.gatewayResilienceStrip}>
+        <div className={styles.gatewayResilienceCol}>
+          <div className={styles.gatewayResilienceHeader}>
             <ShieldCheck size={14} color="#4ade80" />
+            <span className={styles.gatewayResilienceLabel}>TAXA DE APROVAÇÃO</span>
           </div>
-          <div className={styles.predictiveKpiValue} style={{ color: "#4ade80" }}>
+          <strong className={styles.gatewayResilienceValueGreen}>
             {approvalRate}%
-          </div>
-          <span className={styles.predictiveKpiSub}>
-            Das tentativas de cobrança finalizadas com sucesso
-          </span>
+          </strong>
         </div>
 
-        <div
-          className={`${styles.predictiveKpiCard} ${styles.predictiveKpiCardGold}`}
-        >
-          <div className={styles.predictiveKpiHeader}>
-            <span className={styles.predictiveKpiLabel}>Latência Média da API</span>
-            <Clock size={14} color="#facc15" />
+        <div className={styles.gatewayResilienceCol}>
+          <div className={styles.gatewayResilienceHeader}>
+            <span
+              className={
+                avgLatency < 1000
+                  ? styles.statusDotGreen
+                  : avgLatency < 3000
+                  ? styles.statusDotYellow
+                  : styles.statusDotRed
+              }
+            />
+            <span className={styles.gatewayResilienceLabel}>LATÊNCIA MÉDIA</span>
           </div>
-          <div className={styles.predictiveKpiValue} style={{ color: "#facc15" }}>
-            {avgLatency} <small style={{ fontSize: "0.8rem", color: "#888" }}>ms</small>
-          </div>
-          <span className={styles.predictiveKpiSub}>
-            Tempo médio de resposta do gateway (Saudável: &lt; 1000ms)
-          </span>
+          <strong
+            className={
+              avgLatency < 1000
+                ? styles.gatewayResilienceValueGreen
+                : avgLatency < 3000
+                ? styles.gatewayResilienceValueYellow
+                : styles.gatewayResilienceValueRed
+            }
+          >
+            {avgLatency} <span className={styles.unitSmall}>ms</span>
+          </strong>
         </div>
 
-        <div className={styles.predictiveKpiCard}>
-          <div className={styles.predictiveKpiHeader}>
-            <span className={styles.predictiveKpiLabel}>Fricções / Recusas Monitoradas</span>
+        <div className={`${styles.gatewayResilienceCol} ${styles.gatewayResilienceColLast}`}>
+          <div className={styles.gatewayResilienceHeader}>
             <AlertOctagon size={14} color="#f87171" />
+            <span className={styles.gatewayResilienceLabel}>FALHAS / RECUSAS</span>
           </div>
-          <div className={styles.predictiveKpiValue}>
-            {failedAttemptsCount} <small style={{ fontSize: "0.8rem", color: "#888" }}>tentativas</small>
-          </div>
-          <span className={styles.predictiveKpiSub}>
-            Total de {totalAttempts} tentativas auditadas pelo sistema
-          </span>
+          <strong className={styles.gatewayResilienceValueRed}>
+            {failedAttemptsCount} <span className={styles.unitSmall}>tentativas</span>
+          </strong>
         </div>
       </div>
 
@@ -4519,9 +5149,6 @@ export function CmsAnalytics() {
                 Auditoria de recusas pelo banco, dados incorretos, erros de rede e travas de segurança.
               </p>
             </div>
-            <span className={`${styles.chartTagPill}`} style={{ color: "#f87171", borderColor: "rgba(248,113,113,0.3)", backgroundColor: "rgba(248,113,113,0.1)" }}>
-              Fricção
-            </span>
           </div>
           <div className={styles.chartContainer}>
             <ResponsiveContainer width="100%" height="100%">
@@ -4578,9 +5205,6 @@ export function CmsAnalytics() {
                 Tempo de resposta em milissegundos por requisição com limites de segurança (Threshold).
               </p>
             </div>
-            <span className={`${styles.chartTagPill} ${styles.chartTagGreen}`}>
-              Tempo de Resposta
-            </span>
           </div>
           <div className={styles.chartContainer}>
             <ResponsiveContainer width="100%" height="100%">
@@ -4724,6 +5348,16 @@ export function CmsAnalytics() {
                   className={refreshing ? styles.spinning : ""}
                 />
               </button>
+
+              <button
+                type="button"
+                onClick={handleExportExecutivePdf}
+                className={styles.exportPdfBtn}
+                title="Gerar e salvar relatório executivo da aba em PDF"
+              >
+                <Printer size={14} />
+                <span>EXPORTAR RELATÓRIO (PDF)</span>
+              </button>
             </div>
 
             {/* PAINEL FLUTUANTE DE SELEÇÃO DE DATA */}
@@ -4776,59 +5410,39 @@ export function CmsAnalytics() {
           </div>
         </div>
 
-        {/* NAVEGAÇÃO DE TABS */}
+        {/* NAVEGAÇÃO DE TABS (ARQUITETURA LIMPA: 3 PILARES ANALÍTICOS) */}
         <div className={styles.headerNav}>
-          <button
-            className={`${styles.tabBtn} ${activeTab === "attributes" ? styles.activeTab : ""}`}
-            onClick={() => setActiveTab("attributes")}
-          >
-            <BarChart3 size={13} />
-            <span>Cores, Tamanhos & Tipos</span>
-          </button>
-          <button
-            className={`${styles.tabBtn} ${activeTab === "products" ? styles.activeTab : ""}`}
-            onClick={() => setActiveTab("products")}
-          >
-            <ShoppingBag size={13} />
-            <span>Raio-X por Produto ({productMetrics.length})</span>
-          </button>
-          <button
-            className={`${styles.tabBtn} ${activeTab === "deadstock" ? styles.activeTab : ""}`}
-            onClick={() => setActiveTab("deadstock")}
-          >
-            <AlertTriangle
-              size={13}
-              color={deadStockItems.length > 0 ? "#f87171" : "currentColor"}
-            />
-            <span>Alerta Dead Stock ({deadStockItems.length})</span>
-          </button>
           <button
             className={`${styles.tabBtn} ${activeTab === "funnel" ? styles.activeTab : ""}`}
             onClick={() => setActiveTab("funnel")}
           >
             <TrendingUp size={13} />
-            <span>Funil de Conversão</span>
+            <span>1. Funil & Telemetria</span>
           </button>
           <button
             className={`${styles.tabBtn} ${activeTab === "charts" ? styles.activeTab : ""}`}
             onClick={() => setActiveTab("charts")}
           >
             <Activity size={13} />
-            <span>Gráficos & Projeções (BI)</span>
+            <span>2. Vendas, Catálogo & BI</span>
           </button>
           <button
             className={`${styles.tabBtn} ${activeTab === "finance" ? styles.activeTab : ""}`}
             onClick={() => setActiveTab("finance")}
           >
             <DollarSign size={13} color="#22c55e" />
-            <span>Engenharia Financeira & Sócios</span>
+            <span>3. Engenharia Financeira & Sócios</span>
           </button>
         </div>
       </header>
 
-      {/* TAB 1: GRÁFICOS DE CORES, TAMANHOS, CATEGORIAS E INSIGHTS DE PRODUÇÃO */}
-      {activeTab === "attributes" && (
-        <div className={styles.attributesLayout}>
+      {/* ABA 2: VENDAS, CATÁLOGO & BI (GRÁFICOS, ATRIBUTOS, PRODUTOS E DEAD STOCK) */}
+      {activeTab === "charts" && (
+        <section className={styles.chartsTabSection}>
+          {renderChartsDashboard()}
+
+          {/* GRID 3 COLUNAS DE ATRIBUTOS (CORES, TAMANHOS & CATEGORIAS) */}
+          <div className={styles.attributesLayout}>
           {/* GRID 3 COLUNAS DE GRÁFICOS */}
           <div className={styles.threeColsGrid}>
             {/* 1. CORES CADASTRADAS */}
@@ -5027,11 +5641,9 @@ export function CmsAnalytics() {
             </div>
           </div>
         </div>
-      )}
 
-      {/* TAB 2: RAIO-X COMPLETO POR PRODUTO */}
-      {activeTab === "products" && (
-        <section className={styles.sectionCard}>
+        {/* RAIO-X COMPLETO POR PRODUTO */}
+        <section className={styles.sectionCard} style={{ marginTop: "2rem" }}>
           {/* BARRA DE PESQUISA, FILTROS DE TIPO & STATUS */}
           <div className={styles.tableControls}>
             <div className={styles.tableControlsLeft}>
@@ -5400,11 +6012,9 @@ export function CmsAnalytics() {
             </table>
           </div>
         </section>
-      )}
 
-      {/* TAB 2: ALERTA DE DEAD STOCK (> 45 DIAS) */}
-      {activeTab === "deadstock" && (
-        <section className={styles.sectionCard}>
+        {/* ALERTA DE DEAD STOCK (> 45 DIAS) */}
+        <section className={styles.sectionCard} style={{ marginTop: "2rem" }}>
           <div className={styles.deadStockBanner}>
             <div className={styles.deadStockInfo}>
               <div className={styles.alertTagGroup}>
@@ -5500,9 +6110,10 @@ export function CmsAnalytics() {
             </table>
           </div>
         </section>
+        </section>
       )}
 
-      {/* TAB 4: FUNIL DE CONVERSÃO */}
+      {/* ABA 1: FUNIL DE CONVERSÃO & TELEMETRIA */}
       {activeTab === "funnel" && (
         <section className={styles.funnelSection}>
           <div className={styles.sectionHeader}>
@@ -5714,21 +6325,15 @@ export function CmsAnalytics() {
             </div>
           </div>
 
-          {/* SUÍTE VISUAL DE GRÁFICOS RECHARTS & ESTIMATIVAS PREDITIVAS */}
-          {renderChartsDashboard()}
+          {/* PAINEL DE DISPOSITIVOS, SISTEMAS OPERACIONAIS & ORIGEM DE TRÁFEGO */}
+          {renderTelemetryCards()}
         </section>
       )}
 
-      {/* TAB 5: ABA DEDICADA DE GRÁFICOS RECHARTS & ESTIMATIVAS PREDITIVAS (BI) */}
-      {activeTab === "charts" && (
-        <section className={styles.chartsTabSection}>
-          {renderChartsDashboard()}
-        </section>
-      )}
-
-      {/* TAB 6: ABA DEDICADA DE ENGENHARIA FINANCEIRA, CAIXA & DIVISÃO DE LUCROS */}
+      {/* ABA 3: ENGENHARIA FINANCEIRA, CAIXA & DIVISÃO SOCIETÁRIA */}
       {activeTab === "finance" && (
         <section className={styles.financeTabSection}>
+          {renderOrderStatusRibbon()}
           {renderProfitSimulator()}
         </section>
       )}

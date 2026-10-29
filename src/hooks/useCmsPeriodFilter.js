@@ -12,7 +12,7 @@ export const parseOrderDate = (input) => {
   
   let raw = input;
   if (typeof input === 'object') {
-    raw = input.createdAt || input.date || input.lastUpdated || input.updatedAt || input.timestamp;
+    raw = input.createdAt || input.created_at || input.paidAt || input.paymentApprovedAt || input.date || input.lastUpdated || input.updatedAt || input.timestamp || input.paymentDate;
   }
   if (!raw) return null;
   if (raw instanceof Date) return isNaN(raw.getTime()) ? null : raw;

@@ -570,7 +570,7 @@ export const couponService = {
       const isBrand = data.type === 'brand';
       const newItemsSold = (Number(data.itemsSold) || 0) + Number(itemsCount || 1);
 
-      // Meritocracia automática de comissão: 1-9 peças (8%), 10-19 (10%), 20+ (15%)
+      // comissão: 1-9 peças (8%), 10-19 (10%), 20+ (15%)
       let rate = Number(data.commissionRate || 8);
       if (!isBrand) {
         if (newItemsSold >= 20) rate = 15;

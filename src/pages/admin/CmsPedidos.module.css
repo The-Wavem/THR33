@@ -244,6 +244,398 @@
   color: var(--text-muted);
 }
 
+/* ============================================================
+   RADAR AO VIVO & ALERTA SONORO (TEMPO REAL FIRESTORE)
+   ============================================================ */
+.liveRadarBar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  background-color: rgba(0, 255, 102, 0.03);
+  border: 1px solid rgba(0, 255, 102, 0.15);
+  border-left: 3px solid #00ff66;
+  padding: 0.65rem 1.15rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+  flex-wrap: wrap;
+}
+
+.radarStatus {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: var(--text-primary);
+}
+
+.radarPulseDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #00ff66;
+  box-shadow: 0 0 10px #00ff66;
+  display: inline-block;
+  animation: radarPulse 2s infinite ease-in-out;
+}
+
+@keyframes radarPulse {
+  0% { transform: scale(0.95); opacity: 0.6; box-shadow: 0 0 4px #00ff66; }
+  50% { transform: scale(1.3); opacity: 1; box-shadow: 0 0 12px #00ff66; }
+  100% { transform: scale(0.95); opacity: 0.6; box-shadow: 0 0 4px #00ff66; }
+}
+
+.radarText {
+  color: var(--text-secondary);
+}
+
+.radarText strong {
+  color: #00ff66;
+  font-weight: 800;
+}
+
+.radarRightSide {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.radarBadge {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0.2rem 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* BANNER NEON DE NOVO PEDIDO RECEBIDO */
+.neonOrderAlertBanner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: linear-gradient(90deg, rgba(0, 255, 102, 0.15) 0%, rgba(0, 255, 102, 0.05) 100%);
+  border: 1px solid #00ff66;
+  box-shadow: 0 0 20px rgba(0, 255, 102, 0.2);
+  padding: 0.85rem 1.25rem;
+  gap: 1rem;
+  animation: slideDownAlert 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-wrap: wrap;
+}
+
+@keyframes slideDownAlert {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.neonAlertContent {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  color: #ffffff;
+  font-size: 0.85rem;
+}
+
+.neonAlertBell {
+  color: #00ff66;
+  animation: bellShake 1s infinite ease-in-out;
+}
+
+@keyframes bellShake {
+  0%, 100% { transform: rotate(0deg); }
+  20%, 60% { transform: rotate(15deg); }
+  40%, 80% { transform: rotate(-15deg); }
+}
+
+.neonAlertContent strong {
+  color: #00ff66;
+  letter-spacing: 1px;
+}
+
+.neonAlertActions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.neonAlertViewBtn {
+  background-color: #00ff66;
+  color: #000000;
+  font-weight: 800;
+  font-size: 0.72rem;
+  letter-spacing: 0.5px;
+  border: none;
+  padding: 0.4rem 0.85rem;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+
+.neonAlertViewBtn:hover {
+  opacity: 0.9;
+}
+
+.neonAlertCloseBtn {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 0.35rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.neonAlertCloseBtn:hover {
+  color: #ffffff;
+  border-color: #ffffff;
+}
+
+/* BOTÕES DE CONTROLE ADICIONAIS NO HEADER */
+.soundToggleBtn {
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-muted);
+  padding: 0.65rem 0.95rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.soundToggleBtn:hover {
+  border-color: var(--border-active);
+  color: var(--text-primary);
+}
+
+.soundActive {
+  border-color: rgba(0, 255, 102, 0.4);
+  color: #00ff66;
+  background-color: rgba(0, 255, 102, 0.05);
+}
+
+.soundActive:hover {
+  border-color: #00ff66;
+  color: #00ff66;
+}
+
+.soundOnIcon {
+  color: #00ff66;
+}
+
+.whatsappBatchBtn {
+  background-color: rgba(37, 211, 102, 0.12);
+  color: #25d366;
+  border: 1px solid rgba(37, 211, 102, 0.4);
+  padding: 0.65rem 1.15rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.whatsappBatchBtn:hover {
+  background-color: #25d366;
+  color: #000000;
+  border-color: #25d366;
+}
+
+/* ============================================================
+   RÉGUA OPERACIONAL CONTÍNUA DE ALTO IMPACTO (DE-BOXING STRIP)
+   ============================================================ */
+.ordersStreamlineStrip {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  background: #09090b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.streamlineCol {
+  padding: 1.4rem 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  min-width: 0;
+  transition: background-color 0.15s ease;
+}
+
+.streamlineCol:last-child {
+  border-right: none;
+}
+
+.streamlineCol:hover {
+  background-color: rgba(255, 255, 255, 0.015);
+}
+
+.streamlineHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.streamlineLabel {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.streamlineDotGreen {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #00ff66;
+  box-shadow: 0 0 6px #00ff66;
+}
+
+.streamlineDotCyan {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #38bdf8;
+  box-shadow: 0 0 6px #38bdf8;
+}
+
+.streamlineDotYellow {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #facc15;
+  box-shadow: 0 0 6px #facc15;
+}
+
+.streamlineDotPurple {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: #c084fc;
+  box-shadow: 0 0 6px #c084fc;
+}
+
+.streamlineMainValGreen {
+  font-family: var(--font-heading);
+  font-size: clamp(1.8rem, 2.4vw, 2.5rem);
+  font-weight: 900;
+  color: #00ff66;
+  text-shadow: 0 0 25px rgba(0, 255, 102, 0.25);
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.streamlineMainValCyan {
+  font-family: var(--font-heading);
+  font-size: clamp(1.8rem, 2.4vw, 2.5rem);
+  font-weight: 900;
+  color: #38bdf8;
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.streamlineMainValYellow {
+  font-family: var(--font-heading);
+  font-size: clamp(1.8rem, 2.4vw, 2.5rem);
+  font-weight: 900;
+  color: #facc15;
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.streamlineMainValPurple {
+  font-family: var(--font-heading);
+  font-size: clamp(1.8rem, 2.4vw, 2.5rem);
+  font-weight: 900;
+  color: #c084fc;
+  line-height: 1;
+  letter-spacing: -0.5px;
+}
+
+.streamlineSubtext {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin-top: 0.1rem;
+}
+
+@media (max-width: 900px) {
+  .ordersStreamlineStrip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .streamlineCol:nth-child(2) {
+    border-right: none;
+  }
+  .streamlineCol:nth-child(1),
+  .streamlineCol:nth-child(2) {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+}
+
+@media (max-width: 520px) {
+  .ordersStreamlineStrip {
+    grid-template-columns: 1fr;
+  }
+  .streamlineCol {
+    border-right: none !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  }
+}
+
+/* ============================================================
+   ROMANEIO DE EXPEDIÇÃO & POSTAGEM - DESTINOS E BADGES
+   ============================================================ */
+.docOrderShippingRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.75rem;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.docOrderPinIcon {
+  color: #09090b;
+  flex-shrink: 0;
+}
+
+.docStateHighlight {
+  font-weight: 900;
+  color: #09090b;
+  background-color: #e4e4e7;
+  padding: 0.1rem 0.35rem;
+  border-radius: 2px;
+}
+
+.docCepHighlight {
+  font-weight: 900;
+  color: #09090b;
+  font-family: monospace;
+}
+
+.docOrderCarrierBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  background-color: #09090b;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  padding: 0.25rem 0.6rem;
+}
+
 /* CONTROLES */
 .controlBar {
   display: flex;

@@ -467,6 +467,9 @@ async function reserveStockAtomic(db, items, orderRefId) {
       }
 
       const data = snap.data();
+      const isUnlimited = Boolean(data.unlimitedStock || data.isUnlimitedStock);
+      if (isUnlimited) continue;
+
       const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
       const size = String(item.size || "M").toUpperCase();
 
@@ -493,6 +496,9 @@ async function reserveStockAtomic(db, items, orderRefId) {
     // 3. Fase de gravacao: aplicar deducoes de estoque
     for (const { prodRef, snap, item } of productSnapshots) {
       const data = snap.data();
+      const isUnlimited = Boolean(data.unlimitedStock || data.isUnlimitedStock);
+      if (isUnlimited) continue;
+
       const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
       const size = String(item.size || "M").toUpperCase();
       const updates = {
@@ -565,6 +571,9 @@ async function restoreStockAtomic(
     for (const { prodRef, snap, item } of productSnapshots) {
       if (!snap.exists) continue;
       const data = snap.data();
+      const isUnlimited = Boolean(data.unlimitedStock || data.isUnlimitedStock);
+      if (isUnlimited) continue;
+
       const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
       const size = String(item.size || "M").toUpperCase();
       const updates = {
@@ -642,6 +651,9 @@ exports.createPagBankOrder = onCall(
             );
           }
           const data = snap.data();
+          const isUnlimited = Boolean(data.unlimitedStock || data.isUnlimitedStock);
+          if (isUnlimited) continue;
+
           const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
           const size = String(item.size || "M").toUpperCase();
           let available = 0;
@@ -805,8 +817,8 @@ exports.createPagBankOrder = onCall(
         realPrice = Number(item.price);
       }
 
-      // 2. Detecta frete grátis na peça
-      if (prodData.freeShipping || prodData.hasFreeShipping || item.freeShipping || item.hasFreeShipping) {
+      // 2. Detecta frete grátis na peça (somente se marcado oficialmente no catálogo)
+      if (prodData.freeShipping === true || prodData.hasFreeShipping === true) {
         orderHasFreeShippingItem = true;
       }
 
@@ -871,7 +883,43 @@ exports.createPagBankOrder = onCall(
           !cData.minOrderValue ||
           subtotalInReais >= Number(cData.minOrderValue);
 
-        if (isActive && isNotExpired && meetsMinOrder) {
+        const totalItemsQuantity = sanitizedItems.reduce((acc, it) => acc + (it.quantity || 1), 0);
+        const meetsMinItems = !cData.minItemsCount || totalItemsQuantity >= Number(cData.minItemsCount);
+
+        const allowedEmails = Array.isArray(cData.allowedEmails)
+          ? cData.allowedEmails.map(e => String(e || "").trim().toLowerCase()).filter(Boolean)
+          : [];
+        const cleanCustomerEmail = String(customer.email || "").trim().toLowerCase();
+        const meetsAllowedEmails = allowedEmails.length === 0 || allowedEmails.includes(cleanCustomerEmail);
+
+        let userExceededLimit = false;
+        if (cleanCustomerEmail && (cData.onlyFirstPurchase || (cData.maxUsesPerUser && Number(cData.maxUsesPerUser) > 0))) {
+          try {
+            const userOrdersQuery = await db.collection("orders")
+              .where("clientEmail", "==", cleanCustomerEmail)
+              .get();
+            
+            const validUserOrders = userOrdersQuery.docs.map(d => d.data()).filter(ord => {
+              const st = String(ord.status || "").toLowerCase();
+              return !["cancelado", "cancelled", "recusado", "pagamento_recusado", "expirado"].includes(st);
+            });
+
+            if (cData.onlyFirstPurchase && validUserOrders.length > 0) {
+              userExceededLimit = true;
+            }
+
+            if (cData.maxUsesPerUser && Number(cData.maxUsesPerUser) > 0) {
+              const couponUses = validUserOrders.filter(ord => String(ord.couponCode || "").trim().toUpperCase() === cleanCoupon).length;
+              if (couponUses >= Number(cData.maxUsesPerUser)) {
+                userExceededLimit = true;
+              }
+            }
+          } catch (ordCheckErr) {
+            logger.warn("Aviso ao checar limite de uso do cupom do usuario:", ordCheckErr.message);
+          }
+        }
+
+        if (isActive && isNotExpired && meetsMinOrder && meetsMinItems && meetsAllowedEmails && !userExceededLimit) {
           validatedCouponData = { id: couponDoc.id, ...cData };
           let pct = Number(cData.discountPercent ?? cData.discountPercentage ?? cData.discount ?? 0);
           if (pct > 0 && pct <= 1) {
@@ -920,22 +968,16 @@ exports.createPagBankOrder = onCall(
 
     const isFreeShipping = Boolean(
       orderHasFreeShippingItem ||
-      isCouponFreeShipping ||
-      shipping?.freeShipping === true ||
-      shipping?.isFreeShippingActive === true ||
-      Number(shipping?.cost) === 0 ||
-      Number(shipping?.costInCents) === 0 ||
-      subtotalInCents >= 29900 ||
-      shippingMethodId.includes("retirada")
+      isCouponFreeShipping
     );
     
     let officialShippingFeeInCents = 0;
     if (!isFreeShipping) {
-      if (shipping?.costInCents !== undefined && !isNaN(Number(shipping.costInCents))) {
+      if (shipping?.costInCents !== undefined && !isNaN(Number(shipping.costInCents)) && Number(shipping.costInCents) > 0) {
         officialShippingFeeInCents = Math.round(Number(shipping.costInCents));
-      } else if (shipping?.cost !== undefined && !isNaN(Number(shipping.cost))) {
+      } else if (shipping?.cost !== undefined && !isNaN(Number(shipping.cost)) && Number(shipping.cost) > 0) {
         officialShippingFeeInCents = Math.round(Number(shipping.cost) * 100);
-      } else if (shipping?.fee !== undefined && !isNaN(Number(shipping.fee))) {
+      } else if (shipping?.fee !== undefined && !isNaN(Number(shipping.fee)) && Number(shipping.fee) > 0) {
         officialShippingFeeInCents = Math.round(Number(shipping.fee) * 100);
       } else if (shippingMethodId === "expresso") {
         officialShippingFeeInCents = 3850;
@@ -1373,8 +1415,51 @@ exports.createPagBankOrder = onCall(
       shippingMethod: shippingMethodId,
       shippingAddress: orderPayload.shipping.address,
       items: sanitizedItems,
-      carrier: shipping?.carrier || shipping?.company || null,
-      shippingDeadline: shipping?.deadline || null,
+      carrier: (() => {
+        let c = shipping?.carrier || shipping?.company || null;
+        if (!c || c.toLowerCase() === 'transportadora') {
+          if (shippingMethodId.startsWith('frenet_')) {
+            const code = shippingMethodId.replace('frenet_', '');
+            if (['03220', '03298', '03301', '03280', '04014', '04162', '40010', '40096', '40215', '40290'].includes(code)) return 'Correios';
+            if (['04510', '04669', '04367', '41106', '41068'].includes(code)) return 'Correios';
+          }
+          if (shippingMethodId.startsWith('me_')) {
+            const meCode = shippingMethodId.replace('me_', '');
+            if (['1', '2', '17'].includes(meCode)) return 'Correios';
+            if (['3', '4'].includes(meCode)) return 'Jadlog';
+            if (meCode === '27') return 'Loggi';
+            if (['28', '29'].includes(meCode)) return 'J&T Express';
+          }
+          if (shippingMethodId.includes('jadlog')) return 'Jadlog';
+          if (shippingMethodId.includes('loggi')) return 'Loggi';
+          if (shippingMethodId.includes('sedex') || shippingMethodId.includes('pac') || shippingMethodId.includes('correios')) return 'Correios';
+          if (shippingMethodId.includes('jet') || shippingMethodId.includes('j&t')) return 'J&T Express';
+        }
+        return c || 'Transportadora';
+      })(),
+      serviceName: (() => {
+        let s = shipping?.serviceName || shipping?.service || null;
+        if (!s || s.startsWith('frenet_') || s.startsWith('me_')) {
+          if (shippingMethodId.startsWith('frenet_')) {
+            const code = shippingMethodId.replace('frenet_', '');
+            if (['03220', '03298', '03301', '03280', '04014', '04162', '40010', '40096', '40215', '40290'].includes(code)) return 'SEDEX';
+            if (['04510', '04669', '04367', '41106', '41068'].includes(code)) return 'PAC';
+          }
+          if (shippingMethodId.startsWith('me_')) {
+            const meCode = shippingMethodId.replace('me_', '');
+            if (meCode === '1') return 'PAC';
+            if (meCode === '2') return 'SEDEX';
+            if (['3', '4'].includes(meCode)) return 'Padrão';
+            if (meCode === '27') return 'Express';
+            if (['28', '29'].includes(meCode)) return 'Standard';
+          }
+          if (shippingMethodId.includes('sedex')) return 'SEDEX';
+          if (shippingMethodId.includes('pac')) return 'PAC';
+          if (shippingMethodId.includes('express')) return 'Express';
+        }
+        return s || 'Envio Padrão';
+      })(),
+      shippingDeadline: shipping?.shippingDeadline || shipping?.deadline || null,
       trackingUrl: null,
       pixQrCodeUrl,
       pixCopiaECola,
@@ -2417,6 +2502,10 @@ exports.refundPagBankOrder = onCall(
  */
 function calculateFallbackShipping(cleanCep, totalQty) {
   const prefix2 = parseInt(cleanCep.substring(0, 2), 10);
+  const prefix5 = parseInt(cleanCep.substring(0, 5), 10);
+  if (isNaN(prefix2) || prefix5 < 1000 || /^(\d)\1{7}$/.test(cleanCep)) {
+    return [];
+  }
   const additionalQty = Math.max(0, totalQty - 1);
 
   // Faixa 1: Grande SP e Capital (01 a 09)
@@ -2536,30 +2625,35 @@ function calculateFallbackShipping(cleanCep, totalQty) {
   }
 
   // Faixa 5: Norte (66 a 69, 76)
-  const aereoPrice = Number((49.90 + additionalQty * 6.00).toFixed(2));
-  const pacPrice = Number((39.50 + additionalQty * 4.50).toFixed(2));
-  return [
-    {
-      id: "pac_norte",
-      name: "PAC (Correios)",
-      carrier: "Correios",
-      serviceName: "PAC",
-      deadline: "10 a 15 dias úteis",
-      deliveryDays: 15,
-      price: pacPrice,
-      source: "fallback",
-    },
-    {
-      id: "aereo_norte",
-      name: "Jadlog",
-      carrier: "Jadlog",
-      serviceName: "Padrão",
-      deadline: "6 a 10 dias úteis",
-      deliveryDays: 10,
-      price: aereoPrice,
-      source: "fallback",
-    },
-  ];
+  if ((prefix2 >= 66 && prefix2 <= 69) || prefix2 === 76) {
+    const aereoPrice = Number((49.90 + additionalQty * 6.00).toFixed(2));
+    const pacPrice = Number((39.50 + additionalQty * 4.50).toFixed(2));
+    return [
+      {
+        id: "pac_norte",
+        name: "PAC (Correios)",
+        carrier: "Correios",
+        serviceName: "PAC",
+        deadline: "10 a 15 dias úteis",
+        deliveryDays: 15,
+        price: pacPrice,
+        source: "fallback",
+      },
+      {
+        id: "aereo_norte",
+        name: "Jadlog",
+        carrier: "Jadlog",
+        serviceName: "Padrão",
+        deadline: "6 a 10 dias úteis",
+        deliveryDays: 10,
+        price: aereoPrice,
+        source: "fallback",
+      },
+    ];
+  }
+
+  // Não pertence a nenhuma faixa válida do Brasil
+  return [];
 }
 
 /**
@@ -2584,9 +2678,9 @@ exports.calculateShipping = onRequest(
         const { cep, items, subtotal } = req.body || {};
         const cleanCep = String(cep || "").replace(/\D/g, "");
 
-        if (!cleanCep || cleanCep.length !== 8) {
+        if (!cleanCep || cleanCep.length !== 8 || /^(\d)\1{7}$/.test(cleanCep) || parseInt(cleanCep.substring(0, 5), 10) < 1000) {
           return res.status(400).json({
-            error: "CEP de destino inválido. Forneça 8 dígitos numéricos.",
+            error: "CEP de destino inválido ou inexistente. Forneça um CEP brasileiro válido.",
           });
         }
 
@@ -2849,18 +2943,10 @@ exports.calculateShipping = onRequest(
           sourceUsed = "fallback_matriz_sp";
         }
 
-        // 4. Retirada no Ateliê para CEPs da região de Itaquaquecetuba / Mogi / Poá / Suzano (08500-08799)
-        const prefix5 = parseInt(cleanCep.substring(0, 5), 10);
-        if (prefix5 >= 8500 && prefix5 <= 8799) {
-          quotes.unshift({
-            id: "retirada_atelie",
-            name: "Retirada no Ateliê (Grátis)",
-            carrier: "THR33 Ateliê",
-            serviceName: "Retirada Presencial",
-            deadline: "Disponível em 24h úteis",
-            deliveryDays: 1,
-            price: 0,
-            source: "local",
+        if (quotes.length === 0) {
+          return res.status(404).json({
+            error: "CEP não encontrado na base oficial ou fora da área de entrega atendida.",
+            options: []
           });
         }
 
