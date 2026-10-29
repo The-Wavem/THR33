@@ -38,7 +38,8 @@ import {
   Gift,
   Zap,
   Sparkles,
-  ShoppingBag
+  ShoppingBag,
+  Share2
 } from 'lucide-react';
 import { giftCardService } from '../../services/giftCardService';
 import { useAuth } from '../../context/AuthContext';
@@ -497,18 +498,53 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     loadUserAddresses();
   }, [currentUser, user]);
 
-  // 2. BUSCA PEDIDOS REAIS DO CLIENTE NA COLEÇÃO 'orders'
+  // 2. BUSCA PEDIDOS REAIS DO CLIENTE NA COLEÇÃO 'orders' (Por UID e por Email com auto-vínculo e listener real-time)
   useEffect(() => {
+    let isMounted = true;
+    let unsubUid = null;
+    let unsubEmail = null;
+
     async function fetchUserOrders() {
       const activeUid = currentUser?.uid || user?.uid;
-      if (!activeUid) return;
+      const activeEmail = (currentUser?.email || user?.email || '').trim().toLowerCase();
+      if (!activeUid && !activeEmail) return;
 
       setLoadingOrders(true);
       try {
-        const q = query(collection(db, 'orders'), where('userId', '==', activeUid));
-        const querySnapshot = await getDocs(q);
+        const docsMap = new Map();
 
-        // Mapa de consulta do catálogo para associar fotos reais a pedidos legados ou com imagens vazias
+        // 1. Busca por userId
+        if (activeUid) {
+          try {
+            const qUid = query(collection(db, 'orders'), where('userId', '==', activeUid));
+            const snapUid = await getDocs(qUid);
+            snapUid.forEach(d => docsMap.set(d.id, d));
+          } catch (e) {
+            console.warn("Aviso ao consultar pedidos por UID:", e.message);
+          }
+        }
+
+        // 2. Busca por clientEmail (assegura pedidos PIX criados como guest ou sessão transitória)
+        if (activeEmail) {
+          try {
+            const qEmail = query(collection(db, 'orders'), where('clientEmail', '==', activeEmail));
+            const snapEmail = await getDocs(qEmail);
+            snapEmail.forEach(d => {
+              if (!docsMap.has(d.id)) {
+                docsMap.set(d.id, d);
+              }
+              // Auto-vincula o pedido à conta do usuário autenticado no Firestore
+              const dData = d.data();
+              if (activeUid && (!dData.userId || dData.userId === 'guest')) {
+                setDoc(doc(db, 'orders', d.id), { userId: activeUid }, { merge: true }).catch(() => {});
+              }
+            });
+          } catch (e) {
+            console.warn("Aviso ao consultar pedidos por email:", e.message);
+          }
+        }
+
+        // Mapa de consulta do catálogo para associar fotos reais
         const catalogMap = new Map();
         try {
           const prodsSnap = await getDocs(collection(db, 'products'));
@@ -526,7 +562,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
         }
 
         const fetched = [];
-        querySnapshot.forEach((docSnap) => {
+        docsMap.forEach((docSnap) => {
           const data = docSnap.data();
 
           let parsedTimestamp = 0;
@@ -571,6 +607,21 @@ export function Perfil({ defaultTab = 'pedidos' }) {
             cleanDisplayId = `THR-${cleanDisplayId.toUpperCase()}`;
           }
 
+          const isOrderPaid = ['pago', 'paid', 'aprovado', 'approved', ORDER_STATUSES.PAGAMENTO_APROVADO].includes(normStatus) || 
+                              ['pago', 'paid', 'aprovado', 'approved', 'pagamento_aprovado'].includes(String(data.status || '').toLowerCase());
+
+          const hasGift = Boolean(
+            data.hasGiftCard || 
+            (Array.isArray(data.items) && data.items.some(i => i.isGiftCard || i.category === 'gift-card' || String(i.id || '').includes('vale')))
+          );
+
+          // Se o pedido está pago, possui vale-presente e ainda não gerou código, auto-processa
+          if (isOrderPaid && hasGift && !data.giftCardsProcessed) {
+            giftCardService.processOrderGiftCards(docSnap.id, data).catch(err => {
+              console.warn("Aviso ao auto-processar vale-presente do pedido:", err.message);
+            });
+          }
+
           fetched.push({
             id: cleanDisplayId,
             rawId: docSnap.id,
@@ -605,6 +656,9 @@ export function Perfil({ defaultTab = 'pedidos' }) {
             shippingMethod: data.shippingMethod === 'pac' ? 'PAC Correios (3 a 7 dias úteis)' : 'SEDEX Expresso (1 a 2 dias úteis)',
             shippingCost: Number(data.shippingCost || 0),
             total: Number(data.total || 0),
+            hasGiftCard: hasGift,
+            giftCardsGenerated: Array.isArray(data.giftCardsGenerated) ? data.giftCardsGenerated : [],
+            giftCardsProcessed: Boolean(data.giftCardsProcessed),
             address: data.shippingAddress ? {
               name: data.clientName || 'Cliente THR33',
               street: data.shippingAddress.street || 'Rua',
@@ -631,7 +685,12 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                 size: item.size || 'M',
                 price: Number(rawPrice || 0),
                 image: finalImg,
-                evaluated: item.evaluated || false
+                evaluated: item.evaluated || false,
+                isGiftCard: Boolean(item.isGiftCard || item.category === 'gift-card' || String(item.id || '').includes('vale')),
+                category: item.category || null,
+                giftDeliveryMode: item.giftDeliveryMode || null,
+                recipientName: item.recipientName || null,
+                giftMessage: item.giftMessage || null
               };
             })
           });
@@ -640,14 +699,47 @@ export function Perfil({ defaultTab = 'pedidos' }) {
         // Ordena do mais recente para o mais antigo (decrescente)
         fetched.sort((a, b) => (b.createdAtTimestamp || 0) - (a.createdAtTimestamp || 0));
 
-        setOrders(fetched);
+        if (isMounted) {
+          setOrders(fetched);
+        }
       } catch (err) {
         console.warn("Aviso ao buscar pedidos no Firestore:", err.message);
       } finally {
-        setLoadingOrders(false);
+        if (isMounted) {
+          setLoadingOrders(false);
+        }
       }
     }
+
     fetchUserOrders();
+
+    // Ativa listener real-time no Firestore quando o cliente estiver com a aba Pedidos aberta
+    const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = (currentUser?.email || user?.email || '').trim().toLowerCase();
+
+    if (activeUid) {
+      try {
+        const qUid = query(collection(db, 'orders'), where('userId', '==', activeUid));
+        unsubUid = onSnapshot(qUid, () => {
+          fetchUserOrders();
+        }, (err) => console.warn("Listener UID pedidos:", err.message));
+      } catch (_) {}
+    }
+
+    if (activeEmail) {
+      try {
+        const qEmail = query(collection(db, 'orders'), where('clientEmail', '==', activeEmail));
+        unsubEmail = onSnapshot(qEmail, () => {
+          fetchUserOrders();
+        }, (err) => console.warn("Listener Email pedidos:", err.message));
+      } catch (_) {}
+    }
+
+    return () => {
+      isMounted = false;
+      if (unsubUid) unsubUid();
+      if (unsubEmail) unsubEmail();
+    };
   }, [currentUser, user, activeTab]);
 
   // MODAIS
@@ -2234,10 +2326,17 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                             <strong>VALES-PRESENTE DIGITAIS DO PEDIDO</strong>
                           </div>
 
-                          {(!['pago', 'paid', 'aprovado', 'approved', 'pagamento_aprovado', 'em_producao', 'em_separacao', 'enviado', 'entregue'].includes(String(order.status || '').toLowerCase())) ? (
+                          {(!['pago', 'paid', 'aprovado', 'approved', 'pagamento_aprovado', 'em_producao', 'em_separacao', 'enviado', 'entregue'].includes(String(order.statusCode || order.status || '').toLowerCase())) ? (
                             <div className={styles.giftCardPendingNotice}>
-                              <Clock size={14} />
-                              <span>O código exclusivo do seu vale-presente será liberado automaticamente aqui assim que o pagamento for aprovado.</span>
+                              <Clock size={16} color="#f59e0b" />
+                              <div style={{ textAlign: 'left' }}>
+                                <strong style={{ color: '#f59e0b', display: 'block', fontSize: '0.78rem', letterSpacing: '0.5px', marginBottom: '0.2rem' }}>
+                                  CÓDIGO DE RESGATE BLOQUEADO • AGUARDANDO CONFIRMAÇÃO DO PAGAMENTO
+                                </strong>
+                                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                                  O código exclusivo do seu vale-presente será liberado e revelado automaticamente aqui assim que o pagamento via PIX for aprovado.
+                                </span>
+                              </div>
                             </div>
                           ) : (
                             <div className={styles.generatedGiftCardsList}>
@@ -2248,15 +2347,28 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                                       <div className={styles.giftCardCodeBadge}>
                                         <code>{card.code}</code>
                                         {card.status === 'active' && (
-                                          <button 
-                                            type="button" 
-                                            onClick={() => handleCopyGiftCode(card.code)}
-                                            className={styles.copyGiftBtn}
-                                            title="Copiar código do vale"
-                                          >
-                                            {copiedGiftCode === card.code ? <Check size={12} color="#00ff88" /> : <Copy size={12} />}
-                                            <span>{copiedGiftCode === card.code ? 'COPIADO!' : 'COPIAR'}</span>
-                                          </button>
+                                          <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}>
+                                            <button 
+                                              type="button" 
+                                              onClick={() => handleCopyGiftCode(card.code)}
+                                              className={styles.copyGiftBtn}
+                                              title="Copiar código do vale"
+                                            >
+                                              {copiedGiftCode === card.code ? <Check size={12} color="#00ff88" /> : <Copy size={12} />}
+                                              <span>{copiedGiftCode === card.code ? 'COPIADO!' : 'COPIAR'}</span>
+                                            </button>
+                                            <a
+                                              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`🎁 Você recebeu um Vale-Presente Digital THR33 no valor de R$ ${Number(card.amount || 0).toFixed(2)}!\n\nResgate no site https://thr33.com.br usando o código: ${card.code}`)}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className={styles.copyGiftBtn}
+                                              style={{ background: '#22c55e', color: '#ffffff', textDecoration: 'none' }}
+                                              title="Mandar código para WhatsApp"
+                                            >
+                                              <Share2 size={12} />
+                                              <span>WHATSAPP</span>
+                                            </a>
+                                          </div>
                                         )}
                                       </div>
                                       <strong className={styles.giftCardValueText}>

@@ -5,6 +5,7 @@ import { useWishlist } from '../../context/WishlistContext';
 import { analyticsService } from '../../services/analyticsService';
 import { formatFitBadgeLabel, formatCategoryBadgeLabel } from '../../utils/fitUtils';
 import ImageWithSkeleton from '../ui/ImageWithSkeleton';
+import { preloadRoute } from '../../utils/preloader';
 import styles from './ProductCard.module.css';
 
 export function ProductCard({ product }) {
@@ -45,7 +46,11 @@ export function ProductCard({ product }) {
   const hasSecondaryImage = Boolean(secondaryImage && secondaryImage !== primaryImage);
 
   return (
-    <article className={styles.card}>
+    <article 
+      className={styles.card}
+      onMouseEnter={() => preloadRoute('/produto/' + productId)}
+      onTouchStart={() => preloadRoute('/produto/' + productId)}
+    >
       <div className={styles.imageWrapper}>
         {/* FAIXA TRANSVERSAL DIAGONAL NO CANTO SUPERIOR (FRETE GRÁTIS) */}
         {hasFreeShipping && (

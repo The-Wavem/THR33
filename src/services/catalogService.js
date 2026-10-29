@@ -13,6 +13,40 @@ import {
 } from 'firebase/firestore';
 import { db } from './firebaseConfig';
 
+
+// ============================================================
+// CACHE EM MEMORIA SWR (STALE-WHILE-REVALIDATE) - LATENCIA 0ms
+// ============================================================
+const memoryCache = {
+  products: null,
+  productsTimestamp: 0,
+  productsPromise: null,
+  vitrine: null,
+  vitrineTimestamp: 0,
+  gifts: null,
+  giftsTimestamp: 0
+};
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutos de leitura instantanea (0ms)
+
+/**
+ * Invalida o cache em memoria sob demanda (ex: ao salvar dados no CMS)
+ */
+export const invalidateCatalogCache = (type = 'all') => {
+  if (type === 'all' || type === 'products') {
+    memoryCache.products = null;
+    memoryCache.productsTimestamp = 0;
+    memoryCache.productsPromise = null;
+  }
+  if (type === 'all' || type === 'vitrine') {
+    memoryCache.vitrine = null;
+    memoryCache.vitrineTimestamp = 0;
+  }
+  if (type === 'all' || type === 'gifts') {
+    memoryCache.gifts = null;
+    memoryCache.giftsTimestamp = 0;
+  }
+};
+
 // ============================================================
 // 1. CONFIGURAÇÕES DA VITRINE E DA HOME (FIRESTORE)
 // ============================================================
@@ -20,12 +54,18 @@ import { db } from './firebaseConfig';
 /**
  * Busca configurações da vitrine (Bento Grid, Carrossel/Hero, etc.)
  */
-export const getVitrineSettings = async () => {
+export const getVitrineSettings = async (forceRefresh = false) => {
+  if (!forceRefresh && memoryCache.vitrine && (Date.now() - memoryCache.vitrineTimestamp < CACHE_TTL_MS)) {
+    return memoryCache.vitrine;
+  }
   try {
     const docRef = doc(db, 'settings', 'vitrine');
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-      return docSnap.data();
+      const data = docSnap.data();
+      memoryCache.vitrine = data;
+      memoryCache.vitrineTimestamp = Date.now();
+      return data;
     }
 
     // Fallback retrocompatível: verifica se existe em 'storefront'
@@ -37,12 +77,15 @@ export const getVitrineSettings = async () => {
     if (bannerSnap.exists() || bentoSnap.exists()) {
       const bannerData = bannerSnap.exists() ? bannerSnap.data() : null;
       const bentoData = bentoSnap.exists() ? bentoSnap.data() : null;
-      return {
+      const data = {
         hero: bannerData ? { slides: bannerData.slides || [] } : null,
         bentoGrid: bentoData ? bentoData.cards || [] : [],
         sectionTag: bentoData?.sectionTag || 'ENSAIO DE CAMPANHA',
         sectionTitle: bentoData?.sectionTitle || 'A RUA COMO NOSSO ATELIÊ'
       };
+      memoryCache.vitrine = data;
+      memoryCache.vitrineTimestamp = Date.now();
+      return data;
     }
 
     return null;
@@ -57,6 +100,7 @@ export const getVitrineSettings = async () => {
  */
 export const saveVitrineSettings = async (settingsData) => {
   try {
+    invalidateCatalogCache('vitrine');
     const docRef = doc(db, 'settings', 'vitrine');
     await setDoc(
       docRef,
@@ -133,22 +177,19 @@ export const getFeaturedProducts = async (maxItems = 8) => {
 /**
  * Busca todos os produtos ativos do catálogo ordenados por atualização (sem fallback para mocks estáticos)
  */
-export const getAllProducts = async () => {
-  try {
-    const q = query(collection(db, 'products'), orderBy('updatedAt', 'desc'));
-    const snap = await getDocs(q);
-    const list = [];
-    snap.forEach((d) => {
-      const data = d.data();
-      if (data && (data.name || data.title) && data.price !== undefined) {
-        list.push({ id: d.id, ...data });
-      }
-    });
-    return list;
-  } catch (err) {
-    // Fallback sem orderBy caso índice composto não exista imediatamente
+export const getAllProducts = async (forceRefresh = false) => {
+  if (!forceRefresh && memoryCache.products && (Date.now() - memoryCache.productsTimestamp < CACHE_TTL_MS)) {
+    return memoryCache.products;
+  }
+
+  if (!forceRefresh && memoryCache.productsPromise) {
+    return memoryCache.productsPromise;
+  }
+
+  const fetchPromise = (async () => {
     try {
-      const snap = await getDocs(collection(db, 'products'));
+      const q = query(collection(db, 'products'), orderBy('updatedAt', 'desc'));
+      const snap = await getDocs(q);
       const list = [];
       snap.forEach((d) => {
         const data = d.data();
@@ -156,12 +197,34 @@ export const getAllProducts = async () => {
           list.push({ id: d.id, ...data });
         }
       });
+      memoryCache.products = list;
+      memoryCache.productsTimestamp = Date.now();
       return list;
-    } catch (e) {
-      console.warn('Aviso: Falha ao conectar ao Firestore ao listar produtos:', e.message);
-      return [];
+    } catch (err) {
+      // Fallback sem orderBy caso indice composto nao exista imediatamente
+      try {
+        const snap = await getDocs(collection(db, 'products'));
+        const list = [];
+        snap.forEach((d) => {
+          const data = d.data();
+          if (data && (data.name || data.title) && data.price !== undefined) {
+            list.push({ id: d.id, ...data });
+          }
+        });
+        memoryCache.products = list;
+        memoryCache.productsTimestamp = Date.now();
+        return list;
+      } catch (e) {
+        console.warn('Aviso: Falha ao conectar ao Firestore ao listar produtos:', e.message);
+        return [];
+      }
+    } finally {
+      memoryCache.productsPromise = null;
     }
-  }
+  })();
+
+  memoryCache.productsPromise = fetchPromise;
+  return fetchPromise;
 };
 
 export const fetchProducts = getAllProducts;
@@ -172,6 +235,38 @@ export const fetchProducts = getAllProducts;
 export const getProductById = async (idOrSlug) => {
   if (!idOrSlug) return null;
   const cleanSearch = String(idOrSlug).toLowerCase().trim();
+
+  const normalizeStr = (str) =>
+    String(str || '')
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '');
+
+  // 0. Leitura direta no cache em memoria (0ms, zero chamadas de rede)
+  if (Array.isArray(memoryCache.products) && memoryCache.products.length > 0) {
+    const cachedItem = memoryCache.products.find((p) => {
+      if (!p || (!p.name && !p.title)) return false;
+      const pSlug = String(p.slug || '').toLowerCase().trim();
+      const pId = String(p.id || '').toLowerCase().trim();
+      const pNameNorm = normalizeStr(p.name || p.title);
+      const prevSlugs = Array.isArray(p.previousSlugs)
+        ? p.previousSlugs.map((s) => String(s).toLowerCase().trim())
+        : [];
+
+      return (
+        pSlug === cleanSearch ||
+        pId === cleanSearch ||
+        pNameNorm === normalizeStr(cleanSearch) ||
+        prevSlugs.includes(cleanSearch)
+      );
+    });
+
+    if (cachedItem) {
+      return cachedItem;
+    }
+  }
 
   try {
     // 1. Tenta buscar diretamente pelo ID do documento
@@ -251,7 +346,11 @@ export const getReleases = async () => {
 /**
  * Busca produtos do tipo brinde / vale-presente
  */
-export const getGifts = async () => {
+export const getGifts = async (forceRefresh = false) => {
+  if (!forceRefresh && memoryCache.gifts && (Date.now() - memoryCache.giftsTimestamp < CACHE_TTL_MS)) {
+    return memoryCache.gifts;
+  }
+
   try {
     // 1. Tenta buscar da coleção dedicada 'gifts'
     try {
@@ -259,7 +358,11 @@ export const getGifts = async () => {
       if (!giftsSnap.empty) {
         const list = [];
         giftsSnap.forEach((d) => list.push({ id: d.id, ...d.data() }));
-        if (list.length > 0) return list;
+        if (list.length > 0) {
+          memoryCache.gifts = list;
+          memoryCache.giftsTimestamp = Date.now();
+          return list;
+        }
       }
     } catch (_) {}
 
@@ -269,8 +372,14 @@ export const getGifts = async () => {
     const list = [];
     snap.forEach((d) => list.push({ id: d.id, ...d.data() }));
 
-    if (list.length > 0) return list;
+    if (list.length > 0) {
+      memoryCache.gifts = list;
+      memoryCache.giftsTimestamp = Date.now();
+      return list;
+    }
 
+    memoryCache.gifts = GIFTS_DATA;
+    memoryCache.giftsTimestamp = Date.now();
     return GIFTS_DATA;
   } catch (err) {
     console.warn('Aviso ao buscar brindes no Firestore:', err.message);
@@ -346,6 +455,7 @@ export const getDynamicMetadata = () => {
  */
 export const decrementProductStock = async (items = []) => {
   if (!items || items.length === 0) return;
+  invalidateCatalogCache('products');
 
   for (const item of items) {
     const productId = item.id || item.slug;
@@ -400,7 +510,8 @@ export const catalogService = {
   getGiftById,
   getProductsByCategory,
   getDynamicMetadata,
-  decrementProductStock
+  decrementProductStock,
+  invalidateCatalogCache
 };
 
 export default catalogService;

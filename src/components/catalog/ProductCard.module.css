@@ -126,7 +126,6 @@
   object-fit: cover;
   transition: opacity 0.45s cubic-bezier(0.25, 0.46, 0.45, 0.94), 
               transform 0.55s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-  will-change: opacity, transform;
 }
 
 .imageHidden {
@@ -151,6 +150,7 @@
 @media (hover: hover) and (pointer: fine) {
   .card:hover .image {
     transform: scale(1.035);
+    will-change: transform, opacity;
   }
 
   .card:hover .hasSecondary .primaryImage {
@@ -171,15 +171,13 @@
   height: 40px;
   min-width: 40px;
   min-height: 40px;
-  background-color: rgba(10, 10, 10, 0.72);
+  background-color: rgba(14, 14, 14, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.16);
   color: var(--text-primary);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   transition: all var(--transition-fast);
   z-index: 4;
   border-radius: 50%;
@@ -222,14 +220,13 @@
 .overlayBtn {
   flex: 1;
   text-align: center;
-  background-color: rgba(10, 10, 10, 0.92);
+  background-color: rgba(10, 10, 10, 0.94);
   color: var(--text-primary);
   border: 1px solid var(--border-color);
   padding: 0.65rem 0.8rem;
   font-size: 0.72rem;
   font-weight: 800;
   letter-spacing: 1px;
-  backdrop-filter: blur(4px);
   text-decoration: none;
   transition: all var(--transition-fast);
 }

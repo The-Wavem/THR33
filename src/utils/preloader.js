@@ -1,3 +1,4 @@
+import { catalogService } from '../services/catalogService';
 // UTILITÁRIO DE PRELOADING INTELIGENTE E ESCALONADO DE ROTAS (IDLE CALLBACK)
 // Evita travamentos na thread principal e picos de EvaluateScript / GPUTask
 
@@ -95,4 +96,20 @@ export function preloadRoute(path) {
   if (loader) {
     enqueueLoader(cleanPath, loader);
   }
+}
+
+/**
+ * Aquece dados criticos do catalogo e pre-carrega rotas essenciais de forma escalonada
+ */
+export function warmUpCriticalData() {
+  runWhenIdle(() => {
+    // 1. Aquece cache em memoria (0ms para futuras navegacoes)
+    try {
+      catalogService.getAllProducts().catch(() => {});
+    } catch (_) {}
+
+    // 2. Pre-carrega chunks das principais rotas da loja
+    preloadRoute('/catalogo');
+    preloadRoute('/produto/prewarm');
+  });
 }

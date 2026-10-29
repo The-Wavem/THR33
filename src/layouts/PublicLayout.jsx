@@ -4,6 +4,7 @@ import Lenis from 'lenis';
 import { Navbar } from '../components/layout/Navbar';
 import { Footer } from '../components/layout/Footer';
 import { analyticsService } from '../services/analyticsService';
+import { warmUpCriticalData } from '../utils/preloader';
 import styles from './PublicLayout.module.css';
 
 export function PublicLayout({ 
@@ -27,6 +28,11 @@ export function PublicLayout({
     }
   }, [location.pathname]);
 
+  // 1.1 PRÉ-AQUECIMENTO DE DADOS CRÍTICOS DO CATÁLOGO (0ms de latência)
+  useEffect(() => {
+    warmUpCriticalData();
+  }, []);
+
   // 2. INICIALIZAÇÃO E CONTROLE DO LENIS SCROLL
   useEffect(() => {
     const lenis = new Lenis({
@@ -37,6 +43,7 @@ export function PublicLayout({
       smoothWheel: true,
       wheelMultiplier: 1.0,
       touchMultiplier: 2.0,
+      syncTouch: false,
     });
 
     lenisRef.current = lenis;
@@ -65,7 +72,16 @@ export function PublicLayout({
     if (!location.hash && lenisRef.current) {
       lenisRef.current.scrollTo(0, { immediate: true });
     }
-    analyticsService.trackSessionVisit(location.pathname);
+    const scheduleTelemetry = (fn) => {
+      if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+        window.requestIdleCallback(fn, { timeout: 2000 });
+      } else {
+        setTimeout(fn, 150);
+      }
+    };
+    scheduleTelemetry(() => {
+      analyticsService.trackSessionVisit(location.pathname);
+    });
   }, [location.pathname]);
 
   return (

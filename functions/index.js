@@ -878,6 +878,11 @@ exports.createPagBankOrder = onCall(
         sku: String(prodData.sku || item.id).slice(0, 32),
         size: String(item.size || "M").slice(0, 10),
         evaluated: false,
+        isGiftCard: isItemDigital,
+        category: isItemDigital ? "gift-card" : (prodData.category || item.category || "camisa"),
+        giftDeliveryMode: item.giftDeliveryMode || (isItemDigital ? "code" : null),
+        recipientName: item.recipientName || null,
+        giftMessage: item.giftMessage || null,
       });
 
       subtotalInCents += itemTotalInCents;
@@ -1458,6 +1463,7 @@ exports.createPagBankOrder = onCall(
       shippingMethod: shippingMethodId,
       shippingAddress: orderPayload.shipping.address,
       items: sanitizedItems,
+      hasGiftCard: Boolean(sanitizedItems.some(i => i.isGiftCard)),
       carrier: (() => {
         let c = shipping?.carrier || shipping?.company || null;
         if (!c || c.toLowerCase() === 'transportadora') {

@@ -16,6 +16,26 @@ const SUMMARY_DOC_REF = doc(db, 'analytics', 'summary');
 const recentEvents = new Map();
 const DEDUPLICATION_WINDOW_MS = 1000;
 
+
+// Agendamento nao-bloqueante de telemetria para garantir 0ms de impacto na UI e animacoes
+const deferTelemetry = (fn) => {
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    window.requestIdleCallback(() => {
+      try {
+        const res = fn();
+        if (res && typeof res.catch === 'function') res.catch(() => {});
+      } catch (_) {}
+    }, { timeout: 2000 });
+  } else {
+    setTimeout(() => {
+      try {
+        const res = fn();
+        if (res && typeof res.catch === 'function') res.catch(() => {});
+      } catch (_) {}
+    }, 50);
+  }
+};
+
 function shouldTrack(eventKey) {
   const now = Date.now();
   const lastTime = recentEvents.get(eventKey) || 0;
@@ -168,165 +188,170 @@ export const analyticsService = {
   /**
    * Rastreia uso de filtros no catálogo (Ex: fit_boxy, cat_camisa)
    */
-  async trackFilterUse(filterGroup, value) {
-    if (!value) return;
-    const cleanGroup = String(filterGroup).toLowerCase().replace(/\s+/g, '_');
-    const cleanValue = String(value).toLowerCase().replace(/\s+/g, '_');
-    const eventKey = `filter:${cleanGroup}_${cleanValue}`;
+  trackFilterUse(filterGroup, value) {
+    deferTelemetry(async () => {
+      if (!value) return;
+      const cleanGroup = String(filterGroup).toLowerCase().replace(/\s+/g, '_');
+      const cleanValue = String(value).toLowerCase().replace(/\s+/g, '_');
+      const eventKey = `filter:${cleanGroup}_${cleanValue}`;
 
-    if (!shouldTrack(eventKey)) return;
+      if (!shouldTrack(eventKey)) return;
 
-    const fieldKey = `filters.${cleanGroup}_${cleanValue}`;
-    try {
-      await setDoc(SUMMARY_DOC_REF, {
-        [fieldKey]: increment(1),
-        lastUpdated: new Date().toISOString()
-      }, { merge: true });
-    } catch (err) {
-      console.warn("Aviso telemetria (filtro):", err.message);
-    }
+      const fieldKey = `filters.${cleanGroup}_${cleanValue}`;
+      try {
+        await setDoc(SUMMARY_DOC_REF, {
+          [fieldKey]: increment(1),
+          lastUpdated: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.warn("Aviso telemetria (filtro):", err.message);
+      }
+    });
   },
 
   /**
    * Rastreia visualização detalhada da peça na PDP e Vitrine
    * Registra a visualização na coleção products/{productId} e no analytics/summary
    */
-  async trackProductView(productId, productName = '', category = '', fit = '', slug = '') {
-    if (!productId) return;
-    const cleanId = String(productId).replace(/[./#$\[\]]/g, '_');
-    const cleanSlug = slug ? String(slug).replace(/[./#$\[\]]/g, '_') : '';
-    const eventKey = `productView:${cleanId}`;
+  trackProductView(productId, productName = '', category = '', fit = '', slug = '') {
+    deferTelemetry(async () => {
+      if (!productId) return;
+      const cleanId = String(productId).replace(/[./#$\[\]]/g, '_');
+      const cleanSlug = slug ? String(slug).replace(/[./#$\[\]]/g, '_') : '';
+      const eventKey = `productView:${cleanId}`;
 
-    if (!shouldTrack(eventKey)) return;
+      if (!shouldTrack(eventKey)) return;
 
-    try {
-      const now = new Date().toISOString();
-      const productDocRef = doc(db, 'products', cleanId);
+      try {
+        const now = new Date().toISOString();
+        const productDocRef = doc(db, 'products', cleanId);
 
-      // 1. Incrementa o contador diretamente no documento do produto
-      await setDoc(productDocRef, {
-        views: increment(1),
-        lastViewedAt: now
-      }, { merge: true });
+        // 1. Incrementa o contador diretamente no documento do produto
+        await setDoc(productDocRef, {
+          views: increment(1),
+          lastViewedAt: now
+        }, { merge: true });
 
+        // 2. Incrementa o sumário global de analytics e funil
+        const updates = {
+          [`products.${cleanId}.views`]: increment(1),
+          [`products.${cleanId}.name`]: productName || cleanId,
+          [`products.${cleanId}.category`]: category || 'camisa',
+          [`products.${cleanId}.fit`]: fit || 'boxy',
+          'funnel.pdpViews': increment(1),
+          lastUpdated: now
+        };
 
-      // 2. Incrementa o sumário global de analytics e funil
-      const updates = {
-        [`products.${cleanId}.views`]: increment(1),
-        [`products.${cleanId}.name`]: productName || cleanId,
-        [`products.${cleanId}.category`]: category || 'camisa',
-        [`products.${cleanId}.fit`]: fit || 'boxy',
-        'funnel.pdpViews': increment(1),
-        lastUpdated: now
-      };
+        if (cleanSlug && cleanSlug !== cleanId) {
+          updates[`products.${cleanSlug}.views`] = increment(1);
+          updates[`products.${cleanSlug}.name`] = productName || cleanSlug;
+          updates[`products.${cleanSlug}.category`] = category || 'camisa';
+          updates[`products.${cleanSlug}.fit`] = fit || 'boxy';
+        }
 
-      if (cleanSlug && cleanSlug !== cleanId) {
-        updates[`products.${cleanSlug}.views`] = increment(1);
-        updates[`products.${cleanSlug}.name`] = productName || cleanSlug;
-        updates[`products.${cleanSlug}.category`] = category || 'camisa';
-        updates[`products.${cleanSlug}.fit`] = fit || 'boxy';
+        await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
+      } catch (err) {
+        console.warn("Aviso ao registrar view do produto:", err.message);
       }
-
-      await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
-    } catch (err) {
-      console.warn("Aviso ao registrar view do produto:", err.message);
-    }
+    });
   },
 
   /**
    * Rastreia adição de item ao carrinho com atribuição de campanha UTM
    */
-  async trackAddToCart(item) {
-    if (!item?.id && !item?.slug) return;
-    const cleanId = String(item.id || item.slug).replace(/[./#$\[\]]/g, '_');
-    const cleanSlug = item.slug ? String(item.slug).replace(/[./#$\[\]]/g, '_') : '';
-    const qty = Number(item.quantity) || 1;
-    const rawColor = typeof item.color === 'object' ? (item.color?.name || item.color?.id) : item.color;
-    const colorKey = rawColor ? `colors.${String(rawColor).toLowerCase().replace(/\s+/g, '_')}` : 'colors.preto_piano';
-    const sizeKey = item.size ? `sizes.${item.size}` : 'sizes.M';
-    const catKey = item.category ? `categories.${item.category}` : 'categories.camisa';
+  trackAddToCart(item) {
+    deferTelemetry(async () => {
+      if (!item?.id && !item?.slug) return;
+      const cleanId = String(item.id || item.slug).replace(/[./#$\[\]]/g, '_');
+      const cleanSlug = item.slug ? String(item.slug).replace(/[./#$\[\]]/g, '_') : '';
+      const qty = Number(item.quantity) || 1;
+      const rawColor = typeof item.color === 'object' ? (item.color?.name || item.color?.id) : item.color;
+      const colorKey = rawColor ? `colors.${String(rawColor).toLowerCase().replace(/\s+/g, '_')}` : 'colors.preto_piano';
+      const sizeKey = item.size ? `sizes.${item.size}` : 'sizes.M';
+      const catKey = item.category ? `categories.${item.category}` : 'categories.camisa';
 
-    try {
-      const now = new Date().toISOString();
-      const productRef = doc(db, 'products', cleanId);
+      try {
+        const now = new Date().toISOString();
+        const productRef = doc(db, 'products', cleanId);
 
-      // 1. Grava diretamente no documento do produto
-      await setDoc(productRef, {
-        addedToCart: increment(qty),
-        lastAddedToCartAt: now
-      }, { merge: true });
+        // 1. Grava diretamente no documento do produto
+        await setDoc(productRef, {
+          addedToCart: increment(qty),
+          lastAddedToCartAt: now
+        }, { merge: true });
 
+        // 2. Grava no sumário global
+        const updates = {
+          [`products.${cleanId}.addedToCart`]: increment(qty),
+          [`products.${cleanId}.name`]: item.name || cleanId,
+          [`products.${cleanId}.fit`]: item.fit || 'boxy',
+          [colorKey]: increment(qty),
+          [sizeKey]: increment(qty),
+          [catKey]: increment(qty),
+          'funnel.cartAdds': increment(qty),
+          lastUpdated: now
+        };
 
-      // 2. Grava no sumário global
-      const updates = {
-        [`products.${cleanId}.addedToCart`]: increment(qty),
-        [`products.${cleanId}.name`]: item.name || cleanId,
-        [`products.${cleanId}.fit`]: item.fit || 'boxy',
-        [colorKey]: increment(qty),
-        [sizeKey]: increment(qty),
-        [catKey]: increment(qty),
-        'funnel.cartAdds': increment(qty),
-        lastUpdated: now
-      };
-
-      if (cleanSlug && cleanSlug !== cleanId) {
-        updates[`products.${cleanSlug}.addedToCart`] = increment(qty);
-      }
-
-      await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
-
-      // 3. Atribuição UTM na Sacola com validação de expiração
-      const activeUtm = this.getActiveUtm();
-      if (activeUtm?.utm_campaign) {
-        const q = query(collection(db, 'campaigns'), where('utm_campaign', '==', activeUtm.utm_campaign));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          await setDoc(doc(db, 'campaigns', snap.docs[0].id), {
-            cartAdds: increment(qty),
-            lastCartAddAt: now
-          }, { merge: true });
+        if (cleanSlug && cleanSlug !== cleanId) {
+          updates[`products.${cleanSlug}.addedToCart`] = increment(qty);
         }
+
+        await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
+
+        // 3. Atribuição UTM na Sacola com validação de expiração
+        const activeUtm = this.getActiveUtm();
+        if (activeUtm?.utm_campaign) {
+          const q = query(collection(db, 'campaigns'), where('utm_campaign', '==', activeUtm.utm_campaign));
+          const snap = await getDocs(q);
+          if (!snap.empty) {
+            await setDoc(doc(db, 'campaigns', snap.docs[0].id), {
+              cartAdds: increment(qty),
+              lastCartAddAt: now
+            }, { merge: true });
+          }
+        }
+      } catch (err) {
+        console.warn("Aviso telemetria (add carrinho):", err.message);
       }
-    } catch (err) {
-      console.warn("Aviso telemetria (add carrinho):", err.message);
-    }
+    });
   },
 
   /**
    * Rastreia remoção/desistência de item do carrinho
    */
-  async trackRemoveFromCart(item, qty = 1) {
-    if (!item?.id && !item?.slug) return;
-    const cleanId = String(item.id || item.slug).replace(/[./#$\[\]]/g, '_');
-    const cleanSlug = item.slug ? String(item.slug).replace(/[./#$\[\]]/g, '_') : '';
-    const removeQty = Number(qty) || Number(item.quantity) || 1;
+  trackRemoveFromCart(item, qty = 1) {
+    deferTelemetry(async () => {
+      if (!item?.id && !item?.slug) return;
+      const cleanId = String(item.id || item.slug).replace(/[./#$\[\]]/g, '_');
+      const cleanSlug = item.slug ? String(item.slug).replace(/[./#$\[\]]/g, '_') : '';
+      const removeQty = Number(qty) || Number(item.quantity) || 1;
 
-    try {
-      const now = new Date().toISOString();
-      const productRef = doc(db, 'products', cleanId);
+      try {
+        const now = new Date().toISOString();
+        const productRef = doc(db, 'products', cleanId);
 
-      // 1. Grava diretamente no documento do produto
-      await setDoc(productRef, {
-        removedFromCart: increment(removeQty),
-        lastRemovedFromCartAt: now
-      }, { merge: true });
+        // 1. Grava diretamente no documento do produto
+        await setDoc(productRef, {
+          removedFromCart: increment(removeQty),
+          lastRemovedFromCartAt: now
+        }, { merge: true });
 
+        // 2. Grava no sumário global
+        const updates = {
+          [`products.${cleanId}.removedFromCart`]: increment(removeQty),
+          'funnel.cartRemoves': increment(removeQty),
+          lastUpdated: now
+        };
 
-      // 2. Grava no sumário global
-      const updates = {
-        [`products.${cleanId}.removedFromCart`]: increment(removeQty),
-        'funnel.cartRemoves': increment(removeQty),
-        lastUpdated: now
-      };
+        if (cleanSlug && cleanSlug !== cleanId) {
+          updates[`products.${cleanSlug}.removedFromCart`] = increment(removeQty);
+        }
 
-      if (cleanSlug && cleanSlug !== cleanId) {
-        updates[`products.${cleanSlug}.removedFromCart`] = increment(removeQty);
+        await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
+      } catch (err) {
+        console.warn("Aviso telemetria (remove carrinho):", err.message);
       }
-
-      await setDoc(SUMMARY_DOC_REF, updates, { merge: true });
-    } catch (err) {
-      console.warn("Aviso telemetria (remove carrinho):", err.message);
-    }
+    });
   },
 
   /**
@@ -432,25 +457,27 @@ export const analyticsService = {
   /**
    * Rastreia visualização de páginas gerais e checa parâmetros UTM
    */
-  async trackPageView(pageName) {
-    if (!pageName) return;
-    const cleanName = String(pageName).replace(/[./#$\[\]]/g, '_');
-    const eventKey = `page:${cleanName}`;
+  trackPageView(pageName) {
+    deferTelemetry(async () => {
+      if (!pageName) return;
+      const cleanName = String(pageName).replace(/[./#$\[\]]/g, '_');
+      const eventKey = `page:${cleanName}`;
 
-    // Dispara captura de UTM se presente na query string
-    this.checkAndTrackUtm();
+      // Dispara captura de UTM se presente na query string
+      this.checkAndTrackUtm();
 
-    if (!shouldTrack(eventKey)) return;
+      if (!shouldTrack(eventKey)) return;
 
-    const pageKey = `pageViews.${cleanName}`;
-    try {
-      await setDoc(SUMMARY_DOC_REF, {
-        [pageKey]: increment(1),
-        lastUpdated: new Date().toISOString()
-      }, { merge: true });
-    } catch (err) {
-      console.warn("Aviso telemetria (pageView):", err.message);
-    }
+      const pageKey = `pageViews.${cleanName}`;
+      try {
+        await setDoc(SUMMARY_DOC_REF, {
+          [pageKey]: increment(1),
+          lastUpdated: new Date().toISOString()
+        }, { merge: true });
+      } catch (err) {
+        console.warn("Aviso telemetria (pageView):", err.message);
+      }
+    });
   },
 
   /**

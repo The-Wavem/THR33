@@ -2,6 +2,8 @@ import React, { Suspense } from 'react';
 import { useHomeData } from '../../hooks/useHomeData';
 import { lazyWithRetry } from '../../utils/lazyWithRetry';
 import Hero from '../../sections/home/Hero';
+import BentoGrid from '../../sections/home/BentoGrid';
+import BestSellers from '../../sections/home/BestSellers';
 import Container from '../../components/layout/Container';
 import ProductCardSkeleton from '../../components/catalog/ProductCardSkeleton';
 import { SEO } from '../../components/common/SEO';
@@ -32,8 +34,6 @@ const HOME_FAQ_LIST = [
 const HOME_FAQ_SCHEMA = buildFaqSchema(HOME_FAQ_LIST);
 
 // Lazy loading assíncrono das seções abaixo da dobra com retry automático
-const BentoGrid = lazyWithRetry(() => import('../../sections/home/BentoGrid'));
-const BestSellers = lazyWithRetry(() => import('../../sections/home/BestSellers'));
 const SocialCommunityGrid = lazyWithRetry(() => import('../../components/common/SocialCommunityGrid'));
 const DropFaq = lazyWithRetry(() => import('../../components/common/DropFaq'));
 const NewsletterVIP = lazyWithRetry(() => import('../../components/common/NewsletterVIP'));
@@ -51,48 +51,28 @@ export function Home() {
       />
       <Hero bannerData={vitrine?.hero} isLoading={loading} />
 
-      <Suspense
-        fallback={
-          <Container size="default" style={{ padding: '4rem 1.5rem' }}>
-            <ProductCardSkeleton count={3} />
-          </Container>
-        }
-      >
-        <BentoGrid
-          gridItems={vitrine?.bentoGrid || []}
-          sectionTag={vitrine?.sectionTag}
-          sectionTitle={vitrine?.sectionTitle}
-          isLoading={loading}
-        />
-      </Suspense>
+      <BentoGrid
+        gridItems={vitrine?.bentoGrid || []}
+        sectionTag={vitrine?.sectionTag}
+        sectionTitle={vitrine?.sectionTitle}
+        isLoading={loading}
+      />
 
-      <Suspense
-        fallback={
-          <Container size="default" style={{ padding: '4rem 1.5rem' }}>
-            <ProductCardSkeleton count={4} />
-          </Container>
-        }
-      >
-        <BestSellers products={featuredProducts} isLoading={loading} />
-      </Suspense>
+      <BestSellers products={featuredProducts} isLoading={loading} />
 
-      {communityPosts && communityPosts.length > 0 && (
-        <Suspense fallback={null}>
+      <Suspense fallback={null}>
+        {communityPosts && communityPosts.length > 0 && (
           <SocialCommunityGrid posts={communityPosts} products={featuredProducts} />
-        </Suspense>
-      )}
+        )}
 
-      {vitrine?.showFaq && (
-        <Suspense fallback={null}>
+        {vitrine?.showFaq && (
           <DropFaq />
-        </Suspense>
-      )}
+        )}
 
-      {vitrine?.showNewsletter && (
-        <Suspense fallback={null}>
+        {vitrine?.showNewsletter && (
           <NewsletterVIP />
-        </Suspense>
-      )}
+        )}
+      </Suspense>
     </main>
   );
 }

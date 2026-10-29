@@ -305,9 +305,15 @@ export const pagbankService = {
               price: Number(item.price) || 0,
               quantity: Number(item.quantity) || 1,
               size: item.size || 'M',
-              freeShipping: Boolean(item.freeShipping || item.hasFreeShipping)
+              freeShipping: Boolean(item.freeShipping || item.hasFreeShipping),
+              isGiftCard: Boolean(item.isGiftCard || item.category === 'gift-card' || String(item.id || '').includes('vale')),
+              category: item.category || (item.isGiftCard ? 'gift-card' : 'camisa'),
+              giftDeliveryMode: item.giftDeliveryMode || null,
+              recipientName: item.recipientName || null,
+              giftMessage: item.giftMessage || null
             })),
             customer: {
+              uid: customer.uid || customer.userId || null,
               name: customer.name || 'Cliente THR33',
               email: customer.email || 'cliente@thr33.com',
               taxId: (customer.cpf || customer.taxId || '').replace(/\D/g, ''),

@@ -1062,6 +1062,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         pagbankRes = await pagbankService.createOrder({
           orderReference: orderRefId,
           customer: {
+            uid: user?.uid || authUser?.uid || currentUser?.uid || null,
             name: clientData.name || user?.displayName || user?.name || 'Cliente THR33',
             email: clientData.email || user?.email || 'cliente@thr33.com',
             cpf: clientData.cpf || '',
@@ -1079,7 +1080,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             price: Number(item.price) || 0,
             quantity: Number(item.quantity) || 1,
             image: item.image || '',
-            freeShipping: Boolean(item.freeShipping || item.hasFreeShipping)
+            freeShipping: Boolean(item.freeShipping || item.hasFreeShipping),
+            isGiftCard: Boolean(item.isGiftCard || item.category === 'gift-card' || String(item.id || '').includes('vale')),
+            category: item.category || (item.isGiftCard ? 'gift-card' : 'camisa'),
+            giftDeliveryMode: item.giftDeliveryMode || null,
+            recipientName: item.recipientName || null,
+            giftMessage: item.giftMessage || null
           })),
           shippingAddress: addressToSave,
           shippingCost: effectiveShipping,
@@ -1302,6 +1308,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         // Enriquece o pedido já gravado no backend com metadados complementares (UTMs, endereço normalizado e detalhes visuais)
         try {
           await setDoc(doc(db, 'orders', finalDocId), {
+            userId: cleanPayload.userId || user?.uid || authUser?.uid || currentUser?.uid || 'guest',
+            clientEmail: cleanPayload.clientEmail || user?.email || '',
+            clientName: cleanPayload.clientName || '',
+            clientCpf: cleanPayload.clientCpf || '',
+            clientPhone: cleanPayload.clientPhone || '',
+            hasGiftCard: Boolean(cleanPayload.hasGiftCard),
             carrier: cleanPayload.carrier || selectedShippingOption?.carrier || selectedShippingOption?.name || '',
             serviceName: cleanPayload.serviceName || selectedShippingOption?.serviceName || '',
             shippingDeadline: cleanPayload.shippingDeadline || selectedShippingOption?.deadline || '',
