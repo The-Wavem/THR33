@@ -27,7 +27,8 @@ import {
   ChevronDown,
   ChevronUp,
   Shield,
-  Clock
+  Clock,
+  Gift
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { SEO } from '../../components/common/SEO';
@@ -61,6 +62,7 @@ import { pagbankService, PAGBANK_TEST_CARDS, detectCardBrand, encryptCardData } 
 import { CardBrandIcon } from '../../components/ui/CardBrandIcon';
 import { ORDER_STATUSES, normalizeOrderStatus } from '../../services/orderStateMachine';
 import { webhookService } from '../../services/webhookService';
+import { giftCardService } from '../../services/giftCardService';
 import styles from './Checkout.module.css';
 
 export function Checkout({ user: propUser, onOpenAuthModal }) {
@@ -79,6 +81,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     isFreeShippingActive,
     hasFreeShippingItem,
     hasFreeShippingCoupon,
+    hasPhysicalItems,
+    isOnlyDigitalCart,
     total, 
     appliedCoupon, 
     applyCoupon, 
@@ -92,6 +96,19 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   const [useWalletBalance, setUseWalletBalance] = useState(false);
   const [userWalletAmount, setUserWalletAmount] = useState(0);
 
+  const hasGiftCardInCart = useMemo(() => {
+    return cartItems.some(i => i.isGiftCard || i.category === 'gift-card' || String(i.id || '').includes('vale'));
+  }, [cartItems]);
+
+  const isOnlyGiftCardsInCart = useMemo(() => {
+    return cartItems.length > 0 && cartItems.every(i => 
+      i.isGiftCard || 
+      i.isDigital || 
+      i.category === 'gift-card' || 
+      String(i.id || '').includes('vale')
+    );
+  }, [cartItems]);
+
   useEffect(() => {
     const activeUid = user?.uid || authUser?.uid || currentUser?.uid;
     if (activeUid) {
@@ -103,8 +120,24 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     }
   }, [user, authUser, currentUser]);
 
-  const walletDeduction = useWalletBalance ? Math.min(userWalletAmount, total) : 0;
+  // Se o carrinho contiver Vale-Presente, o saldo da carteira não pode ser utilizado (anti-loop)
+  const walletDeduction = (useWalletBalance && !hasGiftCardInCart) ? Math.min(userWalletAmount, total) : 0;
   const finalAmountToPay = Math.max(0, total - walletDeduction);
+
+  // Se todos os itens forem digitais, zera o frete automaticamente
+  useEffect(() => {
+    if (isOnlyGiftCardsInCart) {
+      setShippingCost(0);
+      setShippingDetails({
+        id: 'digital_delivery',
+        name: 'Entrega Digital Instantânea',
+        carrier: 'THR33 Digital',
+        serviceName: 'Meus Pedidos',
+        price: 0,
+        deadline: 'Instantâneo após aprovação'
+      });
+    }
+  }, [isOnlyGiftCardsInCart, setShippingCost, setShippingDetails]);
 
   // CONTROLE DE ETAPAS: 1 = Identificação, 2 = Entrega & Frete, 3 = Pagamento, 4 = Sucesso
   const [currentStep, setCurrentStep] = useState(1);
@@ -278,6 +311,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         const data = docSnap.data();
         const norm = normalizeOrderStatus(data.status);
         setCreatedOrderStatus(norm);
+        if (['pagamento_aprovado', 'pago'].includes(norm)) {
+          if (data.hasGiftCard && !data.giftCardsProcessed) {
+            giftCardService.processOrderGiftCards(createdOrderId, data)
+              .catch(err => console.warn("Aviso ao processar vales em tempo real:", err.message));
+          }
+        }
         if (data.createdAt) {
           const ms = data.createdAt.toDate ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime();
           setCreatedOrderDate(ms);
@@ -624,7 +663,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       }
     }
 
-    setCurrentStep(2);
+    if (isOnlyGiftCardsInCart) {
+      setCurrentStep(3);
+    } else {
+      setCurrentStep(2);
+    }
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -870,7 +913,15 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
     setIsProcessing(true);
 
-    const addressToSave = activeAddress || {
+    const addressToSave = isOnlyGiftCardsInCart ? {
+      cep: '80000-000',
+      street: 'Entrega Digital Instantânea',
+      number: 'S/N',
+      neighborhood: 'Digital',
+      city: clientData.city || user?.city || 'Curitiba',
+      state: clientData.state || user?.state || 'PR',
+      complement: 'Liberado instantaneamente em Meus Pedidos'
+    } : (activeAddress || {
       cep: addressForm.cep || '80420-000',
       street: addressForm.street || 'Rua Comendador Araújo',
       number: addressForm.number || '333',
@@ -878,7 +929,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       city: addressForm.city || 'Curitiba',
       state: addressForm.state || 'PR',
       complement: addressForm.complement || ''
-    };
+    });
 
     const orderRefId = `THR-${Date.now()}`;
 
@@ -915,26 +966,32 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         price: Number(item.price) || 0,
         quantity: Number(item.quantity) || 1,
         image: item.image || '',
+        category: item.category || (item.isGiftCard ? 'gift-card' : 'camisa'),
+        isGiftCard: Boolean(item.isGiftCard || item.category === 'gift-card' || String(item.id || '').includes('vale')),
+        giftDeliveryMode: item.giftDeliveryMode || null,
+        recipientName: item.recipientName || null,
+        giftMessage: item.giftMessage || null,
         evaluated: false
       })),
+      hasGiftCard: hasGiftCardInCart,
       itemsCount: totalItemsCount,
       subtotal: Number(subtotal) || 0,
       discountAmount: Number(discountAmount) || 0,
       couponCode: appliedCoupon?.code || null,
       couponId: appliedCoupon?.id || null,
-      shippingCost: isFreeShippingActive ? 0 : (Number(shippingCost) || 0),
-      freeShippingApplied: Boolean(isFreeShippingActive),
-      freeShippingReason: hasFreeShippingItem && hasFreeShippingCoupon
+      shippingCost: isOnlyGiftCardsInCart ? 0 : (isFreeShippingActive ? 0 : (Number(shippingCost) || 0)),
+      freeShippingApplied: isOnlyGiftCardsInCart ? false : Boolean(isFreeShippingActive),
+      freeShippingReason: isOnlyGiftCardsInCart ? null : (hasFreeShippingItem && hasFreeShippingCoupon
         ? 'item_and_coupon'
         : hasFreeShippingCoupon
         ? 'coupon'
         : hasFreeShippingItem
         ? 'item'
-        : null,
-      shippingMethod: selectedShippingMethod || 'padrao',
-      carrier: selectedShippingOption?.carrier || selectedShippingOption?.name || 'Transportadora',
-      serviceName: selectedShippingOption?.serviceName || selectedShippingOption?.name || '',
-      shippingDeadline: selectedShippingOption?.deadline || null,
+        : null),
+      shippingMethod: isOnlyGiftCardsInCart ? 'digital' : (selectedShippingMethod || 'padrao'),
+      carrier: isOnlyGiftCardsInCart ? 'THR33 Digital' : (selectedShippingOption?.carrier || selectedShippingOption?.name || 'Transportadora'),
+      serviceName: isOnlyGiftCardsInCart ? 'Instantâneo via Meus Pedidos' : (selectedShippingOption?.serviceName || selectedShippingOption?.name || ''),
+      shippingDeadline: isOnlyGiftCardsInCart ? 'Instantâneo após aprovação' : (selectedShippingOption?.deadline || null),
       total: Number(finalAmountToPay) || 0,
       originalTotal: Number(total) || 0,
       walletDeduction: Number(walletDeduction) || 0,
@@ -1277,6 +1334,14 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       setCreatedOrderDate(Date.now());
       if (orderData.pixExpiresAt) {
         setPixExpiresAt(orderData.pixExpiresAt);
+      }
+
+      // Processa vales-presente se o pedido já iniciou aprovado (ex: pago 100% com carteira ou cartão instantâneo)
+      if (initialStatus === ORDER_STATUSES.PAGAMENTO_APROVADO || initialStatus === 'pago') {
+        if (cleanPayload.hasGiftCard) {
+          giftCardService.processOrderGiftCards(finalDocId, cleanPayload)
+            .catch(err => console.warn("Aviso ao processar vales do pedido:", err.message));
+        }
       }
 
       // Notifica time operacional se já iniciou aprovado
@@ -1668,27 +1733,40 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             <span className={styles.stepName}>IDENTIFICAÇÃO</span>
           </button>
           
-          <div className={`${styles.stepLine} ${currentStep >= 2 ? styles.stepLineActive : ''}`} />
+          <div className={`${styles.stepLine} ${currentStep >= (isOnlyGiftCardsInCart ? 3 : 2) ? styles.stepLineActive : ''}`} />
 
-          <button 
-            type="button"
-            className={`${styles.stepItem} ${currentStep === 2 ? styles.stepActive : ''} ${currentStep > 2 ? styles.stepCompleted : ''}`}
-            onClick={() => { if (validateStep1()) setCurrentStep(2); }}
-          >
-            <span className={styles.stepNum}>{currentStep > 2 ? <Check size={12} /> : '2'}</span>
-            <span className={styles.stepName}>ENTREGA & FRETE</span>
-          </button>
+          {!isOnlyGiftCardsInCart ? (
+            <>
+              <button 
+                type="button"
+                className={`${styles.stepItem} ${currentStep === 2 ? styles.stepActive : ''} ${currentStep > 2 ? styles.stepCompleted : ''}`}
+                onClick={() => { if (validateStep1()) setCurrentStep(2); }}
+              >
+                <span className={styles.stepNum}>{currentStep > 2 ? <Check size={12} /> : '2'}</span>
+                <span className={styles.stepName}>ENTREGA & FRETE</span>
+              </button>
 
-          <div className={`${styles.stepLine} ${currentStep >= 3 ? styles.stepLineActive : ''}`} />
+              <div className={`${styles.stepLine} ${currentStep >= 3 ? styles.stepLineActive : ''}`} />
 
-          <button 
-            type="button"
-            className={`${styles.stepItem} ${currentStep === 3 ? styles.stepActive : ''}`}
-            onClick={() => { if (validateStep1()) setCurrentStep(3); }}
-          >
-            <span className={styles.stepNum}>3</span>
-            <span className={styles.stepName}>PAGAMENTO PAGBANK</span>
-          </button>
+              <button 
+                type="button"
+                className={`${styles.stepItem} ${currentStep === 3 ? styles.stepActive : ''}`}
+                onClick={() => { if (validateStep1()) setCurrentStep(3); }}
+              >
+                <span className={styles.stepNum}>3</span>
+                <span className={styles.stepName}>PAGAMENTO PAGBANK</span>
+              </button>
+            </>
+          ) : (
+            <button 
+              type="button"
+              className={`${styles.stepItem} ${currentStep === 3 ? styles.stepActive : ''}`}
+              onClick={() => { if (validateStep1()) setCurrentStep(3); }}
+            >
+              <span className={styles.stepNum}>2</span>
+              <span className={styles.stepName}>PAGAMENTO PAGBANK</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -1859,7 +1937,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                     onClick={handleNextToStep2} 
                     className={styles.primaryBtn}
                   >
-                    <span>CONTINUAR PARA ENTREGA</span>
+                    <span>{isOnlyGiftCardsInCart ? 'CONTINUAR PARA PAGAMENTO' : 'CONTINUAR PARA ENTREGA'}</span>
                     <ArrowRight size={15} />
                   </button>
                 </div>
@@ -2200,34 +2278,50 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 className={styles.stepCard}
               >
                 <div className={styles.stepCardHeader}>
-                  <span className={styles.stepCardBadge}>ETAPA 03</span>
+                  <span className={styles.stepCardBadge}>{isOnlyGiftCardsInCart ? 'ETAPA 02 (FINAL)' : 'ETAPA 03'}</span>
                   <h2 className={styles.stepCardTitle}>PAGAMENTO</h2>
                 </div>
 
                 {/* Resumo do Destino */}
-                <div className={styles.shippingReviewBadge}>
-                  <MapPin size={15} />
-                  <span>
-                    Entrega para: <strong>{clientData.name}</strong> • {activeAddress?.street || 'Rua Comendador Araújo'}, {activeAddress?.number || '333'} ({activeAddress?.city || 'Curitiba'}/{activeAddress?.state || 'PR'})
-                  </span>
-                  <button type="button" onClick={() => setCurrentStep(2)} className={styles.changeLink}>Alterar</button>
-                </div>
+                {isOnlyGiftCardsInCart ? (
+                  <div className={styles.shippingReviewBadge} style={{ borderColor: 'rgba(0, 255, 136, 0.25)', background: 'rgba(0, 255, 136, 0.04)' }}>
+                    <Gift size={15} color="#00ff88" />
+                    <span>
+                      Entrega Digital para: <strong>{clientData.name || 'Comprador'}</strong> • Códigos disponíveis instantaneamente na área <strong>Meus Pedidos</strong> após a aprovação
+                    </span>
+                  </div>
+                ) : (
+                  <div className={styles.shippingReviewBadge}>
+                    <MapPin size={15} />
+                    <span>
+                      Entrega para: <strong>{clientData.name}</strong> • {activeAddress?.street || 'Rua Comendador Araújo'}, {activeAddress?.number || '333'} ({activeAddress?.city || 'Curitiba'}/{activeAddress?.state || 'PR'})
+                    </span>
+                    <button type="button" onClick={() => setCurrentStep(2)} className={styles.changeLink}>Alterar</button>
+                  </div>
+                )}
 
                 {/* BLOCO DE ABATIMENTO COM SALDO EM CARTEIRA */}
                 {userWalletAmount > 0 && (
                   <div className={styles.walletPaymentBlock}>
-                    <label className={styles.walletCheckLabel}>
+                    <label className={styles.walletCheckLabel} style={hasGiftCardInCart ? { opacity: 0.6, cursor: 'not-allowed' } : {}}>
                       <input 
                         type="checkbox" 
-                        checked={useWalletBalance}
+                        checked={useWalletBalance && !hasGiftCardInCart}
+                        disabled={hasGiftCardInCart}
                         onChange={(e) => setUseWalletBalance(e.target.checked)}
                       />
                       <div>
                         <span>UTILIZAR SALDO EM CARTEIRA</span>
-                        <small>Você possui R$ {userWalletAmount.toFixed(2)} disponíveis para abater nesta compra.</small>
+                        {hasGiftCardInCart ? (
+                          <small style={{ color: '#f59e0b', fontWeight: 600 }}>
+                            O saldo da carteira não pode ser utilizado para comprar outro vale-presente.
+                          </small>
+                        ) : (
+                          <small>Você possui R$ {userWalletAmount.toFixed(2)} disponíveis para abater nesta compra.</small>
+                        )}
                       </div>
                     </label>
-                    {useWalletBalance && (
+                    {useWalletBalance && !hasGiftCardInCart && (
                       <span className={styles.deductionNotice}>
                         Desconto aplicado da carteira: -R$ {walletDeduction.toFixed(2)}
                       </span>
@@ -2451,7 +2545,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 )}
 
                 <div className={styles.stepActionsBetween}>
-                  <button type="button" onClick={() => setCurrentStep(2)} className={styles.secondaryBtn}>
+                  <button type="button" onClick={() => setCurrentStep(isOnlyGiftCardsInCart ? 1 : 2)} className={styles.secondaryBtn}>
                     <ArrowLeft size={14} />
                     <span>VOLTAR</span>
                   </button>
@@ -2577,12 +2671,16 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
             <div className={styles.summaryRow}>
               <span>Frete</span>
-              <span style={isFreeShippingActive || shippingCost === 0 ? { color: '#10b981', fontWeight: 600 } : undefined}>
-                {isFreeShippingActive || shippingCost === 0 ? 'GRÁTIS' : `R$ ${shippingCost.toFixed(2)}`}
+              <span style={isOnlyGiftCardsInCart || isFreeShippingActive || shippingCost === 0 ? { color: '#10b981', fontWeight: 600 } : undefined}>
+                {isOnlyGiftCardsInCart || isFreeShippingActive || shippingCost === 0 ? 'GRÁTIS' : `R$ ${shippingCost.toFixed(2)}`}
               </span>
             </div>
 
-            {isFreeShippingActive && (
+            {isOnlyGiftCardsInCart ? (
+              <div style={{ fontSize: '0.72rem', color: '#10b981', marginTop: '-0.35rem', textAlign: 'right', fontWeight: 500 }}>
+                Entrega Digital Instantânea
+              </div>
+            ) : isFreeShippingActive && (
               <div style={{ fontSize: '0.72rem', color: '#10b981', marginTop: '-0.35rem', textAlign: 'right', fontWeight: 500 }}>
                 {hasFreeShippingItem && hasFreeShippingCoupon
                   ? 'Acumulado: Peça + Cupom'

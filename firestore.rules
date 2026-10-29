@@ -160,5 +160,25 @@ service cloud.firestore {
       allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
       allow update, delete: if isAdmin();
     }
+
+    // Catálogo de brindes e gifts promocionais da loja ('gifts')
+    match /gifts/{giftId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Vales-presente digitais da THR33 ('gift_cards')
+    match /gift_cards/{codeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() || isAdmin();
+      allow update: if isAdmin() || (
+        isAuthenticated() &&
+        resource.data.status == 'active' &&
+        request.resource.data.status == 'redeemed' &&
+        request.resource.data.redeemedByUid == request.auth.uid
+      );
+      allow delete: if isAdmin();
+    }
   }
 }
+

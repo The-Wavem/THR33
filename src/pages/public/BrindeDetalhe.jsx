@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Check, ShoppingBag, ShieldCheck, ArrowLeft, Package } from 'lucide-react';
+import { 
+  Check, 
+  ShoppingBag, 
+  ShieldCheck, 
+  ArrowLeft, 
+  Package, 
+  Gift, 
+  Zap, 
+  Sparkles, 
+  AlertCircle 
+} from 'lucide-react';
 import { catalogService } from '../../services/catalogService';
 import { GIFTS_DATA } from '../../data/giftsData';
 import { useCart } from '../../context/CartContext';
@@ -9,7 +19,9 @@ import { SEO } from '../../components/common/SEO';
 import { buildBreadcrumbSchema } from '../../utils/seoSchemas';
 import styles from './BrindeDetalhe.module.css';
 
-const DEFAULT_GIFT_VALUES = [150, 300, 500, 1000];
+const DEFAULT_GIFT_VALUES = [50, 100, 200];
+const MIN_GIFT_VALUE = 30;
+const MAX_GIFT_VALUE = 2000;
 
 export function BrindeDetalhe() {
   const { id } = useParams();
@@ -19,28 +31,52 @@ export function BrindeDetalhe() {
   const [loading, setLoading] = useState(true);
 
   // Estados específicos para Vale-Presente
-  const [selectedValue, setSelectedValue] = useState(150);
+  const [selectedValue, setSelectedValue] = useState(100);
   const [customValueInput, setCustomValueInput] = useState('');
   const [isCustomMode, setIsCustomMode] = useState(false);
+  const [deliveryMode, setDeliveryMode] = useState('code'); // 'code' (presentear) ou 'self' (ativar na conta)
   const [recipientName, setRecipientName] = useState('');
-  const [recipientEmail, setRecipientEmail] = useState('');
   const [giftMessage, setGiftMessage] = useState('');
   const [added, setAdded] = useState(false);
+  const [valError, setValError] = useState('');
 
   const handlePresetSelect = (val) => {
     setSelectedValue(val);
     setIsCustomMode(false);
     setCustomValueInput('');
+    setValError('');
   };
 
   const handleCustomValueChange = (e) => {
     const raw = e.target.value;
     setCustomValueInput(raw);
     setIsCustomMode(true);
-    const num = Number(raw);
-    if (!isNaN(num) && num > 0) {
-      setSelectedValue(Math.min(Math.max(num, 50), 5000));
+    
+    if (!raw) {
+      setValError('Digite um valor para o vale.');
+      return;
     }
+
+    const num = Number(raw);
+    if (isNaN(num)) {
+      setValError('Digite um número válido.');
+      return;
+    }
+
+    if (num < MIN_GIFT_VALUE) {
+      setValError(`O valor mínimo para o vale-presente é R$ ${MIN_GIFT_VALUE},00.`);
+      setSelectedValue(num);
+      return;
+    }
+
+    if (num > MAX_GIFT_VALUE) {
+      setValError(`O valor máximo permitido é R$ ${MAX_GIFT_VALUE.toLocaleString('pt-BR')},00.`);
+      setSelectedValue(num);
+      return;
+    }
+
+    setValError('');
+    setSelectedValue(num);
   };
 
   useEffect(() => {
@@ -57,7 +93,8 @@ export function BrindeDetalhe() {
         }
         if (item) {
           setGiftItem(item);
-          setSelectedValue(item.price ? Number(item.price) : 150);
+          const initialVal = item.defaultPrice ? Number(item.defaultPrice) : (item.price ? Number(item.price) : 100);
+          setSelectedValue(initialVal);
         }
       } catch (err) {
         console.error('Erro ao carregar brinde:', err);
@@ -85,7 +122,7 @@ export function BrindeDetalhe() {
             size={32}
             style={{ animation: 'spin 1.5s linear infinite', margin: '0 auto 1rem' }}
           />
-          <p>Carregando item no Firestore...</p>
+          <p>Carregando item no catálogo...</p>
         </div>
       </main>
     );
@@ -128,18 +165,31 @@ export function BrindeDetalhe() {
     );
   }
 
-  const isGiftCard = giftItem.category === 'gift-card' || giftItem.id.includes('vale');
+  const isGiftCard = giftItem.category === 'gift-card' || String(giftItem.id || '').includes('vale');
+  const isCustomInvalid = isCustomMode && (Number(customValueInput) < MIN_GIFT_VALUE || Number(customValueInput) > MAX_GIFT_VALUE || isNaN(Number(customValueInput)));
 
   const handleAddToCart = () => {
+    if (isGiftCard && isCustomInvalid) {
+      return;
+    }
+
+    const effectivePrice = isGiftCard ? selectedValue : Number(giftItem.price || 0);
+
     const customProduct = {
-      id: isGiftCard ? `${giftItem.id}-${selectedValue}` : giftItem.id,
+      id: isGiftCard ? `${giftItem.id}-${selectedValue}-${deliveryMode}` : giftItem.id,
       name: isGiftCard ? `${giftItem.name} (R$ ${selectedValue})` : giftItem.name,
-      price: isGiftCard ? selectedValue : Number(giftItem.price || 0),
+      price: effectivePrice,
       image: giftItem.image,
-      fit: isGiftCard ? `Vale Digital R$ ${selectedValue}` : 'Acessório Oficial',
-      recipientName: recipientName.trim() || undefined,
-      recipientEmail: recipientEmail.trim() || undefined,
-      giftMessage: giftMessage.trim() || undefined
+      category: isGiftCard ? 'gift-card' : (giftItem.category || 'brinde'),
+      fit: isGiftCard 
+        ? (deliveryMode === 'self' ? 'Crédito Minha Carteira' : 'Código Presente') 
+        : 'Acessório Oficial',
+      isGiftCard,
+      giftDeliveryMode: isGiftCard ? deliveryMode : null,
+      recipientName: isGiftCard && deliveryMode === 'code' ? (recipientName.trim() || undefined) : undefined,
+      giftMessage: isGiftCard && deliveryMode === 'code' ? (giftMessage.trim() || undefined) : undefined,
+      freeShipping: true,
+      hasFreeShipping: true
     };
 
     addToCart(customProduct, isGiftCard ? `R$ ${selectedValue}` : 'ÚNICO', 1);
@@ -156,7 +206,7 @@ export function BrindeDetalhe() {
     <main className={styles.container}>
       <SEO
         title={`${giftItem.name} | THR33 Streetwear`}
-        description={giftItem.description || 'Brinde exclusivo e acessório oficial da marca de streetwear THR33.'}
+        description={giftItem.description || 'Vale-presente digital oficial THR33. Escolha o valor e use em qualquer drop do site.'}
         image={giftItem.image}
         url={`/brindes/${giftItem.id}`}
         jsonLd={giftJsonLd}
@@ -187,18 +237,22 @@ export function BrindeDetalhe() {
               <div className={styles.cardOverlayPreview}>
                 <div className={styles.previewHeader}>
                   <span className={styles.previewLogo}>THR33</span>
-                  <span className={styles.previewSubtitle}>GIFT PASS</span>
+                  <span className={styles.previewSubtitle}>
+                    {deliveryMode === 'self' ? 'CARTEIRA DIGITAL' : 'GIFT PASS'}
+                  </span>
                 </div>
                 <div className={styles.previewValue}>
                   R$ {selectedValue?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                 </div>
                 <div className={styles.previewRecipient}>
-                  {recipientName
-                    ? `PARA: ${recipientName.toUpperCase()}`
-                    : 'CARTÃO DIGITAL THR33'}
+                  {deliveryMode === 'self'
+                    ? 'CRÉDITO NA SUA PRÓPRIA CONTA'
+                    : recipientName
+                      ? `PARA: ${recipientName.toUpperCase()}`
+                      : 'CÓDIGO DIGITAL EXCLUSIVO'}
                 </div>
                 <div className={styles.previewFooterNote}>
-                  CÓDIGO DIGITAL EXCLUSIVO • SEM VALIDADE
+                  DISPONÍVEL EM MEUS PEDIDOS APÓS O PAGAMENTO
                 </div>
               </div>
             )}
@@ -214,6 +268,42 @@ export function BrindeDetalhe() {
             <h1 className={styles.title}>{giftItem.name}</h1>
             <p className={styles.description}>{giftItem.description}</p>
           </div>
+
+          {/* SELETOR DE MODO DE DESTINO DO VALE */}
+          {isGiftCard && (
+            <div className={styles.sectionGroup}>
+              <span className={styles.groupLabel}>ONDE VOCÊ QUER USAR O VALE-PRESENTE?</span>
+              <div className={styles.modeSelectorGrid}>
+                <button
+                  type="button"
+                  className={`${styles.modeCard} ${deliveryMode === 'code' ? styles.activeModeCard : ''}`}
+                  onClick={() => setDeliveryMode('code')}
+                >
+                  <div className={styles.modeHeader}>
+                    <Gift size={16} />
+                    <span>GERAR CÓDIGO P/ PRESENTEAR</span>
+                  </div>
+                  <span className={styles.modeDesc}>
+                    Gera um código exclusivo em <strong>Meus Pedidos</strong> para você copiar e mandar no WhatsApp da pessoa ativar.
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  className={`${styles.modeCard} ${deliveryMode === 'self' ? styles.activeModeCard : ''}`}
+                  onClick={() => setDeliveryMode('self')}
+                >
+                  <div className={styles.modeHeader}>
+                    <Zap size={16} />
+                    <span>ATIVAR NA MINHA CONTA</span>
+                  </div>
+                  <span className={styles.modeDesc}>
+                    O valor cai direto como <strong>saldo na sua carteira digital</strong> assim que o pagamento for aprovado.
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* SELETOR DE VALOR (CASO SEJA VALE-PRESENTE) */}
           {isGiftCard && (
@@ -236,29 +326,35 @@ export function BrindeDetalhe() {
 
               {/* CAMPO DE VALOR LIVRE / ADAPTÁVEL */}
               <div className={styles.customValueBlock}>
-                <label htmlFor="customGiftVal">OUTRO VALOR LIVRE (R$ 50 A R$ 5.000):</label>
+                <label htmlFor="customGiftVal">OU DIGITE OUTRO VALOR (R$ {MIN_GIFT_VALUE} A R$ {MAX_GIFT_VALUE.toLocaleString('pt-BR')}):</label>
                 <div className={styles.customInputRow}>
                   <span className={styles.currencyPrefix}>R$</span>
                   <input
                     id="customGiftVal"
                     type="number"
-                    min="50"
-                    max="5000"
-                    placeholder="Ex: 250"
+                    min={MIN_GIFT_VALUE}
+                    max={MAX_GIFT_VALUE}
+                    placeholder="Ex: 150"
                     value={customValueInput}
                     onChange={handleCustomValueChange}
                     className={styles.customValInput}
                   />
                 </div>
+                {valError && (
+                  <div className={styles.valueValidationAlert}>
+                    <AlertCircle size={13} style={{ display: 'inline', verticalAlign: 'middle', marginRight: '4px' }} />
+                    <span>{valError}</span>
+                  </div>
+                )}
                 <small>
-                  O saldo será creditado integralmente no código digital gerado para resgate.
+                  O saldo de R$ {selectedValue?.toFixed(2)} será creditado sem taxas ou descontos.
                 </small>
               </div>
             </div>
           )}
 
-          {/* DADOS DO PRESENTEAR (SE FOR VALE PRESENTE) */}
-          {isGiftCard && (
+          {/* DADOS DO PRESENTEAR (SE FOR VALE PRESENTE E MODO CÓDIGO) */}
+          {isGiftCard && deliveryMode === 'code' && (
             <div className={styles.sectionGroup}>
               <span className={styles.groupLabel}>PERSONALIZAÇÃO DO CARTÃO DIGITAL:</span>
               <div className={styles.formFields}>
@@ -274,24 +370,13 @@ export function BrindeDetalhe() {
                 </div>
 
                 <div className={styles.fieldGroup}>
-                  <label htmlFor="recipientEmail">E-MAIL DO PRESENTEADO (OPCIONAL):</label>
-                  <input
-                    id="recipientEmail"
-                    type="email"
-                    placeholder="amigo@email.com"
-                    value={recipientEmail}
-                    onChange={(e) => setRecipientEmail(e.target.value)}
-                  />
-                </div>
-
-                <div className={styles.fieldGroup}>
                   <label htmlFor="giftMessage">
-                    MENSAGEM PERSONALIZADA NO CARTÃO (OPCIONAL):
+                    MENSAGEM PERSONALIZADA (OPCIONAL):
                   </label>
                   <textarea
                     id="giftMessage"
                     rows="3"
-                    placeholder="Escreva uma mensagem especial para acompanhar o vale..."
+                    placeholder="Ex: Parabéns meu mano! Escolhe a peça que quiser no drop novo..."
                     value={giftMessage}
                     onChange={(e) => setGiftMessage(e.target.value)}
                   />
@@ -303,7 +388,7 @@ export function BrindeDetalhe() {
           {/* PREÇO E BOTÃO COMPRAR */}
           <div className={styles.purchaseBox}>
             <div className={styles.totalPrice}>
-              <span>VALOR FINAL:</span>
+              <span>TOTAL A PAGAR:</span>
               <strong>
                 R${' '}
                 {(isGiftCard ? selectedValue : Number(giftItem.price || 0)).toLocaleString(
@@ -315,8 +400,10 @@ export function BrindeDetalhe() {
 
             <button
               type="button"
+              disabled={isGiftCard && isCustomInvalid}
               className={`${styles.buyBtn} ${added ? styles.buyBtnSuccess : ''}`}
               onClick={handleAddToCart}
+              style={isGiftCard && isCustomInvalid ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
             >
               {added ? (
                 <>
@@ -326,7 +413,7 @@ export function BrindeDetalhe() {
               ) : (
                 <>
                   <ShoppingBag size={18} />
-                  <span>{isGiftCard ? 'GERAR E ADICIONAR VALE' : 'ADICIONAR À SACOLA'}</span>
+                  <span>{isGiftCard ? 'ADICIONAR VALE À SACOLA' : 'ADICIONAR À SACOLA'}</span>
                 </>
               )}
             </button>
@@ -335,23 +422,22 @@ export function BrindeDetalhe() {
           <div className={styles.guaranteeNotice}>
             <ShieldCheck size={16} />
             <span>
-              Vales digitais são entregues instantaneamente via e-mail e não possuem prazo de
-              expiração.
+              Entrega digital imediata na área Meus Pedidos logo após a confirmação do pagamento. Sem prazo de validade.
             </span>
           </div>
 
           <div className={styles.termsList}>
             <div className={styles.termItem}>
               <span className={styles.termDot} />
-              <span>Válido para todas as peças e modelagens oficiais do catálogo.</span>
+              <span>Válido para qualquer produto do site (camisas, jaquetas e lançamentos).</span>
             </div>
             <div className={styles.termItem}>
               <span className={styles.termDot} />
-              <span>Resgate instantâneo na Carteira Digital da conta do cliente.</span>
+              <span>Código exclusivo e resgate em 1 clique direto no perfil.</span>
             </div>
             <div className={styles.termItem}>
               <span className={styles.termDot} />
-              <span>Saldo cumulativo e sem prazo de validade ou expiração.</span>
+              <span>Saldo 100% cumulativo e sem custos adicionais de envio.</span>
             </div>
           </div>
         </section>

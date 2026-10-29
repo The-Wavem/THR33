@@ -1379,6 +1379,24 @@
   border-radius: 3px;
 }
 
+.giftCardConfigBox {
+  background: rgba(0, 255, 136, 0.03);
+  border: 1px solid rgba(0, 255, 136, 0.25);
+  padding: 1.15rem;
+  border-radius: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.giftCardConfigHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+  color: #00ff88;
+}
+
 @media (max-width: 850px) {
   .controlBar { flex-direction: column; align-items: stretch; }
   .gridTwo { grid-template-columns: 1fr; }

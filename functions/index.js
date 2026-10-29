@@ -776,15 +776,31 @@ exports.createPagBankOrder = onCall(
         );
       }
 
-      const prodDoc = await db
+      let prodDoc = await db
         .collection("products")
         .doc(String(item.id))
         .get();
       if (!prodDoc.exists) {
-        throw new HttpsError(
-          "not-found",
-          `Produto "${item.name || item.id}" não foi encontrado no catálogo oficial da THR33.`,
-        );
+        const giftDoc = await db.collection("gifts").doc(String(item.id)).get();
+        if (giftDoc.exists) {
+          prodDoc = giftDoc;
+        } else if (String(item.id || "").includes("vale-presente") || item.category === "gift-card" || item.isGiftCard) {
+          prodDoc = {
+            exists: true,
+            data: () => ({
+              name: item.name || "Vale-Presente Digital THR33",
+              price: Number(item.price) || 50,
+              isGiftCard: true,
+              category: "gift-card",
+              unlimitedStock: true
+            })
+          };
+        } else {
+          throw new HttpsError(
+            "not-found",
+            `Produto "${item.name || item.id}" não foi encontrado no catálogo oficial da THR33.`,
+          );
+        }
       }
 
       const prodData = prodDoc.data();
@@ -817,8 +833,16 @@ exports.createPagBankOrder = onCall(
         realPrice = Number(item.price);
       }
 
-      // 2. Detecta frete grátis na peça (somente se marcado oficialmente no catálogo)
-      if (prodData.freeShipping === true || prodData.hasFreeShipping === true) {
+      // 2. Detecta frete grátis na peça (somente se marcado oficialmente no catálogo em produto físico)
+      const isItemDigital = Boolean(
+        prodData.isGiftCard || 
+        prodData.category === "gift-card" || 
+        prodData.type === "gift-card" ||
+        item.isGiftCard ||
+        item.category === "gift-card" ||
+        String(item.id || "").includes("vale-presente")
+      );
+      if (!isItemDigital && (prodData.freeShipping === true || prodData.hasFreeShipping === true)) {
         orderHasFreeShippingItem = true;
       }
 
@@ -966,7 +990,14 @@ exports.createPagBankOrder = onCall(
       validatedCouponData?.free_shipping === true
     );
 
+    const isOnlyDigitalOrder = sanitizedItems.length > 0 && sanitizedItems.every(i => 
+      i.isGiftCard === true || 
+      i.category === "gift-card" || 
+      String(i.id || "").includes("vale-presente")
+    );
+
     const isFreeShipping = Boolean(
+      isOnlyDigitalOrder ||
       orderHasFreeShippingItem ||
       isCouponFreeShipping
     );
@@ -993,6 +1024,18 @@ exports.createPagBankOrder = onCall(
         throw new HttpsError(
           "unauthenticated",
           "Apenas usuários autenticados podem utilizar saldo de carteira digital.",
+        );
+      }
+
+      const hasGiftCardInOrder = sanitizedItems.some(i => 
+        i.isGiftCard === true || 
+        i.category === "gift-card" || 
+        String(i.id || "").includes("vale-presente")
+      );
+      if (hasGiftCardInOrder) {
+        throw new HttpsError(
+          "failed-precondition",
+          "O saldo da carteira digital não pode ser utilizado na compra de um novo Vale-Presente.",
         );
       }
 

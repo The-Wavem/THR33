@@ -34,8 +34,13 @@ import {
   ShieldCheck,
   Headphones,
   FileText,
-  QrCode
+  QrCode,
+  Gift,
+  Zap,
+  Sparkles,
+  ShoppingBag
 } from 'lucide-react';
+import { giftCardService } from '../../services/giftCardService';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { couponService } from '../../services/couponService';
@@ -283,6 +288,14 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   const [giftRedeemCode, setGiftRedeemCode] = useState('');
   const [redeeming, setRedeeming] = useState(false);
   const [redeemFeedback, setRedeemFeedback] = useState(null);
+  const [copiedGiftCode, setCopiedGiftCode] = useState(null);
+
+  const handleCopyGiftCode = (code) => {
+    if (!code) return;
+    navigator.clipboard.writeText(code);
+    setCopiedGiftCode(code);
+    setTimeout(() => setCopiedGiftCode(null), 2500);
+  };
   const [exclusiveCoupons, setExclusiveCoupons] = useState([]);
   const [loadingExclusiveCoupons, setLoadingExclusiveCoupons] = useState(false);
   const [copiedVipCode, setCopiedVipCode] = useState(null);
@@ -371,34 +384,23 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     setRedeemFeedback(null);
     try {
       const activeUid = currentUser?.uid || user?.uid;
+      const activeEmail = currentUser?.email || user?.email;
       if (!activeUid) {
-        throw new Error("Usuário não autenticado.");
+        throw new Error("Você precisa estar conectado à sua conta para ativar o vale-presente.");
       }
 
-      let creditedAmount = 150.00;
-      if (cleanCode.includes('300')) creditedAmount = 300.00;
-      else if (cleanCode.includes('500')) creditedAmount = 500.00;
-      else if (cleanCode.includes('1000')) creditedAmount = 1000.00;
-      else if (cleanCode.includes('50')) creditedAmount = 50.00;
-      else if (cleanCode.includes('100')) creditedAmount = 100.00;
+      const res = await giftCardService.redeemGiftCardCode(cleanCode, activeUid, activeEmail);
 
-      const newBal = (Number(walletBalance) || 0) + creditedAmount;
-
-      await setDoc(doc(db, 'users', activeUid), {
-        walletBalance: newBal,
-        lastRedeemedAt: new Date().toISOString()
-      }, { merge: true });
-
-      setWalletBalance(newBal);
+      setWalletBalance(res.newWalletBalance);
       setGiftRedeemCode('');
       setRedeemFeedback({
         type: 'success',
-        text: `Vale-presente resgatado com sucesso! Saldo creditado: R$ ${Number(creditedAmount || 0).toFixed(2)}`
+        text: `Vale-presente ativado com sucesso! Saldo creditado: R$ ${Number(res.creditedAmount || 0).toFixed(2)}`
       });
     } catch (err) {
       setRedeemFeedback({
         type: 'error',
-        text: "Código de vale inválido ou já resgatado. Verifique os caracteres e tente novamente."
+        text: err.message || "Código de vale inválido ou já resgatado. Verifique os caracteres e tente novamente."
       });
     } finally {
       setRedeeming(false);
@@ -1942,15 +1944,26 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                 <form onSubmit={handleRedeemGift} className={styles.redeemForm}>
                   <input 
                     type="text" 
-                    placeholder="CÓDIGO DO VALE (EX: THR33-GIFT-XXXX)"
+                    placeholder="CÓDIGO DO VALE (EX: THR33-GIFT-XXXX-XXXX)"
                     value={giftRedeemCode}
                     onChange={(e) => setGiftRedeemCode(e.target.value)}
                     required
                   />
                   <button type="submit" disabled={redeeming} className={styles.redeemBtn}>
-                    {redeeming ? 'RESGATANDO...' : 'RESGATAR CÓDIGO'}
+                    {redeeming ? 'RESGATANDO...' : 'ATIVAR VALE-PRESENTE'}
                   </button>
                 </form>
+
+                <div className={styles.walletActionRow}>
+                  <Link to="/catalogo" className={styles.useWalletCatalogBtn}>
+                    <ShoppingBag size={14} />
+                    <span>USAR MEU SALDO NO CATÁLOGO</span>
+                  </Link>
+                  <Link to="/brindes/vale-presente-thr33" className={styles.buyMoreGiftsLink}>
+                    <Gift size={14} />
+                    <span>COMPRAR VALE-PRESENTE</span>
+                  </Link>
+                </div>
               </section>
 
               {/* SEÇÃO DE CUPONS VIP VINCULADOS À CONTA DENTRO DA ABA CARTEIRA */}
@@ -2212,6 +2225,69 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                           </div>
                         ))}
                       </div>
+
+                      {/* SEÇÃO DE VALES-PRESENTE DO PEDIDO */}
+                      {(order.hasGiftCard || (Array.isArray(order.items) && order.items.some(i => i.isGiftCard || i.category === 'gift-card' || String(i.id || '').includes('vale')))) && (
+                        <div className={styles.orderGiftCardsSection}>
+                          <div className={styles.giftCardSectionHeader}>
+                            <Gift size={15} color="#00ff88" />
+                            <strong>VALES-PRESENTE DIGITAIS DO PEDIDO</strong>
+                          </div>
+
+                          {(!['pago', 'paid', 'aprovado', 'approved', 'pagamento_aprovado', 'em_producao', 'em_separacao', 'enviado', 'entregue'].includes(String(order.status || '').toLowerCase())) ? (
+                            <div className={styles.giftCardPendingNotice}>
+                              <Clock size={14} />
+                              <span>O código exclusivo do seu vale-presente será liberado automaticamente aqui assim que o pagamento for aprovado.</span>
+                            </div>
+                          ) : (
+                            <div className={styles.generatedGiftCardsList}>
+                              {Array.isArray(order.giftCardsGenerated) && order.giftCardsGenerated.length > 0 ? (
+                                order.giftCardsGenerated.map((card, cIdx) => (
+                                  <div key={card.code || cIdx} className={styles.giftCardItemBox}>
+                                    <div className={styles.giftCardItemTop}>
+                                      <div className={styles.giftCardCodeBadge}>
+                                        <code>{card.code}</code>
+                                        {card.status === 'active' && (
+                                          <button 
+                                            type="button" 
+                                            onClick={() => handleCopyGiftCode(card.code)}
+                                            className={styles.copyGiftBtn}
+                                            title="Copiar código do vale"
+                                          >
+                                            {copiedGiftCode === card.code ? <Check size={12} color="#00ff88" /> : <Copy size={12} />}
+                                            <span>{copiedGiftCode === card.code ? 'COPIADO!' : 'COPIAR'}</span>
+                                          </button>
+                                        )}
+                                      </div>
+                                      <strong className={styles.giftCardValueText}>
+                                        R$ {Number(card.amount || 0).toFixed(2)}
+                                      </strong>
+                                    </div>
+
+                                    <div className={styles.giftCardItemBottom}>
+                                      <span className={card.status === 'redeemed' || card.deliveryMode === 'self' ? styles.giftStatusRedeemed : styles.giftStatusActive}>
+                                        {card.deliveryMode === 'self' || card.status === 'redeemed' 
+                                          ? '✓ Saldo ativado na sua carteira digital' 
+                                          : '● Código disponível para presente / resgate'}
+                                      </span>
+                                      {card.recipientName && (
+                                        <span className={styles.giftRecipientName}>
+                                          Para: <strong>{card.recipientName}</strong>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className={styles.giftCardPendingNotice}>
+                                  <Sparkles size={14} color="#00ff88" />
+                                  <span>Vales-presente emitidos com sucesso. Seus créditos já foram creditados à sua carteira digital.</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       {/* SEÇÃO FISCAL & NOTA FISCAL (NF-E) */}
                       <div className={styles.orderFiscalSection}>

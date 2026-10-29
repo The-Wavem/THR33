@@ -442,7 +442,69 @@
   flex-shrink: 0;
 }
 
+/* SELETOR DE MODO DE DESTINO DO VALE */
+.modeSelectorGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.85rem;
+}
+
+.modeCard {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.1rem 1rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  transition: all var(--transition-fast);
+  text-align: left;
+  border-radius: 2px;
+}
+
+.modeCard:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+.activeModeCard {
+  border-color: #00ff88;
+  background-color: rgba(0, 255, 136, 0.05);
+}
+
+.modeHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  letter-spacing: 0.5px;
+}
+
+.activeModeCard .modeHeader {
+  color: #00ff88;
+}
+
+.modeDesc {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.valueValidationAlert {
+  display: flex;
+  align-items: center;
+  font-size: 0.72rem;
+  color: #ef4444;
+  font-weight: 700;
+  margin-top: 0.35rem;
+}
+
 @media (max-width: 900px) {
+  .modeSelectorGrid {
+    grid-template-columns: 1fr;
+  }
   .productGrid {
     grid-template-columns: 1fr;
     gap: 2.5rem;

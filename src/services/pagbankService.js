@@ -165,12 +165,16 @@ export const pagbankService = {
     walletDeduction = 0,
     rawOrderData = null
   }) => {
+    const isOnlyDigital = (items || []).length > 0 && (items || []).every(i => 
+      i.isGiftCard || i.category === 'gift-card' || String(i.id || '').includes('vale-presente')
+    );
     const isFree = Boolean(
+      isOnlyDigital ||
       isFreeShippingActive ||
       rawOrderData?.freeShippingApplied ||
       hasFreeShippingItem ||
       hasFreeShippingCoupon ||
-      (items || []).some(i => i.freeShipping || i.hasFreeShipping)
+      (items || []).some(i => !i.isGiftCard && i.category !== 'gift-card' && (i.freeShipping || i.hasFreeShipping))
     );
     const effectiveShipping = isFree ? 0 : (Number(shippingCost) || 0);
 

@@ -39,8 +39,10 @@ import {
   VolumeX,
   Bell,
   Radio,
-  Share2
+  Share2,
+  Gift
 } from 'lucide-react';
+import { giftCardService } from '../../services/giftCardService';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../services/firebaseConfig';
 import { maskCPF } from '../../utils/validators';
@@ -417,6 +419,11 @@ export function CmsPedidos() {
             const changedData = change.doc.data();
             const norm = normalizeOrderStatus(changedData.status || changedData.statusCode);
             const isApproved = norm === ORDER_STATUSES.PAGAMENTO_APROVADO || norm === ORDER_STATUSES.EM_PRODUCAO;
+            if (isApproved && changedData.hasGiftCard && !changedData.giftCardsProcessed) {
+              giftCardService.processOrderGiftCards(change.doc.id, changedData)
+                .catch(err => console.warn("Aviso ao processar vales pendentes no CMS:", err.message));
+            }
+
             if (change.type === 'added' || isApproved) {
               newestOrder = { id: change.doc.id, ...changedData };
               hasNewPaidOrder = true;
@@ -695,6 +702,14 @@ export function CmsPedidos() {
         status: newStatus,
         updatedAt: new Date().toISOString()
       });
+
+      // Se o pedido possui Vale-Presente e foi aprovado/pago, emite os códigos atomicamente
+      if (['pagamento_aprovado', 'pago', 'em_producao'].includes(newStatus)) {
+        if (currentOrder?.hasGiftCard && !currentOrder?.giftCardsProcessed) {
+          giftCardService.processOrderGiftCards(orderId, { ...currentOrder, status: newStatus })
+            .catch(err => console.warn("Aviso ao emitir vales do pedido no CMS:", err.message));
+        }
+      }
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus, updatedAt: new Date().toISOString() } : o));
       if (selectedOrder?.id === orderId) {
         setSelectedOrder(prev => ({ ...prev, status: newStatus, updatedAt: new Date().toISOString() }));
@@ -2235,6 +2250,62 @@ export function CmsPedidos() {
                   ))}
                 </div>
               </div>
+
+              {/* SEÇÃO DE VALES-PRESENTE EMITIDOS (SE HOUVER) */}
+              {(selectedOrder.hasGiftCard || (Array.isArray(selectedOrder.giftCardsGenerated) && selectedOrder.giftCardsGenerated.length > 0)) && (
+                <div className={styles.sectionBlock}>
+                  <div className={styles.sectionHeaderLine}>
+                    <Gift size={15} className={styles.sectionIcon} />
+                    <h3>VALES-PRESENTE DO PEDIDO</h3>
+                  </div>
+
+                  {Array.isArray(selectedOrder.giftCardsGenerated) && selectedOrder.giftCardsGenerated.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                      {selectedOrder.giftCardsGenerated.map((gc, gIdx) => (
+                        <div key={gc.code || gIdx} style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          flexWrap: 'wrap',
+                          gap: '0.5rem',
+                          background: 'rgba(0, 255, 136, 0.05)',
+                          border: '1px solid rgba(0, 255, 136, 0.2)',
+                          padding: '0.6rem 0.85rem',
+                          borderRadius: '3px'
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                            <code style={{ color: '#00ff88', fontWeight: 800, fontSize: '0.88rem' }}>{gc.code}</code>
+                            <span style={{ fontSize: '0.75rem', color: '#fff', fontWeight: 700 }}>R$ {Number(gc.amount || 0).toFixed(2)}</span>
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', fontSize: '0.72rem' }}>
+                            <span style={{ color: 'var(--text-muted)' }}>
+                              {gc.deliveryMode === 'self' ? '⚡ Ativado na Conta' : '🎁 Código para Presente'}
+                            </span>
+                            <span style={{
+                              padding: '0.15rem 0.45rem',
+                              borderRadius: '2px',
+                              fontWeight: 700,
+                              background: gc.status === 'redeemed' ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 255, 136, 0.15)',
+                              color: gc.status === 'redeemed' ? 'var(--text-muted)' : '#00ff88'
+                            }}>
+                              {gc.status === 'redeemed' ? 'RESGATADO' : 'ATIVO'}
+                            </span>
+                            {gc.recipientName && (
+                              <span style={{ color: 'var(--text-secondary)' }}>
+                                Para: <strong>{gc.recipientName}</strong>
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                      Vales-presente aguardando confirmação do pagamento para liberação dos códigos.
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* DISCRIMINAÇÃO FINANCEIRA & FRETE */}
               {(() => {

@@ -61,9 +61,23 @@ export function CartProvider({ children }) {
   const closeCart = () => setIsCartOpen(false);
 
   // Detecção de Frete Grátis (Acumulativo via Peça ou Cupom)
-  const hasFreeShippingItem = useMemo(() => {
-    return cartItems.some(i => i.freeShipping || i.hasFreeShipping);
+  // Observação crítica: Itens digitais / Vales-presentes NÃO concedem frete grátis aos itens físicos do carrinho.
+  const physicalItems = useMemo(() => {
+    return cartItems.filter(i => 
+      !i.isGiftCard && 
+      !i.isDigital && 
+      i.category !== 'gift-card' && 
+      !String(i.id || '').includes('vale-presente')
+    );
   }, [cartItems]);
+
+  const hasPhysicalItems = physicalItems.length > 0;
+  const isOnlyDigitalCart = cartItems.length > 0 && !hasPhysicalItems;
+
+  // Apenas peças físicas com a flag de frete grátis ativam frete grátis no pedido
+  const hasFreeShippingItem = useMemo(() => {
+    return physicalItems.some(i => i.freeShipping || i.hasFreeShipping);
+  }, [physicalItems]);
 
   const hasFreeShippingCoupon = useMemo(() => {
     return Boolean(
@@ -78,9 +92,10 @@ export function CartProvider({ children }) {
 
   const effectiveShippingCost = useMemo(() => {
     if (cartItems.length === 0) return 0;
+    if (isOnlyDigitalCart) return 0;
     if (isFreeShippingActive) return 0;
     return Number(shippingCost || 0);
-  }, [cartItems.length, isFreeShippingActive, shippingCost]);
+  }, [cartItems.length, isOnlyDigitalCart, isFreeShippingActive, shippingCost]);
 
   // Cálculos financeiros
   const subtotal = useMemo(() => {
@@ -198,22 +213,37 @@ export function CartProvider({ children }) {
     const cleanPrice = parsePriceNumber(product.price || product.priceNum);
 
 
+    const isGift = Boolean(
+      product.isGiftCard || 
+      product.category === 'gift-card' || 
+      String(product.id || '').includes('vale-presente')
+    );
+
     const itemToAdd = {
       id: product.id,
       name: product.name || product.title,
       size: sizeStr,
       color: colorObj,
-      category: product.category || 'camisa',
-      fit: product.fit || "Boxy Fit",
+      category: isGift ? 'gift-card' : (product.category || 'camisa'),
+      fit: product.fit || (isGift ? "Vale-Presente Digital" : "Boxy Fit"),
       price: cleanPrice,
       quantity: qty,
       image: product.image || (product.images && product.images[0]),
-      freeShipping: Boolean(product.freeShipping || product.hasFreeShipping)
+      freeShipping: isGift ? false : Boolean(product.freeShipping || product.hasFreeShipping),
+      isGiftCard: isGift,
+      isDigital: isGift,
+      giftDeliveryMode: product.giftDeliveryMode || (isGift ? 'code' : null),
+      recipientName: product.recipientName || null,
+      giftMessage: product.giftMessage || null
     };
 
     setCartItems((prevItems) => {
       const existingIndex = prevItems.findIndex(
-        (item) => item.id === product.id && item.size === sizeStr && item.color?.id === colorObj?.id
+        (item) => item.id === product.id && 
+                  item.size === sizeStr && 
+                  item.color?.id === colorObj?.id &&
+                  item.giftDeliveryMode === itemToAdd.giftDeliveryMode &&
+                  item.recipientName === itemToAdd.recipientName
       );
 
       if (existingIndex > -1) {
@@ -319,6 +349,9 @@ export function CartProvider({ children }) {
         hasFreeShippingCoupon,
         isFreeShippingActive,
         effectiveShippingCost,
+        physicalItems,
+        hasPhysicalItems,
+        isOnlyDigitalCart,
         total,
         totalItemsCount
       }}

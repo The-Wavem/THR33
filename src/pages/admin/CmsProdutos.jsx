@@ -27,7 +27,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Link as LinkIcon,
-  Infinity as InfinityIcon
+  Infinity as InfinityIcon,
+  Gift
 } from 'lucide-react';
 import { db, storage } from '../../services/firebaseConfig';
 import { catalogService } from '../../services/catalogService';
@@ -113,6 +114,9 @@ export function CmsProdutos() {
     ],
     unlimitedStock: false,
     hasColorStock: false,
+    minValue: 30,
+    maxValue: 2000,
+    values: [50, 100, 200],
     colorStock: {
       preto: { PP: 5, P: 15, M: 20, G: 15, GG: 5 }
     }
@@ -336,6 +340,9 @@ export function CmsProdutos() {
       colors: initialColors,
       unlimitedStock: Boolean(product.unlimitedStock || product.isUnlimitedStock),
       hasColorStock: product.hasColorStock ?? false,
+      minValue: Number(product.minValue || 30),
+      maxValue: Number(product.maxValue || 2000),
+      values: Array.isArray(product.values) ? product.values : [50, 100, 200],
       colorStock: initialColorStock
     });
 
@@ -724,7 +731,16 @@ export function CmsProdutos() {
       colorStock: formData.colorStock,
       description: formData.description.trim(),
       unlimitedStock: Boolean(formData.unlimitedStock),
-      isUnlimitedStock: Boolean(formData.unlimitedStock),
+      isUnlimitedStock: Boolean(formData.unlimitedStock || formData.category === 'gift-card'),
+      isGiftCard: formData.category === 'gift-card',
+      ...(formData.category === 'gift-card' ? {
+        minValue: Number(formData.minValue || 30),
+        maxValue: Number(formData.maxValue || 2000),
+        values: Array.isArray(formData.values) && formData.values.length > 0 ? formData.values : [50, 100, 200],
+        freeShipping: true,
+        hasFreeShipping: true,
+        unlimitedStock: true
+      } : {}),
       stock: aggregatedStock,
       sizes: formData.unlimitedStock
         ? ['PP', 'P', 'M', 'G', 'GG']
@@ -1978,8 +1994,54 @@ export function CmsProdutos() {
                 </div>
               </div>
 
-              {/* GRADE DE ESTOQUE POR TAMANHO (SKUS) */}
-              <div className={styles.stockSection}>
+              {/* CONFIGURAÇÃO ESPECÍFICA PARA VALE-PRESENTE DIGITAL */}
+              {formData.category === 'gift-card' ? (
+                <div className={styles.giftCardConfigBox}>
+                  <div className={styles.giftCardConfigHeader}>
+                    <Gift size={16} color="#00ff88" />
+                    <strong>CONFIGURAÇÕES DO VALE-PRESENTE DIGITAL</strong>
+                  </div>
+                  <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '0.2rem 0 0.85rem' }}>
+                    Vales-Presente possuem geração digital instantânea por demanda e não utilizam controle físico por grade P/M/G/GG.
+                  </p>
+
+                  <div className={styles.gridTwo}>
+                    <div className={styles.formGroup}>
+                      <label>VALOR MÍNIMO PERMITIDO (R$)</label>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        value={formData.minValue ?? 30} 
+                        onChange={(e) => setFormData(prev => ({ ...prev, minValue: Number(e.target.value) || 30 }))}
+                        placeholder="Ex: 30"
+                      />
+                    </div>
+                    <div className={styles.formGroup}>
+                      <label>VALOR MÁXIMO PERMITIDO (R$)</label>
+                      <input 
+                        type="number" 
+                        min="1" 
+                        value={formData.maxValue ?? 2000} 
+                        onChange={(e) => setFormData(prev => ({ ...prev, maxValue: Number(e.target.value) || 2000 }))}
+                        placeholder="Ex: 2000"
+                      />
+                    </div>
+                  </div>
+
+                  <div className={styles.formGroup} style={{ marginTop: '0.75rem' }}>
+                    <label>VALORES PRÉ-SETADOS DE BOTÃO (SEPARADOS POR VÍRGULA)</label>
+                    <input 
+                      type="text" 
+                      value={Array.isArray(formData.values) ? formData.values.join(', ') : (formData.values || '50, 100, 200')} 
+                      onChange={(e) => setFormData(prev => ({ ...prev, values: e.target.value.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n) && n > 0) }))}
+                      placeholder="Ex: 50, 100, 200"
+                    />
+                    <small style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Estes valores aparecem como botões rápidos de 1-clique no detalhe do vale.</small>
+                  </div>
+                </div>
+              ) : (
+                /* GRADE DE ESTOQUE POR TAMANHO (SKUS) */
+                <div className={styles.stockSection}>
                 <div className={styles.stockHeader}>
                   <Package size={14} className={styles.stockIcon} />
                   <label>
@@ -2075,6 +2137,7 @@ export function CmsProdutos() {
                   </div>
                 )}
               </div>
+              )}
 
               {/* FLAGS DE DESTAQUE */}
               <div className={styles.checkboxGroup}>
