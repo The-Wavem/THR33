@@ -633,7 +633,10 @@ export const analyticsService = {
               { merge: true }
             );
           } catch (err) {
-            console.warn('Aviso ao registrar sessão inicial:', err.message);
+            // Em desenvolvimento local ou transicao de regras, silencia avisos que nao afetam a aplicacao
+            if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+              console.warn('Aviso ao registrar sessão inicial:', err.message);
+            }
           }
         };
 
@@ -665,7 +668,10 @@ export const analyticsService = {
               { merge: true }
             );
           } catch (err) {
-            console.warn('Aviso ao registrar pageView interno:', err.message);
+            // Em desenvolvimento local ou transicao de regras, silencia avisos que nao afetam a aplicacao
+            if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
+              console.warn('Aviso ao registrar pageView interno:', err.message);
+            }
           }
         };
 

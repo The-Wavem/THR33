@@ -70,14 +70,15 @@ service cloud.firestore {
     }
 
     // Catalogo de produtos: leitura publica; criacao e remocao restrita a admin;
-    // atualizacao permitida para admin OU incremento de metricas de telemetria publica
+    // atualizacao permitida para admin OU baixa de estoque no checkout e metricas de telemetria
     match /products/{productId} {
       allow read: if true;
       allow create, delete: if isAdmin();
       allow update: if isAdmin() || (
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'views', 'lastViewedAt', 'addedToCart', 'lastAddedToCartAt', 
-          'removedFromCart', 'lastRemovedFromCartAt', 'purchases', 'lastSoldAt'
+          'removedFromCart', 'lastRemovedFromCartAt', 'purchases', 'lastSoldAt',
+          'stock', 'totalStock', 'sizes', 'updatedAt'
         ])
       );
     }
@@ -128,7 +129,18 @@ service cloud.firestore {
     }
 
     // Sessoes de telemetria anonima e analitica
+    match /analytics/{docId} {
+      allow read, write: if true;
+    }
     match /analytics/{docId=**} {
+      allow read, write: if true;
+    }
+
+    // Telemetria diaria e estatisticas de trafego
+    match /analytics_daily/{docId} {
+      allow read, write: if true;
+    }
+    match /analytics_daily/{docId=**} {
       allow read, write: if true;
     }
 

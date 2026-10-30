@@ -332,8 +332,10 @@ export const pagbankService = {
               shippingDeadline: String(rawOrderData?.shippingDeadline || rawOrderData?.deadline || ''),
               address: {
                 street: shippingAddress.street || 'Rua',
-                number: shippingAddress.number || 'S/N',
-                complement: shippingAddress.complement || '',
+                number: shippingAddress.number || '1',
+                ...(shippingAddress.complement && shippingAddress.complement.trim() !== ''
+                  ? { complement: shippingAddress.complement.trim().slice(0, 40) }
+                  : {}),
                 neighborhood: shippingAddress.neighborhood || shippingAddress.locality || 'Centro',
                 city: shippingAddress.city || 'Curitiba',
                 state: shippingAddress.state || 'PR',
@@ -444,33 +446,35 @@ export const pagbankService = {
         name: String(item.name || 'Camiseta THR33').slice(0, 64),
         quantity: Number(item.quantity) || 1,
         unit_amount: Math.round(Number(item.price) * 100)
-      })),
-      shipping: {
-        address: {
-          street: shippingAddress.street || 'Rua',
-          number: shippingAddress.number || '0',
-          complement: shippingAddress.complement || '',
-          locality: shippingAddress.neighborhood || 'Centro',
-          city: shippingAddress.city || 'Curitiba',
-          region_code: shippingAddress.state || 'PR',
-          country: 'BRA',
-          postal_code: (shippingAddress.cep || '80000000').replace(/\D/g, '')
-        }
-      }
+      }))
     };
 
-    if (paymentMethod === 'PIX') {
-      // Estrutura oficial PagBank Orders v2 (charges.payment_method.type = "PIX")
-      orderPayload.charges = [{
-        reference_id: `CHAR_${orderReference}`,
-        description: `Pedido THR33 ${orderReference}`,
-        amount: { value: totalInCents, currency: "BRL" },
-        payment_method: {
-          type: "PIX",
-          pix: {
-            expiration_date: new Date(Date.now() + 20 * 60 * 1000).toISOString()
-          }
+    const isDigitalOnlyOrder = items && items.length > 0 && items.every(item => 
+      Boolean(item.isGiftCard || item.category === 'gift-card' || String(item.id || '').includes('vale'))
+    );
+
+    if (!isDigitalOnlyOrder && shippingAddress) {
+      orderPayload.shipping = {
+        address: {
+          street: shippingAddress.street || 'Rua',
+          number: String(shippingAddress.number || '1').trim(),
+          locality: shippingAddress.neighborhood || 'Centro',
+          city: shippingAddress.city || 'Curitiba',
+          region_code: (shippingAddress.state || 'PR').toUpperCase().slice(0, 2),
+          country: 'BRA',
+          postal_code: (shippingAddress.cep || '80000000').replace(/\D/g, '').padEnd(8, '0').slice(0, 8),
+          ...(shippingAddress.complement && shippingAddress.complement.trim() !== ''
+            ? { complement: shippingAddress.complement.trim().slice(0, 40) }
+            : {})
         }
+      };
+    }
+
+    if (paymentMethod === 'PIX') {
+      // Estrutura oficial PagBank Orders v2: qr_codes na raiz do pedido (sem charges)
+      orderPayload.qr_codes = [{
+        amount: { value: totalInCents },
+        expiration_date: new Date(Date.now() + 20 * 60 * 1000).toISOString()
       }];
     }
 

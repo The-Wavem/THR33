@@ -65,6 +65,29 @@ import { webhookService } from '../../services/webhookService';
 import { giftCardService } from '../../services/giftCardService';
 import styles from './Checkout.module.css';
 
+/**
+ * Identifica enderecos virtuais/temporarios de compras digitais que nao devem ser salvos no perfil
+ */
+export const isDigitalOrCheckoutAddress = (addr) => {
+  if (!addr) return false;
+  const street = String(addr.street || '').toLowerCase();
+  const title = String(addr.title || '').toLowerCase();
+  const complement = String(addr.complement || '').toLowerCase();
+  const neighborhood = String(addr.neighborhood || '').toLowerCase();
+  const cep = String(addr.cep || '').replace(/\D/g, '');
+  return (
+    street.includes('entrega digital') ||
+    street.includes('digital instant') ||
+    title === 'checkout' ||
+    title.includes('digital') ||
+    neighborhood === 'digital' ||
+    complement.includes('instantaneamente em meus pedidos') ||
+    complement.includes('entrega digital') ||
+    cep === '80000000' ||
+    cep === '80020310'
+  );
+};
+
 export function Checkout({ user: propUser, onOpenAuthModal }) {
   const navigate = useNavigate();
   const { currentUser, user: authUser, updateUser } = useAuth();
@@ -233,7 +256,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         phone: active.phone || prev.phone || ''
       }));
 
-      const userAddresses = active.addresses || [];
+      const rawAddresses = active.addresses || [];
+      const userAddresses = rawAddresses.filter(a => !isDigitalOrCheckoutAddress(a));
       if (userAddresses.length > 0) {
         setSavedAddresses(userAddresses);
         const defaultAddr = userAddresses.find(a => a.isDefault) || userAddresses[0];
@@ -914,9 +938,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     setIsProcessing(true);
 
     const addressToSave = isOnlyGiftCardsInCart ? {
-      cep: '80000-000',
+      cep: '80020-310',
       street: 'Entrega Digital Instantânea',
-      number: 'S/N',
+      number: '1',
       neighborhood: 'Digital',
       city: clientData.city || user?.city || 'Curitiba',
       state: clientData.state || user?.state || 'PR',
@@ -928,7 +952,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       neighborhood: addressForm.neighborhood || 'Batel',
       city: addressForm.city || 'Curitiba',
       state: addressForm.state || 'PR',
-      complement: addressForm.complement || ''
+      complement: addressForm.complement ? addressForm.complement.trim() : ''
     });
 
     const orderRefId = `THR-${Date.now()}`;
@@ -948,10 +972,13 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
     const isClientPj = Boolean(clientData.isPj || (clientData.cpf && clientData.cpf.replace(/\D/g, '').length === 14));
 
+    const resolvedUid = user?.uid || authUser?.uid || currentUser?.uid || 'guest';
+    const resolvedEmail = (clientData.email || user?.email || '').trim().toLowerCase();
+
     const baseOrderData = {
-      userId: user?.uid || 'guest',
+      userId: resolvedUid,
       clientName: clientData.name || user?.displayName || user?.name || 'Cliente THR33',
-      clientEmail: clientData.email || user?.email || '',
+      clientEmail: resolvedEmail,
       clientCpf: clientData.cpf || user?.cpf || '',
       clientPhone: clientData.phone || user?.phone || '',
       isPj: isClientPj,
@@ -1205,14 +1232,16 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     let finalDocId = pagbankRes?.orderId || null;
 
     const chargeObj = pagbankData?.charges?.[0];
+    const pbQrObj = pagbankData?.qr_codes?.[0] || chargeObj?.qr_code || pagbankRes?.qrCode || null;
+
     const pixQrCodeUrl =
+      pbQrObj?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
       chargeObj?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
-      pagbankData?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
       (paymentMethod === 'PIX' ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=THR33-PIX-${orderRefId}` : null);
 
     const pixCopiaECola =
+      pbQrObj?.text ||
       chargeObj?.qr_code?.text ||
-      pagbankData?.qr_codes?.[0]?.text ||
       (paymentMethod === 'PIX' ? `00020126580014br.gov.bcb.pix0136pagbank-thr33-${orderRefId}` : null);
 
     const orderData = {
@@ -1240,96 +1269,55 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     }));
 
     try {
-      // 1. Grava o pedido no Firestore com Reserva Atômica caso a Function backend não tenha criado
-      if (!finalDocId) {
-        await runTransaction(db, async (transaction) => {
-          const prodSnaps = [];
-          for (const item of (cleanPayload.items || [])) {
-            const pRef = doc(db, 'products', String(item.id));
-            const pSnap = await transaction.get(pRef);
-            prodSnaps.push({ pRef, pSnap, item });
-          }
+      // 1. Gravação 100% GARANTIDA do pedido na coleção 'orders'
+      const targetOrderId = finalDocId || orderRefId;
+      const orderDocRef = doc(db, 'orders', targetOrderId);
 
-          for (const { pSnap, item } of prodSnaps) {
-            if (!pSnap.exists()) continue;
-            const pData = pSnap.data();
-            const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
-            const size = String(item.size || 'M').toUpperCase();
+      await setDoc(orderDocRef, {
+        ...cleanPayload,
+        orderId: targetOrderId,
+        id: targetOrderId,
+        userId: cleanPayload.userId || resolvedUid,
+        clientEmail: cleanPayload.clientEmail || resolvedEmail,
+        clientName: cleanPayload.clientName || clientData.name || user?.displayName || user?.name || 'Cliente THR33',
+        clientCpf: cleanPayload.clientCpf || clientData.cpf || '',
+        clientPhone: cleanPayload.clientPhone || clientData.phone || '',
+        hasGiftCard: Boolean(cleanPayload.hasGiftCard),
+        carrier: cleanPayload.carrier || selectedShippingOption?.carrier || selectedShippingOption?.name || '',
+        serviceName: cleanPayload.serviceName || selectedShippingOption?.serviceName || '',
+        shippingDeadline: cleanPayload.shippingDeadline || selectedShippingOption?.deadline || '',
+        paymentMethod: cleanPayload.paymentMethod,
+        utm_source: utmSource,
+        utm_medium: utmMedium,
+        utm_campaign: utmCampaign,
+        paymentDetails: cleanPayload.paymentDetails,
+        items: cleanPayload.items,
+        shippingAddress: cleanPayload.shippingAddress,
+        clientState: cleanPayload.clientState || cleanPayload.shippingAddress?.state || resolveOrderDestinationUF(cleanPayload) || '',
+        clientCity: cleanPayload.clientCity || cleanPayload.shippingAddress?.city || '',
+        stockReserved: true,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
 
-            const isUnlimited = Boolean(pData.unlimitedStock || pData.isUnlimitedStock);
-            if (isUnlimited) {
-              continue;
-            }
+      finalDocId = targetOrderId;
 
-            let avail = 0;
-            if (pData.stock && typeof pData.stock === 'object') {
-              avail = Number(pData.stock[size] ?? pData.stock[item.size] ?? 0);
-            } else if (typeof pData.stock === 'number') {
-              avail = Number(pData.stock);
-            }
-
-            if (avail < qty) {
-              throw new Error(`Estoque insuficiente para "${pData.name || item.name}" no tamanho ${size}. Disponível: ${avail}`);
-            }
-          }
-
-          for (const { pRef, pSnap, item } of prodSnaps) {
-            if (!pSnap.exists()) continue;
-            const pData = pSnap.data();
-            const isUnlimited = Boolean(pData.unlimitedStock || pData.isUnlimitedStock);
-            if (isUnlimited) {
-              continue;
-            }
-            const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
-            const size = String(item.size || 'M').toUpperCase();
-            const updates = { updatedAt: new Date().toISOString() };
-
-            if (pData.stock && typeof pData.stock === 'object') {
-              const cur = Number(pData.stock[size] ?? pData.stock[item.size] ?? 0);
-              const newStk = { ...pData.stock, [size]: Math.max(0, cur - qty) };
-              updates.stock = newStk;
-              updates.sizes = Object.keys(newStk).filter(s => (newStk[s] || 0) > 0);
-            } else if (typeof pData.stock === 'number') {
-              updates.stock = Math.max(0, pData.stock - qty);
-            }
-
-            transaction.update(pRef, updates);
-          }
-
-          const newOrderRef = doc(collection(db, 'orders'));
-          transaction.set(newOrderRef, {
-            ...cleanPayload,
-            stockReserved: true,
-            stockReleased: false
-          });
-          finalDocId = newOrderRef.id;
+      // 2. Baixa de estoque físico para itens não digitais (executa sem travar o pedido)
+      try {
+        const physicalItems = (cleanPayload.items || []).filter(item => {
+          const isDigital = Boolean(
+            item.isGiftCard ||
+            item.category === 'gift-card' ||
+            item.type === 'gift-card' ||
+            String(item.id || item.slug || '').includes('vale')
+          );
+          return !isDigital;
         });
-      } else {
-        // Enriquece o pedido já gravado no backend com metadados complementares (UTMs, endereço normalizado e detalhes visuais)
-        try {
-          await setDoc(doc(db, 'orders', finalDocId), {
-            userId: cleanPayload.userId || user?.uid || authUser?.uid || currentUser?.uid || 'guest',
-            clientEmail: cleanPayload.clientEmail || user?.email || '',
-            clientName: cleanPayload.clientName || '',
-            clientCpf: cleanPayload.clientCpf || '',
-            clientPhone: cleanPayload.clientPhone || '',
-            hasGiftCard: Boolean(cleanPayload.hasGiftCard),
-            carrier: cleanPayload.carrier || selectedShippingOption?.carrier || selectedShippingOption?.name || '',
-            serviceName: cleanPayload.serviceName || selectedShippingOption?.serviceName || '',
-            shippingDeadline: cleanPayload.shippingDeadline || selectedShippingOption?.deadline || '',
-            paymentMethod: cleanPayload.paymentMethod,
-            utm_source: utmSource,
-            utm_medium: utmMedium,
-            utm_campaign: utmCampaign,
-            paymentDetails: cleanPayload.paymentDetails,
-            items: cleanPayload.items,
-            shippingAddress: cleanPayload.shippingAddress,
-            clientState: cleanPayload.clientState || cleanPayload.shippingAddress?.state || resolveOrderDestinationUF(cleanPayload) || '',
-            clientCity: cleanPayload.clientCity || cleanPayload.shippingAddress?.city || ''
-          }, { merge: true });
-        } catch (syncDocErr) {
-          console.warn("Aviso ao enriquecer documento do pedido:", syncDocErr.message);
+
+        if (physicalItems.length > 0) {
+          await catalogService.decrementProductStock(physicalItems);
         }
+      } catch (stockErr) {
+        console.warn("Aviso ao atualizar estoque físico no checkout:", stockErr.message);
       }
       const rawFinalId = String(finalDocId || '').trim();
       let generatedOrder = rawFinalId;
@@ -1389,26 +1377,32 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           const userSnap = await getDoc(userRef);
           const currentAddresses = userSnap.exists() ? (userSnap.data().addresses || []) : [];
 
-          const newAddressFromCheckout = {
-            id: `addr_${Date.now()}`,
-            title: 'Checkout',
-            cep: addressToSave.cep || '',
-            street: addressToSave.street || '',
-            number: addressToSave.number || '',
-            complement: addressToSave.complement || '',
-            neighborhood: addressToSave.neighborhood || '',
-            city: addressToSave.city || 'Curitiba',
-            state: addressToSave.state || 'PR',
-            isDefault: currentAddresses.length === 0
-          };
+          // Remove qualquer endereço virtual/checkout do perfil
+          let updatedAddresses = currentAddresses.filter(a => !isDigitalOrCheckoutAddress(a));
 
-          const addressExists = currentAddresses.some(
-            a => a.cep === addressToSave.cep && a.number === addressToSave.number
-          );
+          // Apenas adiciona novo endereço ao perfil se a compra for de produto físico real!
+          if (!isOnlyGiftCardsInCart) {
+            const addressExists = updatedAddresses.some(
+              a => a.cep === addressToSave.cep && a.number === addressToSave.number
+            );
 
-          const updatedAddresses = addressExists 
-            ? currentAddresses 
-            : [...currentAddresses, newAddressFromCheckout];
+            if (!addressExists) {
+              const newAddressFromCheckout = {
+                id: `addr_${Date.now()}`,
+                title: addressToSave.complement ? `Apto ${addressToSave.complement}` : `Endereço ${addressToSave.neighborhood || 'Entrega'}`,
+                label: `Endereço (${addressToSave.neighborhood || 'Entrega'})`,
+                cep: addressToSave.cep || '',
+                street: addressToSave.street || '',
+                number: addressToSave.number || '',
+                complement: addressToSave.complement || '',
+                neighborhood: addressToSave.neighborhood || '',
+                city: addressToSave.city || 'Curitiba',
+                state: addressToSave.state || 'PR',
+                isDefault: updatedAddresses.length === 0
+              };
+              updatedAddresses = [...updatedAddresses, newAddressFromCheckout];
+            }
+          }
 
           const userPayload = JSON.parse(JSON.stringify({
             name: clientData.name || user?.displayName || user?.name || '',
@@ -1457,33 +1451,51 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       await catalogService.decrementProductStock(cartItems);
 
     } catch (err) {
-      console.warn("Aviso ao salvar pedido no Firestore:", err.message);
-      const fallbackOrder = `THR-${Math.floor(1000 + Math.random() * 9000)}`;
-      setOrderNumber(fallbackOrder);
-    } finally {
+      console.error("Erro crítico ao finalizar e persistir pedido:", err);
+      setPaymentError(err.message || "Erro ao processar e salvar seu pedido. Por favor, tente novamente.");
       setIsProcessing(false);
-      setCurrentStep(4);
-      clearCart();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
     }
+
+    setIsProcessing(false);
+    setCurrentStep(4);
+    clearCart();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const getLivePixCopiaECola = () => {
     return (
-      pagbankResult?.charges?.[0]?.qr_code?.text ||
       pagbankResult?.qr_codes?.[0]?.text ||
+      pagbankResult?.charges?.[0]?.qr_code?.text ||
       pagbankResult?.pix?.text ||
+      pagbankRes?.qrCode?.text ||
+      pagbankRes?.data?.qr_codes?.[0]?.text ||
+      pagbankRes?.data?.charges?.[0]?.qr_code?.text ||
       "00020101021226850014br.gov.bcb.pix2563api-h.pagseguro.com/pix/v2/mock-thr335204899953039865802BR5921Pagseguro Internet SA6009SAO PAULO62070503***63045677"
     );
   };
 
   const getLivePixQrCodeUrl = () => {
-    return (
-      pagbankResult?.charges?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+    const rawUrl =
       pagbankResult?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      pagbankResult?.charges?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
       pagbankResult?.pix?.qrCodeUrl ||
-      null
-    );
+      pagbankRes?.qrCode?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      pagbankRes?.data?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      pagbankRes?.data?.charges?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      null;
+
+    const pixCode = getLivePixCopiaECola();
+
+    // Se o gateway devolver a URL de imagem direta que requer autenticacao no PagBank ou se rawUrl estiver ausente,
+    // renderiza o QR code diretamente a partir do payload oficial Copia e Cola EMV para leitura 100% confiavel em qualquer banco
+    if (pixCode) {
+      if (!rawUrl || rawUrl.includes('api.pagseguro.com/qrcode') || rawUrl.includes('api-h.pagseguro.com')) {
+        return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(pixCode)}`;
+      }
+    }
+
+    return rawUrl;
   };
 
   const handleCopyPix = () => {

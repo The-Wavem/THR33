@@ -450,6 +450,16 @@ async function reserveStockAtomic(db, items, orderRefId) {
     // 1. Fase de leitura: ler todos os documentos primeiro
     const productSnapshots = [];
     for (const item of items) {
+      const isDigitalGift = Boolean(
+        item.isGiftCard ||
+        item.isDigital ||
+        item.category === "gift-card" ||
+        item.type === "gift-card" ||
+        item.type === "brinde" ||
+        String(item.id || item.reference_id || "").includes("vale-presente")
+      );
+      if (isDigitalGift) continue;
+
       const prodId = String(item.id || item.reference_id);
       if (!prodId) continue;
       const prodRef = db.collection("products").doc(prodId);
@@ -560,6 +570,16 @@ async function restoreStockAtomic(
     // 1. Leituras
     const productSnapshots = [];
     for (const item of items) {
+      const isDigitalGift = Boolean(
+        item.isGiftCard ||
+        item.isDigital ||
+        item.category === "gift-card" ||
+        item.type === "gift-card" ||
+        item.type === "brinde" ||
+        String(item.id || item.reference_id || "").includes("vale-presente")
+      );
+      if (isDigitalGift) continue;
+
       const prodId = String(item.id || item.reference_id);
       if (!prodId) continue;
       const prodRef = db.collection("products").doc(prodId);
@@ -641,6 +661,16 @@ exports.createPagBankOrder = onCall(
       if (Array.isArray(request.data.items) && request.data.items.length > 0) {
         const db = getDb();
         for (const item of request.data.items) {
+          const isDigitalGift = Boolean(
+            item.isGiftCard ||
+            item.isDigital ||
+            item.category === "gift-card" ||
+            item.type === "gift-card" ||
+            item.type === "brinde" ||
+            String(item.id || item.reference_id || "").includes("vale-presente")
+          );
+          if (isDigitalGift) continue;
+
           const prodId = String(item.id || item.reference_id || "");
           if (!prodId) continue;
           const snap = await db.collection("products").doc(prodId).get();
@@ -748,6 +778,12 @@ exports.createPagBankOrder = onCall(
       );
     }
 
+    // Se estiver em sandbox/teste e o email for o do lojista PagBank, usa alias seguro de teste para nao disparar erro 40002
+    const rawCustomerEmail = (customer.email || "").toLowerCase().trim();
+    if (isSandbox && (rawCustomerEmail === "contato.thewavem@gmail.com" || rawCustomerEmail === "thewavem@gmail.com")) {
+      customer.email = "cliente.teste.thr33@gmail.com";
+    }
+
     // 2. Blindagem de Seguranca: Recalcula precos 100% server-side via Firestore
     const db = getDb();
     let subtotalInCents = 0;
@@ -803,47 +839,66 @@ exports.createPagBankOrder = onCall(
         }
       }
 
-      const prodData = prodDoc.data();
-      let realPrice = Number(prodData.price);
-      if (isNaN(realPrice) || realPrice <= 0) {
-        throw new HttpsError(
-          "failed-precondition",
-          `Preço inválido cadastrado para o produto "${prodData.name || item.id}".`,
-        );
-      }
+      const prodData = prodDoc.data() || {};
 
-      // 1. Verifica se o produto tem desconto promocional ativo cadastrado no CMS/Catálogo
-      const isPromoActive = prodData.discountActive !== false;
-      const now = new Date();
-      const isAfterStart = !prodData.discountStartDate || new Date(prodData.discountStartDate) <= now;
-      const isBeforeEnd = !prodData.discountEndDate || new Date(prodData.discountEndDate) >= now;
-
-      if (isPromoActive && isAfterStart && isBeforeEnd) {
-        if (prodData.discountPrice && Number(prodData.discountPrice) > 0 && Number(prodData.discountPrice) < realPrice) {
-          realPrice = Number(prodData.discountPrice);
-        } else if (prodData.promoPrice && Number(prodData.promoPrice) > 0 && Number(prodData.promoPrice) < realPrice) {
-          realPrice = Number(prodData.promoPrice);
-        } else if (prodData.discountPercentage && Number(prodData.discountPercentage) > 0) {
-          realPrice = +(realPrice * (1 - Number(prodData.discountPercentage) / 100)).toFixed(2);
-        }
-      }
-
-      // Se o item passado possui preço promocional legítimo menor que o de tabela
-      if (item.price && !isNaN(Number(item.price)) && Number(item.price) > 0 && Number(item.price) < realPrice) {
-        realPrice = Number(item.price);
-      }
-
-      // 2. Detecta frete grátis na peça (somente se marcado oficialmente no catálogo em produto físico)
+      // 1. Detecta se o item e um vale-presente ou produto digital
       const isItemDigital = Boolean(
         prodData.isGiftCard || 
         prodData.category === "gift-card" || 
         prodData.type === "gift-card" ||
         item.isGiftCard ||
         item.category === "gift-card" ||
-        String(item.id || "").includes("vale-presente")
+        String(item.id || "").includes("vale") ||
+        String(item.id || "").includes("gift")
       );
-      if (!isItemDigital && (prodData.freeShipping === true || prodData.hasFreeShipping === true)) {
-        orderHasFreeShippingItem = true;
+
+      let realPrice = 0;
+
+      if (isItemDigital) {
+        // Para vales-presentes digitais, o preco e definido pelo valor selecionado no checkout (R$ 30 a R$ 2.000)
+        const giftVal = Number(item.price || prodData.price);
+        if (isNaN(giftVal) || giftVal < 30 || giftVal > 2000) {
+          throw new HttpsError(
+            "invalid-argument",
+            "Valor do vale-presente inválido (permitido entre R$ 30 e R$ 2.000).",
+          );
+        }
+        realPrice = giftVal;
+      } else {
+        // Para produtos fisicos (camisetas), o preco base vem obrigatoriamente do catalogo oficial no Firestore
+        let basePrice = Number(prodData.price);
+        if (isNaN(basePrice) || basePrice <= 0) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Preço inválido cadastrado para o produto "${prodData.name || item.id}".`,
+          );
+        }
+        realPrice = basePrice;
+
+        // Verifica promocoes e descontos ativos cadastrados no CMS/Catalogo
+        const isPromoActive = prodData.discountActive !== false;
+        const now = new Date();
+        const isAfterStart = !prodData.discountStartDate || new Date(prodData.discountStartDate) <= now;
+        const isBeforeEnd = !prodData.discountEndDate || new Date(prodData.discountEndDate) >= now;
+
+        if (isPromoActive && isAfterStart && isBeforeEnd) {
+          if (prodData.discountPrice && Number(prodData.discountPrice) > 0 && Number(prodData.discountPrice) < realPrice) {
+            realPrice = Number(prodData.discountPrice);
+          } else if (prodData.promoPrice && Number(prodData.promoPrice) > 0 && Number(prodData.promoPrice) < realPrice) {
+            realPrice = Number(prodData.promoPrice);
+          } else if (prodData.discountPercentage && Number(prodData.discountPercentage) > 0) {
+            realPrice = +(realPrice * (1 - Number(prodData.discountPercentage) / 100)).toFixed(2);
+          }
+        }
+
+        // Se o item passado possui preco promocional legitimo menor que o de tabela
+        if (item.price && !isNaN(Number(item.price)) && Number(item.price) > 0 && Number(item.price) < realPrice) {
+          realPrice = Number(item.price);
+        }
+
+        if (prodData.freeShipping === true || prodData.hasFreeShipping === true) {
+          orderHasFreeShippingItem = true;
+        }
       }
 
       const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
@@ -1207,7 +1262,36 @@ exports.createPagBankOrder = onCall(
       process.env.PAGBANK_WEBHOOK_URL ||
       (process.env.FIREBASE_CONFIG
         ? `https://${FUNCTION_REGION}-${JSON.parse(process.env.FIREBASE_CONFIG).projectId}.cloudfunctions.net/pagbankWebhook`
-        : "https://sua-cloud-function.run.app/pagbankWebhook");
+        : `https://${FUNCTION_REGION}-thr33-streetwear.cloudfunctions.net/pagbankWebhook`);
+
+    const isOnlyDigital = Boolean(isOnlyDigitalOrder);
+
+    // Endereco de entrega fisico formatado estritamente conforme PagBank Orders API
+    // Se complement for vazio, omitir chave para evitar erro 40002 (must not be blank)
+    const shippingAddressPayload = !isOnlyDigital && shipping?.address ? {
+      street: String(shipping.address.street || "Rua").slice(0, 100),
+      number: String(shipping.address.number || "0").trim().slice(0, 20),
+      locality: String(
+        shipping.address.neighborhood ||
+        shipping.address.locality ||
+        "Centro"
+      ).slice(0, 60),
+      city: String(shipping.address.city || "Curitiba").slice(0, 50),
+      region_code: String(
+        shipping.address.state ||
+        shipping.address.region_code ||
+        "PR"
+      ).toUpperCase().slice(0, 2),
+      country: "BRA",
+      postal_code: cleanCep.padEnd(8, "0").slice(0, 8),
+    } : null;
+
+    if (shippingAddressPayload) {
+      const compStr = String(shipping?.address?.complement || "").trim();
+      if (compStr.length > 0) {
+        shippingAddressPayload.complement = compStr.slice(0, 40);
+      }
+    }
 
     const orderPayload = {
       reference_id: referenceId,
@@ -1230,26 +1314,25 @@ exports.createPagBankOrder = onCall(
         quantity: Number(i.quantity) || 1,
         unit_amount: Number(i.unit_amount) || 0,
       })),
-      shipping: {
-        address: {
-          street: shipping?.address?.street || "Rua",
-          number: String(shipping?.address?.number || "S/N")
-            .trim()
-            .slice(0, 15),
-          complement: shipping?.address?.complement || "",
-          locality:
-            shipping?.address?.neighborhood ||
-            shipping?.address?.locality ||
-            "Centro",
-          city: shipping?.address?.city || "Curitiba",
-          region_code: (shipping?.address?.state || "PR")
-            .toUpperCase()
-            .slice(0, 2),
-          country: "BRA",
-          postal_code: cleanCep.padEnd(8, "0").slice(0, 8),
-        },
-      },
-      charges: [chargePayload],
+      ...(!isOnlyDigital && shippingAddressPayload ? {
+        shipping: {
+          address: shippingAddressPayload,
+        }
+      } : {}),
+      ...(paymentMethod.type === "PIX"
+        ? {
+            qr_codes: [
+              {
+                amount: {
+                  value: finalAmountInCents,
+                },
+                expiration_date: pixExpirationDate.toISOString(),
+              },
+            ],
+          }
+        : {
+            charges: [chargePayload],
+          }),
       notification_urls: [webhookUrl],
     };
 
@@ -1405,24 +1488,48 @@ exports.createPagBankOrder = onCall(
         ? "pagamento_aprovado"
         : "aguardando_pagamento";
 
-    // Suporte a especificacao oficial v2 (charges.qr_code e charges.links) com retrocompatibilidade v1
-    const pixQrCodeUrl =
-      charge?.links?.find(
+    // Suporte oficial PagBank v2: qr_codes na raiz (PIX) ou charges[0].qr_code
+    const pbQrObj = pagbankOrder.qr_codes?.[0] || charge?.qr_code || null;
+    const rawQrPngUrl =
+      pbQrObj?.links?.find(
         (l) => l.rel === "QRCODE.PNG" || l.media === "image/png",
       )?.href ||
-      pagbankOrder.qr_codes?.[0]?.links?.find(
+      charge?.links?.find(
         (l) => l.rel === "QRCODE.PNG" || l.media === "image/png",
       )?.href ||
       null;
 
     const pixCopiaECola =
-      charge?.qr_code?.text || pagbankOrder.qr_codes?.[0]?.text || null;
+      pbQrObj?.text || charge?.qr_code?.text || null;
+
+    // Garante que o QR code seja confiavel e carregavel publicamente no frontend
+    const pixQrCodeUrl =
+      rawQrPngUrl ||
+      (pixCopiaECola
+        ? `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(pixCopiaECola)}`
+        : null);
 
     const qrCodeObj = {
       text: pixCopiaECola,
-      id: charge?.qr_code?.id || pagbankOrder.qr_codes?.[0]?.id || null,
-      links: charge?.links || pagbankOrder.qr_codes?.[0]?.links || [],
+      id: pbQrObj?.id || charge?.qr_code?.id || null,
+      links: [
+        ...(pbQrObj?.links || charge?.links || []),
+        ...(pixQrCodeUrl ? [{ rel: "QRCODE.PNG", href: pixQrCodeUrl, media: "image/png", type: "GET" }] : [])
+      ],
     };
+
+    const finalShippingAddress = !isOnlyDigital && shippingAddressPayload
+      ? shippingAddressPayload
+      : {
+          street: shipping?.address?.street || "Entrega Digital Instantânea",
+          number: String(shipping?.address?.number || "1").trim(),
+          complement: "Liberado instantaneamente em Meus Pedidos",
+          neighborhood: shipping?.address?.neighborhood || "Digital",
+          city: shipping?.address?.city || "Curitiba",
+          region_code: (shipping?.address?.state || "PR").toUpperCase().slice(0, 2),
+          country: "BRA",
+          postal_code: cleanCep.padEnd(8, "0").slice(0, 8),
+        };
 
     await orderRef.set({
       orderId: referenceId,
@@ -1461,7 +1568,7 @@ exports.createPagBankOrder = onCall(
       shippingCostInCents: officialShippingFeeInCents,
       freeShippingApplied: Boolean(isFreeShipping),
       shippingMethod: shippingMethodId,
-      shippingAddress: orderPayload.shipping.address,
+      shippingAddress: finalShippingAddress,
       items: sanitizedItems,
       hasGiftCard: Boolean(sanitizedItems.some(i => i.isGiftCard)),
       carrier: (() => {
@@ -1687,6 +1794,129 @@ exports.createSecureOrder = onRequest(
     });
   },
 );
+
+/**
+ * Processamento idempotente de Vales-Presentes no backend quando o pagamento for aprovado
+ */
+async function processOrderGiftCardsBackend(db, orderRef, orderData) {
+  if (!orderData || orderData.giftCardsProcessed === true) return;
+
+  const items = Array.isArray(orderData.items) ? orderData.items : [];
+  const giftCardItems = items.filter((i) =>
+    Boolean(
+      i.isGiftCard ||
+      i.category === "gift-card" ||
+      String(i.id || "").includes("vale"),
+    ),
+  );
+
+  if (giftCardItems.length === 0) return;
+
+  const chars = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const genCode = () => {
+    let seg1 = "";
+    let seg2 = "";
+    for (let i = 0; i < 4; i++) {
+      seg1 += chars.charAt(Math.floor(Math.random() * chars.length));
+      seg2 += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return `THR33-GIFT-${seg1}-${seg2}`;
+  };
+
+  const buyerUid = String(orderData.userId || orderData.clientId || "").trim();
+  const buyerEmail = String(orderData.clientEmail || orderData.customer?.email || "").trim();
+  const buyerName = String(orderData.clientName || orderData.customer?.name || "Cliente THR33").trim();
+
+  const giftCardsGenerated = [];
+
+  for (const item of giftCardItems) {
+    const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+    const unitPrice = Number(item.price || 0);
+    const deliveryMode = item.giftDeliveryMode === "self" ? "self" : "code";
+    const recipientName = String(item.recipientName || "").trim();
+    const giftMessage = String(item.giftMessage || "").trim();
+
+    for (let u = 0; u < qty; u++) {
+      const code = genCode();
+
+      if (deliveryMode === "self" && buyerUid && buyerUid !== "guest") {
+        const userRef = db.collection("users").doc(buyerUid);
+        await userRef.set(
+          {
+            walletBalance: FieldValue.increment(unitPrice),
+            lastWalletCreditAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+
+        await db.collection("gift_cards").doc(code).set({
+          code,
+          initialValue: unitPrice,
+          remainingValue: 0,
+          deliveryMode: "self",
+          status: "redeemed",
+          orderId: orderRef.id,
+          buyerUid,
+          buyerName,
+          buyerEmail,
+          recipientName: buyerName || "Minha Conta",
+          giftMessage: "Ativado automaticamente na carteira do comprador.",
+          redeemedByUid: buyerUid,
+          redeemedByEmail: buyerEmail,
+          redeemedAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
+        });
+
+        giftCardsGenerated.push({
+          code,
+          amount: unitPrice,
+          deliveryMode: "self",
+          status: "redeemed",
+          recipientName: buyerName || "Minha Conta",
+          giftMessage: "",
+        });
+      } else {
+        await db.collection("gift_cards").doc(code).set({
+          code,
+          initialValue: unitPrice,
+          remainingValue: unitPrice,
+          deliveryMode: "code",
+          status: "active",
+          orderId: orderRef.id,
+          buyerUid,
+          buyerName,
+          buyerEmail,
+          recipientName: recipientName || "Presenteado",
+          giftMessage: giftMessage || "",
+          redeemedByUid: null,
+          redeemedByEmail: null,
+          redeemedAt: null,
+          createdAt: FieldValue.serverTimestamp(),
+        });
+
+        giftCardsGenerated.push({
+          code,
+          amount: unitPrice,
+          deliveryMode: "code",
+          status: "active",
+          recipientName: recipientName || "Presenteado",
+          giftMessage: giftMessage || "",
+        });
+      }
+    }
+  }
+
+  await orderRef.set(
+    {
+      giftCardsGenerated,
+      giftCardsProcessed: true,
+      hasGiftCard: true,
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+  logger.info(`Vales-presentes processados com sucesso no backend para pedido ${orderRef.id}: ${giftCardsGenerated.length} vales.`);
+}
 
 /**
  * 5. WEBHOOK PAGBANK V4/V5 COM IDEMPOTENCIA E AUDITORIA (pagbankWebhook)
@@ -2032,6 +2262,14 @@ exports.pagbankWebhook = onRequest(
           payload,
         });
       });
+
+      if (internalStatus === "pagamento_aprovado" || pagbankStatus === "PAID" || pagbankStatus === "AUTHORIZED") {
+        try {
+          await processOrderGiftCardsBackend(db, orderRef, orderData);
+        } catch (giftErr) {
+          logger.warn("Aviso ao auto-processar vales-presentes no webhook:", giftErr.message);
+        }
+      }
 
       logger.info(
         `Pedido ${referenceId || orderId} atualizado com sucesso para: ${internalStatus}`,

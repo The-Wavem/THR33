@@ -458,6 +458,15 @@ export const decrementProductStock = async (items = []) => {
   invalidateCatalogCache('products');
 
   for (const item of items) {
+    const isDigital = Boolean(
+      item.isGiftCard ||
+      item.isDigital ||
+      item.category === 'gift-card' ||
+      item.type === 'gift-card' ||
+      String(item.id || item.slug || '').includes('vale')
+    );
+    if (isDigital) continue;
+
     const productId = item.id || item.slug;
     const size = String(item.size || 'M').toUpperCase();
     const qtyToDeduct = Number(item.quantity || 1);

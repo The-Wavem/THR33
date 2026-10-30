@@ -271,6 +271,26 @@ const ReviewModal = React.memo(function ReviewModal({ item, onClose, onReviewSuc
   );
 });
 
+const isDigitalOrCheckoutAddress = (addr) => {
+  if (!addr) return false;
+  const street = String(addr.street || '').toLowerCase();
+  const title = String(addr.title || '').toLowerCase();
+  const complement = String(addr.complement || '').toLowerCase();
+  const neighborhood = String(addr.neighborhood || '').toLowerCase();
+  const cep = String(addr.cep || '').replace(/\D/g, '');
+  return (
+    street.includes('entrega digital') ||
+    street.includes('digital instant') ||
+    title === 'checkout' ||
+    title.includes('digital') ||
+    neighborhood === 'digital' ||
+    complement.includes('instantaneamente em meus pedidos') ||
+    complement.includes('entrega digital') ||
+    cep === '80000000' ||
+    cep === '80020310'
+  );
+};
+
 export function Perfil({ defaultTab = 'pedidos' }) {
   const { user, currentUser, updateUser, logout, changePassword } = useAuth();
   const { cartItems, applyCoupon, openCart, appliedCoupon } = useCart() || {};
@@ -483,7 +503,13 @@ export function Perfil({ defaultTab = 'pedidos' }) {
         if (userSnap.exists()) {
           const data = userSnap.data();
           if (Array.isArray(data.addresses)) {
-            setAddresses(data.addresses);
+            const validPhysicalAddresses = data.addresses.filter(a => !isDigitalOrCheckoutAddress(a));
+            setAddresses(validPhysicalAddresses);
+
+            // Auto-limpeza no Firestore se houver endereco temporario de checkout/digital
+            if (validPhysicalAddresses.length !== data.addresses.length) {
+              setDoc(userRef, { addresses: validPhysicalAddresses }, { merge: true }).catch(() => {});
+            }
           } else {
             setAddresses([]);
           }

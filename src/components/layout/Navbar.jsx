@@ -325,16 +325,6 @@ export function Navbar({ onOpenCart }) {
               )}
             </AnimatePresence>
           </div>
-
-          <NavLink 
-            to="/como-funciona-a-entrega" 
-            className={({ isActive }) => isActive ? `${styles.link} ${styles.active}` : styles.link}
-            onClick={() => setIsMobileMenuOpen(false)}
-            onMouseEnter={() => preloadRoute('/como-funciona-a-entrega')}
-            onTouchStart={() => preloadRoute('/como-funciona-a-entrega')}
-          >
-            Entrega
-          </NavLink>
           
           <NavLink 
             to="/sobre" 
