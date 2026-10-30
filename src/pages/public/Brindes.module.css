@@ -10,21 +10,24 @@
   justify-content: space-between;
   align-items: flex-end;
   padding-bottom: 2rem;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   margin-bottom: 3rem;
 }
 
 .breadcrumb {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   letter-spacing: 2px;
   color: var(--text-muted);
+  text-transform: uppercase;
+  font-weight: 700;
 }
 
 .title {
   font-family: var(--font-heading);
   font-size: clamp(1.8rem, 3.5vw, 2.8rem);
   font-weight: 800;
-  margin-top: 0.3rem;
+  margin-top: 0.4rem;
+  letter-spacing: -0.5px;
 }
 
 .filterBar {
@@ -52,146 +55,253 @@
   color: var(--bg-primary);
 }
 
-/* BANNER DE VALE PRESENTE */
+/* BANNER DE VALE PRESENTE - EDITORIAL & INTEGRADO (SEM BOX GENERICO) */
 .giftBanner {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  padding: 3rem 2.5rem;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1rem 0 3.5rem;
   margin-bottom: 3.5rem;
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  gap: 2rem;
-  position: relative;
-  overflow: hidden;
+  align-items: flex-end;
+  gap: 2.5rem;
 }
 
-.giftBanner::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, #ffffff, transparent);
+.bannerText {
+  max-width: 720px;
 }
 
-.bannerTag {
-  display: inline-flex;
+.bannerEyebrow {
+  display: flex;
   align-items: center;
-  gap: 0.4rem;
-  font-size: 0.68rem;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.pulseDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: #00ff88;
+  box-shadow: 0 0 10px rgba(0, 255, 136, 0.7);
+  display: inline-block;
+}
+
+.eyebrowText {
+  font-size: 0.72rem;
   font-weight: 800;
-  letter-spacing: 1.5px;
-  color: var(--text-muted);
-  margin-bottom: 0.5rem;
+  letter-spacing: 2px;
+  color: #00ff88;
+  text-transform: uppercase;
 }
 
-.bannerText h2 {
+.bannerHeading {
   font-family: var(--font-heading);
-  font-size: 1.6rem;
-  letter-spacing: 1px;
-  margin-bottom: 0.5rem;
+  font-size: clamp(2rem, 3.8vw, 3rem);
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  text-transform: uppercase;
+  margin: 0 0 0.85rem 0;
+  line-height: 1.1;
+  color: var(--text-primary);
 }
 
-.bannerText p {
-  color: var(--text-secondary);
+.bannerDescription {
+  color: #a1a1aa;
   font-size: 0.95rem;
-  max-width: 600px;
+  line-height: 1.6;
+  margin: 0;
+  max-width: 620px;
 }
 
 .bannerCta {
   display: inline-flex;
   align-items: center;
-  gap: 0.6rem;
-  background-color: var(--text-primary);
-  color: var(--bg-primary);
-  padding: 1rem 1.8rem;
+  gap: 0.75rem;
+  background-color: #ffffff;
+  color: #000000;
+  padding: 1.1rem 2rem;
   font-weight: 800;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   letter-spacing: 1.5px;
+  text-transform: uppercase;
   white-space: nowrap;
   text-decoration: none;
-  transition: opacity var(--transition-fast);
+  border: 1px solid #ffffff;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  flex-shrink: 0;
 }
 
 .bannerCta:hover {
-  opacity: 0.9;
+  background-color: #00ff88;
+  border-color: #00ff88;
+  color: #000000;
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 255, 136, 0.25);
+}
+
+.bannerCtaIcon {
+  transition: transform var(--transition-fast);
+}
+
+.bannerCta:hover .bannerCtaIcon {
+  transform: translateX(4px);
+}
+
+/* AVISO QUANDO NAO HA ACESSORIOS */
+.emptyAcessorios {
+  padding: 2.5rem 1.5rem;
+  margin: 1.5rem 0 2.5rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  text-align: center;
+  color: var(--text-secondary);
+}
+
+.emptyState {
+  grid-column: 1 / -1;
+  text-align: center;
+  padding: 4rem 1rem;
+  color: var(--text-secondary);
 }
 
 /* GRID DE CARDS */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 2rem;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 380px));
+  gap: 2.5rem;
 }
 
+/* CARD COM DESIGN STREETWEAR ELEGANTE */
 .card {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
+  background-color: rgba(14, 14, 14, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   display: flex;
   flex-direction: column;
-  transition: border-color var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+  transition: border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
 }
 
 .card:hover {
-  border-color: var(--border-active);
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+}
+
+.imageLink {
+  display: block;
+  width: 100%;
+  text-decoration: none;
+  position: relative;
+  cursor: pointer;
+  overflow: hidden;
 }
 
 .imageWrapper {
   position: relative;
   width: 100%;
-  aspect-ratio: 4/3;
+  aspect-ratio: 4/5;
   overflow: hidden;
-  background-color: #111;
+  background-color: #0d0d0d;
 }
 
 .typeBadge {
   position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  background-color: rgba(10, 10, 10, 0.85);
-  color: var(--text-primary);
-  border: 1px solid var(--border-color);
-  font-size: 0.65rem;
+  top: 0.85rem;
+  left: 0.85rem;
+  background-color: rgba(10, 10, 10, 0.88);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 0.62rem;
   font-weight: 800;
-  padding: 0.25rem 0.6rem;
-  letter-spacing: 1px;
-  backdrop-filter: blur(4px);
-  z-index: 2;
+  padding: 0.28rem 0.65rem;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  z-index: 3;
+  pointer-events: none;
 }
 
 .image {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.4s ease;
+  transition: transform 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 .card:hover .image {
-  transform: scale(1.05);
+  transform: scale(1.045);
 }
 
+.imageHoverOverlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+  z-index: 2;
+  pointer-events: none;
+}
+
+.card:hover .imageHoverOverlay {
+  opacity: 1;
+}
+
+.overlayText {
+  background-color: #ffffff;
+  color: #000000;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  padding: 0.65rem 1.25rem;
+  text-transform: uppercase;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  transform: translateY(6px);
+  transition: transform var(--transition-fast);
+}
+
+.card:hover .overlayText {
+  transform: translateY(0);
+}
+
+/* CONTEUDO DO CARD */
 .details {
-  padding: 1.25rem;
+  padding: 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.6rem;
+  gap: 0.75rem;
   flex: 1;
-  justify-content: space-between;
+}
+
+.itemNameLink {
+  text-decoration: none;
+  color: inherit;
 }
 
 .itemName {
   font-family: var(--font-heading);
-  font-size: 1rem;
-  font-weight: 700;
+  font-size: 1.15rem;
+  font-weight: 800;
   letter-spacing: 0.5px;
+  margin: 0;
+  color: var(--text-primary);
+  transition: color var(--transition-fast);
+}
+
+.card:hover .itemName {
+  color: #00ff88;
 }
 
 .itemDesc {
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-  line-height: 1.5;
+  font-size: 0.85rem;
+  color: #9ca3af;
+  line-height: 1.55;
+  margin: 0;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -199,45 +309,81 @@
 }
 
 .priceContainer {
-  margin-top: 0.5rem;
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
-.price {
-  font-size: 1.1rem;
-  font-weight: 800;
+.priceLabel {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: #6b7280;
+  text-transform: uppercase;
 }
 
 .priceRange {
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--text-secondary);
-}
-
-.actionBtn {
-  background-color: var(--text-primary);
-  color: var(--bg-primary);
-  text-align: center;
-  padding: 0.8rem;
+  font-size: 0.95rem;
   font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+}
+
+.cardCtaBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background-color: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  padding: 0.85rem 1rem;
   font-size: 0.75rem;
+  font-weight: 800;
   letter-spacing: 1.5px;
-  margin-top: 0.5rem;
+  text-transform: uppercase;
   text-decoration: none;
-  transition: opacity var(--transition-fast);
+  margin-top: 0.5rem;
+  transition: all var(--transition-fast);
 }
 
-.actionBtn:hover {
-  opacity: 0.9;
+.cardCtaBtn:hover {
+  background-color: #ffffff;
+  color: #000000;
+  border-color: #ffffff;
 }
 
+.btnIcon {
+  transition: transform var(--transition-fast);
+}
+
+.cardCtaBtn:hover .btnIcon {
+  transform: translateX(3px);
+}
+
+/* RESPONSIVIDADE */
 @media (max-width: 850px) {
   .header { 
     flex-direction: column; 
     align-items: flex-start; 
     gap: 1rem; 
   }
+  
   .giftBanner { 
     flex-direction: column; 
-    text-align: center; 
+    align-items: flex-start;
+    gap: 1.5rem;
+    padding-bottom: 2.5rem;
+  }
+
+  .bannerHeading {
+    font-size: 1.8rem;
+  }
+
+  .grid {
+    grid-template-columns: 1fr;
   }
 }
