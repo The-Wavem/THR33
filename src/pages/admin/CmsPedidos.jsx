@@ -42,7 +42,7 @@ import {
   Share2,
   Gift
 } from 'lucide-react';
-import { giftCardService } from '../../services/giftCardService';
+import { giftCardService, refundOrderWalletIfNeeded } from '../../services/giftCardService';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../services/firebaseConfig';
 import { maskCPF } from '../../utils/validators';
@@ -647,6 +647,7 @@ export function CmsPedidos() {
       });
 
       if (res?.data?.success) {
+        await refundOrderWalletIfNeeded(refundTargetOrder.id);
         setRefundSuccess(res.data.message || 'Estorno concluído com sucesso!');
         const updates = {
           status: ORDER_STATUSES.CANCELADO,

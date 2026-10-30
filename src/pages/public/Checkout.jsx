@@ -62,7 +62,7 @@ import { pagbankService, PAGBANK_TEST_CARDS, detectCardBrand, encryptCardData } 
 import { CardBrandIcon } from '../../components/ui/CardBrandIcon';
 import { ORDER_STATUSES, normalizeOrderStatus } from '../../services/orderStateMachine';
 import { webhookService } from '../../services/webhookService';
-import { giftCardService } from '../../services/giftCardService';
+import { giftCardService, refundOrderWalletIfNeeded } from '../../services/giftCardService';
 import styles from './Checkout.module.css';
 
 /**
@@ -340,6 +340,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             giftCardService.processOrderGiftCards(createdOrderId, data)
               .catch(err => console.warn("Aviso ao processar vales em tempo real:", err.message));
           }
+        } else if (norm === 'cancelado') {
+          // Estorno automático do saldo da carteira se o pedido for cancelado
+          refundOrderWalletIfNeeded(createdOrderId).catch(err => 
+            console.warn("Aviso ao estornar carteira no checkout cancelado:", err.message)
+          );
         }
         if (data.createdAt) {
           const ms = data.createdAt.toDate ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime();
@@ -398,6 +403,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       setPixTimeRemaining(diffSec);
       if (diffSec <= 0) {
         setPixExpired(true);
+        if (createdOrderId) {
+          // Devolve saldo da carteira imediatamente se PIX expirou
+          refundOrderWalletIfNeeded(createdOrderId).catch(err => 
+            console.warn("Aviso ao estornar carteira no checkout expirado:", err.message)
+          );
+        }
       }
     };
 
@@ -405,7 +416,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     const interval = setInterval(updateCountdown, 1000);
 
     return () => clearInterval(interval);
-  }, [currentStep, paymentMethod, pixExpiresAt, orderNumber, createdOrderDate]);
+  }, [currentStep, paymentMethod, pixExpiresAt, orderNumber, createdOrderDate, createdOrderId]);
 
   const formatPixTimer = (totalSeconds) => {
     const mins = Math.floor(totalSeconds / 60);
@@ -1022,6 +1033,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       total: Number(finalAmountToPay) || 0,
       originalTotal: Number(total) || 0,
       walletDeduction: Number(walletDeduction) || 0,
+      walletRefunded: false,
       paymentMethod: finalAmountToPay === 0 ? 'Carteira Digital THR33' : (paymentMethod || 'PIX'),
       paymentDetails: isCardPayment ? {
         brand: cardBrand,
@@ -1282,6 +1294,15 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         clientName: cleanPayload.clientName || clientData.name || user?.displayName || user?.name || 'Cliente THR33',
         clientCpf: cleanPayload.clientCpf || clientData.cpf || '',
         clientPhone: cleanPayload.clientPhone || clientData.phone || '',
+        subtotal: Number(cleanPayload.subtotal ?? subtotal ?? 0),
+        discountAmount: Number(cleanPayload.discountAmount ?? discountAmount ?? 0),
+        couponCode: cleanPayload.couponCode || appliedCoupon?.code || null,
+        couponId: cleanPayload.couponId || appliedCoupon?.id || null,
+        walletDeduction: Number(cleanPayload.walletDeduction ?? walletDeduction ?? 0),
+        walletRefunded: Boolean(cleanPayload.walletRefunded || false),
+        originalTotal: Number(cleanPayload.originalTotal ?? total ?? 0),
+        freeShippingApplied: Boolean(cleanPayload.freeShippingApplied || isFreeShippingActive),
+        freeShippingReason: cleanPayload.freeShippingReason || null,
         hasGiftCard: Boolean(cleanPayload.hasGiftCard),
         carrier: cleanPayload.carrier || selectedShippingOption?.carrier || selectedShippingOption?.name || '',
         serviceName: cleanPayload.serviceName || selectedShippingOption?.serviceName || '',

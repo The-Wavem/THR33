@@ -640,6 +640,83 @@ async function restoreStockAtomic(
 }
 
 /**
+ * Estorno atomico e transacional do saldo da carteira digital (walletDeduction).
+ * Trava estrita de idempotencia com walletRefunded: true.
+ */
+async function refundWalletDeductionAtomic(db, transaction, orderRef, orderData) {
+  const walletDeduction = Number(orderData.walletDeduction || 0);
+  const buyerUid = String(orderData.userId || orderData.clientId || orderData.uid || "").trim();
+
+  if (walletDeduction <= 0 || orderData.walletRefunded === true || !buyerUid) {
+    return { refunded: false };
+  }
+
+  const userRef = db.collection("users").doc(buyerUid);
+
+  if (transaction) {
+    const userSnap = await transaction.get(userRef);
+    const currentWallet = userSnap.exists ? Number(userSnap.data()?.walletBalance || 0) : 0;
+    const newWallet = currentWallet + walletDeduction;
+
+    transaction.set(
+      userRef,
+      {
+        walletBalance: newWallet,
+        lastWalletRefundAt: FieldValue.serverTimestamp(),
+        lastWalletRefundOrderId: orderRef.id,
+      },
+      { merge: true },
+    );
+
+    transaction.update(orderRef, {
+      walletRefunded: true,
+      walletRefundedAt: FieldValue.serverTimestamp(),
+      walletRefundedAmount: walletDeduction,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  } else {
+    await db.runTransaction(async (t) => {
+      const freshOrderSnap = await t.get(orderRef);
+      if (!freshOrderSnap.exists) return;
+      const freshOrderData = freshOrderSnap.data();
+
+      if (
+        Number(freshOrderData.walletDeduction || 0) <= 0 ||
+        freshOrderData.walletRefunded === true
+      ) {
+        return;
+      }
+
+      const userSnap = await t.get(userRef);
+      const currentWallet = userSnap.exists ? Number(userSnap.data()?.walletBalance || 0) : 0;
+      const newWallet = currentWallet + walletDeduction;
+
+      t.set(
+        userRef,
+        {
+          walletBalance: newWallet,
+          lastWalletRefundAt: FieldValue.serverTimestamp(),
+          lastWalletRefundOrderId: orderRef.id,
+        },
+        { merge: true },
+      );
+
+      t.update(orderRef, {
+        walletRefunded: true,
+        walletRefundedAt: FieldValue.serverTimestamp(),
+        walletRefundedAmount: walletDeduction,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  logger.info(
+    `Saldo da carteira de R$ ${walletDeduction} estornado com sucesso para usuario ${buyerUid} referente ao pedido ${orderRef.id}`,
+  );
+  return { refunded: true, refundedAmount: walletDeduction };
+}
+
+/**
  * 3. CLOUD FUNCTION DE CRIACAO DO PEDIDO SERVER-SIDE (createPagBankOrder)
  * Callable Function com autoridade server-side, validacao de precos em Firestore e itens fiscais.
  */
@@ -2197,6 +2274,9 @@ exports.pagbankWebhook = onRequest(
             charge?.payment_response?.message ||
             "Negado pelo emissor do cartao";
 
+          // Estorna saldo de carteira digital utilizado se houver
+          await refundWalletDeductionAtomic(db, transaction, orderRef, freshData);
+
           // Se o estoque estava reservado e ainda nao foi liberado, devolve ao catalogo
           if (freshData.stockReserved && !freshData.stockReleased) {
             updateData.stockReleased = true;
@@ -2411,6 +2491,9 @@ exports.cancelExpiredPixOrders = onSchedule(
             transaction.update(prodRef, updates);
           }
 
+          // Estorna saldo de carteira digital se utilizado
+          await refundWalletDeductionAtomic(db, transaction, orderDoc.ref, freshData);
+
           // 3. Atualizacao do pedido para cancelado
           transaction.update(orderDoc.ref, {
             status: "cancelado",
@@ -2573,6 +2656,9 @@ exports.cleanupExpiredPixOrdersManual = onRequest(
 
               transaction.update(prodRef, updates);
             }
+
+            // Estorna saldo de carteira digital se utilizado
+            await refundWalletDeductionAtomic(db, transaction, orderDoc.ref, freshData);
 
             transaction.update(orderDoc.ref, {
               status: "cancelado",
@@ -2746,6 +2832,9 @@ exports.refundPagBankOrder = onCall(
       await restoreStockAtomic(db, orderData.items, orderId, reason);
     }
 
+    // Estorna o saldo de carteira digital se utilizado
+    await refundWalletDeductionAtomic(db, null, orderRef, orderData);
+
     // 5. Atualiza o pedido no Firestore
     await orderRef.update({
       status: "cancelado",
@@ -2779,6 +2868,148 @@ exports.refundPagBankOrder = onCall(
       message: "Estorno concluído com sucesso e estoque reintegrado ao catálogo.",
       status: "cancelado",
       financialStatus: "reembolsado",
+    };
+  },
+);
+
+/**
+ * 9. CANCELAMENTO DE PEDIDO PELO CLIENTE OU ADMIN COM ESTORNO (cancelOrderAndRefund)
+ * Permite cancelamento seguro com restauracao de estoque e estorno automatico do saldo da carteira digital.
+ */
+exports.cancelOrderAndRefund = onCall(
+  {
+    region: FUNCTION_REGION,
+    cors: true,
+  },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Requer autenticação.");
+    }
+    const db = getDb();
+    const callerUid = request.auth.uid;
+    const { orderId, reason = "Cancelamento solicitado pelo cliente via Minha Conta" } = request.data || {};
+    if (!orderId) {
+      throw new HttpsError("invalid-argument", "ID do pedido não informado.");
+    }
+
+    const orderRef = db.collection("orders").doc(orderId);
+    let refundedWalletAmount = 0;
+
+    await db.runTransaction(async (transaction) => {
+      const orderSnap = await transaction.get(orderRef);
+      if (!orderSnap.exists) {
+        throw new HttpsError("not-found", `Pedido ${orderId} não encontrado.`);
+      }
+      const orderData = orderSnap.data();
+
+      const isOwner = orderData.userId === callerUid || orderData.clientId === callerUid;
+      if (!isOwner) {
+        const callerEmail = (request.auth.token?.email || "").toLowerCase();
+        const adminEmails = (process.env.ADMIN_EMAILS || "contato.thewavem@gmail.com,eduianbf@gmail.com")
+          .split(",")
+          .map((e) => e.trim().toLowerCase());
+        let isAdmin = adminEmails.includes(callerEmail);
+        if (!isAdmin) {
+          const adminDoc = await db.collection("adminUsers").doc(callerUid).get();
+          if (adminDoc.exists && adminDoc.data()?.role === "admin") {
+            isAdmin = true;
+          }
+        }
+        if (!isAdmin) {
+          throw new HttpsError("permission-denied", "Você não tem permissão para cancelar este pedido.");
+        }
+      }
+
+      const normStatus = (orderData.status || "").toLowerCase();
+      if (normStatus === "cancelado") {
+        return;
+      }
+
+      // 1. Devolve estoque fisico para pecas que estavam reservadas
+      if (orderData.items && Array.isArray(orderData.items) && !orderData.stockReleased) {
+        const prodSnaps = [];
+        for (const item of orderData.items) {
+          const isDigital = Boolean(
+            item.isGiftCard ||
+            item.isDigital ||
+            item.category === "gift-card" ||
+            item.type === "gift-card" ||
+            item.type === "brinde" ||
+            String(item.id || item.reference_id || "").includes("vale-presente")
+          );
+          if (isDigital) continue;
+
+          const prodId = String(item.id || item.reference_id);
+          if (!prodId) continue;
+          const prodRef = db.collection("products").doc(prodId);
+          const snap = await transaction.get(prodRef);
+          prodSnaps.push({ prodRef, snap, item });
+        }
+
+        for (const { prodRef, snap, item } of prodSnaps) {
+          if (!snap.exists) continue;
+          const data = snap.data();
+          if (data.unlimitedStock || data.isUnlimitedStock) continue;
+
+          const qty = Math.max(1, parseInt(item.quantity, 10) || 1);
+          const size = String(item.size || "M").toUpperCase();
+          const updates = { updatedAt: FieldValue.serverTimestamp() };
+
+          if (data.stock && typeof data.stock === "object") {
+            const currentQty = Number(data.stock[size] ?? data.stock[item.size] ?? 0);
+            const newStock = { ...data.stock, [size]: currentQty + qty };
+            updates.stock = newStock;
+            updates.sizes = Object.keys(newStock).filter((s) => (newStock[s] || 0) > 0);
+          } else if (typeof data.stock === "number") {
+            updates.stock = data.stock + qty;
+          }
+
+          if (Array.isArray(data.variants) && data.variants.length > 0) {
+            updates.variants = data.variants.map((v) => {
+              if (String(v.size || "").toUpperCase() === size) {
+                const currentVarQty = Number(v.stock_quantity ?? v.stock ?? 0);
+                return { ...v, stock_quantity: currentVarQty + qty };
+              }
+              return v;
+            });
+          }
+
+          transaction.update(prodRef, updates);
+        }
+      }
+
+      // 2. Estorno do saldo da carteira se aplicavel
+      const refRes = await refundWalletDeductionAtomic(db, transaction, orderRef, orderData);
+      if (refRes.refunded) {
+        refundedWalletAmount = refRes.refundedAmount;
+      }
+
+      // 3. Atualiza pedido para cancelado
+      transaction.update(orderRef, {
+        status: "cancelado",
+        cancelReason: reason,
+        canceledAt: FieldValue.serverTimestamp(),
+        stockReleased: true,
+        stockReserved: false,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      // 4. Registro no historico
+      const histRef = orderRef.collection("historico_pagamento").doc();
+      transaction.set(histRef, {
+        eventDate: FieldValue.serverTimestamp(),
+        internalStatus: "cancelado",
+        reason: `Cancelado pelo cliente/admin: ${reason}`,
+        operator: callerUid,
+      });
+    });
+
+    return {
+      success: true,
+      orderId,
+      status: "cancelado",
+      refundedWalletAmount,
+      message: "Pedido cancelado com sucesso e saldo estornado.",
     };
   },
 );

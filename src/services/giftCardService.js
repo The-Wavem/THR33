@@ -186,7 +186,9 @@ export const giftCardService = {
       throw new Error('Você precisa estar conectado à sua conta para ativar o vale-presente.');
     }
 
-    return await runTransaction(db, async (transaction) => {
+    let redeemedCardData = null;
+
+    const result = await runTransaction(db, async (transaction) => {
       const cardRef = doc(db, 'gift_cards', cleanCode);
       const cardSnap = await transaction.get(cardRef);
 
@@ -195,6 +197,7 @@ export const giftCardService = {
       }
 
       const cardData = cardSnap.data();
+      redeemedCardData = cardData;
 
       if (cardData.status === 'redeemed') {
         throw new Error('Este código de vale-presente já foi utilizado anteriormente.');
@@ -243,6 +246,53 @@ export const giftCardService = {
         newWalletBalance: newWallet
       };
     });
+
+    // Atualiza o documento do pedido de origem para marcar o codigo como resgatado no histórico do comprador
+    if (redeemedCardData?.orderId) {
+      try {
+        const orderRef = doc(db, 'orders', redeemedCardData.orderId);
+        const orderSnap = await getDoc(orderRef);
+        if (orderSnap.exists()) {
+          const oData = orderSnap.data();
+          const cards = Array.isArray(oData.giftCardsGenerated) ? [...oData.giftCardsGenerated] : [];
+          let changed = false;
+          const updatedCards = cards.map(c => {
+            if (c.code === cleanCode) {
+              changed = true;
+              return {
+                ...c,
+                status: 'redeemed',
+                redeemedAt: new Date().toISOString(),
+                redeemedByUid: userUid,
+                redeemedByEmail: userEmail || ''
+              };
+            }
+            return c;
+          });
+          if (changed) {
+            await updateDoc(orderRef, {
+              giftCardsGenerated: updatedCards,
+              updatedAt: new Date().toISOString()
+            });
+          }
+        }
+      } catch (ordErr) {
+        console.warn("Aviso ao sincronizar pedido vinculado ao vale resgatado:", ordErr.message);
+      }
+    }
+
+    return result;
+  },
+
+  /**
+   * Estorna o saldo de carteira digital (walletDeduction) de um pedido cancelado ou expirado.
+   * Possui trava estrita de idempotência (walletRefunded: true) para nunca duplicar estornos.
+   * 
+   * @param {string} orderId ID do pedido
+   * @returns {Promise<{ success: boolean, refunded: boolean, refundedAmount?: number, newWalletBalance?: number }>}
+   */
+  refundOrderWalletIfNeeded: async (orderId) => {
+    return refundOrderWalletIfNeeded(orderId);
   },
 
   /**
@@ -256,5 +306,65 @@ export const giftCardService = {
     return { id: snap.id, ...snap.data() };
   }
 };
+
+/**
+ * Estorna o saldo de carteira digital (walletDeduction) de um pedido cancelado ou expirado.
+ * Possui trava estrita de idempotência (walletRefunded: true) para nunca duplicar estornos.
+ * 
+ * @param {string} orderId ID do pedido
+ * @returns {Promise<{ success: boolean, refunded: boolean, refundedAmount?: number, newWalletBalance?: number }>}
+ */
+export async function refundOrderWalletIfNeeded(orderId) {
+  if (!orderId) return { success: false, refunded: false, reason: 'missing_order_id' };
+
+  try {
+    const orderRef = doc(db, 'orders', orderId);
+    return await runTransaction(db, async (transaction) => {
+      const orderSnap = await transaction.get(orderRef);
+      if (!orderSnap.exists()) {
+        return { success: false, refunded: false, reason: 'order_not_found' };
+      }
+
+      const orderData = orderSnap.data();
+      const walletDeduction = Number(orderData.walletDeduction || 0);
+      const buyerUid = String(orderData.userId || orderData.uid || '').trim();
+
+      // Trava de idempotência: só estorna se houver valor deduzido e ainda não tiver sido estornado
+      if (walletDeduction <= 0 || orderData.walletRefunded === true || !buyerUid) {
+        return { success: true, refunded: false, reason: 'not_applicable_or_already_refunded' };
+      }
+
+      const userRef = doc(db, 'users', buyerUid);
+      const userSnap = await transaction.get(userRef);
+      const currentWallet = userSnap.exists() ? Number(userSnap.data().walletBalance || 0) : 0;
+      const newWallet = currentWallet + walletDeduction;
+
+      // Devolve saldo na conta do comprador
+      transaction.set(userRef, {
+        walletBalance: newWallet,
+        lastWalletRefundAt: new Date().toISOString(),
+        lastWalletRefundOrderId: orderId
+      }, { merge: true });
+
+      // Grava a trava de estorno no pedido
+      transaction.update(orderRef, {
+        walletRefunded: true,
+        walletRefundedAt: new Date().toISOString(),
+        walletRefundedAmount: walletDeduction,
+        updatedAt: new Date().toISOString()
+      });
+
+      return {
+        success: true,
+        refunded: true,
+        refundedAmount: walletDeduction,
+        newWalletBalance: newWallet
+      };
+    });
+  } catch (err) {
+    console.error("Erro ao estornar saldo da carteira:", err);
+    return { success: false, refunded: false, error: err.message };
+  }
+}
 
 export default giftCardService;

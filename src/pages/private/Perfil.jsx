@@ -41,7 +41,7 @@ import {
   ShoppingBag,
   Share2
 } from 'lucide-react';
-import { giftCardService } from '../../services/giftCardService';
+import { giftCardService, refundOrderWalletIfNeeded } from '../../services/giftCardService';
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { couponService } from '../../services/couponService';
@@ -58,8 +58,9 @@ import { fetchAddressByCep } from '../../services/viaCepService';
 import { resolveCarrierAndService } from '../../utils/carrierUtils';
 import { supportService } from '../../services/supportService';
 import { reviewService } from '../../services/reviewService';
-import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../services/firebaseConfig';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../../services/firebaseConfig';
 import { 
   ORDER_STATUSES, 
   ORDER_TIMELINE_STEPS, 
@@ -677,7 +678,15 @@ export function Perfil({ defaultTab = 'pedidos' }) {
               : data.paymentMethod === 'credit' || data.paymentMethod === 'Cartão de Crédito'
                 ? 'Cartão de Crédito PagBank' 
                 : (data.paymentMethod || 'Boleto Bancário'),
-            coupon: data.discountAmount ? { code: data.couponCode || "DESCONTO", discount: Number(data.discountAmount || 0) } : null,
+            coupon: (data.couponCode || data.coupon) ? { 
+              code: data.couponCode || data.coupon?.code || "DESCONTO", 
+              discount: Number(data.discountAmount ?? data.coupon?.discount ?? 0) 
+            } : (Number(data.discountAmount || 0) > 0 ? { code: "DESCONTO", discount: Number(data.discountAmount) } : null),
+            discountAmount: Number(data.discountAmount || 0),
+            walletDeduction: Number(data.walletDeduction || 0),
+            walletRefunded: Boolean(data.walletRefunded),
+            originalTotal: Number(data.originalTotal ?? data.subtotal ?? data.total ?? 0),
+            freeShippingApplied: Boolean(data.freeShippingApplied),
             subtotal: Number(data.subtotal ?? data.total ?? 0),
             shippingMethod: data.shippingMethod === 'pac' ? 'PAC Correios (3 a 7 dias úteis)' : 'SEDEX Expresso (1 a 2 dias úteis)',
             shippingCost: Number(data.shippingCost || 0),
@@ -724,6 +733,66 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
         // Ordena do mais recente para o mais antigo (decrescente)
         fetched.sort((a, b) => (b.createdAtTimestamp || 0) - (a.createdAtTimestamp || 0));
+
+        // Sincroniza se algum vale-presente ativo já foi resgatado na coleção gift_cards
+        const activeGiftCodes = [];
+        fetched.forEach(ord => {
+          if (Array.isArray(ord.giftCardsGenerated)) {
+            ord.giftCardsGenerated.forEach(card => {
+              if (card?.code && card.status === 'active') {
+                activeGiftCodes.push(card.code);
+              }
+            });
+          }
+        });
+
+        if (activeGiftCodes.length > 0) {
+          try {
+            const cardSnaps = await Promise.all(
+              activeGiftCodes.map(code => getDoc(doc(db, 'gift_cards', code)))
+            );
+            const redeemedMap = new Map();
+            cardSnaps.forEach(snap => {
+              if (snap.exists()) {
+                const cData = snap.data();
+                if (cData.status === 'redeemed') {
+                  redeemedMap.set(snap.id, cData);
+                }
+              }
+            });
+
+            if (redeemedMap.size > 0) {
+              fetched.forEach(ord => {
+                if (Array.isArray(ord.giftCardsGenerated)) {
+                  let changed = false;
+                  ord.giftCardsGenerated = ord.giftCardsGenerated.map(c => {
+                    if (redeemedMap.has(c.code)) {
+                      changed = true;
+                      const rData = redeemedMap.get(c.code);
+                      return {
+                        ...c,
+                        status: 'redeemed',
+                        redeemedAt: rData.redeemedAt || new Date().toISOString(),
+                        redeemedByUid: rData.redeemedByUid || null,
+                        redeemedByEmail: rData.redeemedByEmail || null
+                      };
+                    }
+                    return c;
+                  });
+
+                  if (changed && ord.rawId) {
+                    updateDoc(doc(db, 'orders', ord.rawId), {
+                      giftCardsGenerated: ord.giftCardsGenerated,
+                      updatedAt: new Date().toISOString()
+                    }).catch(err => console.warn("Aviso ao sincronizar pedido:", err.message));
+                  }
+                }
+              });
+            }
+          } catch (syncErr) {
+            console.warn("Aviso ao conferir vales resgatados:", syncErr.message);
+          }
+        }
 
         if (isMounted) {
           setOrders(fetched);
@@ -1257,7 +1326,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   // -------------------------------------------------------------
   // HANDLERS: CANCELAMENTO DE PEDIDO (EM PREPARAÇÃO)
   // -------------------------------------------------------------
-  const handleConfirmCancelOrder = (e) => {
+  const handleConfirmCancelOrder = async (e) => {
     e.preventDefault();
     if (!cancelingOrder) return;
 
@@ -1281,8 +1350,60 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     }
 
     const orderId = cancelingOrder.id;
-    setCancelingOrder(null);
-    alert(`Pedido #${orderId} cancelado com sucesso. O estorno de valores foi solicitado automaticamente junto ao PagBank.`);
+    const rawId = cancelingOrder.rawId || orderId;
+
+    try {
+      try {
+        const cancelFn = httpsCallable(functions, 'cancelOrderAndRefund');
+        await cancelFn({ orderId: rawId, reason: 'Cancelamento solicitado pelo cliente via Minha Conta' });
+      } catch (fnErr) {
+        console.warn("Aviso na Cloud Function de cancelamento:", fnErr.message);
+      }
+
+      const refundRes = await refundOrderWalletIfNeeded(rawId);
+      if (refundRes?.refunded && refundRes.newWalletBalance !== undefined) {
+        setWalletBalance(refundRes.newWalletBalance);
+      } else if (cancelingOrder.walletDeduction > 0) {
+        setWalletBalance(prev => prev + Number(cancelingOrder.walletDeduction));
+      }
+
+      setOrders(prev => prev.map(ord => {
+        if (ord.id === orderId || ord.rawId === rawId) {
+          return {
+            ...ord,
+            status: 'Cancelado',
+            statusCode: 'cancelado',
+            walletRefunded: true
+          };
+        }
+        return ord;
+      }));
+
+      if (selectedOrderDetails && (selectedOrderDetails.id === orderId || selectedOrderDetails.rawId === rawId)) {
+        setSelectedOrderDetails(prev => ({
+          ...prev,
+          status: 'Cancelado',
+          statusCode: 'cancelado',
+          walletRefunded: true
+        }));
+      }
+
+      const hasRefund = (cancelingOrder.walletDeduction > 0) || (refundRes?.refunded);
+      const refundAmountStr = hasRefund 
+        ? ` O saldo de R$ ${Number(cancelingOrder.walletDeduction || refundRes?.refundedAmount || 0).toFixed(2)} foi estornado para sua Carteira Digital THR33.` 
+        : '';
+
+      setCancelingOrder(null);
+      alert(`Pedido #${orderId} cancelado com sucesso.${refundAmountStr}`);
+      return;
+    } catch (err) {
+      console.error("Erro ao cancelar pedido:", err);
+      setCancelingOrder(null);
+      alert(`Pedido #${orderId} cancelado.`);
+      return;
+    }
+
+
   };
 
   // -------------------------------------------------------------
@@ -2230,7 +2351,19 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     <article key={order.rawId || `${order.id}-${orderIdx}`} className={styles.orderCard}>
                       <header className={styles.orderMeta}>
                         <div>
-                          <span className={styles.orderId}>PEDIDO #{order.id}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.2rem' }}>
+                            <span className={styles.orderId}>PEDIDO #{order.id}</span>
+                            {order.coupon && (
+                              <span style={{ fontSize: '0.68rem', padding: '0.12rem 0.4rem', borderRadius: '3px', background: 'rgba(0, 255, 136, 0.1)', border: '1px solid rgba(0, 255, 136, 0.25)', color: '#00ff88', fontWeight: 600, letterSpacing: '0.5px' }}>
+                                CUPOM {order.coupon.code}
+                              </span>
+                            )}
+                            {Number(order.walletDeduction || 0) > 0 && (
+                              <span style={{ fontSize: '0.68rem', padding: '0.12rem 0.4rem', borderRadius: '3px', background: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.15)', color: '#ffffff', fontWeight: 600, letterSpacing: '0.5px' }}>
+                                CARTEIRA: - R$ {Number(order.walletDeduction).toFixed(2)} {order.walletRefunded ? '(Estornado)' : ''}
+                              </span>
+                            )}
+                          </div>
                           <span className={styles.orderDate}>Realizado em {order.date}</span>
                         </div>
                         
@@ -2372,7 +2505,12 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                                     <div className={styles.giftCardItemTop}>
                                       <div className={styles.giftCardCodeBadge}>
                                         <code>{card.code}</code>
-                                        {card.status === 'active' && (
+                                        {card.status === 'redeemed' || card.deliveryMode === 'self' ? (
+                                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.2rem 0.5rem', background: 'rgba(0, 255, 136, 0.12)', border: '1px solid rgba(0, 255, 136, 0.3)', borderRadius: '4px', color: '#00ff88', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.5px' }}>
+                                            <Check size={12} color="#00ff88" />
+                                            <span>ATIVADO</span>
+                                          </div>
+                                        ) : (
                                           <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}>
                                             <button 
                                               type="button" 
@@ -2405,7 +2543,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                                     <div className={styles.giftCardItemBottom}>
                                       <span className={card.status === 'redeemed' || card.deliveryMode === 'self' ? styles.giftStatusRedeemed : styles.giftStatusActive}>
                                         {card.deliveryMode === 'self' || card.status === 'redeemed' 
-                                          ? '✓ Saldo ativado na sua carteira digital' 
+                                          ? '✓ ATIVADO • Créditos já resgatados na carteira digital' 
                                           : '● Código disponível para presente / resgate'}
                                       </span>
                                       {card.recipientName && (
@@ -2713,6 +2851,66 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                 </div>
               </div>
 
+              {/* VALES-PRESENTE DO PEDIDO NO MODAL */}
+              {(selectedOrderDetails.hasGiftCard || (Array.isArray(selectedOrderDetails.giftCardsGenerated) && selectedOrderDetails.giftCardsGenerated.length > 0)) && (
+                <div className={styles.orderGiftCardsSection} style={{ marginBottom: '1.25rem' }}>
+                  <div className={styles.giftCardSectionHeader}>
+                    <Gift size={15} color="#00ff88" />
+                    <strong>VALES-PRESENTE DIGITAIS DO PEDIDO</strong>
+                  </div>
+                  <div className={styles.generatedGiftCardsList}>
+                    {selectedOrderDetails.giftCardsGenerated.map((card, cIdx) => (
+                      <div key={card.code || cIdx} className={styles.giftCardItemBox}>
+                        <div className={styles.giftCardItemTop}>
+                          <div className={styles.giftCardCodeBadge}>
+                            <code>{card.code}</code>
+                            {card.status === 'redeemed' || card.deliveryMode === 'self' ? (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.2rem 0.5rem', background: 'rgba(0, 255, 136, 0.12)', border: '1px solid rgba(0, 255, 136, 0.3)', borderRadius: '4px', color: '#00ff88', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.5px' }}>
+                                <Check size={12} color="#00ff88" />
+                                <span>ATIVADO</span>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}>
+                                <button 
+                                  type="button" 
+                                  onClick={() => handleCopyGiftCode(card.code)}
+                                  className={styles.copyGiftBtn}
+                                  title="Copiar código do vale"
+                                >
+                                  {copiedGiftCode === card.code ? <Check size={12} color="#00ff88" /> : <Copy size={12} />}
+                                  <span>{copiedGiftCode === card.code ? 'COPIADO!' : 'COPIAR'}</span>
+                                </button>
+                                <a
+                                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`🎁 Você recebeu um Vale-Presente Digital THR33 no valor de R$ ${Number(card.amount || 0).toFixed(2)}!\n\nResgate no site https://thr33.com.br usando o código: ${card.code}`)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={styles.copyGiftBtn}
+                                  style={{ background: '#22c55e', color: '#ffffff', textDecoration: 'none' }}
+                                  title="Mandar código para WhatsApp"
+                                >
+                                  <Share2 size={12} />
+                                  <span>WHATSAPP</span>
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                          <strong className={styles.giftCardValueText}>
+                            R$ {Number(card.amount || 0).toFixed(2)}
+                          </strong>
+                        </div>
+                        <div className={styles.giftCardItemBottom}>
+                          <span className={card.status === 'redeemed' || card.deliveryMode === 'self' ? styles.giftStatusRedeemed : styles.giftStatusActive}>
+                            {card.deliveryMode === 'self' || card.status === 'redeemed' 
+                              ? '✓ ATIVADO • Créditos já resgatados na carteira digital' 
+                              : '● Código disponível para presente / resgate'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* GRADE COM ENDEREÇO DE ENTREGA + RESUMO FINANCEIRO */}
               <div className={styles.detailsTwoCols}>
                 {/* ENDEREÇO DE ENVIO */}
@@ -2753,7 +2951,23 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     {selectedOrderDetails.coupon && (
                       <div className={`${styles.finRow} ${styles.finDiscount}`}>
                         <span>Cupom ({selectedOrderDetails.coupon.code}):</span>
-                        <span>- R$ {Number(selectedOrderDetails.coupon.discount || 0).toFixed(2)}</span>
+                        <span style={{ color: '#00ff88' }}>- R$ {Number(selectedOrderDetails.coupon.discount || 0).toFixed(2)}</span>
+                      </div>
+                    )}
+
+                    {Number(selectedOrderDetails.walletDeduction || 0) > 0 && (
+                      <div className={`${styles.finRow} ${styles.finDiscount}`}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          Saldo da Carteira Utilizado:
+                          {selectedOrderDetails.walletRefunded ? (
+                            <span style={{ fontSize: '0.68rem', color: '#00ff88', background: 'rgba(0, 255, 136, 0.1)', padding: '0.1rem 0.35rem', borderRadius: '3px', fontWeight: 600 }}>
+                              ESTORNADO P/ CARTEIRA
+                            </span>
+                          ) : null}
+                        </span>
+                        <span style={{ color: '#00ff88' }}>
+                          - R$ {Number(selectedOrderDetails.walletDeduction || 0).toFixed(2)}
+                        </span>
                       </div>
                     )}
 
