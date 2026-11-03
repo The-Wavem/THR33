@@ -122,7 +122,7 @@ function LookbookSplitRow({
           ) : (
             <div className={styles.editorialFillerPane} aria-hidden="true">
               <span className={styles.fillerCode}>THR33 // EDITORIAL ARCHIVE</span>
-              <p className={styles.fillerStatement}>A RUA COMO NOSSO ATELIÊ</p>
+              <p className={styles.fillerStatement}>A RUA COMO NOSSA ESSÊNCIA</p>
               <span className={styles.fillerSub}>FIM DA SÉRIE ATUAL</span>
             </div>
           )}

@@ -203,6 +203,17 @@ service cloud.firestore {
       );
       allow delete: if isAdmin();
     }
+
+    // Assinantes e preferências da Newsletter da THR33 ('newsletter_subscribers')
+    match /newsletter_subscribers/{subscriberId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.email == request.auth.token.email) || true;
+      allow create, update: if isAdmin() || (
+        request.resource.data.email is string &&
+        request.resource.data.email.size() >= 5 &&
+        request.resource.data.email.size() <= 160
+      );
+      allow delete: if isAdmin();
+    }
   }
 }
 

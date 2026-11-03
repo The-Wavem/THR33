@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Button from '../../components/ui/Button';
-import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
 import largoDaOrdemBg from '@assets/images/largo-da-ordem-bg.jpeg';
 import largoDaOrdemBg2 from '@assets/images/largo-da-ordem-bg2.jpeg';
 import styles from './Hero.module.css';
@@ -10,7 +9,7 @@ import styles from './Hero.module.css';
 const DEFAULT_HERO_SLIDES = [
   {
     id: 'slide_1',
-    title: 'A RUA COMO NOSSO ATELIÊ',
+    title: 'A RUA É NOSSA ESSÊNCIA',
     subtitle: 'LEAK TWO — DROP EXCLUSIVO',
     badge: 'NOVO DROP',
     bgImage: largoDaOrdemBg,
@@ -127,7 +126,7 @@ export function Hero({ bannerData, isLoading = false, children }) {
         {
           id: bannerData.id || 'hero_banner_1',
           title: bannerData.title || 'THR33 STREETWEAR',
-          subtitle: bannerData.subtitle || 'A RUA COMO NOSSO ATELIÊ',
+          subtitle: bannerData.subtitle || 'A RUA É NOSSA ESSÊNCIA',
           badge: bannerData.badge || 'DESTAQUE',
           bgImage: bannerData.mediaUrl || bannerData.bgImage || DEFAULT_HERO_SLIDES[0].bgImage,
           type: bannerData.type || 'image',
@@ -160,6 +159,39 @@ export function Hero({ bannerData, isLoading = false, children }) {
     setTimerKey((k) => k + 1);
   };
 
+  // Pré-carregamento imediato de todas as imagens do carrossel na memória e cache do navegador
+  useEffect(() => {
+    if (!Array.isArray(slides) || slides.length === 0) return;
+
+    slides.forEach((s, idx) => {
+      const url = s.bgImage || s.mediaUrl;
+      if (url && typeof url === 'string' && !url.match(/\.(mp4|webm|ogg)$/i)) {
+        // Pré-carrega no cache de imagem do navegador e força decodificação na GPU
+        const img = new Image();
+        img.src = url;
+        if (img.decode) {
+          img.decode().catch(() => {});
+        }
+        // Registra link preload de alta prioridade no head
+        if (typeof document !== 'undefined') {
+          const selector = `link[rel="preload"][href="${CSS.escape(url)}"]`;
+          try {
+            if (!document.querySelector(selector)) {
+              const link = document.createElement('link');
+              link.rel = 'preload';
+              link.as = 'image';
+              link.href = url;
+              if (idx === 0) link.fetchPriority = 'high';
+              document.head.appendChild(link);
+            }
+          } catch {
+            // Em caso de caractere especial no seletor, ignora
+          }
+        }
+      }
+    });
+  }, [slides]);
+
   // Timer automático para o carrossel ir mudando sozinho
   useEffect(() => {
     if (isHovered || slides.length <= 1) return;
@@ -189,7 +221,62 @@ export function Hero({ bannerData, isLoading = false, children }) {
 
   return (
     <section className={styles.heroSection} aria-label="Destaques THR33">
-      {/* Área Arrastável com AnimatePresence */}
+      {/* Camada Persistente de Backgrounds Pré-carregados (Crossfade Suave Sem Recarregar) */}
+      <div className={styles.backgroundLayer} aria-hidden="true">
+        {slides.map((s, idx) => {
+          const isCurrent = idx === currentSlide;
+          const isVid =
+            s.type === 'video' || (s.mediaUrl && s.mediaUrl.match(/\.(mp4|webm|ogg)$/i));
+          const mediaSrc = s.bgImage || s.mediaUrl;
+          if (!mediaSrc && !isVid) return null;
+
+          return (
+            <motion.div
+              key={`hero-bg-${s.id || idx}`}
+              className={styles.slideBackground}
+              initial={false}
+              animate={{
+                opacity: isCurrent ? 1 : 0,
+                scale: isCurrent ? 1 : 1.05,
+              }}
+              transition={{
+                opacity: { duration: 0.65, ease: [0.16, 1, 0.3, 1] },
+                scale: { duration: 6, ease: 'easeOut' }
+              }}
+              style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: isCurrent ? 1 : 0,
+                pointerEvents: 'none'
+              }}
+            >
+              {!isVid && mediaSrc && (
+                <img
+                  src={mediaSrc}
+                  alt={s.title || 'Destaque THR33'}
+                  loading="eager"
+                  decoding="async"
+                  fetchPriority={idx === 0 ? 'high' : 'auto'}
+                  className={styles.heroPreloadedImage}
+                />
+              )}
+              {isVid && (
+                <video
+                  src={mediaSrc}
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className={styles.heroPreloadedImage}
+                />
+              )}
+            </motion.div>
+          );
+        })}
+        <div className={styles.overlay} />
+      </div>
+
+      {/* Área Arrastável com AnimatePresence para os Textos */}
       <motion.div
         className={styles.dragWrapper}
         drag="x"
@@ -197,56 +284,17 @@ export function Hero({ bannerData, isLoading = false, children }) {
         dragElastic={0.15}
         onDragEnd={handleDragEnd}
       >
-        <AnimatePresence custom={direction} mode="wait">
-          <motion.div
-            key={`hero-slide-${slide.id || currentSlide}`}
-            className={styles.slideMotionContainer}
-          >
-            {/* Background do Slide com Zoom Suave & Prioridade LCP */}
-            <motion.div
-              variants={bgVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              className={styles.slideBackground}
-              style={{ backgroundColor: '#0a0a0a' }}
-            >
-              {!isVideo && (slide.bgImage || slide.mediaUrl) && (
-                <ImageWithSkeleton
-                  src={slide.bgImage || slide.mediaUrl}
-                  alt={slide.title || 'Destaque THR33'}
-                  priority={true}
-                  wrapperClassName={styles.heroImageSkeletonWrapper}
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    width: '100%',
-                    height: '100%'
-                  }}
-                />
-              )}
-              {isVideo && (
-                <video
-                  src={slide.mediaUrl || slide.bgImage}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
-              )}
-              <div className={styles.overlay} />
-            </motion.div>
+        <div className={styles.slideMotionContainer}>
+          {/* Suporte a Modelo 3D opcional no Hero com Suspense e Pulso Brutalista */}
+          {children && (
+            <div className={styles.modelWrapper}>
+              <Suspense fallback={<HeroBadgeFallback />}>{children}</Suspense>
+            </div>
+          )}
 
-            {/* Suporte a Modelo 3D opcional no Hero com Suspense e Pulso Brutalista */}
-            {children && (
-              <div className={styles.modelWrapper}>
-                <Suspense fallback={<HeroBadgeFallback />}>{children}</Suspense>
-              </div>
-            )}
-
-            {/* Conteúdo Textual do Slide */}
+          <AnimatePresence custom={direction} mode="wait">
             <motion.div
+              key={`hero-text-${slide.id || currentSlide}`}
               variants={textVariants}
               initial="initial"
               animate="animate"
@@ -287,8 +335,8 @@ export function Hero({ bannerData, isLoading = false, children }) {
                 </div>
               ) : null}
             </motion.div>
-          </motion.div>
-        </AnimatePresence>
+          </AnimatePresence>
+        </div>
       </motion.div>
 
       {/* Botões de Navegação Lateral */}
@@ -357,11 +405,11 @@ export function Hero({ bannerData, isLoading = false, children }) {
         <div className={styles.marqueeTrack}>
           <span>
             THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSO
-            ATELIÊ // TIRAGENS LIMITADAS //{' '}
+            THR33 // TIRAGENS LIMITADAS //{' '}
           </span>
           <span>
             THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSO
-            ATELIÊ // TIRAGENS LIMITADAS //{' '}
+            THR33 // TIRAGENS LIMITADAS //{' '}
           </span>
         </div>
       </div>

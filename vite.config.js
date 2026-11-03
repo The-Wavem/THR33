@@ -5,6 +5,9 @@ import { fileURLToPath, URL } from 'node:url'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  esbuild: {
+    drop: ['console', 'debugger'],
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -22,7 +25,7 @@ export default defineConfig({
       '/api/calculateShipping': {
         target: 'https://southamerica-east1-thr33-streetwear.cloudfunctions.net',
         changeOrigin: true,
-        rewrite: (path) => '/calculateShipping',
+        rewrite: () => '/calculateShipping',
       },
       '/api/pagbank': {
         target: 'https://sandbox.api.pagseguro.com',

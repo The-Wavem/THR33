@@ -60,8 +60,8 @@ export function Footer() {
         .subscribeToDropWaitlist({
           email: cleanEmail,
           name: currentUser?.displayName || currentUser?.name || "",
-          dropId: currentDropConfig?.id || "drop-cactus-01",
-          dropName: currentDropConfig?.title || "UTOPIA PROCESS // CACTUS STREETS",
+          dropId: currentDropConfig?.id || "drop-thr33",
+          dropName: currentDropConfig?.title || "PRÓXIMO DROP THR33",
           source: "footer_newsletter",
         })
         .catch(() => {});
@@ -306,8 +306,8 @@ export function Footer() {
               80420-000
             </span>
             <span>
-              ATENDIMENTO AO CONSUMIDOR: SAC@THR33.COM • WHATSAPP: (41)
-              99542-4186
+              ATENDIMENTO AO CONSUMIDOR: CONTATO.THR33@GMAIL.COM • WHATSAPP: +55 41
+              8841-0374 • INSTAGRAM: @MADEBYTHR33
             </span>
           </div>
         </div>

@@ -665,8 +665,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
       setSaveProfileSuccess(true);
       setTimeout(() => setSaveProfileSuccess(false), 3000);
-    } catch (err) {
-      console.warn("Erro ao salvar dados do perfil no Firestore:", err);
+    } catch {
+      // Ignora erro silencioso de sincronização de perfil
     } finally {
       setSavingProfile(false);
     }
@@ -696,8 +696,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         if (updateUser) {
           await updateUser(userPayload);
         }
-      } catch (err) {
-        console.warn("Sincronização cadastral silenciosa:", err);
+      } catch {
+        // Sincronização silenciosa
       }
     }
 
@@ -1487,8 +1487,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         dropSubscriberService.subscribeToDropWaitlist({
           email: clientData.email || user?.email,
           name: clientData.name || user?.displayName || user?.name || '',
-          dropId: currentDropConfig?.id || 'drop-cactus-01',
-          dropName: currentDropConfig?.title || 'UTOPIA PROCESS // CACTUS STREETS',
+          dropId: currentDropConfig?.id || 'drop-thr33',
+          dropName: currentDropConfig?.title || 'PRÓXIMO DROP THR33',
           source: 'checkout_opt_in'
         }).catch(() => {});
       }

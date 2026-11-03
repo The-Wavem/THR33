@@ -57,7 +57,7 @@ const FITS = [
 
 export function Sobre() {
   const heroSectionRef = useRef(null);
-  const atelierSectionRef = useRef(null);
+  const manifestoSectionRef = useRef(null);
   const threeContainerRef = useRef(null);
 
   const [reelFrames, setReelFrames] = useState(INITIAL_REAL_REEL_FRAMES);
@@ -157,12 +157,12 @@ export function Sobre() {
   });
   const heroBgParallaxY = useTransform(heroScrollProgress, [0, 1], ['0%', '24%']);
 
-  const { scrollYProgress: atelierScrollProgress } = useScroll({
-    target: atelierSectionRef,
+  const { scrollYProgress: manifestoScrollProgress } = useScroll({
+    target: manifestoSectionRef,
     offset: ['start end', 'end start']
   });
-  const atelierBgParallaxY = useTransform(atelierScrollProgress, [0, 1], ['-16%', '16%']);
-  const atelierReelParallaxY = useTransform(atelierScrollProgress, [0, 1], ['-8%', '8%']);
+  const manifestoBgParallaxY = useTransform(manifestoScrollProgress, [0, 1], ['-16%', '16%']);
+  const manifestoReelParallaxY = useTransform(manifestoScrollProgress, [0, 1], ['-8%', '8%']);
 
   // -------------------------------------------------------------------------
   // THREE.JS RENDERER: EMBLEMA 3D OFICIAL (CENTRALIZADO & 100% RESPONSIVO)
@@ -375,7 +375,7 @@ export function Sobre() {
   return (
     <div className={styles.pageWrapper}>
       <SEO
-        title="O Ateliê & Manifesto Curitiba | THR33 Streetwear"
+        title="Manifesto Curitiba & Essência Urbana | THR33 Streetwear"
         description="Conheça a história da THR33 Streetwear. Nascida no Largo da Ordem em Curitiba, unindo modelagens Boxy pesadas, arquitetura brutalista e produção sob demanda."
         url="/sobre"
       />
@@ -442,11 +442,11 @@ export function Sobre() {
           2. RESTANTE DO CONTEÚDO DA PÁGINA (HISTÓRIA, MODELAGENS, MEDIDAS)
           ========================================================================= */}
       <div className={styles.mainContentContainer}>
-        {/* HISTÓRIA: A RUA COMO NOSSO ATELIÊ COM PARALLAX NO REEL */}
-        <section ref={atelierSectionRef} className={styles.atelierParallaxSection}>
+        {/* HISTÓRIA: A RUA COMO NOSSA ESSÊNCIA COM PARALLAX NO REEL */}
+        <section ref={manifestoSectionRef} className={styles.manifestoParallaxSection}>
           <motion.div
             className={styles.parallaxBgLayer}
-            style={{ backgroundColor: '#080808', y: atelierBgParallaxY }}
+            style={{ backgroundColor: '#080808', y: manifestoBgParallaxY }}
           >
             <ImageWithSkeleton
               src={largoDaOrdemBg2}
@@ -461,11 +461,11 @@ export function Sobre() {
             <div className={styles.splitSection}>
               <div className={styles.motionBox}>
                 <motion.div
-                  style={{ y: atelierReelParallaxY, width: '100%', height: '124%' }}
+                  style={{ y: manifestoReelParallaxY, width: '100%', height: '124%' }}
                 >
                   <ImageWithSkeleton
                     src={currentReelSrc}
-                    alt="Ateliê THR33 Curitiba"
+                    alt="Produção THR33 Curitiba"
                     className={styles.motionImage}
                     style={{ width: '100%', height: '100%' }}
                   />
@@ -473,7 +473,7 @@ export function Sobre() {
               </div>
 
               <div className={styles.textColumn}>
-                <h2 className={styles.sectionTitle}>A RUA COMO NOSSO ATELIÊ</h2>
+                <h2 className={styles.sectionTitle}>A RUA COMO NOSSA ESSÊNCIA</h2>
                 <p className={styles.bodyText}>
                   Criada por jovens curitibanos, a THR33 foca na confecção de camisetas estruturadas
                   em malha pesada. Cada estampa é desenvolvida em edições limitadas sem repetição de

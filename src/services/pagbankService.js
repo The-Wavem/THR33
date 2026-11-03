@@ -126,7 +126,6 @@ export const encryptCardData = async ({
         throw new Error(`Dados do cartão inválidos para criptografia: ${errorMsg}`);
       }
     } catch (sdkError) {
-      console.error("Falha ao criptografar cartão com SDK PagBank:", sdkError);
       throw sdkError;
     }
   }
@@ -402,7 +401,6 @@ export const pagbankService = {
         }
       }
     } catch (callErr) {
-      console.error("Erro na Cloud Function createPagBankOrder:", callErr);
       const errMsg = String(callErr.message || callErr.details || "");
       const cleanLastDigits = String(cardData?.lastDigits || cardData?.number || '').replace(/\D/g, '').slice(-4);
       const isTestCard = cleanLastDigits === '1111' || cleanLastDigits === '5100' || cleanLastDigits === '4444';
@@ -411,7 +409,7 @@ export const pagbankService = {
         throw new Error(errMsg);
       }
       if (errMsg.includes("buyer email must not be equals to merchant email") || errMsg.includes("40002")) {
-        throw new Error("O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista (contato.thewavem@gmail.com). Por favor, informe outro e-mail na Etapa 1.");
+        throw new Error("O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista. Por favor, informe outro e-mail na Etapa 1.");
       }
       if (!isSandboxMode() && !isTestCard) {
         const details = String(callErr.details || callErr.message || "");
@@ -423,7 +421,6 @@ export const pagbankService = {
         }
         throw new Error(callErr.message || "Erro ao conectar ao gateway PagBank");
       }
-      console.warn("Aviso ao conectar Cloud Function createPagBankOrder (aplicando fallback homologacao/teste):", callErr.message);
     }
 
     // 2. Fallback HTTP direto (/api/createSecureOrder) se disponivel

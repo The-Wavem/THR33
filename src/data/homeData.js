@@ -11,7 +11,7 @@ export const heroSlidesData = [
     description: 'MODELAGEM TAILORED STREET EM ALGODÃO PESADO',
     image: largoDaOrdemBg,
     primaryCta: 'EXPLORAR CATÁLOGO',
-    secondaryCta: 'CONHEÇA O ATELIÊ'
+    secondaryCta: 'CONHEÇA A MARCA'
   },
   {
     id: '02',
@@ -22,7 +22,7 @@ export const heroSlidesData = [
     description: 'HEAVYWEIGHT COTTON 260GSM // CORTE BOXY E COSTURA REFORÇADA',
     image: largoDaOrdemBg2,
     primaryCta: 'EXPLORAR CATÁLOGO',
-    secondaryCta: 'CONHEÇA O ATELIÊ'
+    secondaryCta: 'CONHEÇA A MARCA'
   }
 ];
 
@@ -38,11 +38,11 @@ export const carouselSlides = [
     sub: 'CURITIBA // LARGO DA ORDEM',
     tag: 'LOOKBOOK OFICIAL • FILM',
     image: largoDaOrdemBg,
-    caption: 'A RUA COMO NOSSO ATELIÊ // MODELAGEM OVERSIZED & BOXY'
+    caption: 'A RUA É NOSSA ESSÊNCIA // MODELAGEM OVERSIZED & BOXY'
   },
   {
     id: 'slide-2',
-    title: 'ATELIÊ R.U.A // MATERIAL STUDY',
+    title: 'THR33 R.U.A // MATERIAL STUDY',
     sub: 'HEAVYWEIGHT COTTON & HARDWARE',
     tag: 'EDITORIAL // INDUSTRIAL PROCESS',
     image: largoDaOrdemBg2,

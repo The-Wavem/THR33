@@ -163,7 +163,7 @@ export function AuthProvider({ children }) {
         termsVersion: '1.0',
         createdAt: new Date().toISOString(),
         provider: 'password'
-      });
+      }, { merge: true });
 
       emailService.triggerWelcomeEmail({
         uid: user.uid,
@@ -249,15 +249,15 @@ export function AuthProvider({ children }) {
       updatedData.name = name.trim();
       try {
         await updateProfile(auth.currentUser, { displayName: name.trim() });
-      } catch (err) {
-        console.warn("Erro ao atualizar displayName:", err);
+      } catch {
+        // Ignora falha silenciosa de displayName
       }
     }
 
     try {
       await setDoc(userDocRef, updatedData, { merge: true });
-    } catch (err) {
-      console.warn("Aviso ao salvar completeProfile no Firestore:", err.message);
+    } catch {
+      // Mantém dados em memória se Firestore oscilar
     }
 
     setCurrentUser(prev => ({
@@ -275,15 +275,14 @@ export function AuthProvider({ children }) {
       if (auth.currentUser && updatedFields.name) {
         try {
           await updateProfile(auth.currentUser, { displayName: updatedFields.name.trim() });
-        } catch (nameErr) {
-          console.warn("Aviso ao atualizar displayName:", nameErr.message);
+        } catch {
+          // Ignora falha silenciosa de displayName
         }
       }
       const userDocRef = doc(db, 'users', currentUser.uid);
       await setDoc(userDocRef, updatedFields, { merge: true });
       setCurrentUser(prev => ({ ...prev, ...updatedFields }));
-    } catch (err) {
-      console.warn("Aviso ao atualizar perfil no Firestore:", err.message);
+    } catch {
       setCurrentUser(prev => ({ ...prev, ...updatedFields }));
     }
   };
@@ -295,7 +294,6 @@ export function AuthProvider({ children }) {
       await fbUpdatePassword(auth.currentUser, newPassword);
       return { success: true };
     } catch (err) {
-      console.error("Erro ao alterar senha no Firebase:", err);
       if (err.code === 'auth/requires-recent-login') {
         return { success: false, error: 'Por segurança, faça login novamente antes de alterar sua senha.' };
       }

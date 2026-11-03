@@ -1,3 +1,4 @@
+import newsletterService from '../../services/newsletterService';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
@@ -401,10 +402,28 @@ export function CmsDashboard() {
       });
       const totalSpent = paidFoundOrders.reduce((acc, o) => acc + (Number(o.total) || Number(o.amount) || 0), 0);
       const firstOrder = foundOrders[0];
+      const customerEmail = firstOrder.customerEmail || firstOrder.email || firstOrder.clientEmail || '';
+      const customerUid = firstOrder.userId || firstOrder.uid || null;
+
+      let emailStatus = 'not_subscribed';
+      if (customerEmail) {
+        try {
+          const prefs = await newsletterService.getUserEmailPreferences(customerUid, customerEmail);
+          if (prefs?.unsubscribedAll) {
+            emailStatus = 'opt_out';
+          } else if (prefs?.newsletter) {
+            emailStatus = 'active';
+          }
+        } catch {
+          emailStatus = 'not_subscribed';
+        }
+      }
+
       setCrmResult({
         cpf: maskCPF(cleanCpf),
         name: firstOrder.customerName || firstOrder.name || firstOrder.clientName || 'Cliente THR33',
-        email: firstOrder.customerEmail || firstOrder.email || firstOrder.clientEmail || '',
+        email: customerEmail,
+        emailStatus,
         ordersCount: foundOrders.length,
         totalSpent,
         orders: foundOrders.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
@@ -746,7 +765,24 @@ export function CmsDashboard() {
               <div className={styles.crmProfile}>
                 <div className={styles.crmTopInfo}>
                   <div>
-                    <strong className={styles.crmName}>{crmResult.name}</strong>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', flexWrap: 'wrap' }}>
+                      <strong className={styles.crmName}>{crmResult.name}</strong>
+                      {crmResult.emailStatus === 'active' && (
+                        <span style={{ fontSize: '0.62rem', padding: '2px 7px', background: '#FFFFFF', color: '#000000', fontWeight: '700', letterSpacing: '0.5px' }}>
+                          NEWSLETTER VIP: ATIVO
+                        </span>
+                      )}
+                      {crmResult.emailStatus === 'opt_out' && (
+                        <span style={{ fontSize: '0.62rem', padding: '2px 7px', border: '1px solid #737373', color: '#A3A3A3', fontWeight: '700', letterSpacing: '0.5px' }}>
+                          OPT-OUT / E-MAILS DESATIVADOS
+                        </span>
+                      )}
+                      {crmResult.emailStatus === 'not_subscribed' && (
+                        <span style={{ fontSize: '0.62rem', padding: '2px 7px', border: '1px solid #222222', color: '#737373', letterSpacing: '0.5px' }}>
+                          NEWSLETTER: NÃO INSCRITO
+                        </span>
+                      )}
+                    </div>
                     <small className={styles.crmCpf}>CPF: {crmResult.cpf} {crmResult.email && `• ${crmResult.email}`}</small>
                   </div>
                   <div className={styles.crmKpis}>

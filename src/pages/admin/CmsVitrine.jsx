@@ -32,7 +32,7 @@ import styles from './CmsVitrine.module.css';
 // Configuração padrão limpa para inicialização da Grade Bento
 const DEFAULT_BENTO_CONFIG = {
   sectionTag: "ENSAIO DE CAMPANHA",
-  sectionTitle: "A RUA COMO NOSSO ATELIÊ",
+  sectionTitle: "A RUA É NOSSA ESSÊNCIA",
   cards: [
     {
       id: "bento_1",
@@ -128,7 +128,7 @@ export function CmsVitrine() {
             setSlides([
               {
                 id: "slide_1",
-                title: "A RUA COMO NOSSO ATELIÊ",
+                title: "A RUA É NOSSA ESSÊNCIA",
                 subtitle: "LEAK TWO — DROP EXCLUSIVO",
                 badge: "NOVO DROP",
                 bgImage: "",
@@ -144,7 +144,7 @@ export function CmsVitrine() {
           if (settings.bentoGrid?.length > 0) {
             setBentoConfig({
               sectionTag: settings.sectionTag || "ENSAIO DE CAMPANHA",
-              sectionTitle: settings.sectionTitle || "A RUA COMO NOSSO ATELIÊ",
+              sectionTitle: settings.sectionTitle || "A RUA É NOSSA ESSÊNCIA",
               cards: settings.bentoGrid
             });
           } else {
@@ -154,7 +154,7 @@ export function CmsVitrine() {
           setSlides([
             {
               id: "slide_1",
-              title: "A RUA COMO NOSSO ATELIÊ",
+              title: "A RUA É NOSSA ESSÊNCIA",
               subtitle: "LEAK TWO — DROP EXCLUSIVO",
               badge: "NOVO DROP",
               bgImage: "",
@@ -495,7 +495,7 @@ export function CmsVitrine() {
         },
         bentoGrid: bentoConfig.cards || [],
         sectionTag: bentoConfig.sectionTag || "ENSAIO DE CAMPANHA",
-        sectionTitle: bentoConfig.sectionTitle || "A RUA COMO NOSSO ATELIÊ"
+        sectionTitle: bentoConfig.sectionTitle || "A RUA É NOSSA ESSÊNCIA"
       });
 
       setSaveSuccess(true);
@@ -785,7 +785,7 @@ export function CmsVitrine() {
                     </div>
                     <input 
                       type="text" 
-                      placeholder="Ex: A RUA COMO NOSSO ATELIÊ" 
+                      placeholder="Ex: A RUA É NOSSA ESSÊNCIA" 
                       value={currentSlide.title || ''} 
                       onChange={(e) => handleUpdateSlide('title', e.target.value)} 
                       required 
@@ -1017,7 +1017,7 @@ export function CmsVitrine() {
                     <label>TÍTULO PRINCIPAL</label>
                     <input 
                       type="text" 
-                      placeholder="Ex: A RUA COMO NOSSO ATELIÊ" 
+                      placeholder="Ex: A RUA É NOSSA ESSÊNCIA" 
                       value={bentoConfig.sectionTitle || ''} 
                       onChange={(e) => handleUpdateBentoSection('sectionTitle', e.target.value)} 
                     />

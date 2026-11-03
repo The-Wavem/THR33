@@ -41,8 +41,8 @@ export function BentoGrid({ gridItems = [], sectionTag, sectionTitle, isLoading 
     return (
       <section className={styles.section} aria-busy="true" aria-label="Carregando destaques">
         <div className={styles.header}>
-          <span className={styles.tag}>{sectionTag || 'COLEÇÃO OFICIAL // ATELIÊ CWB'}</span>
-          <h2 className={styles.title}>{sectionTitle || 'A RUA COMO NOSSO ATELIÊ'}</h2>
+          <span className={styles.tag}>{sectionTag || 'COLEÇÃO OFICIAL // CURITIBA CWB'}</span>
+          <h2 className={styles.title}>{sectionTitle || 'A RUA COMO NOSSA ESSÊNCIA'}</h2>
         </div>
 
         <div className={styles.grid}>
@@ -70,8 +70,8 @@ export function BentoGrid({ gridItems = [], sectionTag, sectionTitle, isLoading 
   return (
     <section className={styles.section}>
       <div className={styles.header}>
-        <span className={styles.tag}>{sectionTag || 'COLEÇÃO OFICIAL // ATELIÊ CWB'}</span>
-        <h2 className={styles.title}>{sectionTitle || 'A RUA COMO NOSSO ATELIÊ'}</h2>
+        <span className={styles.tag}>{sectionTag || 'COLEÇÃO OFICIAL // CURITIBA CWB'}</span>
+        <h2 className={styles.title}>{sectionTitle || 'A RUA COMO NOSSA ESSÊNCIA'}</h2>
       </div>
 
       <div className={styles.grid}>

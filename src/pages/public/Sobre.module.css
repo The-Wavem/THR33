@@ -308,8 +308,8 @@
   box-sizing: border-box;
 }
 
-/* Seção Ateliê com Imagem Parallax de Fundo */
-.atelierParallaxSection {
+/* Seção Manifesto com Imagem Parallax de Fundo */
+.manifestoParallaxSection {
   position: relative;
   overflow: hidden;
   width: 100%;

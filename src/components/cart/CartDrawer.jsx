@@ -136,7 +136,7 @@ export function CartDrawer() {
                     <ShoppingBag size={32} />
                   </div>
                   <h3 className={styles.emptyTitle}>SUA SACOLA ESTÁ VAZIA</h3>
-                  <p className={styles.emptyText}>Você ainda não adicionou nenhuma peça do ateliê à sua sacola.</p>
+                  <p className={styles.emptyText}>Você ainda não adicionou nenhuma peça à sua sacola.</p>
                   <Link to="/catalogo" onClick={closeCart} className={styles.shopBtn}>
                     <span>EXPLORAR CATÁLOGO</span>
                     <ArrowRight size={14} />

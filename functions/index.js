@@ -733,6 +733,14 @@ exports.createPagBankOrder = onCall(
       : "https://api.pagseguro.com";
 
     // Suporte integrado para geracao de Sessao 3DS 2.0 (obrigatoria para Cartao de Debito PagBank em Producao)
+    if (request.data?.action === "unsubscribeEmail") {
+      const db = getDb();
+      return await handleUnsubscribeEmailAction(db, {
+        email: request.data.email,
+        uid: request.data.uid || request.auth?.uid
+      });
+    }
+
     if (request.data?.action === "sendTransactionalEmail") {
       const db = getDb();
       const { type, orderId, uid, email, name } = request.data;
@@ -3797,10 +3805,15 @@ async function sendResendEmail({ to, subject, html }) {
         );
         return { sent: true, id: fallbackRes.data?.id, fallbackSender: true };
       } catch (fallbackErr) {
-        logger.warn(
-          "[RESEND] Falha também no remetente fallback:",
+        const fbErrMsg = JSON.stringify(
           fallbackErr.response?.data || fallbackErr.message,
         );
+        logger.warn("[RESEND] Falha também no remetente fallback:", fbErrMsg);
+        return {
+          sent: false,
+          error: fbErrMsg,
+          primaryError: errMsg,
+        };
       }
     }
 
@@ -3809,7 +3822,9 @@ async function sendResendEmail({ to, subject, html }) {
   }
 }
 
-function buildThr33EmailWrapper({ preheader, title, subtitle, bodyHtml }) {
+function buildThr33EmailWrapper({ preheader, title, subtitle, bodyHtml, recipientEmail }) {
+  const unsubUrl = `https://thr33.com.br/perfil?tab=dados&unsubscribe=1&unsubscribeEmail=${encodeURIComponent(recipientEmail || "")}`;
+
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -3826,7 +3841,7 @@ function buildThr33EmailWrapper({ preheader, title, subtitle, bodyHtml }) {
           <tr>
             <td style="padding:36px 40px 28px 40px;border-bottom:1px solid #222222;">
               <span style="font-size:22px;font-weight:900;letter-spacing:5px;color:#FFFFFF;text-transform:uppercase;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;display:block;">THR33</span>
-              <span style="font-size:10px;letter-spacing:2.5px;color:#737373;text-transform:uppercase;display:block;margin-top:4px;">STREETWEAR // ATELIÊ CURITIBA</span>
+              <span style="font-size:10px;letter-spacing:2.5px;color:#737373;text-transform:uppercase;display:block;margin-top:4px;">STREETWEAR // CURITIBA / PR</span>
             </td>
           </tr>
           <tr>
@@ -3847,11 +3862,21 @@ function buildThr33EmailWrapper({ preheader, title, subtitle, bodyHtml }) {
               <p style="margin:0 0 6px 0;font-size:10px;font-weight:700;letter-spacing:2px;color:#737373;text-transform:uppercase;">
                 THR33 STREETWEAR — CURITIBA / PR
               </p>
-              <p style="margin:0 0 12px 0;font-size:11px;color:#737373;line-height:1.6;">
+              <p style="margin:0 0 16px 0;font-size:11px;color:#737373;line-height:1.7;">
                 Confecção autoral sob demanda, modelagens pesadas e tiragens limitadas.<br/>
-                Atendimento: <a href="https://wa.me/5541995424186" style="color:#FFFFFF;text-decoration:underline;">(41) 99542-4186</a>
+                WhatsApp: <a href="https://wa.me/554188410374" style="color:#FFFFFF;text-decoration:underline;font-weight:600;">+55 41 8841-0374</a> &bull; E-mail: <a href="mailto:contato.thr33@gmail.com" style="color:#FFFFFF;text-decoration:underline;">contato.thr33@gmail.com</a><br/>
+                Instagram: <a href="https://instagram.com/madebythr33" style="color:#A3A3A3;text-decoration:none;">@madebythr33</a> &bull; <a href="https://thr33.com.br/suporte" style="color:#A3A3A3;text-decoration:underline;">Central de Suporte</a>
               </p>
-              <a href="https://thr33.com.br" style="font-size:11px;color:#A3A3A3;text-decoration:underline;letter-spacing:1px;">thr33.com.br</a>
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td align="left" style="font-size:11px;">
+                    <a href="https://thr33.com.br" style="color:#A3A3A3;text-decoration:underline;letter-spacing:1px;">thr33.com.br</a>
+                  </td>
+                  <td align="right" style="font-size:11px;">
+                    <a href="${unsubUrl}" style="color:#737373;text-decoration:underline;letter-spacing:0.5px;">Cancelar recebimento de e-mails</a>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
         </table>
@@ -3862,8 +3887,129 @@ function buildThr33EmailWrapper({ preheader, title, subtitle, bodyHtml }) {
 </html>`;
 }
 
+/**
+ * Validação rigorosa de Opt-Out e Preferências de E-mail
+ */
+async function canSendEmailToUser(db, { uid, email, category = "transactional" } = {}) {
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  let userPrefs = null;
+  let subPrefs = null;
+
+  try {
+    if (uid) {
+      const uSnap = await db.collection("users").doc(String(uid)).get();
+      if (uSnap.exists) {
+        userPrefs = uSnap.data()?.emailPreferences;
+      }
+    }
+    if (cleanEmail) {
+      const sSnap = await db.collection("newsletter_subscribers").doc(cleanEmail).get();
+      if (sSnap.exists) {
+        subPrefs = sSnap.data();
+      }
+    }
+
+    // 1. Chave mestra: unsubscribedAll
+    if (userPrefs?.unsubscribedAll === true || subPrefs?.unsubscribedAll === true) {
+      return { allowed: false, reason: "user_unsubscribed_all" };
+    }
+
+    // 2. Categoria Carrinho Abandonado
+    if (category === "abandoned_cart") {
+      if (userPrefs?.abandonedCart === false || subPrefs?.abandonedCartOptIn === false) {
+        return { allowed: false, reason: "user_opted_out_abandoned_cart" };
+      }
+    }
+
+    // 3. Categoria Newsletter / Drops
+    if (category === "newsletter") {
+      if (userPrefs?.newsletter === false || subPrefs?.subscribed === false) {
+        return { allowed: false, reason: "user_opted_out_newsletter" };
+      }
+    }
+
+    return { allowed: true };
+  } catch (err) {
+    logger.warn("Aviso ao checar canSendEmailToUser:", err.message);
+    return { allowed: true };
+  }
+}
+
+/**
+ * Ação de cancelamento universal (unsubscribe) com privilégio de Admin SDK
+ */
+async function handleUnsubscribeEmailAction(db, { email, uid }) {
+  const cleanEmail = String(email || "").trim().toLowerCase();
+  if (!cleanEmail) {
+    return { success: false, error: "E-mail obrigatório" };
+  }
+  const nowIso = new Date().toISOString();
+  const nowMs = Date.now();
+
+  await db.collection("newsletter_subscribers").doc(cleanEmail).set(
+    {
+      email: cleanEmail,
+      uid: uid || null,
+      subscribed: false,
+      unsubscribedAll: true,
+      abandonedCartOptIn: false,
+      source: "unsubscribe_action",
+      updatedAt: nowIso,
+      updatedAtMs: nowMs,
+    },
+    { merge: true },
+  ).catch((e) => logger.warn("Erro ao atualizar newsletter_subscribers:", e.message));
+
+  await db.collection("drop_subscribers").doc(cleanEmail).set(
+    {
+      email: cleanEmail,
+      status: "unsubscribed",
+      unsubscribedAll: true,
+      updatedAt: nowIso,
+    },
+    { merge: true },
+  ).catch((e) => logger.warn("Erro ao atualizar drop_subscribers:", e.message));
+
+  if (uid) {
+    await db.collection("users").doc(String(uid)).set(
+      {
+        emailPreferences: {
+          newsletter: false,
+          abandonedCart: false,
+          transactional: false,
+          unsubscribedAll: true,
+          updatedAt: nowIso,
+        },
+        newsletterSubscribed: false,
+        updatedAt: nowIso,
+      },
+      { merge: true },
+    ).catch((e) => logger.warn("Erro ao atualizar users por uid:", e.message));
+  } else {
+    const userQuery = await db.collection("users").where("email", "==", cleanEmail).limit(1).get().catch(() => null);
+    if (userQuery && !userQuery.empty) {
+      await userQuery.docs[0].ref.set(
+        {
+          emailPreferences: {
+            newsletter: false,
+            abandonedCart: false,
+            transactional: false,
+            unsubscribedAll: true,
+            updatedAt: nowIso,
+          },
+          newsletterSubscribed: false,
+          updatedAt: nowIso,
+        },
+        { merge: true },
+      ).catch((e) => logger.warn("Erro ao atualizar users por email:", e.message));
+    }
+  }
+
+  return { success: true, email: cleanEmail };
+}
+
 // GATILHO A — Boas-vindas ao Criar Conta (welcome_register) — Minimalista P&B
-function buildWelcomeEmailHtml({ userName, coupon }) {
+function buildWelcomeEmailHtml({ userName, coupon, recipientEmail }) {
   const rawFirst = String(userName || "Cliente").trim().split(" ")[0] || "Cliente";
   const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
 
@@ -3891,7 +4037,7 @@ function buildWelcomeEmailHtml({ userName, coupon }) {
 
   const bodyHtml = `
     <p style="margin:0 0 24px 0;font-size:14px;color:#A3A3A3;line-height:1.7;">
-      Sua conta foi criada com sucesso. A partir de agora você tem acesso direto ao nosso acervo, acompanhamento de pedidos em tempo real e lançamentos limitados do ateliê.
+      Sua conta foi criada com sucesso. A partir de agora você tem acesso direto ao nosso acervo, acompanhamento de pedidos em tempo real e lançamentos limitados da marca.
     </p>
     ${couponBlockHtml}
     <div style="margin-top:32px;text-align:left;">
@@ -3906,11 +4052,12 @@ function buildWelcomeEmailHtml({ userName, coupon }) {
     title: `Bem-vindo à THR33, ${firstName}.`,
     subtitle: "",
     bodyHtml,
+    recipientEmail,
   });
 }
 
 // GATILHO B — Pedido Recebido / Aguardando PIX (order_created_pix) — Minimalista P&B
-function buildOrderPixEmailHtml({ orderId, orderData }) {
+function buildOrderPixEmailHtml({ orderId, orderData, recipientEmail }) {
   const displayOrder = formatOrderCodeBackend(orderId || orderData.orderId);
   const items = Array.isArray(orderData.items) ? orderData.items : [];
   const pixCode = orderData.pixCopiaECola || "";
@@ -3982,11 +4129,12 @@ function buildOrderPixEmailHtml({ orderId, orderData }) {
     subtitle:
       "Utilize o código PIX Copia e Cola ou escaneie o QR Code abaixo no aplicativo do seu banco para confirmar sua compra.",
     bodyHtml,
+    recipientEmail: recipientEmail || orderData.clientEmail,
   });
 }
 
 // GATILHO C — Pagamento Confirmado & Resumo da Compra (order_paid) — Minimalista P&B
-function buildOrderPaidEmailHtml({ orderId, orderData }) {
+function buildOrderPaidEmailHtml({ orderId, orderData, recipientEmail }) {
   const displayOrder = formatOrderCodeBackend(orderId || orderData.orderId);
   const items = Array.isArray(orderData.items) ? orderData.items : [];
   const giftCards = Array.isArray(orderData.giftCardsGenerated) ? orderData.giftCardsGenerated : [];
@@ -4160,13 +4308,14 @@ function buildOrderPaidEmailHtml({ orderId, orderData }) {
     title: `Pagamento confirmado — ${displayOrder}`,
     subtitle: isOnlyDigital
       ? "Seu pagamento foi aprovado e seus créditos digitais já estão disponíveis."
-      : "Seu pagamento foi confirmado. Suas peças já entraram em preparação no nosso ateliê.",
+      : "Seu pagamento foi confirmado. Suas peças já entraram em preparação para envio.",
     bodyHtml,
+    recipientEmail: recipientEmail || orderData.clientEmail,
   });
 }
 
 // GATILHO D — Pedido Enviado + Código de Rastreio (order_shipped) — Minimalista P&B
-function buildOrderShippedEmailHtml({ orderId, orderData }) {
+function buildOrderShippedEmailHtml({ orderId, orderData, recipientEmail }) {
   const displayOrder = formatOrderCodeBackend(orderId || orderData.orderId);
   const trackingCode = String(orderData.trackingCode || "").trim().toUpperCase();
   const carrier = orderData.carrier || "Transportadora";
@@ -4213,13 +4362,14 @@ function buildOrderShippedEmailHtml({ orderId, orderData }) {
     preheader: `Seu pedido ${displayOrder} foi enviado. Código de rastreio: ${trackingCode}`,
     title: `Seu pedido está a caminho (${displayOrder}).`,
     subtitle:
-      "Suas peças passaram pela conferência final do Ateliê THR33 e já foram entregues à transportadora.",
+      "Suas peças passaram pela conferência final da THR33 e já foram entregues à transportadora.",
     bodyHtml,
+    recipientEmail: recipientEmail || orderData.clientEmail,
   });
 }
 
 // GATILHO E — Carrinho Abandonado após 24h (abandoned_cart) — Minimalista P&B
-function buildAbandonedCartEmailHtml({ userName, items, subtotal }) {
+function buildAbandonedCartEmailHtml({ userName, items, subtotal, recipientEmail }) {
   const rawFirst = String(userName || "Cliente").trim().split(" ")[0] || "Cliente";
   const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
   const safeItems = Array.isArray(items) ? items : [];
@@ -4285,45 +4435,46 @@ function buildAbandonedCartEmailHtml({ userName, items, subtotal }) {
     subtitle:
       "Nossas tiragens são produzidas em lotes limitados. Os itens que você selecionou continuam salvos caso queira concluir seu pedido.",
     bodyHtml,
+    recipientEmail,
   });
 }
 
-// DISPARADORES TRANSACIONAIS 100% IDEMPOTENTES (LOCK ATÔMICO COM db.runTransaction ANTES DO ENVIO)
+// DISPARADORES TRANSACIONAIS 100% IDEMPOTENTES (COM TRAVA DE 60S E GRAVAÇÃO DE SENT APÓS CONFIRMAÇÃO REAL DO RESEND)
 async function sendWelcomeEmailIfNeeded(db, uid, { email, name } = {}) {
   if (!uid) return { sent: false, reason: "missing_uid" };
   const userRef = db.collection("users").doc(String(uid));
 
   try {
-    // 1. Trava transacional ANTES de chamar a API externa da Resend
-    const txState = await db.runTransaction(async (transaction) => {
+    const nowMs = Date.now();
+    const lockResult = await db.runTransaction(async (transaction) => {
       const userSnap = await transaction.get(userRef);
       const userData = userSnap.exists ? userSnap.data() : {};
 
-      if (userData.welcomeEmailSent === true || userData.welcomeEmailSending === true) {
-        return { shouldSend: false, alreadySent: true };
+      if (userData.welcomeEmailSent === true) {
+        return { allowed: false, reason: "already_sent" };
       }
-
-      const targetEmail = String(email || userData.email || "").trim();
-      const targetName = String(name || userData.name || "Cliente").trim();
-      if (!targetEmail || !targetEmail.includes("@")) {
-        return { shouldSend: false, reason: "missing_email" };
+      if (userData.welcomeEmailLockUntil && Number(userData.welcomeEmailLockUntil) > nowMs) {
+        return { allowed: false, reason: "in_flight_lock" };
       }
 
       transaction.set(
         userRef,
-        {
-          welcomeEmailSent: true,
-          welcomeEmailSending: true,
-          welcomeEmailSentAt: FieldValue.serverTimestamp(),
-        },
+        { welcomeEmailLockUntil: nowMs + 60000 },
         { merge: true },
       );
-
-      return { shouldSend: true, targetEmail, targetName };
+      return { allowed: true, userData };
     });
 
-    if (!txState.shouldSend) {
-      return { sent: false, ...txState };
+    if (!lockResult.allowed) {
+      return { sent: false, alreadySent: true, reason: lockResult.reason };
+    }
+
+    const userData = lockResult.userData || {};
+    const targetEmail = (email || userData.email || "").trim();
+    const targetName = (name || userData.name || "Cliente THR33").trim();
+    if (!targetEmail) {
+      await userRef.set({ welcomeEmailLockUntil: 0 }, { merge: true });
+      return { sent: false, reason: "missing_email" };
     }
 
     let welcomeCoupon = null;
@@ -4351,27 +4502,33 @@ async function sendWelcomeEmailIfNeeded(db, uid, { email, name } = {}) {
     }
 
     const html = buildWelcomeEmailHtml({
-      userName: txState.targetName,
+      userName: targetName,
       coupon: welcomeCoupon,
     });
 
     const result = await sendResendEmail({
-      to: txState.targetEmail,
+      to: targetEmail,
       subject: "Bem-vindo à THR33",
       html,
     });
 
     if (result.sent) {
-      await userRef.set({ welcomeEmailSending: false }, { merge: true });
-    } else {
-      // Libera a trava apenas se o envio na Resend falhar
       await userRef.set(
-        { welcomeEmailSent: false, welcomeEmailSending: false },
+        {
+          welcomeEmailSent: true,
+          welcomeEmailLockUntil: 0,
+          welcomeEmailSentAt: FieldValue.serverTimestamp(),
+        },
         { merge: true },
       );
+    } else {
+      // Libera a trava imediatamente caso o Resend tenha falhado
+      await userRef.set({ welcomeEmailLockUntil: 0 }, { merge: true });
     }
+
     return result;
   } catch (err) {
+    await userRef.set({ welcomeEmailLockUntil: 0 }, { merge: true }).catch(() => {});
     logger.warn("Erro não-bloqueante em sendWelcomeEmailIfNeeded:", err.message);
     return { sent: false, error: err.message };
   }
@@ -4379,13 +4536,17 @@ async function sendWelcomeEmailIfNeeded(db, uid, { email, name } = {}) {
 
 async function sendOrderPixEmailIfNeeded(db, orderRef, orderDataInput) {
   try {
+    const nowMs = Date.now();
     const txState = await db.runTransaction(async (transaction) => {
       const snap = await transaction.get(orderRef);
       const orderData = snap.exists ? snap.data() : orderDataInput;
       if (!orderData) return { shouldSend: false, reason: "order_not_found" };
 
-      if (orderData.pixEmailSent === true || orderData.pixEmailSending === true) {
+      if (orderData.pixEmailSent === true) {
         return { shouldSend: false, alreadySent: true };
+      }
+      if (orderData.pixEmailLockUntil && Number(orderData.pixEmailLockUntil) > nowMs) {
+        return { shouldSend: false, alreadySent: true, reason: "in_flight_lock" };
       }
 
       const targetEmail = String(orderData.clientEmail || orderData.customer?.email || "").trim();
@@ -4395,11 +4556,7 @@ async function sendOrderPixEmailIfNeeded(db, orderRef, orderDataInput) {
 
       transaction.set(
         orderRef,
-        {
-          pixEmailSent: true,
-          pixEmailSending: true,
-          pixEmailSentAt: FieldValue.serverTimestamp(),
-        },
+        { pixEmailLockUntil: nowMs + 60000 },
         { merge: true },
       );
 
@@ -4423,12 +4580,20 @@ async function sendOrderPixEmailIfNeeded(db, orderRef, orderDataInput) {
     });
 
     if (result.sent) {
-      await orderRef.set({ pixEmailSending: false }, { merge: true });
+      await orderRef.set(
+        {
+          pixEmailSent: true,
+          pixEmailLockUntil: 0,
+          pixEmailSentAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
     } else {
-      await orderRef.set({ pixEmailSent: false, pixEmailSending: false }, { merge: true });
+      await orderRef.set({ pixEmailLockUntil: 0 }, { merge: true });
     }
     return result;
   } catch (err) {
+    await orderRef.set({ pixEmailLockUntil: 0 }, { merge: true }).catch(() => {});
     logger.warn("Erro não-bloqueante em sendOrderPixEmailIfNeeded:", err.message);
     return { sent: false, error: err.message };
   }
@@ -4436,16 +4601,20 @@ async function sendOrderPixEmailIfNeeded(db, orderRef, orderDataInput) {
 
 async function sendOrderPaidEmailIfNeeded(db, orderRef, orderDataInput) {
   try {
+    const nowMs = Date.now();
     const txState = await db.runTransaction(async (transaction) => {
       const snap = await transaction.get(orderRef);
       const orderData = snap.exists ? snap.data() : orderDataInput;
       if (!orderData) return { shouldSend: false, reason: "order_not_found" };
 
-      if (
-        orderData.confirmationEmailSent === true ||
-        orderData.confirmationEmailSending === true
-      ) {
+      if (orderData.confirmationEmailSent === true) {
         return { shouldSend: false, alreadySent: true };
+      }
+      if (
+        orderData.confirmationEmailLockUntil &&
+        Number(orderData.confirmationEmailLockUntil) > nowMs
+      ) {
+        return { shouldSend: false, alreadySent: true, reason: "in_flight_lock" };
       }
 
       const targetEmail = String(orderData.clientEmail || orderData.customer?.email || "").trim();
@@ -4453,11 +4622,7 @@ async function sendOrderPaidEmailIfNeeded(db, orderRef, orderDataInput) {
 
       transaction.set(
         orderRef,
-        {
-          confirmationEmailSent: true,
-          confirmationEmailSending: true,
-          confirmationEmailSentAt: FieldValue.serverTimestamp(),
-        },
+        { confirmationEmailLockUntil: nowMs + 60000 },
         { merge: true },
       );
 
@@ -4481,15 +4646,20 @@ async function sendOrderPaidEmailIfNeeded(db, orderRef, orderDataInput) {
     });
 
     if (result.sent) {
-      await orderRef.set({ confirmationEmailSending: false }, { merge: true });
-    } else {
       await orderRef.set(
-        { confirmationEmailSent: false, confirmationEmailSending: false },
+        {
+          confirmationEmailSent: true,
+          confirmationEmailLockUntil: 0,
+          confirmationEmailSentAt: FieldValue.serverTimestamp(),
+        },
         { merge: true },
       );
+    } else {
+      await orderRef.set({ confirmationEmailLockUntil: 0 }, { merge: true });
     }
     return result;
   } catch (err) {
+    await orderRef.set({ confirmationEmailLockUntil: 0 }, { merge: true }).catch(() => {});
     logger.warn("Erro não-bloqueante em sendOrderPaidEmailIfNeeded:", err.message);
     return { sent: false, error: err.message };
   }
@@ -4497,6 +4667,7 @@ async function sendOrderPaidEmailIfNeeded(db, orderRef, orderDataInput) {
 
 async function sendOrderShippedEmailIfNeeded(db, orderRef, orderDataInput) {
   try {
+    const nowMs = Date.now();
     const txState = await db.runTransaction(async (transaction) => {
       const snap = await transaction.get(orderRef);
       const orderData = snap.exists ? snap.data() : orderDataInput;
@@ -4511,17 +4682,16 @@ async function sendOrderShippedEmailIfNeeded(db, orderRef, orderDataInput) {
       ) {
         return { shouldSend: false, alreadySent: true };
       }
+      if (orderData.shippedEmailLockUntil && Number(orderData.shippedEmailLockUntil) > nowMs) {
+        return { shouldSend: false, alreadySent: true, reason: "in_flight_lock" };
+      }
 
       const targetEmail = String(orderData.clientEmail || orderData.customer?.email || "").trim();
       if (!targetEmail) return { shouldSend: false, reason: "missing_email" };
 
       transaction.set(
         orderRef,
-        {
-          shippedEmailSent: true,
-          lastShippedTrackingCode: trackingCode,
-          shippedEmailSentAt: FieldValue.serverTimestamp(),
-        },
+        { shippedEmailLockUntil: nowMs + 60000 },
         { merge: true },
       );
 
@@ -4544,14 +4714,22 @@ async function sendOrderShippedEmailIfNeeded(db, orderRef, orderDataInput) {
       html,
     });
 
-    if (!result.sent) {
+    if (result.sent) {
       await orderRef.set(
-        { shippedEmailSent: false, lastShippedTrackingCode: null },
+        {
+          shippedEmailSent: true,
+          lastShippedTrackingCode: txState.trackingCode,
+          shippedEmailLockUntil: 0,
+          shippedEmailSentAt: FieldValue.serverTimestamp(),
+        },
         { merge: true },
       );
+    } else {
+      await orderRef.set({ shippedEmailLockUntil: 0 }, { merge: true });
     }
     return result;
   } catch (err) {
+    await orderRef.set({ shippedEmailLockUntil: 0 }, { merge: true }).catch(() => {});
     logger.warn("Erro não-bloqueante em sendOrderShippedEmailIfNeeded:", err.message);
     return { sent: false, error: err.message };
   }
@@ -4563,6 +4741,7 @@ async function sendAbandonedCartEmailIfNeeded(db, uid, { forceTest = false } = {
   const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
   try {
+    const nowMs = Date.now();
     const txState = await db.runTransaction(async (transaction) => {
       const userSnap = await transaction.get(userRef);
       if (!userSnap.exists) return { shouldSend: false, reason: "user_not_found" };
@@ -4582,9 +4761,16 @@ async function sendAbandonedCartEmailIfNeeded(db, uid, { forceTest = false } = {
       if (!forceTest && cart.abandonedEmailSent === true) {
         return { shouldSend: false, alreadySent: true };
       }
+      if (
+        !forceTest &&
+        cart.abandonedEmailLockUntil &&
+        Number(cart.abandonedEmailLockUntil) > nowMs
+      ) {
+        return { shouldSend: false, alreadySent: true, reason: "in_flight_lock" };
+      }
 
       const updatedAtMs = Number(cart.UpdatedAtMs || 0);
-      if (!forceTest && (!updatedAtMs || Date.now() - updatedAtMs < TWENTY_FOUR_HOURS_MS)) {
+      if (!forceTest && (!updatedAtMs || nowMs - updatedAtMs < TWENTY_FOUR_HOURS_MS)) {
         return { shouldSend: false, reason: "not_24h_yet" };
       }
 
@@ -4593,8 +4779,7 @@ async function sendAbandonedCartEmailIfNeeded(db, uid, { forceTest = false } = {
         {
           abandonedCart: {
             ...cart,
-            abandonedEmailSent: true,
-            abandonedEmailSentAt: FieldValue.serverTimestamp(),
+            abandonedEmailLockUntil: nowMs + 60000,
           },
         },
         { merge: true },
@@ -4631,7 +4816,29 @@ async function sendAbandonedCartEmailIfNeeded(db, uid, { forceTest = false } = {
       });
 
       if (hasRecentPurchase) {
+        await userRef.set(
+          {
+            abandonedCart: {
+              ...txState.cartSnapshot,
+              abandonedEmailSent: true,
+              abandonedEmailLockUntil: 0,
+            },
+          },
+          { merge: true },
+        );
         return { sent: false, reason: "already_purchased_recently" };
+      }
+    }
+
+    // Valida preferências de e-mail / opt-out
+    if (!forceTest) {
+      const optCheck = await canSendEmailToUser(db, {
+        uid,
+        email: txState.targetEmail,
+        category: "abandoned_cart"
+      });
+      if (!optCheck.allowed) {
+        return { sent: false, skipped: true, reason: optCheck.reason };
       }
     }
 
@@ -4639,6 +4846,7 @@ async function sendAbandonedCartEmailIfNeeded(db, uid, { forceTest = false } = {
       userName: txState.userName,
       items: txState.items,
       subtotal: txState.subtotal,
+      recipientEmail: txState.targetEmail,
     });
 
     const result = await sendResendEmail({
@@ -4647,12 +4855,24 @@ async function sendAbandonedCartEmailIfNeeded(db, uid, { forceTest = false } = {
       html,
     });
 
-    if (!result.sent && !forceTest) {
+    if (result.sent) {
       await userRef.set(
         {
           abandonedCart: {
             ...txState.cartSnapshot,
-            abandonedEmailSent: false,
+            abandonedEmailSent: true,
+            abandonedEmailLockUntil: 0,
+            abandonedEmailSentAt: FieldValue.serverTimestamp(),
+          },
+        },
+        { merge: true },
+      );
+    } else {
+      await userRef.set(
+        {
+          abandonedCart: {
+            ...txState.cartSnapshot,
+            abandonedEmailLockUntil: 0,
           },
         },
         { merge: true },
@@ -4677,6 +4897,13 @@ exports.sendTransactionalEmail = onCall(
   async (request) => {
     const db = getDb();
     const { type, orderId, uid, email, name, forceTest } = request.data || {};
+
+    if (type === "unsubscribe_email" || request.data?.action === "unsubscribeEmail") {
+      return await handleUnsubscribeEmailAction(db, {
+        email: email || request.data?.email,
+        uid: uid || request.auth?.uid
+      });
+    }
 
     if (type === "welcome_register") {
       const targetUid = uid || request.auth?.uid;
@@ -4753,7 +4980,7 @@ exports.checkAbandonedCartsCron = onSchedule(
  * FEATURE 2: PRÉ-REGISTRO / LISTA VIP DE DROPS & DISPARO EM LOTES (BATCH API)
  * ============================================================================
  */
-function buildDropWaitlistWelcomeHtml({ name, dropName, dropId }) {
+function buildDropWaitlistWelcomeHtml({ name, dropName, dropId, recipientEmail }) {
   const cleanDropName = String(dropName || dropId || "PRÓXIMO DROP").toUpperCase();
   const rawFirst = name ? String(name).trim().split(" ")[0] : null;
   const firstName = rawFirst
@@ -4780,6 +5007,7 @@ function buildDropWaitlistWelcomeHtml({ name, dropName, dropId }) {
     title: `Você está na Lista VIP — ${cleanDropName}.`,
     subtitle: "",
     bodyHtml,
+    recipientEmail,
   });
 }
 
@@ -4789,12 +5017,15 @@ function buildDropBroadcastEmailHtml({
   bannerUrl,
   manifestoText,
   couponCode,
+  couponTitle,
   couponDescription,
   ctaUrl,
   ctaLabel,
+  showCta = true,
+  recipientEmail,
 }) {
   const cleanTitle = String(subjectTitle || "Drop disponível — Acesso liberado").trim();
-  const targetLink = String(ctaUrl || "https://thr33.com.br/catalogo").trim();
+  const targetLink = String(ctaUrl || "").trim();
   const buttonText = String(ctaLabel || "ACESSAR O DROP")
     .replace(/[\[\]]/g, "")
     .trim()
@@ -4803,10 +5034,12 @@ function buildDropBroadcastEmailHtml({
   const bannerBlockHtml =
     bannerUrl && String(bannerUrl).startsWith("http")
       ? `
-      <div style="margin-bottom:24px;border:1px solid #222222;background-color:#050505;overflow:hidden;">
-        <a href="${targetLink}" style="text-decoration:none;display:block;">
-          <img src="${bannerUrl}" alt="${cleanTitle}" width="478" style="width:100%;max-width:478px;height:auto;display:block;border:0;" />
-        </a>
+      <div style="margin-bottom:24px;border:1px solid #222222;background-color:#050505;overflow:hidden;text-align:center;">
+        ${
+          targetLink
+            ? `<a href="${targetLink}" style="text-decoration:none;display:block;"><img src="${bannerUrl}" alt="${cleanTitle}" width="560" style="width:100%;max-width:560px;height:auto;display:block;border:0;margin:0 auto;" /></a>`
+            : `<img src="${bannerUrl}" alt="${cleanTitle}" width="560" style="width:100%;max-width:560px;height:auto;display:block;border:0;margin:0 auto;" />`
+        }
       </div>
     `
       : "";
@@ -4826,9 +5059,9 @@ function buildDropBroadcastEmailHtml({
   const couponBlockHtml =
     couponCode && String(couponCode).trim()
       ? `
-      <div style="margin:28px 0;padding:24px;border:1px solid #222222;text-align:center;">
+      <div style="margin:28px 0;padding:24px;border:1px solid #222222;background-color:#050505;text-align:center;">
         <span style="display:block;font-size:10px;font-weight:600;letter-spacing:2px;color:#737373;text-transform:uppercase;margin-bottom:8px;">
-          ACESSO LISTA VIP
+          ${String(couponTitle || "CREDENCIAL // LISTA VIP").toUpperCase()}
         </span>
         <div style="font-size:20px;font-weight:700;letter-spacing:3px;color:#FFFFFF;margin:6px 0;font-family:monospace;">
           ${String(couponCode).trim().toUpperCase()}
@@ -4840,24 +5073,32 @@ function buildDropBroadcastEmailHtml({
     `
       : "";
 
+  const ctaBlockHtml =
+    showCta !== false && targetLink && buttonText
+      ? `
+      <div style="margin-top:32px;text-align:left;">
+        <a href="${targetLink}" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+          ${buttonText}
+        </a>
+      </div>
+    `
+      : "";
+
   const bodyHtml = `
     ${bannerBlockHtml}
     <div>
       ${formattedParagraphs}
     </div>
     ${couponBlockHtml}
-    <div style="margin-top:32px;text-align:left;">
-      <a href="${targetLink}" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
-        ${buttonText}
-      </a>
-    </div>
+    ${ctaBlockHtml}
   `;
 
   return buildThr33EmailWrapper({
-    preheader: `${cleanTitle} — Acesso prioritário Lista VIP THR33.`,
+    preheader: `${cleanTitle} — THR33 Streetwear.`,
     title: cleanTitle,
     subtitle: dropName ? String(dropName).toUpperCase() : "",
     bodyHtml,
+    recipientEmail,
   });
 }
 
@@ -4878,14 +5119,15 @@ async function sendDropWaitlistWelcomeIfNeeded(db, data) {
 
     const subscriberId = data?.subscriberId || getSubscriberDocId(rawEmail);
     const subRef = db.collection("drop_subscribers").doc(subscriberId);
+    const nowMs = Date.now();
 
     const txState = await db.runTransaction(async (transaction) => {
       const subSnap = await transaction.get(subRef);
       const subData = subSnap.exists ? subSnap.data() : {};
 
-      const dropId = String(data?.dropId || subData.dropId || "drop-cactus-01").trim();
+      const dropId = String(data?.dropId || subData.dropId || "drop-thr33").trim();
       const dropName = String(
-        data?.dropName || subData.dropName || "UTOPIA PROCESS // CACTUS STREETS",
+        data?.dropName || subData.dropName || "PRÓXIMO DROP THR33",
       ).trim();
       const name = String(data?.name || subData.name || "").trim();
       const source = String(data?.source || subData.source || "home_newsletter").trim();
@@ -4907,6 +5149,13 @@ async function sendDropWaitlistWelcomeIfNeeded(db, data) {
         return { shouldSend: false, alreadySent: true, subscriberId };
       }
 
+      if (
+        subData.welcomeDropEmailLockUntil &&
+        Number(subData.welcomeDropEmailLockUntil) > nowMs
+      ) {
+        return { shouldSend: false, alreadySent: true, reason: "in_flight_lock", subscriberId };
+      }
+
       transaction.set(
         subRef,
         {
@@ -4916,9 +5165,7 @@ async function sendDropWaitlistWelcomeIfNeeded(db, data) {
           dropName,
           source,
           status: "active",
-          welcomeDropEmailSent: true,
-          welcomeDropEmailSentFor: dropId,
-          welcomeDropEmailSentAt: FieldValue.serverTimestamp(),
+          welcomeDropEmailLockUntil: nowMs + 60000,
           updatedAt: FieldValue.serverTimestamp(),
           ...(subSnap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
         },
@@ -4945,14 +5192,18 @@ async function sendDropWaitlistWelcomeIfNeeded(db, data) {
       html,
     });
 
-    if (!result.sent) {
+    if (result.sent) {
       await subRef.set(
         {
-          welcomeDropEmailSent: false,
-          welcomeDropEmailSentFor: null,
+          welcomeDropEmailSent: true,
+          welcomeDropEmailSentFor: txState.dropId,
+          welcomeDropEmailLockUntil: 0,
+          welcomeDropEmailSentAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
       );
+    } else {
+      await subRef.set({ welcomeDropEmailLockUntil: 0 }, { merge: true });
     }
 
     return { ...result, subscriberId };
@@ -4978,10 +5229,13 @@ async function sendResendBatchEmails(emailsPayloadArray) {
   };
 
   let totalSent = 0;
+  const failedRecipients = [];
+  let lastErrorMsg = "";
   const CHUNK_SIZE = 100; // Limite oficial da Batch API da Resend (/emails/batch)
 
   for (let i = 0; i < emailsPayloadArray.length; i += CHUNK_SIZE) {
-    const chunk = emailsPayloadArray.slice(i, i + CHUNK_SIZE).map((item) => ({
+    const rawSlice = emailsPayloadArray.slice(i, i + CHUNK_SIZE);
+    const chunk = rawSlice.map((item) => ({
       from: configuredFrom,
       to: [item.to],
       subject: item.subject,
@@ -4997,8 +5251,10 @@ async function sendResendBatchEmails(emailsPayloadArray) {
     } catch (batchErr) {
       const status = batchErr.response?.status;
       const errMsg = JSON.stringify(batchErr.response?.data || batchErr.message);
+      lastErrorMsg = errMsg;
 
-      // Fallback para onboarding@resend.dev caso domínio ainda não esteja verificado
+      let batchRecovered = false;
+      // 1º Fallback: Tenta lote com onboarding@resend.dev caso domínio ainda não esteja verificado
       if (
         (status === 403 || status === 422 || errMsg.toLowerCase().includes("domain")) &&
         !configuredFrom.includes("onboarding@resend.dev")
@@ -5013,16 +5269,48 @@ async function sendResendBatchEmails(emailsPayloadArray) {
             timeout: 20000,
           });
           totalSent += fallbackChunk.length;
-          continue;
+          batchRecovered = true;
         } catch (fbErr) {
-          logger.warn("[RESEND BATCH] Falha no fallback:", fbErr.message);
+          lastErrorMsg = JSON.stringify(fbErr.response?.data || fbErr.message);
+          logger.warn("[RESEND BATCH] Lote fallback falhou, iniciando envio individual:", lastErrorMsg);
         }
       }
-      logger.warn("[RESEND BATCH] Erro ao enviar lote:", errMsg);
+
+      // 2º Fallback Individual: Se o lote inteiro foi recusado (ex: restrição de Sandbox para 1 destinatário do lote),
+      // dispara individualmente para garantir que todos os destinatários válidos recebam o e-mail!
+      if (!batchRecovered) {
+        for (let idx = 0; idx < rawSlice.length; idx++) {
+          const item = rawSlice[idx];
+          const singleRes = await sendResendEmail({
+            to: item.to,
+            subject: item.subject,
+            html: item.html,
+          });
+          if (singleRes.sent) {
+            totalSent += 1;
+          } else {
+            failedRecipients.push({
+              email: item.to,
+              error: singleRes.error || "Falha no envio individual",
+            });
+            if (singleRes.error) lastErrorMsg = singleRes.error;
+          }
+          // Pausa curta para respeitar o rate limit da Resend (2 req/s)
+          if (idx < rawSlice.length - 1) {
+            await new Promise((r) => setTimeout(r, 520));
+          }
+        }
+      }
     }
   }
 
-  return { sent: totalSent > 0, count: totalSent };
+  return {
+    sent: totalSent > 0,
+    count: totalSent,
+    failedCount: failedRecipients.length,
+    failedRecipients,
+    error: totalSent === 0 ? lastErrorMsg : undefined,
+  };
 }
 
 async function handleDropBroadcastCampaign(db, request) {
@@ -5035,7 +5323,7 @@ async function handleDropBroadcastCampaign(db, request) {
   const callerEmail = (request.auth.token?.email || "").toLowerCase();
   const adminEmails = (
     process.env.ADMIN_EMAILS ||
-    "contato.thewavem@gmail.com,thewavem@gmail.com,eduianbf@gmail.com,admin@thr33.com,sac@thr33.com,contato@thr33.com"
+    "contato.thewavem@gmail.com,thewavem@gmail.com,eduianbf@gmail.com,kampaweslley@gmail.com,contato.thr33@gmail.com,admin@thr33.com,sac@thr33.com,contato@thr33.com"
   )
     .split(",")
     .map((e) => e.trim().toLowerCase());
@@ -5056,14 +5344,18 @@ async function handleDropBroadcastCampaign(db, request) {
     mode = "test", // 'test' | 'broadcast'
     testEmail,
     targetDropId = "all",
+    targetSource = "all",
+    customRecipients = null,
     subjectTitle,
     dropName,
     bannerUrl,
     manifestoText,
     couponCode,
+    couponTitle,
     couponDescription,
     ctaUrl,
     ctaLabel,
+    showCta = true,
   } = request.data || {};
 
   const cleanSubject = String(subjectTitle || "Drop disponível — Acesso liberado").trim();
@@ -5073,9 +5365,11 @@ async function handleDropBroadcastCampaign(db, request) {
     bannerUrl,
     manifestoText,
     couponCode,
+    couponTitle,
     couponDescription,
     ctaUrl,
     ctaLabel,
+    showCta,
   });
 
   if (mode === "test") {
@@ -5083,10 +5377,23 @@ async function handleDropBroadcastCampaign(db, request) {
     if (!recipient || !recipient.includes("@")) {
       throw new HttpsError("invalid-argument", "Informe um e-mail válido para o envio de teste.");
     }
+    const testHtml = buildDropBroadcastEmailHtml({
+      subjectTitle: cleanSubject,
+      dropName,
+      bannerUrl,
+      manifestoText,
+      couponCode,
+      couponTitle,
+      couponDescription,
+      ctaUrl,
+      ctaLabel,
+      showCta,
+      recipientEmail: recipient,
+    });
     const res = await sendResendEmail({
       to: recipient,
-      subject: `[TESTE VIP] ${cleanSubject}`,
-      html,
+      subject: `[TESTE] ${cleanSubject}`,
+      html: testHtml,
     });
     return {
       ...res,
@@ -5096,30 +5403,69 @@ async function handleDropBroadcastCampaign(db, request) {
     };
   }
 
-  // Modo Broadcast em Lotes para a Lista VIP Ativa
-  const subsSnap = await db
-    .collection("drop_subscribers")
-    .where("status", "==", "active")
-    .get();
-
+  // Modo Broadcast para destinatários selecionados ou filtro da Lista VIP
   const recipientsSet = new Set();
-  subsSnap.forEach((docSnap) => {
-    const d = docSnap.data();
-    const em = String(d.email || "").trim().toLowerCase();
-    if (!em || !em.includes("@")) return;
-    if (targetDropId && targetDropId !== "all" && d.dropId !== targetDropId) return;
-    recipientsSet.add(em);
-  });
 
-  const recipients = Array.from(recipientsSet);
-  if (recipients.length === 0) {
+  if (Array.isArray(customRecipients) && customRecipients.length > 0) {
+    customRecipients.forEach((raw) => {
+      const em = String(raw || "").trim().toLowerCase();
+      if (em && em.includes("@")) recipientsSet.add(em);
+    });
+  } else {
+    const subsSnap = await db.collection("drop_subscribers").get();
+    subsSnap.forEach((docSnap) => {
+      const d = docSnap.data() || {};
+      if (d.status === "unsubscribed" || d.unsubscribedAll === true) return;
+      const em = String(d.email || "").trim().toLowerCase();
+      if (!em || !em.includes("@")) return;
+      if (targetDropId && targetDropId !== "all" && d.dropId !== targetDropId) return;
+      if (targetSource && targetSource !== "all" && d.source !== targetSource) return;
+      recipientsSet.add(em);
+    });
+  }
+
+  const rawRecipients = Array.from(recipientsSet);
+  if (rawRecipients.length === 0) {
     return { sent: false, count: 0, reason: "no_active_subscribers" };
   }
 
-  const batchPayloads = recipients.map((em) => ({
+  // Validação estrita de Opt-out e LGPD para cada destinatário (filtra quem desativou e-mails)
+  const validRecipients = [];
+  let optOutFilteredCount = 0;
+  for (const em of rawRecipients) {
+    const check = await canSendEmailToUser(db, { email: em, category: "newsletter" });
+    if (check.allowed) {
+      validRecipients.push(em);
+    } else {
+      optOutFilteredCount++;
+    }
+  }
+
+  if (validRecipients.length === 0) {
+    return {
+      sent: false,
+      count: 0,
+      reason: "all_subscribers_opted_out",
+      optOutFilteredCount,
+    };
+  }
+
+  const batchPayloads = validRecipients.map((em) => ({
     to: em,
     subject: cleanSubject,
-    html,
+    html: buildDropBroadcastEmailHtml({
+      subjectTitle: cleanSubject,
+      dropName,
+      bannerUrl,
+      manifestoText,
+      couponCode,
+      couponTitle,
+      couponDescription,
+      ctaUrl,
+      ctaLabel,
+      showCta,
+      recipientEmail: em,
+    }),
   }));
 
   const batchResult = await sendResendBatchEmails(batchPayloads);
@@ -5128,12 +5474,14 @@ async function handleDropBroadcastCampaign(db, request) {
   try {
     await db.collection("drop_broadcasts").add({
       subjectTitle: cleanSubject,
-      dropName: dropName || "DROP THR33",
+      dropName: dropName || "THR33",
       targetDropId,
+      targetSource,
       couponCode: couponCode || null,
       ctaUrl: ctaUrl || null,
       totalRecipients: recipients.length,
       sentCount: batchResult.count,
+      failedCount: batchResult.failedCount || 0,
       sentByEmail: callerEmail,
       createdAt: FieldValue.serverTimestamp(),
     });
@@ -5144,6 +5492,9 @@ async function handleDropBroadcastCampaign(db, request) {
   return {
     sent: batchResult.sent,
     count: batchResult.count,
+    failedCount: batchResult.failedCount || 0,
+    failedRecipients: batchResult.failedRecipients || [],
+    error: batchResult.error,
     totalRecipients: recipients.length,
     mode: "broadcast",
   };

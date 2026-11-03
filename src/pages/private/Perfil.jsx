@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  User, 
+  User,
+  Mail, 
   MapPin, 
   Package, 
   AlertTriangle, 
@@ -45,6 +46,7 @@ import { giftCardService, refundOrderWalletIfNeeded } from '../../services/giftC
 import { useAuth } from '../../context/AuthContext';
 import { useCart } from '../../context/CartContext';
 import { couponService } from '../../services/couponService';
+import { newsletterService } from '../../services/newsletterService';
 import { 
   maskCPF, 
   maskPhone, 
@@ -305,6 +307,177 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   
   const activeUser = currentUser || user;
 
+  // DADOS DO USUÁRIO
+  const [userData, setUserData] = useState({
+    name: activeUser?.name || activeUser?.displayName || '',
+    email: activeUser?.email || '',
+    cpf: activeUser?.cpf || '',
+    phone: activeUser?.phone || ''
+  });
+
+  const [editFormData, setEditFormData] = useState({ ...userData });
+  const [isEditingData, setIsEditingData] = useState(false);
+  const [userErrors, setUserErrors] = useState({});
+  const [saveSuccessFeedback, setSaveSuccessFeedback] = useState(false);
+
+  // Sincroniza dinamicamente com o perfil carregado do Firebase Auth / Firestore
+  useEffect(() => {
+    const active = currentUser || user;
+    if (active) {
+      const updated = {
+        name: active.name || active.displayName || '',
+        email: active.email || '',
+        cpf: active.cpf || '',
+        phone: active.phone || ''
+      };
+      setUserData(updated);
+      setEditFormData(updated);
+    }
+  }, [currentUser, user]);
+  // PREFERÊNCIAS DE E-MAIL & NEWSLETTER VIP
+  const [emailPreferences, setEmailPreferences] = useState({
+    newsletter: true,
+    abandonedCart: true,
+    transactional: true,
+    unsubscribedAll: false
+  });
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [prefsSuccessMsg, setPrefsSuccessMsg] = useState('');
+  const emailPrefsRef = useRef(null);
+
+  useEffect(() => {
+    const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = userData?.email || currentUser?.email || user?.email;
+    if (!activeEmail) return;
+
+    newsletterService.getUserEmailPreferences(activeUid, activeEmail).then((prefs) => {
+      setEmailPreferences(prefs);
+    });
+
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const isUnsub = params.get('unsubscribe') === '1';
+      if (isUnsub) {
+        setActiveTab('dados');
+        setSavingPrefs(true);
+        newsletterService
+          .updateEmailPreferences({
+            uid: activeUid,
+            email: activeEmail,
+            name: userData?.name || currentUser?.displayName,
+            preferences: {
+              newsletter: false,
+              abandonedCart: false,
+              transactional: false,
+              unsubscribedAll: true
+            },
+            source: 'url_unsubscribe_param'
+          })
+          .then((newPrefs) => {
+            setEmailPreferences(newPrefs);
+            setPrefsSuccessMsg('Recebimento de e-mails desativado com sucesso conforme solicitado.');
+            setTimeout(() => {
+              if (emailPrefsRef.current) {
+                emailPrefsRef.current.scrollIntoView({ behavior: 'smooth' });
+              }
+            }, 300);
+          })
+          .finally(() => setSavingPrefs(false));
+      }
+    }
+  }, [currentUser?.uid, user?.uid, userData?.email, currentUser?.email, user?.email]);
+
+  const handleTogglePreference = async (key) => {
+    const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = userData?.email || currentUser?.email || user?.email;
+    if (!activeEmail || savingPrefs) return;
+
+    const newPrefs = {
+      ...emailPreferences,
+      [key]: !emailPreferences[key],
+      unsubscribedAll: false
+    };
+
+    setSavingPrefs(true);
+    setPrefsSuccessMsg('');
+    try {
+      const saved = await newsletterService.updateEmailPreferences({
+        uid: activeUid,
+        email: activeEmail,
+        name: userData?.name || currentUser?.displayName,
+        preferences: newPrefs,
+        source: 'perfil_toggle'
+      });
+      setEmailPreferences(saved);
+      setPrefsSuccessMsg('Preferências de e-mail atualizadas com sucesso.');
+      setTimeout(() => setPrefsSuccessMsg(''), 4000);
+    } catch (err) {
+      alert(err.message || 'Erro ao atualizar preferências.');
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
+
+  const handleUnsubscribeAll = async () => {
+    const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = userData?.email || currentUser?.email || user?.email;
+    if (!activeEmail || savingPrefs) return;
+
+    setSavingPrefs(true);
+    setPrefsSuccessMsg('');
+    try {
+      const saved = await newsletterService.updateEmailPreferences({
+        uid: activeUid,
+        email: activeEmail,
+        name: userData?.name || currentUser?.displayName,
+        preferences: {
+          newsletter: false,
+          abandonedCart: false,
+          transactional: false,
+          unsubscribedAll: true
+        },
+        source: 'perfil_mute_all'
+      });
+      setEmailPreferences(saved);
+      setPrefsSuccessMsg('Recebimento de e-mails da THR33 desativado com sucesso.');
+    } catch (err) {
+      alert(err.message || 'Erro ao desativar recebimento de e-mails.');
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
+
+  const handleReactivateAll = async () => {
+    const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = userData?.email || currentUser?.email || user?.email;
+    if (!activeEmail || savingPrefs) return;
+
+    setSavingPrefs(true);
+    setPrefsSuccessMsg('');
+    try {
+      const saved = await newsletterService.updateEmailPreferences({
+        uid: activeUid,
+        email: activeEmail,
+        name: userData?.name || currentUser?.displayName,
+        preferences: {
+          newsletter: true,
+          abandonedCart: true,
+          transactional: true,
+          unsubscribedAll: false
+        },
+        source: 'perfil_reactivate_all'
+      });
+      setEmailPreferences(saved);
+      setPrefsSuccessMsg('Recebimento de e-mails e Newsletter VIP reativados com sucesso!');
+      setTimeout(() => setPrefsSuccessMsg(''), 4000);
+    } catch (err) {
+      alert(err.message || 'Erro ao reativar e-mails.');
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
+
+
   // DADOS DA CARTEIRA DIGITAL & CUPONS VIP VINCULADOS AO E-MAIL
   const [walletBalance, setWalletBalance] = useState(0);
   const [giftRedeemCode, setGiftRedeemCode] = useState('');
@@ -333,7 +506,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
         if (snap.exists()) {
           setWalletBalance(Number(snap.data().walletBalance || 0));
         }
-      }).catch(err => console.warn("Aviso ao carregar carteira:", err));
+      }).catch(() => {});
     }
 
     if (activeEmail) {
@@ -343,7 +516,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
         .then((list) => {
           setExclusiveCoupons(Array.isArray(list) ? list : []);
         })
-        .catch((err) => console.warn("Aviso ao carregar cupons VIP:", err))
+        .catch(() => {})
         .finally(() => setLoadingExclusiveCoupons(false));
     } else {
       setExclusiveCoupons([]);
@@ -428,34 +601,6 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       setRedeeming(false);
     }
   };
-
-  // DADOS DO USUÁRIO
-  const [userData, setUserData] = useState({
-    name: activeUser?.name || activeUser?.displayName || '',
-    email: activeUser?.email || '',
-    cpf: activeUser?.cpf || '',
-    phone: activeUser?.phone || ''
-  });
-
-  const [editFormData, setEditFormData] = useState({ ...userData });
-  const [isEditingData, setIsEditingData] = useState(false);
-  const [userErrors, setUserErrors] = useState({});
-  const [saveSuccessFeedback, setSaveSuccessFeedback] = useState(false);
-
-  // Sincroniza dinamicamente com o perfil carregado do Firebase Auth / Firestore
-  useEffect(() => {
-    const active = currentUser || user;
-    if (active) {
-      const updated = {
-        name: active.name || active.displayName || '',
-        email: active.email || '',
-        cpf: active.cpf || '',
-        phone: active.phone || ''
-      };
-      setUserData(updated);
-      setEditFormData(updated);
-    }
-  }, [currentUser, user]);
 
   // DADOS DE ACESSO (SENHA)
   const [isEditingPassword, setIsEditingPassword] = useState(false);
@@ -1418,7 +1563,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     setReportingIssueOrder(null);
     setIssueDescription('');
 
-    alert(`Solicitação registrada com sucesso!\n\nProtocolo: #${protocol}\nPedido: #${orderId}\n\nNossa equipe de pós-venda do Ateliê entrará em contato pelo seu e-mail (${userData.email}) em até 24 horas úteis.`);
+    alert(`Solicitação registrada com sucesso!\n\nProtocolo: #${protocol}\nPedido: #${orderId}\n\nNossa equipe de pós-venda da THR33 entrará em contato pelo seu e-mail (${userData.email}) em até 24 horas úteis.`);
   };
 
   const handleCopyTrackingCode = (code) => {
@@ -1949,6 +2094,105 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     </div>
                   </form>
                 )}
+              </div>
+
+              {/* SUB-PAINEL DE PREFERÊNCIAS DE E-MAIL & NEWSLETTER VIP */}
+              <div ref={emailPrefsRef} className={styles.subPanel}>
+                <div className={styles.subPanelHeader}>
+                  <div className={styles.subPanelTitleGroup}>
+                    <Mail size={16} />
+                    <h3 className={styles.subPanelTitle}>PREFERÊNCIAS DE E-MAIL & NEWSLETTER VIP</h3>
+                  </div>
+                  {emailPreferences.unsubscribedAll && (
+                    <div className={styles.emailPrefPausedBadge}>
+                      <AlertCircle size={13} />
+                      <span>RECEBIMENTO PAUSADO</span>
+                    </div>
+                  )}
+                </div>
+
+                {prefsSuccessMsg && (
+                  <div className={styles.emailPrefSuccessAlert}>
+                    <CheckCircle2 size={16} />
+                    <span>{prefsSuccessMsg}</span>
+                  </div>
+                )}
+
+                <div className={styles.emailPrefsBox}>
+                  {/* Item 1: Newsletter VIP & Novos Drops */}
+                  <div className={styles.emailPrefItem}>
+                    <div className={styles.emailPrefText}>
+                      <strong>NEWSLETTER VIP // ALERTAS DE DROPS</strong>
+                      <span>Receba o link antecipado, teasers exclusivos e senhas prioritárias dos novos lotes.</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={savingPrefs || emailPreferences.unsubscribedAll}
+                      onClick={() => handleTogglePreference('newsletter')}
+                      className={`${styles.emailPrefToggleBtn} ${emailPreferences.newsletter && !emailPreferences.unsubscribedAll ? styles.emailPrefToggleBtnActive : ''}`}
+                    >
+                      {emailPreferences.newsletter && !emailPreferences.unsubscribedAll ? '✓ ATIVO' : 'PAUSADO'}
+                    </button>
+                  </div>
+
+                  {/* Item 2: Lembretes de Sacola (Carrinho Abandonado 24h) */}
+                  <div className={styles.emailPrefItem}>
+                    <div className={styles.emailPrefText}>
+                      <strong>LEMBRETES DE SACOLA // CARRINHO RESERVADO</strong>
+                      <span>Notificação única de 24 horas caso deixe peças pendentes na sacola antes do estoque esgotar.</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={savingPrefs || emailPreferences.unsubscribedAll}
+                      onClick={() => handleTogglePreference('abandonedCart')}
+                      className={`${styles.emailPrefToggleBtn} ${emailPreferences.abandonedCart && !emailPreferences.unsubscribedAll ? styles.emailPrefToggleBtnActive : ''}`}
+                    >
+                      {emailPreferences.abandonedCart && !emailPreferences.unsubscribedAll ? '✓ ATIVO' : 'PAUSADO'}
+                    </button>
+                  </div>
+
+                  {/* Item 3: Transacionais de Pedidos e Segurança */}
+                  <div className={styles.emailPrefItem}>
+                    <div className={styles.emailPrefText}>
+                      <strong>STATUS DO PEDIDO & ATUALIZAÇÕES DE ENTREGA</strong>
+                      <span>Confirmação de pagamento, emissão da NF-e e código de rastreamento da transportadora.</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={true}
+                      className={`${styles.emailPrefToggleBtn} ${!emailPreferences.unsubscribedAll ? styles.emailPrefToggleBtnActive : ''}`}
+                      title="Essencial para o envio e rastreio dos seus pedidos"
+                    >
+                      {!emailPreferences.unsubscribedAll ? '✓ ESSENCIAL' : 'PAUSADO'}
+                    </button>
+                  </div>
+
+                  {/* Barra de Ações: Desativar tudo ou Reativar */}
+                  <div className={styles.emailPrefActionsBar}>
+                    {!emailPreferences.unsubscribedAll ? (
+                      <button
+                        type="button"
+                        disabled={savingPrefs}
+                        onClick={handleUnsubscribeAll}
+                        className={styles.emailPrefMuteBtn}
+                      >
+                        {savingPrefs ? 'ATUALIZANDO...' : 'DESATIVAR RECEBIMENTO VIA E-MAIL'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={savingPrefs}
+                        onClick={handleReactivateAll}
+                        className={styles.emailPrefReactivateBtn}
+                      >
+                        {savingPrefs ? 'REATIVANDO...' : 'REATIVAR RECEBIMENTO & NEWSLETTER VIP'}
+                      </button>
+                    )}
+                    <small style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                      Identificador de preferência vinculado a: <strong>{userData.email}</strong>
+                    </small>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -2791,7 +3035,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                       <Clock size={16} color="var(--text-muted)" />
                       <div className={styles.trackingDetails}>
                         <span style={{ fontStyle: 'italic' }}>
-                          O rastreamento oficial será disponibilizado nesta tela assim que a peça for despachada pelo ateliê.
+                          O rastreamento oficial será disponibilizado nesta tela assim que o pedido for despachado.
                         </span>
                       </div>
                     </div>
@@ -3167,7 +3411,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
               </div>
 
               <p className={styles.modalDesc}>
-                Conte-nos o que aconteceu. Nossa equipe de controle de qualidade e suporte do Ateliê atenderá sua solicitação prioritariamente.
+                Conte-nos o que aconteceu. Nossa equipe de controle de qualidade e suporte da THR33 atenderá sua solicitação prioritariamente.
               </p>
 
               <form onSubmit={handleSubmitIssue} className={styles.reviewForm}>

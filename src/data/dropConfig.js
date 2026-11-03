@@ -2,9 +2,9 @@ import largoDaOrdemBg from '@assets/images/largo-da-ordem-bg.jpeg';
 import largoDaOrdemBg2 from '@assets/images/largo-da-ordem-bg2.jpeg';
 
 export const currentDropConfig = {
-  id: 'drop-cactus-01',
-  title: 'UTOPIA PROCESS // CACTUS STREETS',
-  subTitle: 'DROP 01 ★ HEAVYWEIGHT BASS & CONCRETE',
+  id: 'drop-thr33',
+  title: 'PRÓXIMO DROP THR33',
+  subTitle: 'DROP OFICIAL ★ TIRAGEM LIMITADA',
   releaseDate: '2026-08-20T00:00:00',
   coordinates: 'CWB // LARGO DA ORDEM',
   teaserGifUrl: largoDaOrdemBg,
@@ -15,7 +15,7 @@ export const currentDropConfig = {
     accentAcid: '#E2FF00',
     borderColor: 'rgba(255, 255, 255, 0.15)'
   },
-  loaderLogoText: 'THR33 × ATELIÊ',
+  loaderLogoText: 'THR33 STREETWEAR',
   heroImage: largoDaOrdemBg,
   manifestoImage: largoDaOrdemBg2,
   manifestoHeading: 'O GRAVE DO TRAP ENCONTRA A SERIGRAFIA CRU DE 300GSM',

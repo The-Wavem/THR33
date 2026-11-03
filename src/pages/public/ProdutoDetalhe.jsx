@@ -515,7 +515,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
             </div>
             <div className={styles.loadingBadge}>
               <span className={styles.loadingDot} />
-              <span>THR33 // ATELIÊ STREETWEAR</span>
+              <span>THR33 // STREETWEAR CURITIBA</span>
             </div>
             <h2 className={styles.loadingTitle}>CONSULTANDO ACERVO</h2>
             <p className={styles.loadingSubtitle}>
@@ -586,7 +586,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
               <span>Procurava uma edição específica ou modelo sob demanda?</span>
               <Link to="/suporte" className={styles.notFoundSupportLink}>
                 <HelpCircle size={14} />
-                <span>Fale com o Ateliê</span>
+                <span>Fale com o Suporte</span>
               </Link>
             </div>
           </motion.div>
@@ -596,7 +596,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
             <section className={styles.suggestionsSection} aria-label="Peças recomendadas">
               <header className={styles.suggestionsHeader}>
                 <span className={styles.suggestionsSuperTitle}>RECOMENDAÇÕES // FOR THE FEW</span>
-                <h3 className={styles.suggestionsTitle}>OUTRAS PEÇAS EM DESTAQUE NO ATELIÊ</h3>
+                <h3 className={styles.suggestionsTitle}>OUTRAS PEÇAS EM DESTAQUE NO CATÁLOGO</h3>
               </header>
 
               <div className={styles.suggestionsGrid}>

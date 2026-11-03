@@ -5,9 +5,9 @@ import { functions } from './firebaseConfig';
  * Trava em memória para impedir chamadas duplicadas simultâneas (race condition)
  * para a mesma operação na mesma sessão do navegador.
  */
-const inFlightKeys = new Set();
+const sentSessionLocks = new Set();
 
-function buildDedupeKey(payload) {
+function buildLockKey(payload) {
   const type = payload?.type || 'unknown';
   if (type === 'drop_broadcast_campaign') {
     return null; // Broadcast/teste pode ser acionado repetidas vezes pelo admin
@@ -26,12 +26,12 @@ function buildDedupeKey(payload) {
  * e 100% não-bloqueantes para não interferir na experiência de navegação ou checkout.
  */
 async function invokeTransactionalEmail(payload) {
-  const dedupeKey = buildDedupeKey(payload);
-  if (dedupeKey) {
-    if (inFlightKeys.has(dedupeKey)) {
+  const lockKey = buildLockKey(payload);
+  if (lockKey) {
+    if (sentSessionLocks.has(lockKey)) {
       return { sent: false, deduplicatedClientSide: true };
     }
-    inFlightKeys.add(dedupeKey);
+    sentSessionLocks.add(lockKey);
   }
 
   try {
@@ -40,18 +40,30 @@ async function invokeTransactionalEmail(payload) {
       action: 'sendTransactionalEmail',
       ...payload
     });
-    return res?.data || { sent: false };
+    const result = res?.data || { sent: false };
+
+    if (!result.sent && !result.alreadySent && lockKey) {
+      sentSessionLocks.delete(lockKey);
+    }
+    return result;
   } catch (primaryErr) {
     try {
       const dedicatedCallable = httpsCallable(functions, 'sendTransactionalEmail');
       const fallbackRes = await dedicatedCallable(payload);
-      return fallbackRes?.data || { sent: false };
-    } catch (fallbackErr) {
-      if (dedupeKey) {
-        inFlightKeys.delete(dedupeKey);
+      const result = fallbackRes?.data || { sent: false };
+
+      if (!result.sent && !result.alreadySent && lockKey) {
+        sentSessionLocks.delete(lockKey);
       }
-      console.warn('Aviso não-bloqueante ao disparar e-mail transacional:', fallbackErr.message || primaryErr.message);
-      return { sent: false };
+      return result;
+    } catch (fallbackErr) {
+      if (lockKey) {
+        sentSessionLocks.delete(lockKey);
+      }
+      return {
+        sent: false,
+        error: primaryErr?.message || fallbackErr?.message || 'Falha na comunicação com o servidor de e-mail.'
+      };
     }
   }
 }
@@ -112,8 +124,8 @@ export const emailService = {
       type: 'drop_waitlist_welcome',
       email,
       name: name || '',
-      dropId: dropId || 'drop-cactus-01',
-      dropName: dropName || 'UTOPIA PROCESS // CACTUS STREETS',
+      dropId: dropId || 'drop-thr33',
+      dropName: dropName || 'PRÓXIMO DROP THR33',
       source: source || 'home_newsletter',
       subscriberId
     });

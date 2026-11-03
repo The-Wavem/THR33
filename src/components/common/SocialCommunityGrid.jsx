@@ -19,8 +19,8 @@ export function SocialCommunityGrid({ posts = [], products = [] }) {
         return validPosts.slice(0, 4).map((p, idx) => ({
           id: p.id || `cms-post-${idx}`,
           image: p.image || p.imageUrl,
-          tag: p.tag || p.handle || '@THR33.ATELIER',
-          location: p.location || p.caption || 'CURITIBA // ATELIÊ'
+          tag: p.tag || p.handle || '@MADEBYTHR33',
+          location: p.location || p.caption || 'CURITIBA // PR'
         }));
       }
     }
@@ -37,7 +37,7 @@ export function SocialCommunityGrid({ posts = [], products = [] }) {
           productFrames.push({
             id: prod.id || prod.slug || `prod-frame-${productFrames.length}`,
             image: img,
-            tag: prod.name ? prod.name.toUpperCase() : '@THR33.ATELIER',
+            tag: prod.name ? prod.name.toUpperCase() : '@MADEBYTHR33',
             location: prod.fit ? `MODELAGEM ${String(prod.fit).toUpperCase()}` : 'CURITIBA // CWB'
           });
         }
@@ -65,12 +65,12 @@ export function SocialCommunityGrid({ posts = [], products = [] }) {
       <div className={styles.headerRow}>
         <div className={styles.headerLeft}>
           <Camera size={16} className={styles.acidIcon} />
-          <h2>CULTURA & COMUNIDADE // @THR33.ATELIER</h2>
+          <h2>CULTURA & COMUNIDADE // @MADEBYTHR33</h2>
         </div>
         <motion.a
           whileHover={{ x: 2, y: -2 }}
           transition={{ duration: 0.15 }}
-          href="https://instagram.com"
+          href="https://instagram.com/madebythr33"
           target="_blank"
           rel="noopener noreferrer"
           className={styles.btnInstagram}

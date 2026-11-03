@@ -8,7 +8,7 @@ import largoDaOrdemBg2 from '@assets/images/largo-da-ordem-bg2.jpeg';
 const REAL_FALLBACK_HERO_SLIDES = [
   {
     id: 'slide_1',
-    title: 'A RUA COMO NOSSO ATELIÊ',
+    title: 'A RUA É NOSSA ESSÊNCIA',
     subtitle: 'LEAK TWO — DROP EXCLUSIVO',
     badge: 'NOVO DROP',
     bgImage: largoDaOrdemBg,
@@ -27,7 +27,7 @@ const REAL_FALLBACK_HERO_SLIDES = [
     active: true,
     buttons: [
       { id: 'btn_1', text: 'EXPLORAR CATÁLOGO', link: '/catalogo', variant: 'primary' },
-      { id: 'btn_2', text: 'CONHEÇA O ATELIÊ', link: '/sobre', variant: 'secondary' }
+      { id: 'btn_2', text: 'CONHEÇA A MARCA', link: '/sobre', variant: 'secondary' }
     ]
   }
 ];
@@ -188,8 +188,8 @@ export function useHomeData(limitProducts = 8) {
           slides: cleanSlides.length > 0 ? cleanSlides : REAL_FALLBACK_HERO_SLIDES
         },
         bentoGrid: cleanBento.length > 0 ? cleanBento : fallbackRealBento,
-        sectionTag: mergedSettings?.sectionTag || 'COLEÇÃO OFICIAL // ATELIÊ CWB',
-        sectionTitle: mergedSettings?.sectionTitle || 'A RUA COMO NOSSO ATELIÊ',
+        sectionTag: mergedSettings?.sectionTag || 'COLEÇÃO OFICIAL // CURITIBA CWB',
+        sectionTitle: mergedSettings?.sectionTitle || 'A RUA É NOSSA ESSÊNCIA',
         communityPosts: cleanCommunityPosts
       };
 

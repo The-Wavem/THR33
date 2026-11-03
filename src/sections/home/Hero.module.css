@@ -20,10 +20,22 @@
   align-items: center;
   justify-content: center;
   cursor: grab;
+  z-index: 3;
 }
 
 .dragWrapper:active {
   cursor: grabbing;
+}
+
+.backgroundLayer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: #0a0a0a;
+  z-index: 1;
 }
 
 .slideMotionContainer {
@@ -43,13 +55,17 @@
   background-position: center;
   width: 100%;
   height: 100%;
+  will-change: opacity, transform;
 }
 
-.heroImageSkeletonWrapper {
+.heroPreloadedImage {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
+  object-fit: cover;
+  user-select: none;
+  pointer-events: none;
 }
 
 /* Fallback 3D / Modelo Circular Brutalista */
@@ -115,6 +131,8 @@
 .overlay {
   position: absolute;
   inset: 0;
+  z-index: 2;
+  pointer-events: none;
   background: linear-gradient(
     180deg, 
     rgba(10, 10, 10, 0.45) 0%, 

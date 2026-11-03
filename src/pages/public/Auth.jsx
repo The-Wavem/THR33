@@ -22,6 +22,7 @@ import { validateEmail, validatePassword, validateMaxLength } from '../../utils/
 import { SEO } from '../../components/common/SEO';
 import { currentDropConfig } from '../../data/dropConfig';
 import { dropSubscriberService } from '../../services/dropSubscriberService';
+import { newsletterService } from '../../services/newsletterService';
 import styles from './Auth.module.css';
 
 // Número oficial do WhatsApp de suporte da THR33 (mesmo utilizado em Suporte.jsx)
@@ -159,6 +160,19 @@ export function Auth() {
     }
   }, [searchParams]);
 
+  // Processa cancelamento direto de e-mails via link do rodapé mesmo para usuários deslogados
+  useEffect(() => {
+    const isUnsub = searchParams.get('unsubscribe') === '1';
+    const unsubEmail = searchParams.get('unsubscribeEmail');
+    if (isUnsub && unsubEmail) {
+      newsletterService.unsubscribeByEmailDirect(unsubEmail).then((res) => {
+        if (res.success) {
+          setSuccessMessage(`Recebimento de e-mails desativado com sucesso para ${unsubEmail}.`);
+        }
+      });
+    }
+  }, [searchParams]);
+
   // Verifica o oobCode no Firebase assim que entra no modo 'reset_confirm'
   useEffect(() => {
     let isMounted = true;
@@ -175,7 +189,7 @@ export function Auth() {
         })
         .catch((err) => {
           if (!isMounted) return;
-          console.error('Erro ao validar código de recuperação:', err);
+
           setCodeExpired(true);
           setVerifyingCode(false);
           setError(getHumanizedAuthError(err, 'reset_confirm'));
@@ -244,7 +258,7 @@ export function Auth() {
       const from = location.state?.from || '/perfil';
       navigate(from, { replace: true });
     } catch (err) {
-      console.error('Erro Google Auth:', err);
+
       if (err.code === 'auth/popup-closed-by-user') {
         setError('O pop-up do Google foi fechado antes de concluir a autenticação.');
       } else if (err.code === 'auth/popup-blocked') {
@@ -274,7 +288,7 @@ export function Auth() {
       const from = location.state?.from || '/perfil';
       navigate(from, { replace: true });
     } catch (err) {
-      console.error('Erro no login:', err);
+
       setError(getHumanizedAuthError(err, 'login'));
     } finally {
       setSubmitting(false);
@@ -319,8 +333,8 @@ export function Auth() {
         dropSubscriberService.subscribeToDropWaitlist({
           email: registerData.email,
           name: registerData.name,
-          dropId: currentDropConfig?.id || 'drop-cactus-01',
-          dropName: currentDropConfig?.title || 'UTOPIA PROCESS // CACTUS STREETS',
+          dropId: currentDropConfig?.id || 'drop-thr33',
+          dropName: currentDropConfig?.title || 'PRÓXIMO DROP THR33',
           source: 'register_opt_in'
         }).catch(() => {});
       }
@@ -329,7 +343,7 @@ export function Auth() {
       const from = location.state?.from || '/perfil';
       navigate(from, { replace: true });
     } catch (err) {
-      console.error('Erro no cadastro:', err);
+
       setError(getHumanizedAuthError(err, 'register'));
     } finally {
       setSubmitting(false);
@@ -356,7 +370,7 @@ export function Auth() {
       setResetSent(true);
       setResendCooldown(60);
     } catch (err) {
-      console.error('Erro ao solicitar recuperação de senha:', err);
+
       setError(getHumanizedAuthError(err, 'forgot'));
     } finally {
       setSubmitting(false);
@@ -375,7 +389,7 @@ export function Auth() {
       setResendCooldown(60);
       setResendFeedback('Um novo link de recuperação foi enviado para o seu e-mail.');
     } catch (err) {
-      console.error('Erro ao reenviar link de recuperação:', err);
+
       setError(getHumanizedAuthError(err, 'forgot'));
     } finally {
       setSubmitting(false);
@@ -410,7 +424,7 @@ export function Auth() {
       navigate('/login', { replace: true });
       setViewMode('login');
     } catch (err) {
-      console.error('Erro ao salvar nova senha:', err);
+
       const humanized = getHumanizedAuthError(err, 'reset_confirm');
       setError(humanized);
       if (err?.code === 'auth/expired-action-code' || err?.code === 'auth/invalid-action-code') {
@@ -673,9 +687,9 @@ export function Auth() {
                   type="checkbox"
                   checked={registerData.optInDrops !== false}
                   onChange={(e) => setRegisterData({ ...registerData, optInDrops: e.target.checked })}
-                  style={{ accentColor: '#E2FF00', width: '15px', height: '15px', cursor: 'pointer' }}
+                  style={{ accentColor: '#FFFFFF', width: '15px', height: '15px', cursor: 'pointer' }}
                 />
-                <span>Quero entrar na <strong style={{ color: '#E2FF00' }}>Lista VIP de Drops</strong> (Early Access e alertas antecipados)</span>
+                <span>Quero entrar na <strong style={{ color: '#FFFFFF' }}>Lista VIP de Drops</strong> (Early Access e alertas antecipados)</span>
               </label>
 
               {/* TERMO DE ACEITE DAS POLÍTICAS (TD-148) */}

@@ -63,7 +63,7 @@ export function AppRoutes() {
       {/* ROLAGEM AUTOMÁTICA PARA O TOPO EM MUDANÇAS DE ROTA */}
       <ScrollToTop />
 
-      <Suspense fallback={<LoadingScreen message="CARREGANDO ATELIÊ // FOR THE FEW" />}>
+      <Suspense fallback={<LoadingScreen message="CARREGANDO THR33 // FOR THE FEW" />}>
         <Routes>
           {/* ROTAS PÚBLICAS GLOBAIS */}
           <Route 
@@ -126,7 +126,7 @@ export function AppRoutes() {
             {/* ROTA DE CHECKOUT (SOMENTE CLIENTES AUTENTICADOS) */}
             <Route path="/checkout" element={<Checkout user={user} onOpenAuthModal={handleOpenAuth} />} />
 
-            {/* PAINEL TÁTICO PASSAPORTE ATELIÊ */}
+            {/* PAINEL TÁTICO PASSAPORTE THR33 */}
             <Route path="/perfil" element={<Perfil defaultTab="dados" />} />
             <Route path="/minha-conta" element={<Perfil defaultTab="pedidos" />} />
             <Route path="/meus-pedidos" element={<Perfil defaultTab="pedidos" />} />

@@ -27,11 +27,11 @@ const defaultCarouselSlides = [
     sub: 'CURITIBA // LARGO DA ORDEM',
     tag: 'LOOKBOOK OFICIAL • FILM',
     image: largoDaOrdemBg,
-    caption: 'A RUA COMO NOSSO ATELIÊ // MODELAGEM OVERSIZED & BOXY'
+    caption: 'A RUA É NOSSA ESSÊNCIA // MODELAGEM OVERSIZED & BOXY'
   },
   {
     id: 'slide-2',
-    title: 'ATELIÊ CWB // PROCESSO BRUTO',
+    title: 'THR33 CWB // PROCESSO BRUTO',
     sub: 'HEAVYWEIGHT COTTON & HARDWARE',
     tag: 'EDITORIAL // INDUSTRIAL PROCESS',
     image: largoDaOrdemBg2,
@@ -316,7 +316,7 @@ export function HomeContent({
           <div className={styles.sectionHeader}>
             <div className={styles.sectionHeaderLeft}>
               <span className={styles.dotPulse} />
-              <h2>DESTAQUES DO ATELIÊ // COMPRE AGORA</h2>
+              <h2>DESTAQUES DA COLEÇÃO // COMPRE AGORA</h2>
             </div>
             <span className={styles.sectionSubtext}>[DROP EXCLUSIVO • ESTOQUE LIMITADO]</span>
           </div>
@@ -458,7 +458,7 @@ export function HomeContent({
                 </div>
                 <h3 className={styles.manifestoTitle}>FOR THE FEW.</h3>
                 <p className={styles.manifestoSub}>
-                  A RUA NÃO É APENAS CENÁRIO, É NOSSO ATELIÊ.
+                  A RUA NÃO É APENAS CENÁRIO, É NOSSA ESSÊNCIA.
                 </p>
                 <p className={styles.manifestoBody}>
                   Construímos modelagens brutas para suportar o ritmo urbano e permanecer no tempo.
@@ -466,15 +466,15 @@ export function HomeContent({
                 </p>
                 <button
                   onClick={() => navigate('/sobre')}
-                  className={styles.btnManifestoAtelier}
+                  className={styles.btnManifestoBrand}
                 >
-                  <span>CONHEÇA O ATELIÊ</span>
+                  <span>CONHEÇA A MARCA</span>
                   <ArrowRight size={14} />
                 </button>
               </div>
               <div className={styles.manifestoFooter}>
                 <span>CURITIBA // 2026</span>
-                <span>[THR33 ATELIÊ ORIGINAL]</span>
+                <span>[THR33 ORIGINAL]</span>
               </div>
             </div>
 
