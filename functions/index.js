@@ -753,6 +753,18 @@ exports.createPagBankOrder = onCall(
         const snap = await orderRef.get();
         return await sendOrderPixEmailIfNeeded(db, orderRef, snap.exists ? snap.data() : null);
       }
+      if (type === "drop_waitlist_welcome") {
+        return await sendDropWaitlistWelcomeIfNeeded(db, request.data);
+      }
+      if (type === "drop_broadcast_campaign") {
+        return await handleDropBroadcastCampaign(db, request);
+      }
+      if (type === "abandoned_cart") {
+        const targetUid = uid || request.auth?.uid;
+        return await sendAbandonedCartEmailIfNeeded(db, targetUid, {
+          forceTest: Boolean(request.data?.forceTest),
+        });
+      }
       return { sent: false, reason: "unknown_email_type" };
     }
 
@@ -3797,7 +3809,7 @@ async function sendResendEmail({ to, subject, html }) {
   }
 }
 
-function buildThr33EmailWrapper({ preheader, badgeText, badgeColor = "#00FF88", title, subtitle, bodyHtml }) {
+function buildThr33EmailWrapper({ preheader, title, subtitle, bodyHtml }) {
   return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
@@ -3805,53 +3817,39 @@ function buildThr33EmailWrapper({ preheader, badgeText, badgeColor = "#00FF88", 
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>${title}</title>
 </head>
-<body style="margin:0;padding:0;background-color:#080808;color:#F5F5F5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;background-color:#000000;color:#FFFFFF;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
   <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader || title}</div>
-  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#080808;padding:32px 12px;">
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#000000;padding:40px 16px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background-color:#0D0D0D;border:1px solid #262626;">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:560px;background-color:#0A0A0A;border:1px solid #222222;">
           <tr>
-            <td style="height:3px;background:linear-gradient(90deg,#00FF88 0%,#E2FF00 100%);font-size:0;line-height:0;">&nbsp;</td>
-          </tr>
-          <tr>
-            <td style="padding:28px 32px 20px 32px;border-bottom:1px solid #1F1F1F;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-                <tr>
-                  <td align="left">
-                    <span style="font-size:24px;font-weight:900;letter-spacing:4px;color:#FFFFFF;text-transform:uppercase;font-family:'Arial Black',Impact,sans-serif;">THR33</span>
-                    <span style="font-size:10px;letter-spacing:2px;color:#737373;text-transform:uppercase;display:block;margin-top:2px;">STREETWEAR // ATELIÊ CURITIBA</span>
-                  </td>
-                  <td align="right" valign="middle">
-                    <span style="display:inline-block;padding:5px 10px;background-color:rgba(0,255,136,0.08);border:1px solid ${badgeColor};color:${badgeColor};font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;">
-                      ${badgeText}
-                    </span>
-                  </td>
-                </tr>
-              </table>
+            <td style="padding:36px 40px 28px 40px;border-bottom:1px solid #222222;">
+              <span style="font-size:22px;font-weight:900;letter-spacing:5px;color:#FFFFFF;text-transform:uppercase;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;display:block;">THR33</span>
+              <span style="font-size:10px;letter-spacing:2.5px;color:#737373;text-transform:uppercase;display:block;margin-top:4px;">STREETWEAR // ATELIÊ CURITIBA</span>
             </td>
           </tr>
           <tr>
-            <td style="padding:28px 32px 12px 32px;">
-              <h1 style="margin:0 0 8px 0;font-size:22px;font-weight:900;letter-spacing:1px;text-transform:uppercase;color:#FFFFFF;line-height:1.25;">
+            <td style="padding:36px 40px 16px 40px;">
+              <h1 style="margin:0 0 12px 0;font-size:22px;font-weight:700;letter-spacing:0.3px;color:#FFFFFF;line-height:1.35;">
                 ${title}
               </h1>
-              ${subtitle ? `<p style="margin:0;font-size:14px;color:#A3A3A3;line-height:1.6;">${subtitle}</p>` : ""}
+              ${subtitle ? `<p style="margin:0;font-size:14px;color:#A3A3A3;line-height:1.7;">${subtitle}</p>` : ""}
             </td>
           </tr>
           <tr>
-            <td style="padding:12px 32px 32px 32px;">
+            <td style="padding:12px 40px 40px 40px;">
               ${bodyHtml}
             </td>
           </tr>
           <tr>
-            <td style="padding:24px 32px;background-color:#0A0A0A;border-top:1px solid #1F1F1F;text-align:center;">
-              <p style="margin:0 0 6px 0;font-size:11px;font-weight:700;letter-spacing:2px;color:#737373;text-transform:uppercase;">
-                THR33 STREETWEAR — CONCRETO DE CURITIBA / PR
+            <td style="padding:28px 40px;background-color:#050505;border-top:1px solid #222222;text-align:left;">
+              <p style="margin:0 0 6px 0;font-size:10px;font-weight:700;letter-spacing:2px;color:#737373;text-transform:uppercase;">
+                THR33 STREETWEAR — CURITIBA / PR
               </p>
-              <p style="margin:0 0 12px 0;font-size:11px;color:#525252;line-height:1.5;">
+              <p style="margin:0 0 12px 0;font-size:11px;color:#737373;line-height:1.6;">
                 Confecção autoral sob demanda, modelagens pesadas e tiragens limitadas.<br/>
-                Precisa de suporte? Fale direto conosco no WhatsApp: <a href="https://wa.me/5541995424186" style="color:#00FF88;text-decoration:none;">(41) 99542-4186</a>
+                Atendimento: <a href="https://wa.me/5541995424186" style="color:#FFFFFF;text-decoration:underline;">(41) 99542-4186</a>
               </p>
               <a href="https://thr33.com.br" style="font-size:11px;color:#A3A3A3;text-decoration:underline;letter-spacing:1px;">thr33.com.br</a>
             </td>
@@ -3864,9 +3862,10 @@ function buildThr33EmailWrapper({ preheader, badgeText, badgeColor = "#00FF88", 
 </html>`;
 }
 
-// GATILHO A — Boas-vindas ao Criar Conta (welcome_register)
+// GATILHO A — Boas-vindas ao Criar Conta (welcome_register) — Minimalista P&B
 function buildWelcomeEmailHtml({ userName, coupon }) {
-  const firstName = String(userName || "Cliente THR33").trim().split(" ")[0] || "Cliente";
+  const rawFirst = String(userName || "Cliente").trim().split(" ")[0] || "Cliente";
+  const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
 
   let couponBlockHtml = "";
   if (coupon && coupon.code) {
@@ -3876,63 +3875,41 @@ function buildWelcomeEmailHtml({ userName, coupon }) {
         : `${coupon.discountValue || 10}% OFF`;
 
     couponBlockHtml = `
-      <div style="margin:24px 0;padding:20px;background-color:#121212;border:1px dashed #E2FF00;text-align:center;">
-        <span style="display:block;font-size:10px;font-weight:800;letter-spacing:2px;color:#E2FF00;text-transform:uppercase;margin-bottom:6px;">
-          BÔNUS DE PRIMEIRA COMPRA LIBERADO
+      <div style="margin:28px 0;padding:24px;border:1px solid #222222;text-align:center;">
+        <span style="display:block;font-size:10px;font-weight:600;letter-spacing:2px;color:#737373;text-transform:uppercase;margin-bottom:8px;">
+          PRIMEIRA COMPRA
         </span>
-        <div style="font-size:20px;font-weight:900;letter-spacing:3px;color:#FFFFFF;margin:6px 0;">
+        <div style="font-size:20px;font-weight:700;letter-spacing:3px;color:#FFFFFF;margin:6px 0;font-family:monospace;">
           ${coupon.code}
         </div>
-        <span style="display:block;font-size:12px;color:#A3A3A3;">
-          Garanta <strong style="color:#00FF88;">${discountLabel}</strong> no seu primeiro drop aplicando este código na sacola.
+        <span style="display:block;font-size:12px;color:#A3A3A3;margin-top:6px;">
+          Utilize este código na sacola para <strong style="color:#FFFFFF;">${discountLabel}</strong> no seu primeiro pedido.
         </span>
       </div>
     `;
   }
 
   const bodyHtml = `
-    <div style="margin-top:8px;padding:20px;background-color:#141414;border:1px solid #262626;">
-      <p style="margin:0 0 14px 0;font-size:13px;font-weight:800;letter-spacing:1.5px;color:#00FF88;text-transform:uppercase;">
-        SEU ACESSO EXCLUSIVO ESTÁ ATIVO:
-      </p>
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
-        <tr>
-          <td style="padding:8px 0;border-bottom:1px solid #1F1F1F;font-size:13px;color:#D4D4D4;">
-            <strong style="color:#FFFFFF;">01 // RASTREIO EM TEMPO REAL:</strong> Acompanhe cada etapa da confecção e despacho das suas peças direto no seu painel.
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:8px 0;border-bottom:1px solid #1F1F1F;font-size:13px;color:#D4D4D4;">
-            <strong style="color:#FFFFFF;">02 // CARTEIRA DIGITAL THR33:</strong> Ative Vales-Presente, acumule créditos e utilize saldo instantâneo no checkout.
-          </td>
-        </tr>
-        <tr>
-          <td style="padding:8px 0;font-size:13px;color:#D4D4D4;">
-            <strong style="color:#FFFFFF;">03 // DROPS &amp; CUPONS VIP:</strong> Acesso antecipado a tiragens limitadas e brindes colecionáveis do ateliê.
-          </td>
-        </tr>
-      </table>
-    </div>
+    <p style="margin:0 0 24px 0;font-size:14px;color:#A3A3A3;line-height:1.7;">
+      Sua conta foi criada com sucesso. A partir de agora você tem acesso direto ao nosso acervo, acompanhamento de pedidos em tempo real e lançamentos limitados do ateliê.
+    </p>
     ${couponBlockHtml}
-    <div style="margin-top:28px;text-align:center;">
-      <a href="https://thr33.com.br/catalogo" style="display:inline-block;padding:15px 28px;background-color:#00FF88;color:#080808;font-size:12px;font-weight:900;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
-        [ EXPLORAR CATÁLOGO THR33 ]
+    <div style="margin-top:32px;text-align:left;">
+      <a href="https://thr33.com.br/catalogo" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        EXPLORAR CATÁLOGO
       </a>
     </div>
   `;
 
   return buildThr33EmailWrapper({
-    preheader: `Bem-vindo ao Clube THR33, ${firstName}. Sua conta no Ateliê está ativa.`,
-    badgeText: "CLUBE THR33 // ATELIÊ",
-    badgeColor: "#00FF88",
-    title: `BEM-VINDO AO CLUBE THR33, ${firstName.toUpperCase()}`,
-    subtitle:
-      "Seu cadastro oficial foi confirmado. A partir de agora você faz parte da nossa comunidade de streetwear autoral e independente.",
+    preheader: `Bem-vindo à THR33, ${firstName}. Sua conta está ativa.`,
+    title: `Bem-vindo à THR33, ${firstName}.`,
+    subtitle: "",
     bodyHtml,
   });
 }
 
-// GATILHO B — Pedido Recebido / Aguardando PIX (order_created_pix)
+// GATILHO B — Pedido Recebido / Aguardando PIX (order_created_pix) — Minimalista P&B
 function buildOrderPixEmailHtml({ orderId, orderData }) {
   const displayOrder = formatOrderCodeBackend(orderId || orderData.orderId);
   const items = Array.isArray(orderData.items) ? orderData.items : [];
@@ -3944,12 +3921,12 @@ function buildOrderPixEmailHtml({ orderId, orderData }) {
     .map(
       (item) => `
       <tr>
-        <td style="padding:10px 0;border-bottom:1px solid #1F1F1F;font-size:13px;color:#E5E5E5;">
+        <td style="padding:12px 0;border-bottom:1px solid #222222;font-size:13px;color:#FFFFFF;">
           <strong>${item.name || item.title || "Peça THR33"}</strong>
-          ${item.isGiftCard ? `<span style="color:#00FF88;font-size:11px;margin-left:6px;">[VALE DIGITAL]</span>` : `<span style="color:#737373;font-size:11px;margin-left:6px;">Tam: ${item.size || "U"}</span>`}
-          <span style="color:#737373;font-size:11px;margin-left:6px;">x${item.quantity || 1}</span>
+          ${item.isGiftCard ? `<span style="color:#A3A3A3;font-size:11px;margin-left:6px;">• Vale Digital</span>` : `<span style="color:#737373;font-size:11px;margin-left:6px;">• Tam: ${item.size || "U"}</span>`}
+          <span style="color:#737373;font-size:11px;margin-left:6px;">× ${item.quantity || 1}</span>
         </td>
-        <td align="right" style="padding:10px 0;border-bottom:1px solid #1F1F1F;font-size:13px;font-weight:700;color:#FFFFFF;">
+        <td align="right" style="padding:12px 0;border-bottom:1px solid #222222;font-size:13px;font-weight:600;color:#FFFFFF;">
           ${formatBRLBackend((Number(item.price) || 0) * (Number(item.quantity) || 1))}
         </td>
       </tr>
@@ -3958,61 +3935,57 @@ function buildOrderPixEmailHtml({ orderId, orderData }) {
     .join("");
 
   const bodyHtml = `
-    <div style="margin-bottom:20px;padding:14px 16px;background-color:rgba(226,255,0,0.06);border-left:3px solid #E2FF00;font-size:12px;color:#E5E5E5;line-height:1.5;">
-      <strong style="color:#E2FF00;text-transform:uppercase;letter-spacing:1px;">RESERVA DE ESTOQUE ATIVA POR 20 MINUTOS:</strong><br/>
-      Suas peças estão reservadas exclusivamente para você. Conclua o pagamento via PIX para aprovação imediata.
-    </div>
-
-    <div style="padding:20px;background-color:#141414;border:1px solid #262626;margin-bottom:20px;text-align:center;">
-      <span style="display:block;font-size:11px;letter-spacing:1.5px;color:#A3A3A3;text-transform:uppercase;margin-bottom:6px;">
-        VALOR A PAGAR NO PIX (${displayOrder})
+    <div style="padding:24px 0;border-top:1px solid #222222;border-bottom:1px solid #222222;margin-bottom:28px;text-align:center;">
+      <span style="display:block;font-size:10px;letter-spacing:2px;color:#737373;text-transform:uppercase;margin-bottom:6px;">
+        TOTAL A PAGAR VIA PIX (${displayOrder})
       </span>
-      <div style="font-size:26px;font-weight:900;color:#00FF88;margin-bottom:16px;">
+      <div style="font-size:26px;font-weight:700;color:#FFFFFF;margin-bottom:20px;">
         ${totalFormatted}
       </div>
       ${
         pixQrUrl
-          ? `<div style="margin:0 auto 16px auto;padding:12px;background-color:#FFFFFF;display:inline-block;">
+          ? `<div style="margin:0 auto 20px auto;padding:12px;background-color:#FFFFFF;display:inline-block;">
                <img src="${pixQrUrl}" alt="QR Code PIX THR33" width="180" height="180" style="display:block;border:0;" />
              </div>`
           : ""
       }
-      <span style="display:block;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#E2FF00;text-transform:uppercase;margin-bottom:8px;">
-        CÓDIGO PIX COPIA E COLA (COPIE E COLE NO APP DO SEU BANCO):
+      <span style="display:block;font-size:10px;font-weight:600;letter-spacing:2px;color:#A3A3A3;text-transform:uppercase;margin-bottom:8px;">
+        CÓDIGO PIX COPIA E COLA
       </span>
-      <div style="padding:12px;background-color:#090909;border:1px dashed #3F3F46;font-family:monospace;font-size:11px;color:#D4D4D4;word-break:break-all;line-height:1.4;text-align:left;user-select:all;">
+      <div style="padding:14px;background-color:#050505;border:1px solid #222222;font-family:monospace;font-size:11px;color:#A3A3A3;word-break:break-all;line-height:1.5;text-align:left;user-select:all;">
         ${pixCode}
       </div>
+      <span style="display:block;font-size:11px;color:#737373;margin-top:10px;">
+        A reserva das suas peças permanece ativa por 20 minutos.
+      </span>
     </div>
 
-    <div style="padding:18px;background-color:#121212;border:1px solid #1F1F1F;">
-      <span style="display:block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:#737373;text-transform:uppercase;margin-bottom:10px;">
-        ITENS RESERVADOS NO PEDIDO ${displayOrder}
+    <div>
+      <span style="display:block;font-size:10px;font-weight:600;letter-spacing:2px;color:#737373;text-transform:uppercase;margin-bottom:8px;">
+        ITENS DO PEDIDO ${displayOrder}
       </span>
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
         ${itemsRowsHtml}
       </table>
     </div>
 
-    <div style="margin-top:24px;text-align:center;">
-      <a href="https://thr33.com.br/perfil" style="display:inline-block;padding:14px 26px;background-color:#E2FF00;color:#080808;font-size:12px;font-weight:900;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
-        [ ACOMPANHAR MEU PEDIDO ]
+    <div style="margin-top:32px;text-align:left;">
+      <a href="https://thr33.com.br/perfil" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        ACOMPANHAR PEDIDO
       </a>
     </div>
   `;
 
   return buildThr33EmailWrapper({
-    preheader: `Seu código PIX para o pedido ${displayOrder} está pronto. Reserva ativa por 20 minutos.`,
-    badgeText: "AGUARDANDO PIX",
-    badgeColor: "#E2FF00",
-    title: `PEDIDO ${displayOrder} RECEBIDO`,
+    preheader: `Código PIX gerado para o pedido ${displayOrder}. Reserva ativa por 20 minutos.`,
+    title: `Pedido ${displayOrder} recebido.`,
     subtitle:
-      "Copie o código PIX abaixo ou escaneie o QR Code no aplicativo do seu banco para confirmar seu pedido imediatamente.",
+      "Utilize o código PIX Copia e Cola ou escaneie o QR Code abaixo no aplicativo do seu banco para confirmar sua compra.",
     bodyHtml,
   });
 }
 
-// GATILHO C — Pagamento Confirmado & Resumo da Compra (order_paid)
+// GATILHO C — Pagamento Confirmado & Resumo da Compra (order_paid) — Minimalista P&B
 function buildOrderPaidEmailHtml({ orderId, orderData }) {
   const displayOrder = formatOrderCodeBackend(orderId || orderData.orderId);
   const items = Array.isArray(orderData.items) ? orderData.items : [];
@@ -4030,17 +4003,17 @@ function buildOrderPaidEmailHtml({ orderId, orderData }) {
     const cardsListHtml = codeGiftCards
       .map(
         (gc) => `
-        <div style="margin-top:12px;padding:16px;background-color:#090909;border:1px dashed #00FF88;text-align:center;">
-          <span style="display:block;font-size:10px;letter-spacing:1.5px;color:#A3A3A3;text-transform:uppercase;">
-            VALE-PRESENTE DIGITAL DE <strong style="color:#00FF88;">${formatBRLBackend(gc.amount)}</strong>
+        <div style="margin-top:16px;padding:20px;background-color:#050505;border:1px solid #222222;text-align:center;">
+          <span style="display:block;font-size:10px;letter-spacing:2px;color:#A3A3A3;text-transform:uppercase;">
+            VALE-PRESENTE DIGITAL • <strong style="color:#FFFFFF;">${formatBRLBackend(gc.amount)}</strong>
             ${gc.recipientName ? ` • PARA: ${String(gc.recipientName).toUpperCase()}` : ""}
           </span>
-          <div style="margin:10px 0;font-family:monospace;font-size:20px;font-weight:900;letter-spacing:2px;color:#FFFFFF;user-select:all;">
+          <div style="margin:12px 0;font-family:monospace;font-size:20px;font-weight:700;letter-spacing:3px;color:#FFFFFF;user-select:all;">
             ${gc.code}
           </div>
           ${gc.giftMessage ? `<p style="margin:6px 0 0 0;font-size:12px;color:#A3A3A3;font-style:italic;">"${gc.giftMessage}"</p>` : ""}
-          <span style="display:block;margin-top:8px;font-size:11px;color:#737373;">
-            Como ativar: Acesse <strong>Minha Conta &gt; Carteira Digital</strong> em thr33.com.br e insira o código acima.
+          <span style="display:block;margin-top:10px;font-size:11px;color:#737373;">
+            Para resgatar, acesse <strong style="color:#FFFFFF;">Minha Conta &gt; Carteira Digital</strong> em thr33.com.br e insira o código acima.
           </span>
         </div>
       `,
@@ -4048,12 +4021,12 @@ function buildOrderPaidEmailHtml({ orderId, orderData }) {
       .join("");
 
     giftCardsHtml = `
-      <div style="margin-bottom:24px;padding:20px;background-color:rgba(0,255,136,0.05);border:1px solid #00FF88;">
-        <span style="display:block;font-size:11px;font-weight:900;letter-spacing:2px;color:#00FF88;text-transform:uppercase;">
-          SEU VALE-PRESENTE DIGITAL ESTÁ LIBERADO!
+      <div style="margin-bottom:28px;padding-bottom:24px;border-bottom:1px solid #222222;">
+        <span style="display:block;font-size:10px;font-weight:700;letter-spacing:2px;color:#FFFFFF;text-transform:uppercase;">
+          VALE-PRESENTE DIGITAL DISPONÍVEL
         </span>
-        <p style="margin:6px 0 0 0;font-size:12px;color:#D4D4D4;line-height:1.5;">
-          Copie o código abaixo para ativar em sua Carteira THR33 ou envie diretamente para presentear alguém no WhatsApp:
+        <p style="margin:6px 0 0 0;font-size:13px;color:#A3A3A3;line-height:1.6;">
+          Copie o código abaixo para ativar em sua Carteira THR33 ou compartilhe com a pessoa presenteada:
         </p>
         ${cardsListHtml}
       </div>
@@ -4067,23 +4040,23 @@ function buildOrderPaidEmailHtml({ orderId, orderData }) {
       const lineTotal = unitPrice * qty;
       const imgTag =
         item.image && String(item.image).startsWith("http")
-          ? `<td width="56" valign="top" style="padding:12px 12px 12px 0;border-bottom:1px solid #1F1F1F;">
-               <img src="${item.image}" alt="${item.name || "THR33"}" width="48" height="56" style="display:block;object-fit:cover;background-color:#1A1A1A;border:1px solid #262626;" />
+          ? `<td width="56" valign="top" style="padding:14px 14px 14px 0;border-bottom:1px solid #222222;">
+               <img src="${item.image}" alt="${item.name || "THR33"}" width="48" height="56" style="display:block;object-fit:cover;background-color:#111111;border:1px solid #222222;" />
              </td>`
           : "";
 
       return `
         <tr>
           ${imgTag}
-          <td valign="middle" style="padding:12px 0;border-bottom:1px solid #1F1F1F;">
-            <div style="font-size:13px;font-weight:800;color:#FFFFFF;text-transform:uppercase;">
+          <td valign="middle" style="padding:14px 0;border-bottom:1px solid #222222;">
+            <div style="font-size:13px;font-weight:600;color:#FFFFFF;">
               ${item.name || item.title || "Peça THR33"}
             </div>
-            <div style="font-size:11px;color:#A3A3A3;margin-top:3px;">
-              ${item.isGiftCard ? "Entrega Digital Instantânea" : `Tamanho: <strong style="color:#E5E5E5;">${item.size || "U"}</strong>`} • Qtd: <strong style="color:#E5E5E5;">${qty}</strong>
+            <div style="font-size:12px;color:#737373;margin-top:4px;">
+              ${item.isGiftCard ? "Entrega Digital" : `Tamanho: <span style="color:#A3A3A3;">${item.size || "U"}</span>`} • Qtd: <span style="color:#A3A3A3;">${qty}</span>
             </div>
           </td>
-          <td align="right" valign="middle" style="padding:12px 0;border-bottom:1px solid #1F1F1F;font-size:13px;font-weight:800;color:#FFFFFF;white-space:nowrap;">
+          <td align="right" valign="middle" style="padding:14px 0;border-bottom:1px solid #222222;font-size:13px;font-weight:600;color:#FFFFFF;white-space:nowrap;">
             ${formatBRLBackend(lineTotal)}
           </td>
         </tr>
@@ -4101,30 +4074,31 @@ function buildOrderPaidEmailHtml({ orderId, orderData }) {
         String(i.id || "").includes("vale-presente"),
     );
 
-  const addressBlockHtml = !isOnlyDigital && addr.street
-    ? `
-      <div style="margin-top:20px;padding:16px;background-color:#121212;border:1px solid #1F1F1F;">
-        <span style="display:block;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#737373;text-transform:uppercase;margin-bottom:6px;">
+  const addressBlockHtml =
+    !isOnlyDigital && addr.street
+      ? `
+      <div style="margin-top:24px;padding-top:20px;border-top:1px solid #222222;">
+        <span style="display:block;font-size:10px;font-weight:600;letter-spacing:2px;color:#737373;text-transform:uppercase;margin-bottom:8px;">
           ENDEREÇO DE ENTREGA
         </span>
-        <div style="font-size:13px;color:#E5E5E5;line-height:1.5;">
+        <div style="font-size:13px;color:#A3A3A3;line-height:1.6;">
           ${addr.street}, ${addr.number || "S/N"}${addr.complement ? ` • ${addr.complement}` : ""}<br/>
           ${addr.neighborhood ? `${addr.neighborhood} — ` : ""}${addr.city || ""}/${addr.state || addr.region_code || ""} • CEP: ${addr.cep || addr.postal_code || ""}
         </div>
       </div>
     `
-    : "";
+      : "";
 
   const bodyHtml = `
     ${giftCardsHtml}
 
-    <div style="padding:20px;background-color:#141414;border:1px solid #262626;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:12px;border-bottom:1px solid #262626;padding-bottom:10px;">
+    <div style="border-top:1px solid #222222;padding-top:20px;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:8px;">
         <tr>
-          <td style="font-size:11px;font-weight:800;letter-spacing:1.5px;color:#A3A3A3;text-transform:uppercase;">
+          <td style="font-size:10px;font-weight:600;letter-spacing:2px;color:#737373;text-transform:uppercase;">
             RESUMO DO PEDIDO ${displayOrder}
           </td>
-          <td align="right" style="font-size:11px;color:#00FF88;font-weight:700;">
+          <td align="right" style="font-size:11px;color:#A3A3A3;">
             ${orderData.paymentMethod || "Pagamento Confirmado"}
           </td>
         </tr>
@@ -4136,36 +4110,36 @@ function buildOrderPaidEmailHtml({ orderId, orderData }) {
 
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:16px;">
         <tr>
-          <td style="padding:4px 0;font-size:12px;color:#A3A3A3;">Subtotal</td>
-          <td align="right" style="padding:4px 0;font-size:12px;color:#E5E5E5;">${formatBRLBackend(subtotal)}</td>
+          <td style="padding:4px 0;font-size:12px;color:#737373;">Subtotal</td>
+          <td align="right" style="padding:4px 0;font-size:12px;color:#A3A3A3;">${formatBRLBackend(subtotal)}</td>
         </tr>
         ${
           discountAmount > 0
             ? `<tr>
-                 <td style="padding:4px 0;font-size:12px;color:#00FF88;">Cupom de Desconto ${orderData.couponCode ? `(${orderData.couponCode})` : ""}</td>
-                 <td align="right" style="padding:4px 0;font-size:12px;font-weight:700;color:#00FF88;">- ${formatBRLBackend(discountAmount)}</td>
+                 <td style="padding:4px 0;font-size:12px;color:#A3A3A3;">Desconto ${orderData.couponCode ? `(${orderData.couponCode})` : ""}</td>
+                 <td align="right" style="padding:4px 0;font-size:12px;color:#FFFFFF;">- ${formatBRLBackend(discountAmount)}</td>
                </tr>`
             : ""
         }
         ${
           walletDeduction > 0
             ? `<tr>
-                 <td style="padding:4px 0;font-size:12px;color:#00FF88;">Saldo da Carteira Digital</td>
-                 <td align="right" style="padding:4px 0;font-size:12px;font-weight:700;color:#00FF88;">- ${formatBRLBackend(walletDeduction)}</td>
+                 <td style="padding:4px 0;font-size:12px;color:#A3A3A3;">Saldo da Carteira</td>
+                 <td align="right" style="padding:4px 0;font-size:12px;color:#FFFFFF;">- ${formatBRLBackend(walletDeduction)}</td>
                </tr>`
             : ""
         }
         <tr>
-          <td style="padding:4px 0;font-size:12px;color:#A3A3A3;">Frete / Entrega</td>
-          <td align="right" style="padding:4px 0;font-size:12px;color:#E5E5E5;">
-            ${shippingCost === 0 ? '<span style="color:#00FF88;font-weight:700;">GRÁTIS</span>' : formatBRLBackend(shippingCost)}
+          <td style="padding:4px 0;font-size:12px;color:#737373;">Entrega</td>
+          <td align="right" style="padding:4px 0;font-size:12px;color:#A3A3A3;">
+            ${shippingCost === 0 ? "Grátis" : formatBRLBackend(shippingCost)}
           </td>
         </tr>
         <tr>
-          <td style="padding:12px 0 0 0;border-top:1px solid #262626;font-size:14px;font-weight:900;color:#FFFFFF;text-transform:uppercase;">
-            TOTAL PAGO
+          <td style="padding:14px 0 0 0;border-top:1px solid #222222;font-size:13px;font-weight:700;color:#FFFFFF;text-transform:uppercase;letter-spacing:1px;">
+            Total Pago
           </td>
-          <td align="right" style="padding:12px 0 0 0;border-top:1px solid #262626;font-size:16px;font-weight:900;color:#00FF88;">
+          <td align="right" style="padding:14px 0 0 0;border-top:1px solid #222222;font-size:15px;font-weight:700;color:#FFFFFF;">
             ${formatBRLBackend(totalPaid)}
           </td>
         </tr>
@@ -4174,26 +4148,24 @@ function buildOrderPaidEmailHtml({ orderId, orderData }) {
 
     ${addressBlockHtml}
 
-    <div style="margin-top:28px;text-align:center;">
-      <a href="https://thr33.com.br/perfil" style="display:inline-block;padding:15px 28px;background-color:#00FF88;color:#080808;font-size:12px;font-weight:900;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
-        [ ACOMPANHAR MEU PEDIDO NA THR33 ]
+    <div style="margin-top:32px;text-align:left;">
+      <a href="https://thr33.com.br/perfil" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        ACOMPANHAR PEDIDO
       </a>
     </div>
   `;
 
   return buildThr33EmailWrapper({
-    preheader: `Pagamento confirmado para o pedido ${displayOrder}! Confira o resumo completo da sua compra.`,
-    badgeText: "PAGAMENTO APROVADO",
-    badgeColor: "#00FF88",
-    title: `PAGAMENTO CONFIRMADO — ${displayOrder}`,
+    preheader: `Pagamento confirmado para o pedido ${displayOrder}.`,
+    title: `Pagamento confirmado — ${displayOrder}`,
     subtitle: isOnlyDigital
-      ? "Seu pagamento foi aprovado e seus créditos/códigos digitais já estão liberados."
-      : "Seu pagamento foi confirmado com sucesso! Seu pedido já entrou na fila do nosso ateliê.",
+      ? "Seu pagamento foi aprovado e seus créditos digitais já estão disponíveis."
+      : "Seu pagamento foi confirmado. Suas peças já entraram em preparação no nosso ateliê.",
     bodyHtml,
   });
 }
 
-// GATILHO D — Pedido Enviado + Código de Rastreio (order_shipped)
+// GATILHO D — Pedido Enviado + Código de Rastreio (order_shipped) — Minimalista P&B
 function buildOrderShippedEmailHtml({ orderId, orderData }) {
   const displayOrder = formatOrderCodeBackend(orderId || orderData.orderId);
   const trackingCode = String(orderData.trackingCode || "").trim().toUpperCase();
@@ -4207,68 +4179,152 @@ function buildOrderShippedEmailHtml({ orderId, orderData }) {
   const addr = orderData.shippingAddress || {};
 
   const bodyHtml = `
-    <div style="padding:24px;background-color:#141414;border:1px solid #00FF88;text-align:center;margin-bottom:20px;">
-      <span style="display:block;font-size:10px;font-weight:800;letter-spacing:2px;color:#A3A3A3;text-transform:uppercase;">
+    <div style="padding:24px 0;border-top:1px solid #222222;border-bottom:1px solid #222222;margin-bottom:24px;">
+      <span style="display:block;font-size:10px;font-weight:600;letter-spacing:2px;color:#737373;text-transform:uppercase;">
         TRANSPORTADORA: <strong style="color:#FFFFFF;">${carrier.toUpperCase()}</strong>
       </span>
-      <span style="display:block;font-size:10px;letter-spacing:1.5px;color:#00FF88;text-transform:uppercase;margin-top:12px;">
-        CÓDIGO DE RASTREAMENTO OFICIAL
+      <span style="display:block;font-size:10px;letter-spacing:2px;color:#737373;text-transform:uppercase;margin-top:16px;">
+        CÓDIGO DE RASTREAMENTO
       </span>
-      <div style="margin:8px 0 18px 0;font-family:monospace;font-size:22px;font-weight:900;letter-spacing:3px;color:#FFFFFF;user-select:all;">
+      <div style="margin:8px 0 24px 0;font-family:monospace;font-size:20px;font-weight:700;letter-spacing:3px;color:#FFFFFF;user-select:all;">
         ${trackingCode}
       </div>
-      <a href="${trackingUrl}" style="display:inline-block;padding:14px 26px;background-color:#00FF88;color:#080808;font-size:12px;font-weight:900;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
-        [ RASTREAR ENTREGA AGORA ]
+      <a href="${trackingUrl}" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        RASTREAR ENTREGA
       </a>
     </div>
 
     ${
       addr.street
-        ? `<div style="padding:16px;background-color:#121212;border:1px solid #1F1F1F;margin-bottom:20px;">
-             <span style="display:block;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#737373;text-transform:uppercase;margin-bottom:6px;">
-               DESTINO DO ENVIO
+        ? `<div style="margin-bottom:20px;">
+             <span style="display:block;font-size:10px;font-weight:600;letter-spacing:2px;color:#737373;text-transform:uppercase;margin-bottom:6px;">
+               ENDEREÇO DE DESTINO
              </span>
-             <div style="font-size:13px;color:#E5E5E5;line-height:1.5;">
+             <div style="font-size:13px;color:#A3A3A3;line-height:1.6;">
                ${addr.street}, ${addr.number || "S/N"}${addr.complement ? ` • ${addr.complement}` : ""}<br/>
                ${addr.neighborhood ? `${addr.neighborhood} — ` : ""}${addr.city || ""}/${addr.state || addr.region_code || ""} • CEP: ${addr.cep || addr.postal_code || ""}
              </div>
            </div>`
         : ""
     }
+  `;
 
-    <div style="text-align:center;margin-top:20px;">
-      <a href="https://thr33.com.br/perfil" style="font-size:12px;color:#E2FF00;text-decoration:underline;letter-spacing:1px;font-weight:700;">
-        Ver detalhes completos em Meus Pedidos &rarr;
+  return buildThr33EmailWrapper({
+    preheader: `Seu pedido ${displayOrder} foi enviado. Código de rastreio: ${trackingCode}`,
+    title: `Seu pedido está a caminho (${displayOrder}).`,
+    subtitle:
+      "Suas peças passaram pela conferência final do Ateliê THR33 e já foram entregues à transportadora.",
+    bodyHtml,
+  });
+}
+
+// GATILHO E — Carrinho Abandonado após 24h (abandoned_cart) — Minimalista P&B
+function buildAbandonedCartEmailHtml({ userName, items, subtotal }) {
+  const rawFirst = String(userName || "Cliente").trim().split(" ")[0] || "Cliente";
+  const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
+  const safeItems = Array.isArray(items) ? items : [];
+
+  const itemsHtml = safeItems
+    .map((item) => {
+      const qty = Number(item.quantity || 1);
+      const unitPrice = Number(item.price || 0);
+      const lineTotal = unitPrice * qty;
+      const imgTag =
+        item.image && String(item.image).startsWith("http")
+          ? `<td width="56" valign="top" style="padding:14px 14px 14px 0;border-bottom:1px solid #222222;">
+               <img src="${item.image}" alt="${item.name || "THR33"}" width="48" height="56" style="display:block;object-fit:cover;background-color:#111111;border:1px solid #222222;" />
+             </td>`
+          : "";
+
+      return `
+        <tr>
+          ${imgTag}
+          <td valign="middle" style="padding:14px 0;border-bottom:1px solid #222222;">
+            <div style="font-size:13px;font-weight:600;color:#FFFFFF;">
+              ${item.name || item.title || "Peça THR33"}
+            </div>
+            <div style="font-size:12px;color:#737373;margin-top:4px;">
+              ${item.isGiftCard ? "Entrega Digital" : `Tamanho: <span style="color:#A3A3A3;">${item.size || "U"}</span>`} • Qtd: <span style="color:#A3A3A3;">${qty}</span>
+            </div>
+          </td>
+          <td align="right" valign="middle" style="padding:14px 0;border-bottom:1px solid #222222;font-size:13px;font-weight:600;color:#FFFFFF;white-space:nowrap;">
+            ${formatBRLBackend(lineTotal)}
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const bodyHtml = `
+    <div style="border-top:1px solid #222222;margin-top:8px;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+        ${itemsHtml}
+      </table>
+      ${
+        Number(subtotal) > 0
+          ? `<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:14px;">
+               <tr>
+                 <td style="font-size:12px;color:#737373;text-transform:uppercase;letter-spacing:1px;">Subtotal na sacola</td>
+                 <td align="right" style="font-size:14px;font-weight:700;color:#FFFFFF;">${formatBRLBackend(subtotal)}</td>
+               </tr>
+             </table>`
+          : ""
+      }
+    </div>
+
+    <div style="margin-top:32px;text-align:left;">
+      <a href="https://thr33.com.br/checkout" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        FINALIZAR MINHA COMPRA
       </a>
     </div>
   `;
 
   return buildThr33EmailWrapper({
-    preheader: `Seu pedido ${displayOrder} saiu para entrega! Código de rastreio: ${trackingCode}`,
-    badgeText: "PEDIDO DESPACHADO",
-    badgeColor: "#00FF88",
-    title: `SEU DROP ESTÁ A CAMINHO (${displayOrder})`,
+    preheader: `${firstName}, suas peças selecionadas na THR33 ainda estão disponíveis.`,
+    title: `Você deixou algumas peças na sacola, ${firstName}.`,
     subtitle:
-      "Sua peça passou pela conferência final do Ateliê THR33 e já foi entregue à transportadora.",
+      "Nossas tiragens são produzidas em lotes limitados. Os itens que você selecionou continuam salvos caso queira concluir seu pedido.",
     bodyHtml,
   });
 }
 
-// DISPARADORES IDEMPOTENTES COM TRAVA NO FIRESTORE
+// DISPARADORES TRANSACIONAIS 100% IDEMPOTENTES (LOCK ATÔMICO COM db.runTransaction ANTES DO ENVIO)
 async function sendWelcomeEmailIfNeeded(db, uid, { email, name } = {}) {
   if (!uid) return { sent: false, reason: "missing_uid" };
+  const userRef = db.collection("users").doc(String(uid));
+
   try {
-    const userRef = db.collection("users").doc(uid);
-    const userSnap = await userRef.get();
-    const userData = userSnap.exists ? userSnap.data() : {};
+    // 1. Trava transacional ANTES de chamar a API externa da Resend
+    const txState = await db.runTransaction(async (transaction) => {
+      const userSnap = await transaction.get(userRef);
+      const userData = userSnap.exists ? userSnap.data() : {};
 
-    if (userData.welcomeEmailSent === true) {
-      return { sent: false, alreadySent: true };
+      if (userData.welcomeEmailSent === true || userData.welcomeEmailSending === true) {
+        return { shouldSend: false, alreadySent: true };
+      }
+
+      const targetEmail = String(email || userData.email || "").trim();
+      const targetName = String(name || userData.name || "Cliente").trim();
+      if (!targetEmail || !targetEmail.includes("@")) {
+        return { shouldSend: false, reason: "missing_email" };
+      }
+
+      transaction.set(
+        userRef,
+        {
+          welcomeEmailSent: true,
+          welcomeEmailSending: true,
+          welcomeEmailSentAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      return { shouldSend: true, targetEmail, targetName };
+    });
+
+    if (!txState.shouldSend) {
+      return { sent: false, ...txState };
     }
-
-    const targetEmail = (email || userData.email || "").trim();
-    const targetName = (name || userData.name || "Cliente THR33").trim();
-    if (!targetEmail) return { sent: false, reason: "missing_email" };
 
     let welcomeCoupon = null;
     try {
@@ -4295,22 +4351,22 @@ async function sendWelcomeEmailIfNeeded(db, uid, { email, name } = {}) {
     }
 
     const html = buildWelcomeEmailHtml({
-      userName: targetName,
+      userName: txState.targetName,
       coupon: welcomeCoupon,
     });
 
     const result = await sendResendEmail({
-      to: targetEmail,
-      subject: "BEM-VINDO AO CLUBE THR33 // ATELIÊ",
+      to: txState.targetEmail,
+      subject: "Bem-vindo à THR33",
       html,
     });
 
     if (result.sent) {
+      await userRef.set({ welcomeEmailSending: false }, { merge: true });
+    } else {
+      // Libera a trava apenas se o envio na Resend falhar
       await userRef.set(
-        {
-          welcomeEmailSent: true,
-          welcomeEmailSentAt: FieldValue.serverTimestamp(),
-        },
+        { welcomeEmailSent: false, welcomeEmailSending: false },
         { merge: true },
       );
     }
@@ -4321,36 +4377,55 @@ async function sendWelcomeEmailIfNeeded(db, uid, { email, name } = {}) {
   }
 }
 
-async function sendOrderPixEmailIfNeeded(db, orderRef, orderData) {
+async function sendOrderPixEmailIfNeeded(db, orderRef, orderDataInput) {
   try {
-    if (!orderData || orderData.pixEmailSent === true) {
-      return { sent: false, alreadySent: true };
-    }
-    const targetEmail = (orderData.clientEmail || orderData.customer?.email || "").trim();
-    if (!targetEmail || !orderData.pixCopiaECola) {
-      return { sent: false, reason: "missing_email_or_pix" };
-    }
+    const txState = await db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(orderRef);
+      const orderData = snap.exists ? snap.data() : orderDataInput;
+      if (!orderData) return { shouldSend: false, reason: "order_not_found" };
 
-    const displayOrder = formatOrderCodeBackend(orderRef.id || orderData.orderId);
-    const html = buildOrderPixEmailHtml({
-      orderId: orderRef.id,
-      orderData,
-    });
+      if (orderData.pixEmailSent === true || orderData.pixEmailSending === true) {
+        return { shouldSend: false, alreadySent: true };
+      }
 
-    const result = await sendResendEmail({
-      to: targetEmail,
-      subject: `Código PIX & Reserva de Estoque — Pedido ${displayOrder}`,
-      html,
-    });
+      const targetEmail = String(orderData.clientEmail || orderData.customer?.email || "").trim();
+      if (!targetEmail || !orderData.pixCopiaECola) {
+        return { shouldSend: false, reason: "missing_email_or_pix" };
+      }
 
-    if (result.sent) {
-      await orderRef.set(
+      transaction.set(
+        orderRef,
         {
           pixEmailSent: true,
+          pixEmailSending: true,
           pixEmailSentAt: FieldValue.serverTimestamp(),
         },
         { merge: true },
       );
+
+      return { shouldSend: true, targetEmail, orderData };
+    });
+
+    if (!txState.shouldSend) {
+      return { sent: false, ...txState };
+    }
+
+    const displayOrder = formatOrderCodeBackend(orderRef.id || txState.orderData.orderId);
+    const html = buildOrderPixEmailHtml({
+      orderId: orderRef.id,
+      orderData: txState.orderData,
+    });
+
+    const result = await sendResendEmail({
+      to: txState.targetEmail,
+      subject: `Pedido ${displayOrder} recebido — Código PIX THR33`,
+      html,
+    });
+
+    if (result.sent) {
+      await orderRef.set({ pixEmailSending: false }, { merge: true });
+    } else {
+      await orderRef.set({ pixEmailSent: false, pixEmailSending: false }, { merge: true });
     }
     return result;
   } catch (err) {
@@ -4361,35 +4436,55 @@ async function sendOrderPixEmailIfNeeded(db, orderRef, orderData) {
 
 async function sendOrderPaidEmailIfNeeded(db, orderRef, orderDataInput) {
   try {
-    const freshSnap = await orderRef.get();
-    const orderData = freshSnap.exists ? freshSnap.data() : orderDataInput;
-    if (!orderData) return { sent: false, reason: "order_not_found" };
+    const txState = await db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(orderRef);
+      const orderData = snap.exists ? snap.data() : orderDataInput;
+      if (!orderData) return { shouldSend: false, reason: "order_not_found" };
 
-    if (orderData.confirmationEmailSent === true) {
-      return { sent: false, alreadySent: true };
+      if (
+        orderData.confirmationEmailSent === true ||
+        orderData.confirmationEmailSending === true
+      ) {
+        return { shouldSend: false, alreadySent: true };
+      }
+
+      const targetEmail = String(orderData.clientEmail || orderData.customer?.email || "").trim();
+      if (!targetEmail) return { shouldSend: false, reason: "missing_email" };
+
+      transaction.set(
+        orderRef,
+        {
+          confirmationEmailSent: true,
+          confirmationEmailSending: true,
+          confirmationEmailSentAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      return { shouldSend: true, targetEmail, orderData };
+    });
+
+    if (!txState.shouldSend) {
+      return { sent: false, ...txState };
     }
 
-    const targetEmail = (orderData.clientEmail || orderData.customer?.email || "").trim();
-    if (!targetEmail) return { sent: false, reason: "missing_email" };
-
-    const displayOrder = formatOrderCodeBackend(orderRef.id || orderData.orderId);
+    const displayOrder = formatOrderCodeBackend(orderRef.id || txState.orderData.orderId);
     const html = buildOrderPaidEmailHtml({
       orderId: orderRef.id,
-      orderData,
+      orderData: txState.orderData,
     });
 
     const result = await sendResendEmail({
-      to: targetEmail,
-      subject: `Pagamento Confirmado! Resumo do Pedido ${displayOrder} — THR33`,
+      to: txState.targetEmail,
+      subject: `Pagamento confirmado — Pedido ${displayOrder} — THR33`,
       html,
     });
 
     if (result.sent) {
+      await orderRef.set({ confirmationEmailSending: false }, { merge: true });
+    } else {
       await orderRef.set(
-        {
-          confirmationEmailSent: true,
-          confirmationEmailSentAt: FieldValue.serverTimestamp(),
-        },
+        { confirmationEmailSent: false, confirmationEmailSending: false },
         { merge: true },
       );
     }
@@ -4402,37 +4497,26 @@ async function sendOrderPaidEmailIfNeeded(db, orderRef, orderDataInput) {
 
 async function sendOrderShippedEmailIfNeeded(db, orderRef, orderDataInput) {
   try {
-    const freshSnap = await orderRef.get();
-    const orderData = freshSnap.exists ? freshSnap.data() : orderDataInput;
-    if (!orderData) return { sent: false, reason: "order_not_found" };
+    const txState = await db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(orderRef);
+      const orderData = snap.exists ? snap.data() : orderDataInput;
+      if (!orderData) return { shouldSend: false, reason: "order_not_found" };
 
-    const trackingCode = String(orderData.trackingCode || "").trim().toUpperCase();
-    if (!trackingCode) return { sent: false, reason: "missing_tracking_code" };
+      const trackingCode = String(orderData.trackingCode || "").trim().toUpperCase();
+      if (!trackingCode) return { shouldSend: false, reason: "missing_tracking_code" };
 
-    if (
-      orderData.shippedEmailSent === true &&
-      orderData.lastShippedTrackingCode === trackingCode
-    ) {
-      return { sent: false, alreadySent: true };
-    }
+      if (
+        orderData.shippedEmailSent === true &&
+        orderData.lastShippedTrackingCode === trackingCode
+      ) {
+        return { shouldSend: false, alreadySent: true };
+      }
 
-    const targetEmail = (orderData.clientEmail || orderData.customer?.email || "").trim();
-    if (!targetEmail) return { sent: false, reason: "missing_email" };
+      const targetEmail = String(orderData.clientEmail || orderData.customer?.email || "").trim();
+      if (!targetEmail) return { shouldSend: false, reason: "missing_email" };
 
-    const displayOrder = formatOrderCodeBackend(orderRef.id || orderData.orderId);
-    const html = buildOrderShippedEmailHtml({
-      orderId: orderRef.id,
-      orderData,
-    });
-
-    const result = await sendResendEmail({
-      to: targetEmail,
-      subject: `Seu pedido ${displayOrder} foi enviado! Código de Rastreio: ${trackingCode}`,
-      html,
-    });
-
-    if (result.sent) {
-      await orderRef.set(
+      transaction.set(
+        orderRef,
         {
           shippedEmailSent: true,
           lastShippedTrackingCode: trackingCode,
@@ -4440,10 +4524,144 @@ async function sendOrderShippedEmailIfNeeded(db, orderRef, orderDataInput) {
         },
         { merge: true },
       );
+
+      return { shouldSend: true, targetEmail, trackingCode, orderData };
+    });
+
+    if (!txState.shouldSend) {
+      return { sent: false, ...txState };
+    }
+
+    const displayOrder = formatOrderCodeBackend(orderRef.id || txState.orderData.orderId);
+    const html = buildOrderShippedEmailHtml({
+      orderId: orderRef.id,
+      orderData: txState.orderData,
+    });
+
+    const result = await sendResendEmail({
+      to: txState.targetEmail,
+      subject: `Pedido ${displayOrder} enviado — Código de rastreio: ${txState.trackingCode}`,
+      html,
+    });
+
+    if (!result.sent) {
+      await orderRef.set(
+        { shippedEmailSent: false, lastShippedTrackingCode: null },
+        { merge: true },
+      );
     }
     return result;
   } catch (err) {
     logger.warn("Erro não-bloqueante em sendOrderShippedEmailIfNeeded:", err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
+async function sendAbandonedCartEmailIfNeeded(db, uid, { forceTest = false } = {}) {
+  if (!uid) return { sent: false, reason: "missing_uid" };
+  const userRef = db.collection("users").doc(String(uid));
+  const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+  try {
+    const txState = await db.runTransaction(async (transaction) => {
+      const userSnap = await transaction.get(userRef);
+      if (!userSnap.exists) return { shouldSend: false, reason: "user_not_found" };
+
+      const userData = userSnap.data() || {};
+      const targetEmail = String(userData.email || "").trim();
+      if (!targetEmail || !targetEmail.includes("@")) {
+        return { shouldSend: false, reason: "missing_email" };
+      }
+
+      const cart = userData.abandonedCart || {};
+      const items = Array.isArray(cart.items) ? cart.items : [];
+      if (items.length === 0) {
+        return { shouldSend: false, reason: "empty_cart" };
+      }
+
+      if (!forceTest && cart.abandonedEmailSent === true) {
+        return { shouldSend: false, alreadySent: true };
+      }
+
+      const updatedAtMs = Number(cart.UpdatedAtMs || 0);
+      if (!forceTest && (!updatedAtMs || Date.now() - updatedAtMs < TWENTY_FOUR_HOURS_MS)) {
+        return { shouldSend: false, reason: "not_24h_yet" };
+      }
+
+      transaction.set(
+        userRef,
+        {
+          abandonedCart: {
+            ...cart,
+            abandonedEmailSent: true,
+            abandonedEmailSentAt: FieldValue.serverTimestamp(),
+          },
+        },
+        { merge: true },
+      );
+
+      return {
+        shouldSend: true,
+        targetEmail,
+        userName: userData.name || "Cliente",
+        items,
+        subtotal: Number(cart.subtotal || 0),
+        updatedAtMs,
+        cartSnapshot: cart,
+      };
+    });
+
+    if (!txState.shouldSend) {
+      return { sent: false, ...txState };
+    }
+
+    // Verifica se o cliente já concluiu algum pedido após a última modificação da sacola
+    if (!forceTest && txState.updatedAtMs > 0) {
+      const recentOrdersSnap = await db
+        .collection("orders")
+        .where("userId", "==", String(uid))
+        .limit(10)
+        .get();
+
+      const hasRecentPurchase = recentOrdersSnap.docs.some((docSnap) => {
+        const od = docSnap.data() || {};
+        const createdMs = od.createdAt?.toMillis ? od.createdAt.toMillis() : 0;
+        const status = String(od.status || "").toLowerCase();
+        return createdMs >= txState.updatedAtMs && !status.includes("cancel");
+      });
+
+      if (hasRecentPurchase) {
+        return { sent: false, reason: "already_purchased_recently" };
+      }
+    }
+
+    const html = buildAbandonedCartEmailHtml({
+      userName: txState.userName,
+      items: txState.items,
+      subtotal: txState.subtotal,
+    });
+
+    const result = await sendResendEmail({
+      to: txState.targetEmail,
+      subject: "Suas peças continuam na sacola — THR33",
+      html,
+    });
+
+    if (!result.sent && !forceTest) {
+      await userRef.set(
+        {
+          abandonedCart: {
+            ...txState.cartSnapshot,
+            abandonedEmailSent: false,
+          },
+        },
+        { merge: true },
+      );
+    }
+
+    return result;
+  } catch (err) {
+    logger.warn("Erro não-bloqueante em sendAbandonedCartEmailIfNeeded:", err.message);
     return { sent: false, error: err.message };
   }
 }
@@ -4458,7 +4676,7 @@ exports.sendTransactionalEmail = onCall(
   },
   async (request) => {
     const db = getDb();
-    const { type, orderId, uid, email, name } = request.data || {};
+    const { type, orderId, uid, email, name, forceTest } = request.data || {};
 
     if (type === "welcome_register") {
       const targetUid = uid || request.auth?.uid;
@@ -4477,6 +4695,458 @@ exports.sendTransactionalEmail = onCall(
       const snap = await orderRef.get();
       return await sendOrderPixEmailIfNeeded(db, orderRef, snap.exists ? snap.data() : null);
     }
+    if (type === "abandoned_cart") {
+      const targetUid = uid || request.auth?.uid;
+      return await sendAbandonedCartEmailIfNeeded(db, targetUid, {
+        forceTest: Boolean(forceTest),
+      });
+    }
+    if (type === "drop_waitlist_welcome") {
+      return await sendDropWaitlistWelcomeIfNeeded(db, request.data);
+    }
+    if (type === "drop_broadcast_campaign") {
+      return await handleDropBroadcastCampaign(db, request);
+    }
     return { sent: false, reason: "unknown_email_type" };
   },
 );
+
+/**
+ * 14. CRON DE CARRINHO ABANDONADO (24H DE INATIVIDADE — DISPARO ÚNICO)
+ */
+exports.checkAbandonedCartsCron = onSchedule(
+  {
+    schedule: "every 60 minutes",
+    timeZone: "America/Sao_Paulo",
+    region: FUNCTION_REGION,
+  },
+  async () => {
+    const db = getDb();
+    const cutoffMs = Date.now() - 24 * 60 * 60 * 1000;
+
+    try {
+      const usersSnap = await db
+        .collection("users")
+        .where("abandonedCart.abandonedEmailSent", "==", false)
+        .limit(100)
+        .get();
+
+      let sentCount = 0;
+      for (const userDoc of usersSnap.docs) {
+        const cart = userDoc.data()?.abandonedCart;
+        if (!cart || !Array.isArray(cart.items) || cart.items.length === 0) continue;
+        if (Number(cart.UpdatedAtMs || 0) > cutoffMs) continue;
+
+        const res = await sendAbandonedCartEmailIfNeeded(db, userDoc.id, { forceTest: false });
+        if (res.sent) sentCount++;
+      }
+
+      logger.info(`[ABANDONED CART CRON] Verificação concluída. E-mails enviados: ${sentCount}`);
+    } catch (err) {
+      logger.error("[ABANDONED CART CRON] Erro ao processar carrinhos abandonados:", err.message);
+    }
+  },
+);
+
+/**
+ * ============================================================================
+ * FEATURE 2: PRÉ-REGISTRO / LISTA VIP DE DROPS & DISPARO EM LOTES (BATCH API)
+ * ============================================================================
+ */
+function buildDropWaitlistWelcomeHtml({ name, dropName, dropId }) {
+  const cleanDropName = String(dropName || dropId || "PRÓXIMO DROP").toUpperCase();
+  const rawFirst = name ? String(name).trim().split(" ")[0] : null;
+  const firstName = rawFirst
+    ? rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase()
+    : null;
+
+  const bodyHtml = `
+    <p style="margin:0 0 18px 0;font-size:14px;color:#A3A3A3;line-height:1.7;">
+      ${firstName ? `Olá, <strong style="color:#FFFFFF;">${firstName}</strong>. ` : ""}Seu e-mail foi confirmado na Lista VIP da THR33 para o <strong style="color:#FFFFFF;">${cleanDropName}</strong>.
+    </p>
+    <p style="margin:0 0 28px 0;font-size:14px;color:#A3A3A3;line-height:1.7;">
+      Nossas tiragens são produzidas em lotes limitados. Você receberá o link de acesso prioritário antes da abertura oficial ao público geral.
+    </p>
+
+    <div style="margin-top:32px;text-align:left;">
+      <a href="https://thr33.com.br/catalogo" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        EXPLORAR CATÁLOGO
+      </a>
+    </div>
+  `;
+
+  return buildThr33EmailWrapper({
+    preheader: `Presença confirmada na Lista VIP — ${cleanDropName}.`,
+    title: `Você está na Lista VIP — ${cleanDropName}.`,
+    subtitle: "",
+    bodyHtml,
+  });
+}
+
+function buildDropBroadcastEmailHtml({
+  subjectTitle,
+  dropName,
+  bannerUrl,
+  manifestoText,
+  couponCode,
+  couponDescription,
+  ctaUrl,
+  ctaLabel,
+}) {
+  const cleanTitle = String(subjectTitle || "Drop disponível — Acesso liberado").trim();
+  const targetLink = String(ctaUrl || "https://thr33.com.br/catalogo").trim();
+  const buttonText = String(ctaLabel || "ACESSAR O DROP")
+    .replace(/[\[\]]/g, "")
+    .trim()
+    .toUpperCase();
+
+  const bannerBlockHtml =
+    bannerUrl && String(bannerUrl).startsWith("http")
+      ? `
+      <div style="margin-bottom:24px;border:1px solid #222222;background-color:#050505;overflow:hidden;">
+        <a href="${targetLink}" style="text-decoration:none;display:block;">
+          <img src="${bannerUrl}" alt="${cleanTitle}" width="478" style="width:100%;max-width:478px;height:auto;display:block;border:0;" />
+        </a>
+      </div>
+    `
+      : "";
+
+  const formattedParagraphs = String(
+    manifestoText ||
+      "O novo lote da THR33 acaba de ser liberado para a Lista VIP. Modelagens pesadas construídas no concreto de Curitiba com tiragem estritamente limitada.",
+  )
+    .split(/\n+/)
+    .filter(Boolean)
+    .map(
+      (p) =>
+        `<p style="margin:0 0 16px 0;font-size:14px;color:#A3A3A3;line-height:1.7;">${p}</p>`,
+    )
+    .join("");
+
+  const couponBlockHtml =
+    couponCode && String(couponCode).trim()
+      ? `
+      <div style="margin:28px 0;padding:24px;border:1px solid #222222;text-align:center;">
+        <span style="display:block;font-size:10px;font-weight:600;letter-spacing:2px;color:#737373;text-transform:uppercase;margin-bottom:8px;">
+          ACESSO LISTA VIP
+        </span>
+        <div style="font-size:20px;font-weight:700;letter-spacing:3px;color:#FFFFFF;margin:6px 0;font-family:monospace;">
+          ${String(couponCode).trim().toUpperCase()}
+        </div>
+        <span style="display:block;font-size:12px;color:#A3A3A3;margin-top:6px;">
+          ${couponDescription || "Utilize este código no checkout antes que o lote esgote."}
+        </span>
+      </div>
+    `
+      : "";
+
+  const bodyHtml = `
+    ${bannerBlockHtml}
+    <div>
+      ${formattedParagraphs}
+    </div>
+    ${couponBlockHtml}
+    <div style="margin-top:32px;text-align:left;">
+      <a href="${targetLink}" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        ${buttonText}
+      </a>
+    </div>
+  `;
+
+  return buildThr33EmailWrapper({
+    preheader: `${cleanTitle} — Acesso prioritário Lista VIP THR33.`,
+    title: cleanTitle,
+    subtitle: dropName ? String(dropName).toUpperCase() : "",
+    bodyHtml,
+  });
+}
+
+function getSubscriberDocId(email) {
+  return String(email || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9@._-]/g, "")
+    .replace(/[.#$/[\]]/g, "_");
+}
+
+async function sendDropWaitlistWelcomeIfNeeded(db, data) {
+  try {
+    const rawEmail = String(data?.email || "").trim().toLowerCase();
+    if (!rawEmail || !rawEmail.includes("@")) {
+      return { sent: false, reason: "invalid_email" };
+    }
+
+    const subscriberId = data?.subscriberId || getSubscriberDocId(rawEmail);
+    const subRef = db.collection("drop_subscribers").doc(subscriberId);
+
+    const txState = await db.runTransaction(async (transaction) => {
+      const subSnap = await transaction.get(subRef);
+      const subData = subSnap.exists ? subSnap.data() : {};
+
+      const dropId = String(data?.dropId || subData.dropId || "drop-cactus-01").trim();
+      const dropName = String(
+        data?.dropName || subData.dropName || "UTOPIA PROCESS // CACTUS STREETS",
+      ).trim();
+      const name = String(data?.name || subData.name || "").trim();
+      const source = String(data?.source || subData.source || "home_newsletter").trim();
+
+      if (subData.welcomeDropEmailSentFor === dropId) {
+        transaction.set(
+          subRef,
+          {
+            email: rawEmail,
+            name: name || subData.name || "",
+            dropId,
+            dropName,
+            source,
+            status: "active",
+            updatedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        return { shouldSend: false, alreadySent: true, subscriberId };
+      }
+
+      transaction.set(
+        subRef,
+        {
+          email: rawEmail,
+          name: name || subData.name || "",
+          dropId,
+          dropName,
+          source,
+          status: "active",
+          welcomeDropEmailSent: true,
+          welcomeDropEmailSentFor: dropId,
+          welcomeDropEmailSentAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+          ...(subSnap.exists ? {} : { createdAt: FieldValue.serverTimestamp() }),
+        },
+        { merge: true },
+      );
+
+      return { shouldSend: true, dropId, dropName, name, subscriberId };
+    });
+
+    if (!txState.shouldSend) {
+      return { sent: false, ...txState };
+    }
+
+    const html = buildDropWaitlistWelcomeHtml({
+      name: txState.name,
+      dropName: txState.dropName,
+      dropId: txState.dropId,
+    });
+
+    const cleanDropTitle = txState.dropName.toUpperCase();
+    const result = await sendResendEmail({
+      to: rawEmail,
+      subject: `Lista VIP confirmada — ${cleanDropTitle}`,
+      html,
+    });
+
+    if (!result.sent) {
+      await subRef.set(
+        {
+          welcomeDropEmailSent: false,
+          welcomeDropEmailSentFor: null,
+        },
+        { merge: true },
+      );
+    }
+
+    return { ...result, subscriberId };
+  } catch (err) {
+    logger.warn("Erro não-bloqueante em sendDropWaitlistWelcomeIfNeeded:", err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
+async function sendResendBatchEmails(emailsPayloadArray) {
+  const apiKey = (process.env.RESEND_API_KEY || "").trim();
+  if (!apiKey || apiKey.includes("SUA_CHAVE") || apiKey.includes("re_xxx")) {
+    return { sent: false, count: 0, reason: "missing_api_key" };
+  }
+
+  const configuredFrom =
+    (process.env.RESEND_FROM_EMAIL || "").trim() ||
+    "THR33 Streetwear <contato@thr33.com.br>";
+
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  };
+
+  let totalSent = 0;
+  const CHUNK_SIZE = 100; // Limite oficial da Batch API da Resend (/emails/batch)
+
+  for (let i = 0; i < emailsPayloadArray.length; i += CHUNK_SIZE) {
+    const chunk = emailsPayloadArray.slice(i, i + CHUNK_SIZE).map((item) => ({
+      from: configuredFrom,
+      to: [item.to],
+      subject: item.subject,
+      html: item.html,
+    }));
+
+    try {
+      await axios.post("https://api.resend.com/emails/batch", chunk, {
+        headers,
+        timeout: 20000,
+      });
+      totalSent += chunk.length;
+    } catch (batchErr) {
+      const status = batchErr.response?.status;
+      const errMsg = JSON.stringify(batchErr.response?.data || batchErr.message);
+
+      // Fallback para onboarding@resend.dev caso domínio ainda não esteja verificado
+      if (
+        (status === 403 || status === 422 || errMsg.toLowerCase().includes("domain")) &&
+        !configuredFrom.includes("onboarding@resend.dev")
+      ) {
+        try {
+          const fallbackChunk = chunk.map((c) => ({
+            ...c,
+            from: "THR33 Streetwear <onboarding@resend.dev>",
+          }));
+          await axios.post("https://api.resend.com/emails/batch", fallbackChunk, {
+            headers,
+            timeout: 20000,
+          });
+          totalSent += fallbackChunk.length;
+          continue;
+        } catch (fbErr) {
+          logger.warn("[RESEND BATCH] Falha no fallback:", fbErr.message);
+        }
+      }
+      logger.warn("[RESEND BATCH] Erro ao enviar lote:", errMsg);
+    }
+  }
+
+  return { sent: totalSent > 0, count: totalSent };
+}
+
+async function handleDropBroadcastCampaign(db, request) {
+  // Verifica permissão de Administrador
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Autenticação necessária para disparar campanha.");
+  }
+
+  const callerUid = request.auth.uid;
+  const callerEmail = (request.auth.token?.email || "").toLowerCase();
+  const adminEmails = (
+    process.env.ADMIN_EMAILS ||
+    "contato.thewavem@gmail.com,thewavem@gmail.com,eduianbf@gmail.com,admin@thr33.com,sac@thr33.com,contato@thr33.com"
+  )
+    .split(",")
+    .map((e) => e.trim().toLowerCase());
+
+  let isAdmin = adminEmails.includes(callerEmail);
+  if (!isAdmin) {
+    const userDoc = await db.collection("users").doc(callerUid).get();
+    if (userDoc.exists && (userDoc.data()?.role === "admin" || userDoc.data()?.isAdmin === true)) {
+      isAdmin = true;
+    }
+  }
+
+  if (!isAdmin) {
+    throw new HttpsError("permission-denied", "Apenas administradores podem disparar campanhas para a Lista VIP.");
+  }
+
+  const {
+    mode = "test", // 'test' | 'broadcast'
+    testEmail,
+    targetDropId = "all",
+    subjectTitle,
+    dropName,
+    bannerUrl,
+    manifestoText,
+    couponCode,
+    couponDescription,
+    ctaUrl,
+    ctaLabel,
+  } = request.data || {};
+
+  const cleanSubject = String(subjectTitle || "Drop disponível — Acesso liberado").trim();
+  const html = buildDropBroadcastEmailHtml({
+    subjectTitle: cleanSubject,
+    dropName,
+    bannerUrl,
+    manifestoText,
+    couponCode,
+    couponDescription,
+    ctaUrl,
+    ctaLabel,
+  });
+
+  if (mode === "test") {
+    const recipient = String(testEmail || callerEmail || "").trim();
+    if (!recipient || !recipient.includes("@")) {
+      throw new HttpsError("invalid-argument", "Informe um e-mail válido para o envio de teste.");
+    }
+    const res = await sendResendEmail({
+      to: recipient,
+      subject: `[TESTE VIP] ${cleanSubject}`,
+      html,
+    });
+    return {
+      ...res,
+      mode: "test",
+      recipient,
+      count: res.sent ? 1 : 0,
+    };
+  }
+
+  // Modo Broadcast em Lotes para a Lista VIP Ativa
+  const subsSnap = await db
+    .collection("drop_subscribers")
+    .where("status", "==", "active")
+    .get();
+
+  const recipientsSet = new Set();
+  subsSnap.forEach((docSnap) => {
+    const d = docSnap.data();
+    const em = String(d.email || "").trim().toLowerCase();
+    if (!em || !em.includes("@")) return;
+    if (targetDropId && targetDropId !== "all" && d.dropId !== targetDropId) return;
+    recipientsSet.add(em);
+  });
+
+  const recipients = Array.from(recipientsSet);
+  if (recipients.length === 0) {
+    return { sent: false, count: 0, reason: "no_active_subscribers" };
+  }
+
+  const batchPayloads = recipients.map((em) => ({
+    to: em,
+    subject: cleanSubject,
+    html,
+  }));
+
+  const batchResult = await sendResendBatchEmails(batchPayloads);
+
+  // Registra histórico do disparo no Firestore
+  try {
+    await db.collection("drop_broadcasts").add({
+      subjectTitle: cleanSubject,
+      dropName: dropName || "DROP THR33",
+      targetDropId,
+      couponCode: couponCode || null,
+      ctaUrl: ctaUrl || null,
+      totalRecipients: recipients.length,
+      sentCount: batchResult.count,
+      sentByEmail: callerEmail,
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  } catch (logErr) {
+    logger.warn("Aviso ao registrar log de broadcast:", logErr.message);
+  }
+
+  return {
+    sent: batchResult.sent,
+    count: batchResult.count,
+    totalRecipients: recipients.length,
+    mode: "broadcast",
+  };
+}
+
+

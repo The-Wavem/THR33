@@ -64,6 +64,8 @@ import { ORDER_STATUSES, normalizeOrderStatus } from '../../services/orderStateM
 import { webhookService } from '../../services/webhookService';
 import { giftCardService, refundOrderWalletIfNeeded } from '../../services/giftCardService';
 import { emailService } from '../../services/emailService';
+import { currentDropConfig } from '../../data/dropConfig';
+import { dropSubscriberService } from '../../services/dropSubscriberService';
 import styles from './Checkout.module.css';
 
 /**
@@ -1431,7 +1433,14 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             name: clientData.name || user?.displayName || user?.name || '',
             cpf: clientData.cpf || user?.cpf || '',
             phone: clientData.phone || user?.phone || '',
-            addresses: updatedAddresses
+            addresses: updatedAddresses,
+            abandonedCart: {
+              items: [],
+              subtotal: 0,
+              updatedAt: new Date().toISOString(),
+              UpdatedAtMs: Date.now(),
+              abandonedEmailSent: true
+            }
           }, (k, v) => v === undefined ? null : v));
 
           await setDoc(userRef, userPayload, { merge: true });
@@ -1472,6 +1481,17 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
       // 6. Decrementa o estoque físico por tamanho no Firestore de forma automatizada
       await catalogService.decrementProductStock(cartItems);
+
+      // 7. Registra o comprador na Lista VIP de Drops (checkout_opt_in) sem bloquear
+      if (clientData.email || user?.email) {
+        dropSubscriberService.subscribeToDropWaitlist({
+          email: clientData.email || user?.email,
+          name: clientData.name || user?.displayName || user?.name || '',
+          dropId: currentDropConfig?.id || 'drop-cactus-01',
+          dropName: currentDropConfig?.title || 'UTOPIA PROCESS // CACTUS STREETS',
+          source: 'checkout_opt_in'
+        }).catch(() => {});
+      }
 
     } catch (err) {
       console.error("Erro crítico ao finalizar e persistir pedido:", err);

@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect, useRef } from 'react';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '../services/firebaseConfig';
 import { couponService } from '../services/couponService';
 import { analyticsService } from '../services/analyticsService';
 import { useAuth } from './AuthContext';
@@ -123,6 +125,59 @@ export function CartProvider({ children }) {
   const totalItemsCount = useMemo(() => {
     return cartItems.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
   }, [cartItems]);
+
+  // Sincronização silenciosa do carrinho no Firestore (com debounce de 2s) para recuperação de Carrinho Abandonado (24h)
+  const hasRenderedCartSync = useRef(false);
+  useEffect(() => {
+    const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = currentUser?.email || user?.email;
+    if (!activeUid || !activeEmail) return;
+
+    // Evita sobrescrever com vazio na montagem inicial caso o carrinho já esteja vazio
+    if (!hasRenderedCartSync.current && cartItems.length === 0) {
+      hasRenderedCartSync.current = true;
+      return;
+    }
+    hasRenderedCartSync.current = true;
+
+    const timer = setTimeout(async () => {
+      try {
+        const userRef = doc(db, 'users', activeUid);
+        if (cartItems.length > 0) {
+          await setDoc(userRef, {
+            abandonedCart: {
+              items: cartItems.map(item => ({
+                id: item.id,
+                name: item.name,
+                size: item.size || 'U',
+                quantity: Number(item.quantity || 1),
+                price: Number(item.price || 0),
+                image: item.image || ''
+              })),
+              subtotal: Number(subtotal || 0),
+              updatedAt: new Date().toISOString(),
+              UpdatedAtMs: Date.now(),
+              abandonedEmailSent: false
+            }
+          }, { merge: true });
+        } else {
+          await setDoc(userRef, {
+            abandonedCart: {
+              items: [],
+              subtotal: 0,
+              updatedAt: new Date().toISOString(),
+              UpdatedAtMs: Date.now(),
+              abandonedEmailSent: true
+            }
+          }, { merge: true });
+        }
+      } catch (err) {
+        // Falha silenciosa para não impactar a UX
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [cartItems, subtotal, currentUser?.uid, currentUser?.email, user?.uid, user?.email]);
 
   // Ações de Cupom com validação no Firestore
   const applyCoupon = async (code, userContextOverride = null) => {

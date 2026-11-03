@@ -24,10 +24,19 @@ import {
   Filter,
   ArrowUpDown,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  Mail,
+  Send,
+  Download,
+  Users,
+  Tag
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
 import { campaignService } from '../../services/campaignService';
+import { dropSubscriberService } from '../../services/dropSubscriberService';
+import { emailService } from '../../services/emailService';
+import { currentDropConfig } from '../../data/dropConfig';
+import { useAuth } from '../../context/AuthContext';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import { 
   useCmsPeriodFilter, 
@@ -81,11 +90,31 @@ const CATALOG_DROPS = [
 const CATALOG_SIZES = ['PP', 'P', 'M', 'G', 'GG', 'XGG'];
 
 export function CmsCampanhas() {
+  const { currentUser } = useAuth() || {};
   const [campaigns, setCampaigns] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [subscribers, setSubscribers] = useState([]);
+  const [couponsList, setCouponsList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [copiedId, setCopiedId] = useState(null);
+
+  // Estados da Seção B: LISTA VIP & DISPARO DE DROPS
+  const [showVipSection, setShowVipSection] = useState(true);
+  const [dropEmailSubject, setDropEmailSubject] = useState('🔥 DROP LEAK TWO NO AR — ACESSO LIBERADO');
+  const [dropEmailLabel, setDropEmailLabel] = useState(currentDropConfig?.title || 'UTOPIA PROCESS // CACTUS STREETS');
+  const [dropBannerUrl, setDropBannerUrl] = useState('');
+  const [dropManifesto, setDropManifesto] = useState(
+    'O novo lote da THR33 acaba de ser liberado com prioridade para a Lista VIP.\nModelagens pesadas 300GSM construídas no concreto de Curitiba com tiragem estritamente limitada.'
+  );
+  const [dropCouponCode, setDropCouponCode] = useState('');
+  const [dropCouponDesc, setDropCouponDesc] = useState('Exclusivo para as primeiras 2 horas de abertura da Lista VIP.');
+  const [dropTargetFilter, setDropTargetFilter] = useState('all');
+  const [dropCtaUrl, setDropCtaUrl] = useState('https://thr33.com.br/catalogo?utm_source=email&utm_medium=newsletter&utm_campaign=drop_vip_launch');
+  const [dropTestEmail, setDropTestEmail] = useState('');
+  const [sendingTestEmail, setSendingTestEmail] = useState(false);
+  const [sendingBroadcast, setSendingBroadcast] = useState(false);
+  const [broadcastFeedback, setBroadcastFeedback] = useState({ type: '', message: '' });
 
   // Opções customizadas de Origem e Mídia (gravadas no Firestore)
   const [customSources, setCustomSources] = useState([]);
@@ -249,12 +278,26 @@ export function CmsCampanhas() {
     setLoading(true);
     setRefreshing(true);
     try {
-      const [camps, ordersSnap, sessionsSnap, customOpts] = await Promise.all([
+      const [camps, ordersSnap, sessionsSnap, customOpts, subsList, couponsSnap] = await Promise.all([
         campaignService.getAllCampaigns(),
         getDocs(collection(db, 'orders')),
         getDocs(collection(db, 'checkout_sessions')).catch(() => ({ forEach: () => {} })),
-        campaignService.getCustomUtmOptions()
+        campaignService.getCustomUtmOptions(),
+        dropSubscriberService.getAllSubscribers(),
+        getDocs(collection(db, 'coupons')).catch(() => ({ forEach: () => {} }))
       ]);
+
+      const loadedCoupons = [];
+      if (couponsSnap && couponsSnap.forEach) {
+        couponsSnap.forEach(cDoc => {
+          const cData = cDoc.data();
+          if (cData.active !== false && cData.code) {
+            loadedCoupons.push({ id: cDoc.id, ...cData });
+          }
+        });
+      }
+      setCouponsList(loadedCoupons);
+      setSubscribers(subsList || []);
 
       const ords = [];
       const seenIds = new Set();
@@ -291,6 +334,180 @@ export function CmsCampanhas() {
   useEffect(() => {
     loadCampaigns();
   }, []);
+
+  useEffect(() => {
+    if (currentUser?.email && !dropTestEmail) {
+      setDropTestEmail(currentUser.email);
+    }
+  }, [currentUser]);
+
+  // Métricas e KPIs da Lista VIP de Drops (Feature 2.B)
+  const vipKpis = useMemo(() => {
+    const activeList = (subscribers || []).filter(s => s.status !== 'unsubscribed');
+    const currentDropId = currentDropConfig?.id || 'drop-cactus-01';
+    const currentDropCount = activeList.filter(
+      s => s.dropId === currentDropId || s.dropId === 'leak_two'
+    ).length;
+
+    const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const last7DaysCount = activeList.filter(s => {
+      const ts = s.createdAt?.seconds
+        ? s.createdAt.seconds * 1000
+        : new Date(s.subscribedAtISO || s.createdAt || 0).getTime();
+      return ts >= sevenDaysAgo;
+    }).length;
+
+    const filteredAudience =
+      dropTargetFilter === 'all'
+        ? activeList
+        : activeList.filter(s => s.dropId === dropTargetFilter);
+
+    return {
+      totalActive: activeList.length,
+      currentDropCount,
+      last7DaysCount,
+      filteredAudienceCount: filteredAudience.length,
+      activeList
+    };
+  }, [subscribers, dropTargetFilter]);
+
+  // Exportar CSV da Lista VIP (para Meta Ads Lookalike / Backup)
+  const handleExportVipCsv = () => {
+    if (!vipKpis.activeList.length) {
+      alert('Ainda não há inscritos ativos na Lista VIP para exportar.');
+      return;
+    }
+
+    const headers = ['email', 'name', 'dropId', 'source', 'status', 'subscribedAt'];
+    const rows = vipKpis.activeList.map(sub => {
+      const dateStr = sub.createdAt?.seconds
+        ? new Date(sub.createdAt.seconds * 1000).toISOString()
+        : (sub.subscribedAtISO || '');
+      return [
+        `"${String(sub.email || '').replace(/"/g, '""')}"`,
+        `"${String(sub.name || '').replace(/"/g, '""')}"`,
+        `"${String(sub.dropId || '').replace(/"/g, '""')}"`,
+        `"${String(sub.source || '').replace(/"/g, '""')}"`,
+        `"${String(sub.status || 'active').replace(/"/g, '""')}"`,
+        `"${dateStr}"`
+      ].join(',');
+    });
+
+    const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `thr33_lista_vip_drops_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  // Disparo de Teste do E-mail de Drop
+  const handleSendTestDropEmail = async () => {
+    const targetEmail = (dropTestEmail || currentUser?.email || '').trim();
+    if (!targetEmail || !targetEmail.includes('@')) {
+      setBroadcastFeedback({
+        type: 'error',
+        message: 'Informe um e-mail válido para receber a prévia de teste.'
+      });
+      return;
+    }
+
+    setSendingTestEmail(true);
+    setBroadcastFeedback({ type: '', message: '' });
+    try {
+      const res = await emailService.sendDropBroadcastCampaign({
+        mode: 'test',
+        testEmail: targetEmail,
+        subjectTitle: dropEmailSubject,
+        dropName: dropEmailLabel,
+        bannerUrl: dropBannerUrl,
+        manifestoText: dropManifesto,
+        couponCode: dropCouponCode,
+        couponDescription: dropCouponDesc,
+        ctaUrl: dropCtaUrl,
+        ctaLabel: 'ACESSAR O DROP AGORA'
+      });
+
+      if (res?.sent) {
+        setBroadcastFeedback({
+          type: 'success',
+          message: `E-mail de teste enviado com sucesso para ${targetEmail}! Verifique sua caixa de entrada.`
+        });
+      } else {
+        setBroadcastFeedback({
+          type: 'error',
+          message: res?.reason === 'missing_api_key'
+            ? 'Configure a variável RESEND_API_KEY em functions/.env para habilitar o envio real.'
+            : `Não foi possível enviar o teste (${res?.error || res?.reason || 'verifique os logs'}).`
+        });
+      }
+    } catch (err) {
+      setBroadcastFeedback({
+        type: 'error',
+        message: err.message || 'Erro ao disparar e-mail de teste.'
+      });
+    } finally {
+      setSendingTestEmail(false);
+    }
+  };
+
+  // Disparo em Lotes (Batch API) para toda a Lista VIP
+  const handleBroadcastDropEmail = async () => {
+    if (vipKpis.filteredAudienceCount === 0) {
+      setBroadcastFeedback({
+        type: 'error',
+        message: 'Nenhum inscrito ativo encontrado para o filtro selecionado.'
+      });
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Confirmar disparo oficial do Drop "${dropEmailSubject}" para ${vipKpis.filteredAudienceCount} inscrito(s) da Lista VIP?`
+    );
+    if (!confirmed) return;
+
+    setSendingBroadcast(true);
+    setBroadcastFeedback({ type: '', message: '' });
+    try {
+      const res = await emailService.sendDropBroadcastCampaign({
+        mode: 'broadcast',
+        targetDropId: dropTargetFilter,
+        subjectTitle: dropEmailSubject,
+        dropName: dropEmailLabel,
+        bannerUrl: dropBannerUrl,
+        manifestoText: dropManifesto,
+        couponCode: dropCouponCode,
+        couponDescription: dropCouponDesc,
+        ctaUrl: dropCtaUrl,
+        ctaLabel: 'ACESSAR O DROP AGORA'
+      });
+
+      if (res?.sent) {
+        setBroadcastFeedback({
+          type: 'success',
+          message: `Disparo concluído! ${res.count} de ${res.totalRecipients} e-mails enviados em lotes via Resend Batch API.`
+        });
+      } else {
+        setBroadcastFeedback({
+          type: 'error',
+          message: res?.reason === 'missing_api_key'
+            ? 'Configure a variável RESEND_API_KEY em functions/.env para disparar para a Lista VIP.'
+            : `Falha ao processar lote (${res?.reason || 'verifique a chave da Resend'}).`
+        });
+      }
+    } catch (err) {
+      setBroadcastFeedback({
+        type: 'error',
+        message: err.message || 'Falha ao disparar campanha em lote.'
+      });
+    } finally {
+      setSendingBroadcast(false);
+    }
+  };
 
   // Adicionar Nova Origem Customizada
   const handleAddNewSource = async (e) => {
@@ -1114,6 +1331,265 @@ export function CmsCampanhas() {
             </tbody>
           </table>
         </div>
+      </section>
+
+      {/* ====================================================================
+          SEÇÃO B: LISTA VIP & DISPARO DE DROPS (EARLY ACCESS / RESEND BATCH)
+         ==================================================================== */}
+      <section className={styles.vipSectionCard}>
+        <div className={styles.vipSectionHeader}>
+          <div className={styles.vipHeaderLeft}>
+            <span className={styles.vipEyebrow}>EARLY ACCESS // PRÉ-REGISTRO OFICIAL</span>
+            <h3 className={styles.vipSectionTitle}>
+              <Sparkles size={16} />
+              <span>LISTA VIP & DISPARO DE DROPS ({vipKpis.totalActive} INSCRITOS ATIVOS)</span>
+            </h3>
+          </div>
+          <div className={styles.vipHeaderActions}>
+            <button
+              type="button"
+              onClick={handleExportVipCsv}
+              className={styles.vipExportBtn}
+              title="Exportar lista para CSV (Lookalike Meta Ads / Backup)"
+            >
+              <Download size={13} />
+              <span>EXPORTAR CSV ({vipKpis.totalActive})</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowVipSection(prev => !prev)}
+              className={styles.vipToggleBtn}
+            >
+              {showVipSection ? 'RECOLHER COMPOSITOR' : 'ABRIR COMPOSITOR DE DROP'}
+            </button>
+          </div>
+        </div>
+
+        {/* KPIS DA LISTA VIP */}
+        <div className={styles.vipKpiGrid}>
+          <div className={styles.vipKpiBox}>
+            <span className={styles.vipKpiLabel}>TOTAL DE INSCRITOS ATIVOS</span>
+            <strong className={styles.vipKpiValue}>{vipKpis.totalActive}</strong>
+            <small className={styles.vipKpiSub}>Prontos para receber o alerta de Drop</small>
+          </div>
+          <div className={styles.vipKpiBox}>
+            <span className={styles.vipKpiLabel}>INSCRITOS NO DROP ATUAL</span>
+            <strong className={styles.vipKpiAccent}>{vipKpis.currentDropCount}</strong>
+            <small className={styles.vipKpiSub}>Drop: {currentDropConfig?.id || 'drop-cactus-01'}</small>
+          </div>
+          <div className={styles.vipKpiBox}>
+            <span className={styles.vipKpiLabel}>NOVOS NOS ÚLTIMOS 7 DIAS</span>
+            <strong className={styles.vipKpiGreen}>+{vipKpis.last7DaysCount}</strong>
+            <small className={styles.vipKpiSub}>Crescimento recente da comunidade</small>
+          </div>
+        </div>
+
+        {showVipSection && (
+          <div className={styles.vipComposerGrid}>
+            {/* COLUNA ESQUERDA: COMPOSITOR DE DISPARO ("SOLTAR O DROP POR E-MAIL") */}
+            <div className={styles.vipComposerForm}>
+              <div className={styles.vipComposerBlockTitle}>
+                <Mail size={14} />
+                <span>COMPOSITOR DE DISPARO — SOLTAR O DROP POR E-MAIL</span>
+              </div>
+
+              <div className={styles.formRow}>
+                <div className={styles.formGroup}>
+                  <label>Título / Assunto do E-mail *</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: 🔥 DROP LEAK TWO NO AR — ACESSO LIBERADO"
+                    value={dropEmailSubject}
+                    onChange={(e) => setDropEmailSubject(e.target.value)}
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Selo do Drop (Badge Superior)</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: DROP LEAK TWO // ATELIÊ"
+                    value={dropEmailLabel}
+                    onChange={(e) => setDropEmailLabel(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className={styles.formRow}>
+                <div className={styles.formGroup}>
+                  <label>URL do Banner / Imagem do Drop (Opcional)</label>
+                  <input
+                    type="url"
+                    placeholder="https://... (link direto da foto ou teaser do drop)"
+                    value={dropBannerUrl}
+                    onChange={(e) => setDropBannerUrl(e.target.value)}
+                  />
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Público-Alvo da Lista VIP</label>
+                  <select
+                    value={dropTargetFilter}
+                    onChange={(e) => setDropTargetFilter(e.target.value)}
+                  >
+                    <option value="all">Toda a Lista VIP Ativa ({vipKpis.totalActive} inscritos)</option>
+                    <option value={currentDropConfig?.id || 'drop-cactus-01'}>
+                      Apenas Drop Atual ({currentDropConfig?.id || 'drop-cactus-01'})
+                    </option>
+                    <option value="leak_two">Apenas Drop LEAK TWO</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className={styles.formGroup}>
+                <label>Texto / Manifesto do Drop *</label>
+                <textarea
+                  rows={4}
+                  placeholder="Escreva o manifesto de abertura do drop..."
+                  value={dropManifesto}
+                  onChange={(e) => setDropManifesto(e.target.value)}
+                  className={styles.vipTextarea}
+                />
+              </div>
+
+              <div className={styles.formRow}>
+                <div className={styles.formGroup}>
+                  <label>Cupom Exclusivo Opcional (ex: DROP10)</label>
+                  <div className={styles.vipCouponSelectRow}>
+                    <input
+                      type="text"
+                      placeholder="Ex: DROP10 (deixe vazio se não houver)"
+                      value={dropCouponCode}
+                      onChange={(e) => setDropCouponCode(e.target.value.toUpperCase())}
+                    />
+                    {couponsList.length > 0 && (
+                      <select
+                        value=""
+                        onChange={(e) => {
+                          if (e.target.value) setDropCouponCode(e.target.value);
+                        }}
+                        className={styles.vipQuickSelect}
+                      >
+                        <option value="">Puxar cupom ativo...</option>
+                        {couponsList.map(c => (
+                          <option key={c.id} value={c.code}>
+                            {c.code} ({c.discountType === 'fixed' ? `R$ ${c.discountValue}` : `${c.discountValue}%`})
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                </div>
+                <div className={styles.formGroup}>
+                  <label>Regra / Texto do Cupom no E-mail</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Válido somente nas primeiras 2 horas para a Lista VIP."
+                    value={dropCouponDesc}
+                    onChange={(e) => setDropCouponDesc(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div className={styles.formGroup}>
+                <div className={styles.labelWithAction}>
+                  <label>Link de Destino com UTM *</label>
+                  {campaigns.length > 0 && (
+                    <select
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) setDropCtaUrl(e.target.value);
+                      }}
+                      className={styles.vipQuickSelectSmall}
+                    >
+                      <option value="">Puxar link UTM de campanha criada...</option>
+                      {campaigns.map(c => (
+                        <option key={c.id} value={c.fullUrl || `${baseUrl}${c.targetPath || '/catalogo'}?utm_source=${c.utm_source}&utm_medium=${c.utm_medium}&utm_campaign=${c.utm_campaign}`}>
+                          {c.name} ({c.utm_campaign})
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <input
+                  type="url"
+                  placeholder="https://thr33.com.br/catalogo?utm_source=email..."
+                  value={dropCtaUrl}
+                  onChange={(e) => setDropCtaUrl(e.target.value)}
+                />
+              </div>
+
+              {broadcastFeedback.message && (
+                <div className={broadcastFeedback.type === 'success' ? styles.vipFeedbackSuccess : styles.vipFeedbackError}>
+                  {broadcastFeedback.message}
+                </div>
+              )}
+
+              {/* BARRA DE DISPARO: TESTE INDIVIDUAL + DISPARO EM MASSA */}
+              <div className={styles.vipActionsFooter}>
+                <div className={styles.vipTestGroup}>
+                  <input
+                    type="email"
+                    placeholder="Seu e-mail para teste..."
+                    value={dropTestEmail}
+                    onChange={(e) => setDropTestEmail(e.target.value)}
+                    className={styles.vipTestInput}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSendTestDropEmail}
+                    disabled={sendingTestEmail || sendingBroadcast}
+                    className={styles.vipTestBtn}
+                  >
+                    <Mail size={13} />
+                    <span>{sendingTestEmail ? 'ENVIANDO TESTE...' : 'ENVIAR E-MAIL DE TESTE PARA MIM'}</span>
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleBroadcastDropEmail}
+                  disabled={sendingBroadcast || sendingTestEmail || vipKpis.filteredAudienceCount === 0}
+                  className={styles.vipBroadcastBtn}
+                >
+                  <Send size={13} />
+                  <span>
+                    {sendingBroadcast
+                      ? 'DISPARANDO LOTES...'
+                      : `DISPARAR PARA TODA A LISTA VIP (${vipKpis.filteredAudienceCount} INSCRITOS)`}
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {/* COLUNA DIREITA: ÚLTIMOS INSCRITOS NA LISTA VIP */}
+            <div className={styles.vipSubscribersSide}>
+              <div className={styles.vipComposerBlockTitle}>
+                <Users size={14} />
+                <span>ÚLTIMOS INSCRITOS NA LISTA VIP ({vipKpis.totalActive})</span>
+              </div>
+
+              {vipKpis.activeList.length === 0 ? (
+                <div className={styles.vipEmptyBox}>
+                  Nenhum inscrito capturado ainda. Teste o cadastro na barra NewsletterVIP da Home ou no Rodapé!
+                </div>
+              ) : (
+                <div className={styles.vipSubscribersList}>
+                  {vipKpis.activeList.slice(0, 12).map(sub => (
+                    <div key={sub.id} className={styles.vipSubscriberItem}>
+                      <div className={styles.vipSubMain}>
+                        <strong>{sub.email}</strong>
+                        {sub.name && <span className={styles.vipSubName}>{sub.name}</span>}
+                      </div>
+                      <div className={styles.vipSubMeta}>
+                        <span className={styles.vipSubTag}>{sub.dropId || 'drop'}</span>
+                        <span className={styles.vipSubSource}>{sub.source || 'site'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* MODAL: CRIAR / EDITAR CAMPANHA & GERADOR UTM */}

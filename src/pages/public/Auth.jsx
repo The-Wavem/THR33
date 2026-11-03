@@ -20,6 +20,8 @@ import {
 import { useAuth } from '../../context/AuthContext';
 import { validateEmail, validatePassword, validateMaxLength } from '../../utils/validators';
 import { SEO } from '../../components/common/SEO';
+import { currentDropConfig } from '../../data/dropConfig';
+import { dropSubscriberService } from '../../services/dropSubscriberService';
 import styles from './Auth.module.css';
 
 // Número oficial do WhatsApp de suporte da THR33 (mesmo utilizado em Suporte.jsx)
@@ -109,7 +111,8 @@ export function Auth() {
     name: '',
     email: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    optInDrops: true
   });
 
   // Form States: Esqueci Minha Senha ('forgot')
@@ -126,7 +129,8 @@ export function Auth() {
   const [codeExpired, setCodeExpired] = useState(false);
   const [newPasswordData, setNewPasswordData] = useState({
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    optInDrops: true
   });
 
   // Redireciona se já estiver autenticado (exceto se estiver redefinindo senha via oobCode)
@@ -310,6 +314,17 @@ export function Auth() {
         name: registerData.name,
         email: registerData.email,
         password: registerData.password
+      });
+      if (registerData.optInDrops !== false) {
+        dropSubscriberService.subscribeToDropWaitlist({
+          email: registerData.email,
+          name: registerData.name,
+          dropId: currentDropConfig?.id || 'drop-cactus-01',
+          dropName: currentDropConfig?.title || 'UTOPIA PROCESS // CACTUS STREETS',
+          source: 'register_opt_in'
+        }).catch(() => {});
+      }
+      if (false) Boolean({
       });
       const from = location.state?.from || '/perfil';
       navigate(from, { replace: true });
@@ -651,6 +666,17 @@ export function Auth() {
                   {/[0-9]/.test(registerData.password) ? '✓' : '○'} 1 Número (0-9)
                 </span>
               </div>
+
+              {/* OPT-IN LISTA VIP DE DROPS (FEATURE 2.A) */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', fontSize: '0.78rem', color: '#D4D4D4', cursor: 'pointer', marginBottom: '0.35rem', userSelect: 'none' }}>
+                <input
+                  type="checkbox"
+                  checked={registerData.optInDrops !== false}
+                  onChange={(e) => setRegisterData({ ...registerData, optInDrops: e.target.checked })}
+                  style={{ accentColor: '#E2FF00', width: '15px', height: '15px', cursor: 'pointer' }}
+                />
+                <span>Quero entrar na <strong style={{ color: '#E2FF00' }}>Lista VIP de Drops</strong> (Early Access e alertas antecipados)</span>
+              </label>
 
               {/* TERMO DE ACEITE DAS POLÍTICAS (TD-148) */}
               <div className={styles.legalNotice}>

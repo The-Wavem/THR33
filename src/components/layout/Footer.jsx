@@ -14,6 +14,9 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { preloadRoute } from "../../utils/preloader";
+import { useAuth } from "../../context/AuthContext";
+import { currentDropConfig } from "../../data/dropConfig";
+import { dropSubscriberService } from "../../services/dropSubscriberService";
 import styles from "./Footer.module.css";
 
 const MotionAnchor = motion.a;
@@ -35,6 +38,7 @@ const wavemArrowVariants = {
 };
 
 export function Footer() {
+  const { currentUser } = useAuth() || {};
   const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
   const [openSections, setOpenSections] = useState({
@@ -46,11 +50,21 @@ export function Footer() {
     setOpenSections((prev) => ({ ...prev, [sec]: !prev[sec] }));
   };
 
-  const handleSubscribe = (e) => {
+  const handleSubscribe = async (e) => {
     e.preventDefault();
-    if (email) {
+    if (email && email.trim()) {
+      const cleanEmail = email.trim().toLowerCase();
       setSubscribed(true);
       setEmail("");
+      dropSubscriberService
+        .subscribeToDropWaitlist({
+          email: cleanEmail,
+          name: currentUser?.displayName || currentUser?.name || "",
+          dropId: currentDropConfig?.id || "drop-cactus-01",
+          dropName: currentDropConfig?.title || "UTOPIA PROCESS // CACTUS STREETS",
+          source: "footer_newsletter",
+        })
+        .catch(() => {});
     }
   };
 

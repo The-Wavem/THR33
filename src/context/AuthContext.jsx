@@ -116,12 +116,6 @@ export function AuthProvider({ children }) {
               createdAt: new Date().toISOString(),
               provider: user.providerData?.[0]?.providerId || 'firebase'
             }, { merge: true });
-
-            emailService.triggerWelcomeEmail({
-              uid: user.uid,
-              email: user.email,
-              name: user.displayName || 'Cliente THR33'
-            }).catch(() => {});
           }
         } catch (error) {
           console.warn("Aviso: Firestore indisponível no momento. Mantendo perfil básico.", error.message);
