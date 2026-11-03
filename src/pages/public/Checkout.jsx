@@ -63,6 +63,7 @@ import { CardBrandIcon } from '../../components/ui/CardBrandIcon';
 import { ORDER_STATUSES, normalizeOrderStatus } from '../../services/orderStateMachine';
 import { webhookService } from '../../services/webhookService';
 import { giftCardService, refundOrderWalletIfNeeded } from '../../services/giftCardService';
+import { emailService } from '../../services/emailService';
 import styles from './Checkout.module.css';
 
 /**
@@ -1360,9 +1361,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       // Processa vales-presente se o pedido já iniciou aprovado (ex: pago 100% com carteira ou cartão instantâneo)
       if (initialStatus === ORDER_STATUSES.PAGAMENTO_APROVADO || initialStatus === 'pago') {
         if (cleanPayload.hasGiftCard) {
-          giftCardService.processOrderGiftCards(finalDocId, cleanPayload)
+          await giftCardService.processOrderGiftCards(finalDocId, cleanPayload)
             .catch(err => console.warn("Aviso ao processar vales do pedido:", err.message));
         }
+        emailService.triggerOrderPaidEmail(finalDocId).catch(() => {});
       }
 
       // Notifica time operacional se já iniciou aprovado

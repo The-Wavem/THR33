@@ -733,6 +733,29 @@ exports.createPagBankOrder = onCall(
       : "https://api.pagseguro.com";
 
     // Suporte integrado para geracao de Sessao 3DS 2.0 (obrigatoria para Cartao de Debito PagBank em Producao)
+    if (request.data?.action === "sendTransactionalEmail") {
+      const db = getDb();
+      const { type, orderId, uid, email, name } = request.data;
+      if (type === "welcome_register") {
+        const targetUid = uid || request.auth?.uid;
+        return await sendWelcomeEmailIfNeeded(db, targetUid, { email, name });
+      }
+      if (type === "order_paid" && orderId) {
+        const orderRef = db.collection("orders").doc(String(orderId));
+        return await sendOrderPaidEmailIfNeeded(db, orderRef, null);
+      }
+      if (type === "order_shipped" && orderId) {
+        const orderRef = db.collection("orders").doc(String(orderId));
+        return await sendOrderShippedEmailIfNeeded(db, orderRef, null);
+      }
+      if (type === "order_created_pix" && orderId) {
+        const orderRef = db.collection("orders").doc(String(orderId));
+        const snap = await orderRef.get();
+        return await sendOrderPixEmailIfNeeded(db, orderRef, snap.exists ? snap.data() : null);
+      }
+      return { sent: false, reason: "unknown_email_type" };
+    }
+
     if (request.data?.action === "create3dsSession") {
       // Pre-valida estoque antes de abrir o desafio 3DS no aplicativo do banco do cliente
       if (Array.isArray(request.data.items) && request.data.items.length > 0) {
@@ -1750,6 +1773,20 @@ exports.createPagBankOrder = onCall(
       nfeKey: null,
       nfeUrl: null,
     });
+    try {
+      const savedOrderSnap = await orderRef.get();
+      const savedOrderData = savedOrderSnap.exists ? savedOrderSnap.data() : null;
+      if (initialStatus === "pagamento_aprovado" && savedOrderData) {
+        await processOrderGiftCardsBackend(db, orderRef, savedOrderData);
+        await sendOrderPaidEmailIfNeeded(db, orderRef, savedOrderData);
+      } else if (paymentMethod.type === "PIX" && pixCopiaECola && savedOrderData) {
+        await sendOrderPixEmailIfNeeded(db, orderRef, savedOrderData);
+      }
+    } catch (emailOrGiftErr) {
+      logger.warn("Aviso pos-pedido (vales/e-mail):", emailOrGiftErr.message);
+    }
+    if (false) orderRef.set({
+    });
 
     return {
       success: true,
@@ -2346,6 +2383,7 @@ exports.pagbankWebhook = onRequest(
       if (internalStatus === "pagamento_aprovado" || pagbankStatus === "PAID" || pagbankStatus === "AUTHORIZED") {
         try {
           await processOrderGiftCardsBackend(db, orderRef, orderData);
+          await sendOrderPaidEmailIfNeeded(db, orderRef, orderData);
         } catch (giftErr) {
           logger.warn("Aviso ao auto-processar vales-presentes no webhook:", giftErr.message);
         }
@@ -3652,3 +3690,793 @@ ${urlEntries.join("\n")}
 
 
 
+
+/**
+ * ============================================================================
+ * ENGINE TRANSACIONAL DE E-MAILS — RESEND (Axios Direto / Zero SDK Pesado)
+ * Estética Industrial Brutalist THR33 (#0D0D0D, #00FF88, #E2FF00)
+ * ============================================================================
+ */
+function formatBRLBackend(value) {
+  const num = Number(value || 0);
+  return num.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  });
+}
+
+function formatOrderCodeBackend(rawId) {
+  const clean = String(rawId || "").trim().toUpperCase();
+  if (!clean) return "#THR-000000";
+  if (clean.startsWith("THR-THR-")) return `#THR-${clean.slice(8)}`;
+  if (clean.startsWith("THR-")) return `#${clean}`;
+  return `#THR-${clean}`;
+}
+
+async function sendResendEmail({ to, subject, html }) {
+  const apiKey = (process.env.RESEND_API_KEY || "").trim();
+  const recipient = String(to || "").trim();
+
+  if (!recipient || !recipient.includes("@")) {
+    logger.warn("Resend ignorado: destinatário de e-mail inválido:", recipient);
+    return { sent: false, reason: "invalid_recipient" };
+  }
+
+  // Ignora e-mails fictícios de teste do PagBank Sandbox
+  if (recipient.endsWith("@thr33.com") && recipient.startsWith("cliente@")) {
+    logger.info("Resend ignorado para e-mail fictício de fallback:", recipient);
+    return { sent: false, reason: "fallback_email" };
+  }
+
+  if (!apiKey || apiKey.includes("SUA_CHAVE") || apiKey.includes("re_xxx")) {
+    logger.warn(
+      `[RESEND] RESEND_API_KEY não configurada no functions/.env. E-mail "${subject}" para ${recipient} não pôde ser disparado.`,
+    );
+    return { sent: false, reason: "missing_api_key" };
+  }
+
+  const configuredFrom =
+    (process.env.RESEND_FROM_EMAIL || "").trim() ||
+    "THR33 Streetwear <contato@thr33.com.br>";
+
+  const headers = {
+    Authorization: `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  };
+
+  try {
+    const response = await axios.post(
+      "https://api.resend.com/emails",
+      {
+        from: configuredFrom,
+        to: [recipient],
+        subject,
+        html,
+      },
+      { headers, timeout: 10000 },
+    );
+
+    logger.info(
+      `[RESEND] E-mail enviado com sucesso para ${recipient} (${subject}) | ID: ${response.data?.id}`,
+    );
+    return { sent: true, id: response.data?.id };
+  } catch (err) {
+    const status = err.response?.status;
+    const errMsg = JSON.stringify(err.response?.data || err.message);
+
+    // Fallback inteligente caso o domínio customizado ainda esteja pendente de verificação DNS no Resend
+    if (
+      (status === 403 || status === 422 || errMsg.toLowerCase().includes("domain")) &&
+      !configuredFrom.includes("onboarding@resend.dev")
+    ) {
+      try {
+        const fallbackRes = await axios.post(
+          "https://api.resend.com/emails",
+          {
+            from: "THR33 Streetwear <onboarding@resend.dev>",
+            to: [recipient],
+            subject,
+            html,
+          },
+          { headers, timeout: 10000 },
+        );
+        logger.info(
+          `[RESEND] E-mail enviado via remetente fallback onboarding@resend.dev para ${recipient} | ID: ${fallbackRes.data?.id}`,
+        );
+        return { sent: true, id: fallbackRes.data?.id, fallbackSender: true };
+      } catch (fallbackErr) {
+        logger.warn(
+          "[RESEND] Falha também no remetente fallback:",
+          fallbackErr.response?.data || fallbackErr.message,
+        );
+      }
+    }
+
+    logger.warn(`[RESEND] Falha ao enviar e-mail para ${recipient}:`, errMsg);
+    return { sent: false, error: errMsg };
+  }
+}
+
+function buildThr33EmailWrapper({ preheader, badgeText, badgeColor = "#00FF88", title, subtitle, bodyHtml }) {
+  return `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>${title}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#080808;color:#F5F5F5;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;">
+  <div style="display:none;max-height:0;overflow:hidden;opacity:0;">${preheader || title}</div>
+  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#080808;padding:32px 12px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:600px;background-color:#0D0D0D;border:1px solid #262626;">
+          <tr>
+            <td style="height:3px;background:linear-gradient(90deg,#00FF88 0%,#E2FF00 100%);font-size:0;line-height:0;">&nbsp;</td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px 20px 32px;border-bottom:1px solid #1F1F1F;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+                <tr>
+                  <td align="left">
+                    <span style="font-size:24px;font-weight:900;letter-spacing:4px;color:#FFFFFF;text-transform:uppercase;font-family:'Arial Black',Impact,sans-serif;">THR33</span>
+                    <span style="font-size:10px;letter-spacing:2px;color:#737373;text-transform:uppercase;display:block;margin-top:2px;">STREETWEAR // ATELIÊ CURITIBA</span>
+                  </td>
+                  <td align="right" valign="middle">
+                    <span style="display:inline-block;padding:5px 10px;background-color:rgba(0,255,136,0.08);border:1px solid ${badgeColor};color:${badgeColor};font-size:10px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;">
+                      ${badgeText}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:28px 32px 12px 32px;">
+              <h1 style="margin:0 0 8px 0;font-size:22px;font-weight:900;letter-spacing:1px;text-transform:uppercase;color:#FFFFFF;line-height:1.25;">
+                ${title}
+              </h1>
+              ${subtitle ? `<p style="margin:0;font-size:14px;color:#A3A3A3;line-height:1.6;">${subtitle}</p>` : ""}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:12px 32px 32px 32px;">
+              ${bodyHtml}
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:24px 32px;background-color:#0A0A0A;border-top:1px solid #1F1F1F;text-align:center;">
+              <p style="margin:0 0 6px 0;font-size:11px;font-weight:700;letter-spacing:2px;color:#737373;text-transform:uppercase;">
+                THR33 STREETWEAR — CONCRETO DE CURITIBA / PR
+              </p>
+              <p style="margin:0 0 12px 0;font-size:11px;color:#525252;line-height:1.5;">
+                Confecção autoral sob demanda, modelagens pesadas e tiragens limitadas.<br/>
+                Precisa de suporte? Fale direto conosco no WhatsApp: <a href="https://wa.me/5541995424186" style="color:#00FF88;text-decoration:none;">(41) 99542-4186</a>
+              </p>
+              <a href="https://thr33.com.br" style="font-size:11px;color:#A3A3A3;text-decoration:underline;letter-spacing:1px;">thr33.com.br</a>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+// GATILHO A — Boas-vindas ao Criar Conta (welcome_register)
+function buildWelcomeEmailHtml({ userName, coupon }) {
+  const firstName = String(userName || "Cliente THR33").trim().split(" ")[0] || "Cliente";
+
+  let couponBlockHtml = "";
+  if (coupon && coupon.code) {
+    const discountLabel =
+      coupon.discountType === "fixed"
+        ? `${formatBRLBackend(coupon.discountValue)} OFF`
+        : `${coupon.discountValue || 10}% OFF`;
+
+    couponBlockHtml = `
+      <div style="margin:24px 0;padding:20px;background-color:#121212;border:1px dashed #E2FF00;text-align:center;">
+        <span style="display:block;font-size:10px;font-weight:800;letter-spacing:2px;color:#E2FF00;text-transform:uppercase;margin-bottom:6px;">
+          BÔNUS DE PRIMEIRA COMPRA LIBERADO
+        </span>
+        <div style="font-size:20px;font-weight:900;letter-spacing:3px;color:#FFFFFF;margin:6px 0;">
+          ${coupon.code}
+        </div>
+        <span style="display:block;font-size:12px;color:#A3A3A3;">
+          Garanta <strong style="color:#00FF88;">${discountLabel}</strong> no seu primeiro drop aplicando este código na sacola.
+        </span>
+      </div>
+    `;
+  }
+
+  const bodyHtml = `
+    <div style="margin-top:8px;padding:20px;background-color:#141414;border:1px solid #262626;">
+      <p style="margin:0 0 14px 0;font-size:13px;font-weight:800;letter-spacing:1.5px;color:#00FF88;text-transform:uppercase;">
+        SEU ACESSO EXCLUSIVO ESTÁ ATIVO:
+      </p>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #1F1F1F;font-size:13px;color:#D4D4D4;">
+            <strong style="color:#FFFFFF;">01 // RASTREIO EM TEMPO REAL:</strong> Acompanhe cada etapa da confecção e despacho das suas peças direto no seu painel.
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;border-bottom:1px solid #1F1F1F;font-size:13px;color:#D4D4D4;">
+            <strong style="color:#FFFFFF;">02 // CARTEIRA DIGITAL THR33:</strong> Ative Vales-Presente, acumule créditos e utilize saldo instantâneo no checkout.
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;font-size:13px;color:#D4D4D4;">
+            <strong style="color:#FFFFFF;">03 // DROPS &amp; CUPONS VIP:</strong> Acesso antecipado a tiragens limitadas e brindes colecionáveis do ateliê.
+          </td>
+        </tr>
+      </table>
+    </div>
+    ${couponBlockHtml}
+    <div style="margin-top:28px;text-align:center;">
+      <a href="https://thr33.com.br/catalogo" style="display:inline-block;padding:15px 28px;background-color:#00FF88;color:#080808;font-size:12px;font-weight:900;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        [ EXPLORAR CATÁLOGO THR33 ]
+      </a>
+    </div>
+  `;
+
+  return buildThr33EmailWrapper({
+    preheader: `Bem-vindo ao Clube THR33, ${firstName}. Sua conta no Ateliê está ativa.`,
+    badgeText: "CLUBE THR33 // ATELIÊ",
+    badgeColor: "#00FF88",
+    title: `BEM-VINDO AO CLUBE THR33, ${firstName.toUpperCase()}`,
+    subtitle:
+      "Seu cadastro oficial foi confirmado. A partir de agora você faz parte da nossa comunidade de streetwear autoral e independente.",
+    bodyHtml,
+  });
+}
+
+// GATILHO B — Pedido Recebido / Aguardando PIX (order_created_pix)
+function buildOrderPixEmailHtml({ orderId, orderData }) {
+  const displayOrder = formatOrderCodeBackend(orderId || orderData.orderId);
+  const items = Array.isArray(orderData.items) ? orderData.items : [];
+  const pixCode = orderData.pixCopiaECola || "";
+  const pixQrUrl = orderData.pixQrCodeUrl || "";
+  const totalFormatted = formatBRLBackend(orderData.total);
+
+  const itemsRowsHtml = items
+    .map(
+      (item) => `
+      <tr>
+        <td style="padding:10px 0;border-bottom:1px solid #1F1F1F;font-size:13px;color:#E5E5E5;">
+          <strong>${item.name || item.title || "Peça THR33"}</strong>
+          ${item.isGiftCard ? `<span style="color:#00FF88;font-size:11px;margin-left:6px;">[VALE DIGITAL]</span>` : `<span style="color:#737373;font-size:11px;margin-left:6px;">Tam: ${item.size || "U"}</span>`}
+          <span style="color:#737373;font-size:11px;margin-left:6px;">x${item.quantity || 1}</span>
+        </td>
+        <td align="right" style="padding:10px 0;border-bottom:1px solid #1F1F1F;font-size:13px;font-weight:700;color:#FFFFFF;">
+          ${formatBRLBackend((Number(item.price) || 0) * (Number(item.quantity) || 1))}
+        </td>
+      </tr>
+    `,
+    )
+    .join("");
+
+  const bodyHtml = `
+    <div style="margin-bottom:20px;padding:14px 16px;background-color:rgba(226,255,0,0.06);border-left:3px solid #E2FF00;font-size:12px;color:#E5E5E5;line-height:1.5;">
+      <strong style="color:#E2FF00;text-transform:uppercase;letter-spacing:1px;">RESERVA DE ESTOQUE ATIVA POR 20 MINUTOS:</strong><br/>
+      Suas peças estão reservadas exclusivamente para você. Conclua o pagamento via PIX para aprovação imediata.
+    </div>
+
+    <div style="padding:20px;background-color:#141414;border:1px solid #262626;margin-bottom:20px;text-align:center;">
+      <span style="display:block;font-size:11px;letter-spacing:1.5px;color:#A3A3A3;text-transform:uppercase;margin-bottom:6px;">
+        VALOR A PAGAR NO PIX (${displayOrder})
+      </span>
+      <div style="font-size:26px;font-weight:900;color:#00FF88;margin-bottom:16px;">
+        ${totalFormatted}
+      </div>
+      ${
+        pixQrUrl
+          ? `<div style="margin:0 auto 16px auto;padding:12px;background-color:#FFFFFF;display:inline-block;">
+               <img src="${pixQrUrl}" alt="QR Code PIX THR33" width="180" height="180" style="display:block;border:0;" />
+             </div>`
+          : ""
+      }
+      <span style="display:block;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#E2FF00;text-transform:uppercase;margin-bottom:8px;">
+        CÓDIGO PIX COPIA E COLA (COPIE E COLE NO APP DO SEU BANCO):
+      </span>
+      <div style="padding:12px;background-color:#090909;border:1px dashed #3F3F46;font-family:monospace;font-size:11px;color:#D4D4D4;word-break:break-all;line-height:1.4;text-align:left;user-select:all;">
+        ${pixCode}
+      </div>
+    </div>
+
+    <div style="padding:18px;background-color:#121212;border:1px solid #1F1F1F;">
+      <span style="display:block;font-size:11px;font-weight:800;letter-spacing:1.5px;color:#737373;text-transform:uppercase;margin-bottom:10px;">
+        ITENS RESERVADOS NO PEDIDO ${displayOrder}
+      </span>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+        ${itemsRowsHtml}
+      </table>
+    </div>
+
+    <div style="margin-top:24px;text-align:center;">
+      <a href="https://thr33.com.br/perfil" style="display:inline-block;padding:14px 26px;background-color:#E2FF00;color:#080808;font-size:12px;font-weight:900;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        [ ACOMPANHAR MEU PEDIDO ]
+      </a>
+    </div>
+  `;
+
+  return buildThr33EmailWrapper({
+    preheader: `Seu código PIX para o pedido ${displayOrder} está pronto. Reserva ativa por 20 minutos.`,
+    badgeText: "AGUARDANDO PIX",
+    badgeColor: "#E2FF00",
+    title: `PEDIDO ${displayOrder} RECEBIDO`,
+    subtitle:
+      "Copie o código PIX abaixo ou escaneie o QR Code no aplicativo do seu banco para confirmar seu pedido imediatamente.",
+    bodyHtml,
+  });
+}
+
+// GATILHO C — Pagamento Confirmado & Resumo da Compra (order_paid)
+function buildOrderPaidEmailHtml({ orderId, orderData }) {
+  const displayOrder = formatOrderCodeBackend(orderId || orderData.orderId);
+  const items = Array.isArray(orderData.items) ? orderData.items : [];
+  const giftCards = Array.isArray(orderData.giftCardsGenerated) ? orderData.giftCardsGenerated : [];
+
+  const subtotal = Number(orderData.subtotal ?? orderData.total ?? 0);
+  const discountAmount = Number(orderData.discountAmount || 0);
+  const walletDeduction = Number(orderData.walletDeduction || 0);
+  const shippingCost = Number(orderData.shippingCost || 0);
+  const totalPaid = Number(orderData.total ?? 0);
+
+  let giftCardsHtml = "";
+  const codeGiftCards = giftCards.filter((gc) => gc && gc.code);
+  if (codeGiftCards.length > 0) {
+    const cardsListHtml = codeGiftCards
+      .map(
+        (gc) => `
+        <div style="margin-top:12px;padding:16px;background-color:#090909;border:1px dashed #00FF88;text-align:center;">
+          <span style="display:block;font-size:10px;letter-spacing:1.5px;color:#A3A3A3;text-transform:uppercase;">
+            VALE-PRESENTE DIGITAL DE <strong style="color:#00FF88;">${formatBRLBackend(gc.amount)}</strong>
+            ${gc.recipientName ? ` • PARA: ${String(gc.recipientName).toUpperCase()}` : ""}
+          </span>
+          <div style="margin:10px 0;font-family:monospace;font-size:20px;font-weight:900;letter-spacing:2px;color:#FFFFFF;user-select:all;">
+            ${gc.code}
+          </div>
+          ${gc.giftMessage ? `<p style="margin:6px 0 0 0;font-size:12px;color:#A3A3A3;font-style:italic;">"${gc.giftMessage}"</p>` : ""}
+          <span style="display:block;margin-top:8px;font-size:11px;color:#737373;">
+            Como ativar: Acesse <strong>Minha Conta &gt; Carteira Digital</strong> em thr33.com.br e insira o código acima.
+          </span>
+        </div>
+      `,
+      )
+      .join("");
+
+    giftCardsHtml = `
+      <div style="margin-bottom:24px;padding:20px;background-color:rgba(0,255,136,0.05);border:1px solid #00FF88;">
+        <span style="display:block;font-size:11px;font-weight:900;letter-spacing:2px;color:#00FF88;text-transform:uppercase;">
+          SEU VALE-PRESENTE DIGITAL ESTÁ LIBERADO!
+        </span>
+        <p style="margin:6px 0 0 0;font-size:12px;color:#D4D4D4;line-height:1.5;">
+          Copie o código abaixo para ativar em sua Carteira THR33 ou envie diretamente para presentear alguém no WhatsApp:
+        </p>
+        ${cardsListHtml}
+      </div>
+    `;
+  }
+
+  const itemsHtml = items
+    .map((item) => {
+      const qty = Number(item.quantity || 1);
+      const unitPrice = Number(item.price || 0);
+      const lineTotal = unitPrice * qty;
+      const imgTag =
+        item.image && String(item.image).startsWith("http")
+          ? `<td width="56" valign="top" style="padding:12px 12px 12px 0;border-bottom:1px solid #1F1F1F;">
+               <img src="${item.image}" alt="${item.name || "THR33"}" width="48" height="56" style="display:block;object-fit:cover;background-color:#1A1A1A;border:1px solid #262626;" />
+             </td>`
+          : "";
+
+      return `
+        <tr>
+          ${imgTag}
+          <td valign="middle" style="padding:12px 0;border-bottom:1px solid #1F1F1F;">
+            <div style="font-size:13px;font-weight:800;color:#FFFFFF;text-transform:uppercase;">
+              ${item.name || item.title || "Peça THR33"}
+            </div>
+            <div style="font-size:11px;color:#A3A3A3;margin-top:3px;">
+              ${item.isGiftCard ? "Entrega Digital Instantânea" : `Tamanho: <strong style="color:#E5E5E5;">${item.size || "U"}</strong>`} • Qtd: <strong style="color:#E5E5E5;">${qty}</strong>
+            </div>
+          </td>
+          <td align="right" valign="middle" style="padding:12px 0;border-bottom:1px solid #1F1F1F;font-size:13px;font-weight:800;color:#FFFFFF;white-space:nowrap;">
+            ${formatBRLBackend(lineTotal)}
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const addr = orderData.shippingAddress || {};
+  const isOnlyDigital =
+    items.length > 0 &&
+    items.every(
+      (i) =>
+        i.isGiftCard ||
+        i.category === "gift-card" ||
+        String(i.id || "").includes("vale-presente"),
+    );
+
+  const addressBlockHtml = !isOnlyDigital && addr.street
+    ? `
+      <div style="margin-top:20px;padding:16px;background-color:#121212;border:1px solid #1F1F1F;">
+        <span style="display:block;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#737373;text-transform:uppercase;margin-bottom:6px;">
+          ENDEREÇO DE ENTREGA
+        </span>
+        <div style="font-size:13px;color:#E5E5E5;line-height:1.5;">
+          ${addr.street}, ${addr.number || "S/N"}${addr.complement ? ` • ${addr.complement}` : ""}<br/>
+          ${addr.neighborhood ? `${addr.neighborhood} — ` : ""}${addr.city || ""}/${addr.state || addr.region_code || ""} • CEP: ${addr.cep || addr.postal_code || ""}
+        </div>
+      </div>
+    `
+    : "";
+
+  const bodyHtml = `
+    ${giftCardsHtml}
+
+    <div style="padding:20px;background-color:#141414;border:1px solid #262626;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-bottom:12px;border-bottom:1px solid #262626;padding-bottom:10px;">
+        <tr>
+          <td style="font-size:11px;font-weight:800;letter-spacing:1.5px;color:#A3A3A3;text-transform:uppercase;">
+            RESUMO DO PEDIDO ${displayOrder}
+          </td>
+          <td align="right" style="font-size:11px;color:#00FF88;font-weight:700;">
+            ${orderData.paymentMethod || "Pagamento Confirmado"}
+          </td>
+        </tr>
+      </table>
+
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+        ${itemsHtml}
+      </table>
+
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="margin-top:16px;">
+        <tr>
+          <td style="padding:4px 0;font-size:12px;color:#A3A3A3;">Subtotal</td>
+          <td align="right" style="padding:4px 0;font-size:12px;color:#E5E5E5;">${formatBRLBackend(subtotal)}</td>
+        </tr>
+        ${
+          discountAmount > 0
+            ? `<tr>
+                 <td style="padding:4px 0;font-size:12px;color:#00FF88;">Cupom de Desconto ${orderData.couponCode ? `(${orderData.couponCode})` : ""}</td>
+                 <td align="right" style="padding:4px 0;font-size:12px;font-weight:700;color:#00FF88;">- ${formatBRLBackend(discountAmount)}</td>
+               </tr>`
+            : ""
+        }
+        ${
+          walletDeduction > 0
+            ? `<tr>
+                 <td style="padding:4px 0;font-size:12px;color:#00FF88;">Saldo da Carteira Digital</td>
+                 <td align="right" style="padding:4px 0;font-size:12px;font-weight:700;color:#00FF88;">- ${formatBRLBackend(walletDeduction)}</td>
+               </tr>`
+            : ""
+        }
+        <tr>
+          <td style="padding:4px 0;font-size:12px;color:#A3A3A3;">Frete / Entrega</td>
+          <td align="right" style="padding:4px 0;font-size:12px;color:#E5E5E5;">
+            ${shippingCost === 0 ? '<span style="color:#00FF88;font-weight:700;">GRÁTIS</span>' : formatBRLBackend(shippingCost)}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:12px 0 0 0;border-top:1px solid #262626;font-size:14px;font-weight:900;color:#FFFFFF;text-transform:uppercase;">
+            TOTAL PAGO
+          </td>
+          <td align="right" style="padding:12px 0 0 0;border-top:1px solid #262626;font-size:16px;font-weight:900;color:#00FF88;">
+            ${formatBRLBackend(totalPaid)}
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    ${addressBlockHtml}
+
+    <div style="margin-top:28px;text-align:center;">
+      <a href="https://thr33.com.br/perfil" style="display:inline-block;padding:15px 28px;background-color:#00FF88;color:#080808;font-size:12px;font-weight:900;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        [ ACOMPANHAR MEU PEDIDO NA THR33 ]
+      </a>
+    </div>
+  `;
+
+  return buildThr33EmailWrapper({
+    preheader: `Pagamento confirmado para o pedido ${displayOrder}! Confira o resumo completo da sua compra.`,
+    badgeText: "PAGAMENTO APROVADO",
+    badgeColor: "#00FF88",
+    title: `PAGAMENTO CONFIRMADO — ${displayOrder}`,
+    subtitle: isOnlyDigital
+      ? "Seu pagamento foi aprovado e seus créditos/códigos digitais já estão liberados."
+      : "Seu pagamento foi confirmado com sucesso! Seu pedido já entrou na fila do nosso ateliê.",
+    bodyHtml,
+  });
+}
+
+// GATILHO D — Pedido Enviado + Código de Rastreio (order_shipped)
+function buildOrderShippedEmailHtml({ orderId, orderData }) {
+  const displayOrder = formatOrderCodeBackend(orderId || orderData.orderId);
+  const trackingCode = String(orderData.trackingCode || "").trim().toUpperCase();
+  const carrier = orderData.carrier || "Transportadora";
+  const trackingUrl =
+    orderData.trackingUrl ||
+    (carrier.toLowerCase().includes("correios")
+      ? `https://rastreamento.correios.com.br/app/index.php?codigo=${trackingCode}`
+      : `https://www.google.com/search?q=${encodeURIComponent(trackingCode)}`);
+
+  const addr = orderData.shippingAddress || {};
+
+  const bodyHtml = `
+    <div style="padding:24px;background-color:#141414;border:1px solid #00FF88;text-align:center;margin-bottom:20px;">
+      <span style="display:block;font-size:10px;font-weight:800;letter-spacing:2px;color:#A3A3A3;text-transform:uppercase;">
+        TRANSPORTADORA: <strong style="color:#FFFFFF;">${carrier.toUpperCase()}</strong>
+      </span>
+      <span style="display:block;font-size:10px;letter-spacing:1.5px;color:#00FF88;text-transform:uppercase;margin-top:12px;">
+        CÓDIGO DE RASTREAMENTO OFICIAL
+      </span>
+      <div style="margin:8px 0 18px 0;font-family:monospace;font-size:22px;font-weight:900;letter-spacing:3px;color:#FFFFFF;user-select:all;">
+        ${trackingCode}
+      </div>
+      <a href="${trackingUrl}" style="display:inline-block;padding:14px 26px;background-color:#00FF88;color:#080808;font-size:12px;font-weight:900;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        [ RASTREAR ENTREGA AGORA ]
+      </a>
+    </div>
+
+    ${
+      addr.street
+        ? `<div style="padding:16px;background-color:#121212;border:1px solid #1F1F1F;margin-bottom:20px;">
+             <span style="display:block;font-size:10px;font-weight:800;letter-spacing:1.5px;color:#737373;text-transform:uppercase;margin-bottom:6px;">
+               DESTINO DO ENVIO
+             </span>
+             <div style="font-size:13px;color:#E5E5E5;line-height:1.5;">
+               ${addr.street}, ${addr.number || "S/N"}${addr.complement ? ` • ${addr.complement}` : ""}<br/>
+               ${addr.neighborhood ? `${addr.neighborhood} — ` : ""}${addr.city || ""}/${addr.state || addr.region_code || ""} • CEP: ${addr.cep || addr.postal_code || ""}
+             </div>
+           </div>`
+        : ""
+    }
+
+    <div style="text-align:center;margin-top:20px;">
+      <a href="https://thr33.com.br/perfil" style="font-size:12px;color:#E2FF00;text-decoration:underline;letter-spacing:1px;font-weight:700;">
+        Ver detalhes completos em Meus Pedidos &rarr;
+      </a>
+    </div>
+  `;
+
+  return buildThr33EmailWrapper({
+    preheader: `Seu pedido ${displayOrder} saiu para entrega! Código de rastreio: ${trackingCode}`,
+    badgeText: "PEDIDO DESPACHADO",
+    badgeColor: "#00FF88",
+    title: `SEU DROP ESTÁ A CAMINHO (${displayOrder})`,
+    subtitle:
+      "Sua peça passou pela conferência final do Ateliê THR33 e já foi entregue à transportadora.",
+    bodyHtml,
+  });
+}
+
+// DISPARADORES IDEMPOTENTES COM TRAVA NO FIRESTORE
+async function sendWelcomeEmailIfNeeded(db, uid, { email, name } = {}) {
+  if (!uid) return { sent: false, reason: "missing_uid" };
+  try {
+    const userRef = db.collection("users").doc(uid);
+    const userSnap = await userRef.get();
+    const userData = userSnap.exists ? userSnap.data() : {};
+
+    if (userData.welcomeEmailSent === true) {
+      return { sent: false, alreadySent: true };
+    }
+
+    const targetEmail = (email || userData.email || "").trim();
+    const targetName = (name || userData.name || "Cliente THR33").trim();
+    if (!targetEmail) return { sent: false, reason: "missing_email" };
+
+    let welcomeCoupon = null;
+    try {
+      const couponsSnap = await db
+        .collection("coupons")
+        .where("active", "==", true)
+        .limit(15)
+        .get();
+      const todayStr = new Date().toISOString().split("T")[0];
+      for (const docSnap of couponsSnap.docs) {
+        const c = docSnap.data();
+        const notExpired = !c.validUntil || todayStr <= c.validUntil;
+        if (!notExpired) continue;
+        if (
+          c.onlyFirstPurchase === true ||
+          String(c.code || "").toUpperCase().includes("BEMVINDO")
+        ) {
+          welcomeCoupon = c;
+          break;
+        }
+      }
+    } catch (couponErr) {
+      logger.warn("Aviso ao consultar cupom para e-mail de boas-vindas:", couponErr.message);
+    }
+
+    const html = buildWelcomeEmailHtml({
+      userName: targetName,
+      coupon: welcomeCoupon,
+    });
+
+    const result = await sendResendEmail({
+      to: targetEmail,
+      subject: "BEM-VINDO AO CLUBE THR33 // ATELIÊ",
+      html,
+    });
+
+    if (result.sent) {
+      await userRef.set(
+        {
+          welcomeEmailSent: true,
+          welcomeEmailSentAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+    return result;
+  } catch (err) {
+    logger.warn("Erro não-bloqueante em sendWelcomeEmailIfNeeded:", err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
+async function sendOrderPixEmailIfNeeded(db, orderRef, orderData) {
+  try {
+    if (!orderData || orderData.pixEmailSent === true) {
+      return { sent: false, alreadySent: true };
+    }
+    const targetEmail = (orderData.clientEmail || orderData.customer?.email || "").trim();
+    if (!targetEmail || !orderData.pixCopiaECola) {
+      return { sent: false, reason: "missing_email_or_pix" };
+    }
+
+    const displayOrder = formatOrderCodeBackend(orderRef.id || orderData.orderId);
+    const html = buildOrderPixEmailHtml({
+      orderId: orderRef.id,
+      orderData,
+    });
+
+    const result = await sendResendEmail({
+      to: targetEmail,
+      subject: `Código PIX & Reserva de Estoque — Pedido ${displayOrder}`,
+      html,
+    });
+
+    if (result.sent) {
+      await orderRef.set(
+        {
+          pixEmailSent: true,
+          pixEmailSentAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+    return result;
+  } catch (err) {
+    logger.warn("Erro não-bloqueante em sendOrderPixEmailIfNeeded:", err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
+async function sendOrderPaidEmailIfNeeded(db, orderRef, orderDataInput) {
+  try {
+    const freshSnap = await orderRef.get();
+    const orderData = freshSnap.exists ? freshSnap.data() : orderDataInput;
+    if (!orderData) return { sent: false, reason: "order_not_found" };
+
+    if (orderData.confirmationEmailSent === true) {
+      return { sent: false, alreadySent: true };
+    }
+
+    const targetEmail = (orderData.clientEmail || orderData.customer?.email || "").trim();
+    if (!targetEmail) return { sent: false, reason: "missing_email" };
+
+    const displayOrder = formatOrderCodeBackend(orderRef.id || orderData.orderId);
+    const html = buildOrderPaidEmailHtml({
+      orderId: orderRef.id,
+      orderData,
+    });
+
+    const result = await sendResendEmail({
+      to: targetEmail,
+      subject: `Pagamento Confirmado! Resumo do Pedido ${displayOrder} — THR33`,
+      html,
+    });
+
+    if (result.sent) {
+      await orderRef.set(
+        {
+          confirmationEmailSent: true,
+          confirmationEmailSentAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+    return result;
+  } catch (err) {
+    logger.warn("Erro não-bloqueante em sendOrderPaidEmailIfNeeded:", err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
+async function sendOrderShippedEmailIfNeeded(db, orderRef, orderDataInput) {
+  try {
+    const freshSnap = await orderRef.get();
+    const orderData = freshSnap.exists ? freshSnap.data() : orderDataInput;
+    if (!orderData) return { sent: false, reason: "order_not_found" };
+
+    const trackingCode = String(orderData.trackingCode || "").trim().toUpperCase();
+    if (!trackingCode) return { sent: false, reason: "missing_tracking_code" };
+
+    if (
+      orderData.shippedEmailSent === true &&
+      orderData.lastShippedTrackingCode === trackingCode
+    ) {
+      return { sent: false, alreadySent: true };
+    }
+
+    const targetEmail = (orderData.clientEmail || orderData.customer?.email || "").trim();
+    if (!targetEmail) return { sent: false, reason: "missing_email" };
+
+    const displayOrder = formatOrderCodeBackend(orderRef.id || orderData.orderId);
+    const html = buildOrderShippedEmailHtml({
+      orderId: orderRef.id,
+      orderData,
+    });
+
+    const result = await sendResendEmail({
+      to: targetEmail,
+      subject: `Seu pedido ${displayOrder} foi enviado! Código de Rastreio: ${trackingCode}`,
+      html,
+    });
+
+    if (result.sent) {
+      await orderRef.set(
+        {
+          shippedEmailSent: true,
+          lastShippedTrackingCode: trackingCode,
+          shippedEmailSentAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+    return result;
+  } catch (err) {
+    logger.warn("Erro não-bloqueante em sendOrderShippedEmailIfNeeded:", err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
+/**
+ * 13. CLOUD FUNCTION DEDICADA DE DISPARO TRANSACIONAL DE E-MAILS (sendTransactionalEmail)
+ */
+exports.sendTransactionalEmail = onCall(
+  {
+    region: FUNCTION_REGION,
+    cors: true,
+  },
+  async (request) => {
+    const db = getDb();
+    const { type, orderId, uid, email, name } = request.data || {};
+
+    if (type === "welcome_register") {
+      const targetUid = uid || request.auth?.uid;
+      return await sendWelcomeEmailIfNeeded(db, targetUid, { email, name });
+    }
+    if (type === "order_paid" && orderId) {
+      const orderRef = db.collection("orders").doc(String(orderId));
+      return await sendOrderPaidEmailIfNeeded(db, orderRef, null);
+    }
+    if (type === "order_shipped" && orderId) {
+      const orderRef = db.collection("orders").doc(String(orderId));
+      return await sendOrderShippedEmailIfNeeded(db, orderRef, null);
+    }
+    if (type === "order_created_pix" && orderId) {
+      const orderRef = db.collection("orders").doc(String(orderId));
+      const snap = await orderRef.get();
+      return await sendOrderPixEmailIfNeeded(db, orderRef, snap.exists ? snap.data() : null);
+    }
+    return { sent: false, reason: "unknown_email_type" };
+  },
+);

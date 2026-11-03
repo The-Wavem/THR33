@@ -43,6 +43,7 @@ import {
   Gift
 } from 'lucide-react';
 import { giftCardService, refundOrderWalletIfNeeded } from '../../services/giftCardService';
+import { emailService } from '../../services/emailService';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../services/firebaseConfig';
 import { maskCPF } from '../../utils/validators';
@@ -592,6 +593,7 @@ export function CmsPedidos() {
       if (selectedOrder?.id === dispatchTargetOrder.id) {
         setSelectedOrder(prev => ({ ...prev, ...updates }));
       }
+      emailService.triggerOrderShippedEmail(dispatchTargetOrder.id).catch(() => {});
       setDispatchModalOpen(false);
       setDispatchTargetOrder(null);
     } catch (err) {
@@ -708,7 +710,9 @@ export function CmsPedidos() {
       if (['pagamento_aprovado', 'pago', 'em_producao'].includes(newStatus)) {
         if (currentOrder?.hasGiftCard && !currentOrder?.giftCardsProcessed) {
           giftCardService.processOrderGiftCards(orderId, { ...currentOrder, status: newStatus })
-            .catch(err => console.warn("Aviso ao emitir vales do pedido no CMS:", err.message));
+            .catch(err => console.warn("Aviso ao emitir vales do pedido no CMS:", err.message))
+            .finally(() => emailService.triggerOrderPaidEmail(orderId).catch(() => {}));
+          emailService.triggerOrderPaidEmail(orderId).catch(() => {});
         }
       }
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus, updatedAt: new Date().toISOString() } : o));
@@ -846,6 +850,10 @@ export function CmsPedidos() {
       // Atualiza estado local
       setOrders(prev => prev.map(o => o.id === selectedOrder.id ? { ...o, ...updates } : o));
       setSelectedOrder(prev => ({ ...prev, ...updates }));
+
+      if (updates.trackingCode) {
+        emailService.triggerOrderShippedEmail(selectedOrder.id).catch(() => {});
+      }
 
       alert("Dados logísticos e Nota Fiscal (NF-e) atualizados com sucesso no Firestore.");
     } catch (err) {

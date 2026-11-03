@@ -14,6 +14,7 @@ import {
 } from 'firebase/auth';
 import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../services/firebaseConfig';
+import { emailService } from '../services/emailService';
 
 // Configura o idioma do Firebase Auth para português para disparo de e-mails nativos em pt-BR
 auth.languageCode = 'pt-BR';
@@ -115,6 +116,12 @@ export function AuthProvider({ children }) {
               createdAt: new Date().toISOString(),
               provider: user.providerData?.[0]?.providerId || 'firebase'
             }, { merge: true });
+
+            emailService.triggerWelcomeEmail({
+              uid: user.uid,
+              email: user.email,
+              name: user.displayName || 'Cliente THR33'
+            }).catch(() => {});
           }
         } catch (error) {
           console.warn("Aviso: Firestore indisponível no momento. Mantendo perfil básico.", error.message);
@@ -163,6 +170,12 @@ export function AuthProvider({ children }) {
         createdAt: new Date().toISOString(),
         provider: 'password'
       });
+
+      emailService.triggerWelcomeEmail({
+        uid: user.uid,
+        email: email.trim(),
+        name: name ? name.trim() : 'Cliente THR33'
+      }).catch(() => {});
     } catch (err) {
       console.warn("Não foi possível gravar perfil estendido no Firestore:", err.message);
     }
@@ -202,6 +215,12 @@ export function AuthProvider({ children }) {
           createdAt: new Date().toISOString(),
           provider: 'google'
         });
+
+        emailService.triggerWelcomeEmail({
+          uid: user.uid,
+          email: user.email,
+          name: user.displayName || 'Cliente THR33'
+        }).catch(() => {});
       } else {
         const docData = userDoc.data();
         const isAdminFinal = checkIsAdmin(user.email, docData.role, docData.isAdmin);
