@@ -40,7 +40,9 @@ import {
   Bell,
   Radio,
   Share2,
-  Gift
+  Gift,
+  Mail,
+  Check
 } from 'lucide-react';
 import { giftCardService, refundOrderWalletIfNeeded } from '../../services/giftCardService';
 import { emailService } from '../../services/emailService';
@@ -537,13 +539,46 @@ export function CmsPedidos() {
         updatedAt: new Date().toISOString()
       };
       await updateDoc(orderRef, updates);
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...updates } : o));
+      emailService.triggerOrderInProductionEmail(order.id).catch(() => {});
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...updates, inProductionEmailSent: true } : o));
       if (selectedOrder?.id === order.id) {
-        setSelectedOrder(prev => ({ ...prev, ...updates }));
+        setSelectedOrder(prev => ({ ...prev, ...updates, inProductionEmailSent: true }));
       }
     } catch (err) {
       console.error("Erro ao mover pedido para produção:", err);
       alert("Erro ao mover pedido para produção.");
+    }
+  };
+
+  const handleBatchMoveToProduction = async () => {
+    if (!batchOrders || batchOrders.length === 0) return;
+    const pendingOrders = batchOrders.filter(o => normalizeOrderStatus(o.status) === ORDER_STATUSES.PAGAMENTO_APROVADO);
+    if (pendingOrders.length === 0) {
+      alert('Todos os pedidos deste lote já estão com status "Em Produção".');
+      return;
+    }
+    const confirmed = window.confirm(`Deseja iniciar a produção de ${pendingOrders.length} pedido(s) e disparar o e-mail "Em Corte e Costura" para os clientes?`);
+    if (!confirmed) return;
+
+    try {
+      const nowIso = new Date().toISOString();
+      await Promise.all(
+        pendingOrders.map(async (ord) => {
+          const orderRef = doc(db, 'orders', ord.id);
+          await updateDoc(orderRef, {
+            status: ORDER_STATUSES.EM_PRODUCAO,
+            inProductionAt: nowIso,
+            updatedAt: nowIso
+          });
+          emailService.triggerOrderInProductionEmail(ord.id).catch(() => {});
+        })
+      );
+      const updatedIds = new Set(pendingOrders.map(o => o.id));
+      setOrders(prev => prev.map(o => updatedIds.has(o.id) ? { ...o, status: ORDER_STATUSES.EM_PRODUCAO, inProductionAt: nowIso, updatedAt: nowIso, inProductionEmailSent: true } : o));
+      alert(`${pendingOrders.length} pedido(s) movidos para "Em Produção" e e-mails disparados!`);
+    } catch (err) {
+      console.error("Erro ao iniciar produção em lote:", err);
+      alert("Erro ao atualizar alguns pedidos do lote.");
     }
   };
 
@@ -616,9 +651,10 @@ export function CmsPedidos() {
         updatedAt: new Date().toISOString()
       };
       await updateDoc(orderRef, updates);
-      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...updates } : o));
+      emailService.triggerOrderDeliveredEmail(order.id).catch(() => {});
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, ...updates, deliveredEmailSent: true } : o));
       if (selectedOrder?.id === order.id) {
-        setSelectedOrder(prev => ({ ...prev, ...updates }));
+        setSelectedOrder(prev => ({ ...prev, ...updates, deliveredEmailSent: true }));
       }
     } catch (err) {
       console.error("Erro ao marcar pedido como entregue:", err);
@@ -650,12 +686,14 @@ export function CmsPedidos() {
 
       if (res?.data?.success) {
         await refundOrderWalletIfNeeded(refundTargetOrder.id);
+        emailService.triggerOrderCanceledEmail(refundTargetOrder.id, refundReason).catch(() => {});
         setRefundSuccess(res.data.message || 'Estorno concluído com sucesso!');
         const updates = {
           status: ORDER_STATUSES.CANCELADO,
           financialStatus: 'reembolsado',
           canceledAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
+          canceledEmailSent: true
         };
         setOrders(prev => prev.map(o => o.id === refundTargetOrder.id ? { ...o, ...updates } : o));
         if (selectedOrder?.id === refundTargetOrder.id) {
@@ -2192,6 +2230,40 @@ export function CmsPedidos() {
                         )}
                       </div>
                     )}
+
+                    {/* INDICADOR DISCRETO DE E-MAILS TRANSACIONAIS ENVIADOS */}
+                    <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '0.45rem' }}>
+                      <span style={{ fontSize: '0.65rem', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '1px', display: 'inline-flex', alignItems: 'center', gap: '0.3rem', marginRight: '0.25rem' }}>
+                        <Mail size={11} /> E-mails Disparados:
+                      </span>
+                      {[
+                        { key: 'pixEmailSent', label: 'Aguardando PIX', active: Boolean(selectedOrder.pixEmailSent) },
+                        { key: 'confirmationEmailSent', label: 'Pagamento Aprovado', active: Boolean(selectedOrder.confirmationEmailSent) },
+                        { key: 'inProductionEmailSent', label: 'Em Produção', active: Boolean(selectedOrder.inProductionEmailSent) },
+                        { key: 'shippedEmailSent', label: 'Saiu p/ Entrega', active: Boolean(selectedOrder.shippedEmailSent) },
+                        { key: 'deliveredEmailSent', label: 'Entregue', active: Boolean(selectedOrder.deliveredEmailSent) },
+                        { key: 'canceledEmailSent', label: 'Estornado', active: Boolean(selectedOrder.canceledEmailSent) }
+                      ].map(badge => (
+                        <span
+                          key={badge.key}
+                          style={{
+                            fontSize: '0.62rem',
+                            fontWeight: 700,
+                            padding: '2px 7px',
+                            letterSpacing: '0.04em',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '3px',
+                            backgroundColor: badge.active ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.02)',
+                            border: badge.active ? '1px solid rgba(255, 255, 255, 0.35)' : '1px solid rgba(255, 255, 255, 0.07)',
+                            color: badge.active ? '#FFFFFF' : 'rgba(255, 255, 255, 0.3)'
+                          }}
+                          title={badge.active ? `E-mail "${badge.label}" já enviado ao cliente` : `E-mail "${badge.label}" ainda não disparado`}
+                        >
+                          {badge.active ? '✓' : '•'} {badge.label}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 );
               })()}
@@ -2893,6 +2965,17 @@ export function CmsPedidos() {
               </div>
 
               <div className={styles.productionActionButtons}>
+                <button
+                  type="button"
+                  onClick={handleBatchMoveToProduction}
+                  className={styles.actionCsvBtn}
+                  style={{ borderColor: 'rgba(96, 165, 250, 0.5)', color: '#60a5fa' }}
+                  title="Mover todos os pedidos aprovados deste lote para 'Em Produção' e notificar clientes por e-mail"
+                >
+                  <Scissors size={14} />
+                  <span>Iniciar Produção do Lote</span>
+                </button>
+
                 <button
                   type="button"
                   onClick={() => setHideFinancials(prev => !prev)}

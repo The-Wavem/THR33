@@ -756,6 +756,18 @@ exports.createPagBankOrder = onCall(
         const orderRef = db.collection("orders").doc(String(orderId));
         return await sendOrderShippedEmailIfNeeded(db, orderRef, null);
       }
+      if (type === "order_in_production" && orderId) {
+        const orderRef = db.collection("orders").doc(String(orderId));
+        return await sendOrderInProductionEmailIfNeeded(db, orderRef, null);
+      }
+      if (type === "order_delivered" && orderId) {
+        const orderRef = db.collection("orders").doc(String(orderId));
+        return await sendOrderDeliveredEmailIfNeeded(db, orderRef, null);
+      }
+      if (type === "order_canceled" && orderId) {
+        const orderRef = db.collection("orders").doc(String(orderId));
+        return await sendOrderCanceledEmailIfNeeded(db, orderRef, null, request.data?.reason || "");
+      }
       if (type === "order_created_pix" && orderId) {
         const orderRef = db.collection("orders").doc(String(orderId));
         const snap = await orderRef.get();
@@ -2967,6 +2979,9 @@ exports.refundPagBankOrder = onCall(
       operator: callerEmail || callerUid,
     });
 
+    // 7. Dispara e-mail transacional de confirmacao de cancelamento/estorno
+    await sendOrderCanceledEmailIfNeeded(db, orderRef, orderData, reason);
+
     return {
       success: true,
       orderId,
@@ -4438,6 +4453,224 @@ function buildOrderShippedEmailHtml({ orderId, orderData, recipientEmail }) {
   });
 }
 
+
+// GATILHO D.2 — Peça em Produção / Corte e Costura (order_in_production) — Minimalista P&B
+function buildOrderInProductionEmailHtml({ orderId, orderData, recipientEmail }) {
+  const displayOrder = formatOrderCodeBackend(orderId || orderData.orderId);
+  const items = Array.isArray(orderData.items) ? orderData.items : [];
+  const physicalItems = items.filter(
+    (i) =>
+      !i.isGiftCard &&
+      i.category !== "gift-card" &&
+      !String(i.id || "").includes("vale-presente"),
+  );
+
+  const itemsHtml = physicalItems
+    .map((item) => {
+      const qty = Number(item.quantity || 1);
+      const resolvedImg = resolveItemEmailImageUrl(item);
+      const imgTag = resolvedImg
+        ? `<td width="58" valign="top" style="padding:14px 14px 14px 0;border-bottom:1px solid #1A1A1A;">
+             <img src="${resolvedImg}" alt="${item.name || "THR33"}" width="48" height="56" style="display:block;width:48px;max-width:48px;height:56px;max-height:56px;object-fit:cover;background-color:#111111;border:1px solid #222222;" />
+           </td>`
+        : "";
+
+      return `
+        <tr>
+          ${imgTag}
+          <td valign="middle" style="padding:14px 0;border-bottom:1px solid #1A1A1A;">
+            <div style="font-size:13px;font-weight:600;color:#FFFFFF;">
+              ${item.name || item.title || "Peça THR33"}
+            </div>
+            <div style="font-size:12px;color:#737373;margin-top:4px;">
+              Tamanho: <span style="color:#A3A3A3;">${item.size || "U"}</span> • Qtd: <span style="color:#A3A3A3;">${qty}</span>
+            </div>
+          </td>
+          <td align="right" valign="middle" style="padding:14px 0;border-bottom:1px solid #1A1A1A;font-size:11px;font-weight:700;letter-spacing:1px;color:#FFFFFF;text-transform:uppercase;white-space:nowrap;">
+            EM PRODUÇÃO
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const bodyHtml = `
+    <div style="border-top:1px solid #222222;padding-top:20px;">
+      <span style="display:block;font-size:10px;font-weight:600;letter-spacing:2px;color:#737373;text-transform:uppercase;margin-bottom:8px;">
+        PEÇAS NA BANCADA DE CONFECÇÃO
+      </span>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#000000;">
+        ${itemsHtml}
+      </table>
+    </div>
+
+    <div style="margin-top:24px;padding:16px 20px;background-color:#050505;border:1px solid #1A1A1A;">
+      <p style="margin:0;font-size:12px;color:#A3A3A3;line-height:1.6;">
+        Assim que sua peça passar pelo controle de qualidade e for despachada, você receberá um novo e-mail com o código de rastreamento.
+      </p>
+    </div>
+
+    <div style="margin-top:32px;text-align:left;">
+      <a href="https://lojathr33.com.br/perfil" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        ACOMPANHAR PRODUÇÃO
+      </a>
+    </div>
+  `;
+
+  return buildThr33EmailWrapper({
+    preheader: `Sua peça entrou em corte e costura no Ateliê THR33 (${displayOrder}).`,
+    title: `EM CORTE E COSTURA — ${displayOrder}`,
+    subtitle:
+      "Sua peça entrou oficialmente na bancada de produção do Ateliê THR33. Cada modelagem pesada é confeccionada sob demanda com alto padrão têxtil e conferência individual.",
+    bodyHtml,
+    recipientEmail: recipientEmail || orderData.clientEmail,
+  });
+}
+
+// GATILHO D.3 — Pedido Entregue + Convite para Avaliação (order_delivered) — Minimalista P&B
+function buildOrderDeliveredEmailHtml({ orderId, orderData, recipientEmail }) {
+  const displayOrder = formatOrderCodeBackend(orderId || orderData.orderId);
+  const items = Array.isArray(orderData.items) ? orderData.items : [];
+
+  const itemsHtml = items
+    .map((item) => {
+      const qty = Number(item.quantity || 1);
+      const resolvedImg = resolveItemEmailImageUrl(item);
+      const imgTag = resolvedImg
+        ? `<td width="58" valign="top" style="padding:14px 14px 14px 0;border-bottom:1px solid #1A1A1A;">
+             <img src="${resolvedImg}" alt="${item.name || "THR33"}" width="48" height="56" style="display:block;width:48px;max-width:48px;height:56px;max-height:56px;object-fit:cover;background-color:#111111;border:1px solid #222222;" />
+           </td>`
+        : "";
+
+      return `
+        <tr>
+          ${imgTag}
+          <td valign="middle" style="padding:14px 0;border-bottom:1px solid #1A1A1A;">
+            <div style="font-size:13px;font-weight:600;color:#FFFFFF;">
+              ${item.name || item.title || "Peça THR33"}
+            </div>
+            <div style="font-size:12px;color:#737373;margin-top:4px;">
+              ${item.isGiftCard ? "Entrega Digital" : `Tamanho: <span style="color:#A3A3A3;">${item.size || "U"}</span>`} • Qtd: <span style="color:#A3A3A3;">${qty}</span>
+            </div>
+          </td>
+          <td align="right" valign="middle" style="padding:14px 0;border-bottom:1px solid #1A1A1A;font-size:11px;font-weight:700;letter-spacing:1px;color:#FFFFFF;text-transform:uppercase;white-space:nowrap;">
+            ENTREGUE
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  const bodyHtml = `
+    <div style="border-top:1px solid #222222;padding-top:20px;">
+      <span style="display:block;font-size:10px;font-weight:600;letter-spacing:2px;color:#737373;text-transform:uppercase;margin-bottom:8px;">
+        ITENS ENTREGUES — ${displayOrder}
+      </span>
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background-color:#000000;">
+        ${itemsHtml}
+      </table>
+    </div>
+
+    <div style="margin-top:24px;padding:18px 20px;background-color:#050505;border:1px solid #1A1A1A;">
+      <p style="margin:0;font-size:13px;color:#A3A3A3;line-height:1.6;">
+        Poste seu fit no Instagram marcando <strong style="color:#FFFFFF;">@madebythr33</strong> para aparecer em nossos destaques e deixe sua avaliação oficial na loja.
+      </p>
+    </div>
+
+    <div style="margin-top:32px;text-align:left;">
+      <a href="https://lojathr33.com.br/perfil?tab=pedidos" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        AVALIAR MINHA PEÇA
+      </a>
+      <div style="margin-top:16px;">
+        <a href="https://instagram.com/madebythr33" style="color:#A3A3A3;text-decoration:underline;font-size:11px;">
+          Marcar @madebythr33 no Instagram &rarr;
+        </a>
+      </div>
+    </div>
+  `;
+
+  return buildThr33EmailWrapper({
+    preheader: `Pedido ${displayOrder} entregue! Conte o que achou da sua peça THR33.`,
+    title: `SEU DROP CHEGOU — ${displayOrder}`,
+    subtitle:
+      "Seu pedido consta como entregue. Esperamos que a modelagem, o caimento e o peso da peça superem suas expectativas.",
+    bodyHtml,
+    recipientEmail: recipientEmail || orderData.clientEmail,
+  });
+}
+
+// GATILHO D.4 — Pedido Cancelado & Estornado (order_canceled) — Minimalista P&B
+function buildOrderCanceledEmailHtml({ orderId, orderData, reason, recipientEmail }) {
+  const displayOrder = formatOrderCodeBackend(orderId || orderData.orderId);
+  const totalRefunded = Number(orderData.total ?? 0);
+  const paymentMethod = orderData.paymentMethod || "PIX / Cartão";
+  const finalReason =
+    reason ||
+    orderData.cancelReason ||
+    orderData.refund?.reason ||
+    "Solicitação de cancelamento / estorno";
+
+  const bodyHtml = `
+    <div style="border-top:1px solid #222222;border-bottom:1px solid #222222;padding:20px 0;margin-bottom:24px;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
+        <tr>
+          <td style="padding:8px 0;font-size:11px;letter-spacing:1px;color:#737373;text-transform:uppercase;">
+            Pedido
+          </td>
+          <td align="right" style="padding:8px 0;font-size:13px;font-weight:700;color:#FFFFFF;">
+            ${displayOrder}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;font-size:11px;letter-spacing:1px;color:#737373;text-transform:uppercase;">
+            Valor Estornado
+          </td>
+          <td align="right" style="padding:8px 0;font-size:15px;font-weight:700;color:#FFFFFF;">
+            ${formatBRLBackend(totalRefunded)}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;font-size:11px;letter-spacing:1px;color:#737373;text-transform:uppercase;">
+            Método Original
+          </td>
+          <td align="right" style="padding:8px 0;font-size:12px;color:#A3A3A3;">
+            ${paymentMethod}
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:8px 0;font-size:11px;letter-spacing:1px;color:#737373;text-transform:uppercase;">
+            Motivo Registrado
+          </td>
+          <td align="right" style="padding:8px 0;font-size:12px;color:#A3A3A3;">
+            ${finalReason}
+          </td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="padding:16px 20px;background-color:#050505;border:1px solid #1A1A1A;">
+      <p style="margin:0;font-size:12px;color:#A3A3A3;line-height:1.6;">
+        <strong style="color:#FFFFFF;">Sobre o prazo de devolução financeira:</strong> Estornos via PIX retornam imediatamente à conta bancária de origem. Estornos em Cartão de Crédito constam na fatura conforme o fechamento do banco emissor.
+      </p>
+    </div>
+
+    <div style="margin-top:32px;text-align:left;">
+      <a href="https://lojathr33.com.br/perfil" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        VER DETALHES NO MEU PERFIL
+      </a>
+    </div>
+  `;
+
+  return buildThr33EmailWrapper({
+    preheader: `Confirmação de cancelamento e estorno do pedido ${displayOrder}.`,
+    title: `PEDIDO CANCELADO & ESTORNADO — ${displayOrder}`,
+    subtitle:
+      "Confirmamos o cancelamento do seu pedido e o processamento do estorno financeiro correspondente.",
+    bodyHtml,
+    recipientEmail: recipientEmail || orderData.clientEmail,
+  });
+}
+
 // GATILHO E — Carrinho Abandonado após 24h (abandoned_cart) — Minimalista P&B
 function buildAbandonedCartEmailHtml({ userName, items, subtotal, recipientEmail }) {
   const rawFirst = String(userName || "Cliente").trim().split(" ")[0] || "Cliente";
@@ -4805,6 +5038,241 @@ async function sendOrderShippedEmailIfNeeded(db, orderRef, orderDataInput) {
   }
 }
 
+
+async function sendOrderInProductionEmailIfNeeded(db, orderRef, orderDataInput) {
+  try {
+    const nowMs = Date.now();
+    const txState = await db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(orderRef);
+      const orderData = snap.exists ? snap.data() : orderDataInput;
+      if (!orderData) return { shouldSend: false, reason: "order_not_found" };
+
+      if (orderData.inProductionEmailSent === true) {
+        return { shouldSend: false, alreadySent: true };
+      }
+      if (orderData.inProductionEmailLockUntil && Number(orderData.inProductionEmailLockUntil) > nowMs) {
+        return { shouldSend: false, alreadySent: true, reason: "in_flight_lock" };
+      }
+
+      const items = Array.isArray(orderData.items) ? orderData.items : [];
+      const hasPhysicalItem = items.some(
+        (i) =>
+          !i.isGiftCard &&
+          i.category !== "gift-card" &&
+          !String(i.id || "").includes("vale-presente"),
+      );
+      if (!hasPhysicalItem) {
+        return { shouldSend: false, reason: "digital_only_order" };
+      }
+
+      const targetEmail = String(orderData.clientEmail || orderData.customer?.email || "").trim();
+      if (!targetEmail) return { shouldSend: false, reason: "missing_email" };
+
+      transaction.set(
+        orderRef,
+        { inProductionEmailLockUntil: nowMs + 60000 },
+        { merge: true },
+      );
+
+      return { shouldSend: true, targetEmail, orderData };
+    });
+
+    if (!txState.shouldSend) {
+      return { sent: false, ...txState };
+    }
+
+    const optCheck = await canSendEmailToUser(db, {
+      uid: txState.orderData.userId || txState.orderData.clientId,
+      email: txState.targetEmail,
+      category: "transactional",
+    });
+    if (!optCheck.allowed) {
+      await orderRef.set({ inProductionEmailLockUntil: 0 }, { merge: true });
+      return { sent: false, reason: optCheck.reason || "opt_out" };
+    }
+
+    const displayOrder = formatOrderCodeBackend(orderRef.id || txState.orderData.orderId);
+    const html = buildOrderInProductionEmailHtml({
+      orderId: orderRef.id,
+      orderData: txState.orderData,
+      recipientEmail: txState.targetEmail,
+    });
+
+    const result = await sendResendEmail({
+      to: txState.targetEmail,
+      subject: `Sua peça entrou em produção — Pedido ${displayOrder} — THR33`,
+      html,
+    });
+
+    if (result.sent) {
+      await orderRef.set(
+        {
+          inProductionEmailSent: true,
+          inProductionEmailLockUntil: 0,
+          inProductionEmailSentAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    } else {
+      await orderRef.set({ inProductionEmailLockUntil: 0 }, { merge: true });
+    }
+    return result;
+  } catch (err) {
+    await orderRef.set({ inProductionEmailLockUntil: 0 }, { merge: true }).catch(() => {});
+    logger.warn("Erro não-bloqueante em sendOrderInProductionEmailIfNeeded:", err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
+async function sendOrderDeliveredEmailIfNeeded(db, orderRef, orderDataInput) {
+  try {
+    const nowMs = Date.now();
+    const txState = await db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(orderRef);
+      const orderData = snap.exists ? snap.data() : orderDataInput;
+      if (!orderData) return { shouldSend: false, reason: "order_not_found" };
+
+      if (orderData.deliveredEmailSent === true) {
+        return { shouldSend: false, alreadySent: true };
+      }
+      if (orderData.deliveredEmailLockUntil && Number(orderData.deliveredEmailLockUntil) > nowMs) {
+        return { shouldSend: false, alreadySent: true, reason: "in_flight_lock" };
+      }
+
+      const targetEmail = String(orderData.clientEmail || orderData.customer?.email || "").trim();
+      if (!targetEmail) return { shouldSend: false, reason: "missing_email" };
+
+      transaction.set(
+        orderRef,
+        { deliveredEmailLockUntil: nowMs + 60000 },
+        { merge: true },
+      );
+
+      return { shouldSend: true, targetEmail, orderData };
+    });
+
+    if (!txState.shouldSend) {
+      return { sent: false, ...txState };
+    }
+
+    const optCheck = await canSendEmailToUser(db, {
+      uid: txState.orderData.userId || txState.orderData.clientId,
+      email: txState.targetEmail,
+      category: "transactional",
+    });
+    if (!optCheck.allowed) {
+      await orderRef.set({ deliveredEmailLockUntil: 0 }, { merge: true });
+      return { sent: false, reason: optCheck.reason || "opt_out" };
+    }
+
+    const displayOrder = formatOrderCodeBackend(orderRef.id || txState.orderData.orderId);
+    const html = buildOrderDeliveredEmailHtml({
+      orderId: orderRef.id,
+      orderData: txState.orderData,
+      recipientEmail: txState.targetEmail,
+    });
+
+    const result = await sendResendEmail({
+      to: txState.targetEmail,
+      subject: `Pedido ${displayOrder} entregue! Curtiu a sua peça? — THR33`,
+      html,
+    });
+
+    if (result.sent) {
+      await orderRef.set(
+        {
+          deliveredEmailSent: true,
+          deliveredEmailLockUntil: 0,
+          deliveredEmailSentAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    } else {
+      await orderRef.set({ deliveredEmailLockUntil: 0 }, { merge: true });
+    }
+    return result;
+  } catch (err) {
+    await orderRef.set({ deliveredEmailLockUntil: 0 }, { merge: true }).catch(() => {});
+    logger.warn("Erro não-bloqueante em sendOrderDeliveredEmailIfNeeded:", err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
+async function sendOrderCanceledEmailIfNeeded(db, orderRef, orderDataInput, customReason = "") {
+  try {
+    const nowMs = Date.now();
+    const txState = await db.runTransaction(async (transaction) => {
+      const snap = await transaction.get(orderRef);
+      const orderData = snap.exists ? snap.data() : orderDataInput;
+      if (!orderData) return { shouldSend: false, reason: "order_not_found" };
+
+      if (orderData.canceledEmailSent === true) {
+        return { shouldSend: false, alreadySent: true };
+      }
+      if (orderData.canceledEmailLockUntil && Number(orderData.canceledEmailLockUntil) > nowMs) {
+        return { shouldSend: false, alreadySent: true, reason: "in_flight_lock" };
+      }
+
+      const targetEmail = String(orderData.clientEmail || orderData.customer?.email || "").trim();
+      if (!targetEmail) return { shouldSend: false, reason: "missing_email" };
+
+      transaction.set(
+        orderRef,
+        { canceledEmailLockUntil: nowMs + 60000 },
+        { merge: true },
+      );
+
+      return { shouldSend: true, targetEmail, orderData };
+    });
+
+    if (!txState.shouldSend) {
+      return { sent: false, ...txState };
+    }
+
+    const optCheck = await canSendEmailToUser(db, {
+      uid: txState.orderData.userId || txState.orderData.clientId,
+      email: txState.targetEmail,
+      category: "transactional",
+    });
+    if (!optCheck.allowed) {
+      await orderRef.set({ canceledEmailLockUntil: 0 }, { merge: true });
+      return { sent: false, reason: optCheck.reason || "opt_out" };
+    }
+
+    const displayOrder = formatOrderCodeBackend(orderRef.id || txState.orderData.orderId);
+    const html = buildOrderCanceledEmailHtml({
+      orderId: orderRef.id,
+      orderData: txState.orderData,
+      reason: customReason,
+      recipientEmail: txState.targetEmail,
+    });
+
+    const result = await sendResendEmail({
+      to: txState.targetEmail,
+      subject: `Confirmação de cancelamento e estorno — Pedido ${displayOrder} — THR33`,
+      html,
+    });
+
+    if (result.sent) {
+      await orderRef.set(
+        {
+          canceledEmailSent: true,
+          canceledEmailLockUntil: 0,
+          canceledEmailSentAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    } else {
+      await orderRef.set({ canceledEmailLockUntil: 0 }, { merge: true });
+    }
+    return result;
+  } catch (err) {
+    await orderRef.set({ canceledEmailLockUntil: 0 }, { merge: true }).catch(() => {});
+    logger.warn("Erro não-bloqueante em sendOrderCanceledEmailIfNeeded:", err.message);
+    return { sent: false, error: err.message };
+  }
+}
+
 async function sendAbandonedCartEmailIfNeeded(db, uid, { forceTest = false, email, items: customItems, subtotal: customSubtotal, name: customName } = {}) {
   let targetUid = uid;
   const cleanEmail = email ? String(email).trim().toLowerCase() : "";
@@ -5063,6 +5531,18 @@ exports.sendTransactionalEmail = onCall(
     if (type === "order_shipped" && orderId) {
       const orderRef = db.collection("orders").doc(String(orderId));
       return await sendOrderShippedEmailIfNeeded(db, orderRef, null);
+    }
+    if (type === "order_in_production" && orderId) {
+      const orderRef = db.collection("orders").doc(String(orderId));
+      return await sendOrderInProductionEmailIfNeeded(db, orderRef, null);
+    }
+    if (type === "order_delivered" && orderId) {
+      const orderRef = db.collection("orders").doc(String(orderId));
+      return await sendOrderDeliveredEmailIfNeeded(db, orderRef, null);
+    }
+    if (type === "order_canceled" && orderId) {
+      const orderRef = db.collection("orders").doc(String(orderId));
+      return await sendOrderCanceledEmailIfNeeded(db, orderRef, null, request.data?.reason || "");
     }
     if (type === "order_created_pix" && orderId) {
       const orderRef = db.collection("orders").doc(String(orderId));

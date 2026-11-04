@@ -116,6 +116,40 @@ export const emailService = {
   },
 
   /**
+   * Gatilho E — Peça em Produção / Corte e Costura (order_in_production)
+   */
+  triggerOrderInProductionEmail(orderId) {
+    if (!orderId) return Promise.resolve({ sent: false });
+    return invokeTransactionalEmail({
+      type: 'order_in_production',
+      orderId
+    });
+  },
+
+  /**
+   * Gatilho F — Pedido Entregue + Convite para Avaliação (order_delivered)
+   */
+  triggerOrderDeliveredEmail(orderId) {
+    if (!orderId) return Promise.resolve({ sent: false });
+    return invokeTransactionalEmail({
+      type: 'order_delivered',
+      orderId
+    });
+  },
+
+  /**
+   * Gatilho G — Pedido Cancelado / Estorno Confirmado (order_canceled)
+   */
+  triggerOrderCanceledEmail(orderId, reason = '') {
+    if (!orderId) return Promise.resolve({ sent: false });
+    return invokeTransactionalEmail({
+      type: 'order_canceled',
+      orderId,
+      reason
+    });
+  },
+
+  /**
    * Feature 2.A — E-mail Imediato de Confirmação de Pré-Registro / Lista VIP (drop_waitlist_welcome)
    */
   triggerDropWaitlistWelcome({ email, name, dropId, dropName, source, subscriberId }) {
