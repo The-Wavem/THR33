@@ -1,36 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../services/firebaseConfig';
-import { getVitrineSettings, fetchProducts, getFeaturedProducts } from '../services/catalogService';
-import largoDaOrdemBg from '@assets/images/largo-da-ordem-bg.jpeg';
-import largoDaOrdemBg2 from '@assets/images/largo-da-ordem-bg2.jpeg';
-
-const REAL_FALLBACK_HERO_SLIDES = [
-  {
-    id: 'slide_1',
-    title: 'A RUA É NOSSA ESSÊNCIA',
-    subtitle: 'LEAK TWO — DROP EXCLUSIVO',
-    badge: 'NOVO DROP',
-    bgImage: largoDaOrdemBg,
-    active: true,
-    buttons: [
-      { id: 'btn_1', text: 'VER LANÇAMENTOS', link: '/catalogo', variant: 'primary' },
-      { id: 'btn_2', text: 'CONHEÇA A MARCA', link: '/sobre', variant: 'secondary' }
-    ]
-  },
-  {
-    id: 'slide_2',
-    title: 'FOR THE FEW.',
-    subtitle: 'STREETWEAR URBANO & CURITIBANO',
-    badge: 'COLEÇÃO 2026',
-    bgImage: largoDaOrdemBg2,
-    active: true,
-    buttons: [
-      { id: 'btn_1', text: 'EXPLORAR CATÁLOGO', link: '/catalogo', variant: 'primary' },
-      { id: 'btn_2', text: 'CONHEÇA A MARCA', link: '/sobre', variant: 'secondary' }
-    ]
-  }
-];
+import { getVitrineSettings, fetchProducts } from '../services/catalogService';
 
 const isProductInStock = (product) => {
   if (!product) return false;
@@ -125,56 +96,18 @@ export function useHomeData(limitProducts = 8) {
 
       const rawSlides = mergedSettings?.hero?.slides || mergedSettings?.slides || [];
       const cleanSlides = Array.isArray(rawSlides)
-        ? rawSlides.filter((s) => isCleanUrl(s.bgImage || s.mediaUrl || s.image))
+        ? rawSlides.filter(
+            (s) =>
+              s &&
+              s.active !== false &&
+              (isCleanUrl(s.bgImage) || isCleanUrl(s.mobileBgImage) || isCleanUrl(s.mediaUrl) || isCleanUrl(s.image))
+          )
         : [];
 
       const rawBento = mergedSettings?.bentoGrid || [];
       const cleanBento = Array.isArray(rawBento)
-        ? rawBento.filter((b) => isCleanUrl(b.imageUrl || b.image))
+        ? rawBento.filter((b) => b && b.active !== false && isCleanUrl(b.imageUrl || b.image))
         : [];
-
-      // Se o BentoGrid no Firestore estiver vazio, constrói cards reais a partir das fotos reais dos produtos / assets locais
-      const fallbackRealBento = [
-        {
-          id: 'bento_real_1',
-          title: basePool[0]?.name || 'OVERSIZED HEAVY',
-          buttonText: 'VER DETALHES',
-          link: basePool[0] ? `/produto/${basePool[0].slug || basePool[0].id}` : '/catalogo?modelagem=oversized',
-          image:
-            basePool[0]?.lifestyleImage ||
-            basePool[0]?.secondaryImage ||
-            basePool[0]?.image ||
-            largoDaOrdemBg,
-          size: 'large',
-          active: true
-        },
-        {
-          id: 'bento_real_2',
-          title: basePool[1]?.name || 'BOXY TEES',
-          buttonText: 'VER DETALHES',
-          link: basePool[1] ? `/produto/${basePool[1].slug || basePool[1].id}` : '/catalogo?modelagem=boxy',
-          image:
-            basePool[1]?.lifestyleImage ||
-            basePool[1]?.secondaryImage ||
-            basePool[1]?.image ||
-            largoDaOrdemBg2,
-          size: 'normal',
-          active: true
-        },
-        {
-          id: 'bento_real_3',
-          title: basePool[2]?.name || 'ACERVO OFICIAL',
-          buttonText: 'VER CATÁLOGO',
-          link: basePool[2] ? `/produto/${basePool[2].slug || basePool[2].id}` : '/catalogo',
-          image:
-            basePool[2]?.lifestyleImage ||
-            basePool[2]?.secondaryImage ||
-            basePool[2]?.image ||
-            largoDaOrdemBg,
-          size: 'normal',
-          active: true
-        }
-      ];
 
       // Community posts reais (sem Unsplash)
       const rawPosts = mergedSettings?.communityPosts || [];
@@ -185,11 +118,11 @@ export function useHomeData(limitProducts = 8) {
       const consolidatedVitrine = {
         ...mergedSettings,
         hero: {
-          slides: cleanSlides.length > 0 ? cleanSlides : REAL_FALLBACK_HERO_SLIDES
+          slides: cleanSlides
         },
-        bentoGrid: cleanBento.length > 0 ? cleanBento : fallbackRealBento,
-        sectionTag: mergedSettings?.sectionTag || 'COLEÇÃO OFICIAL // CURITIBA CWB',
-        sectionTitle: mergedSettings?.sectionTitle || 'A RUA É NOSSA ESSÊNCIA',
+        bentoGrid: cleanBento,
+        sectionTag: mergedSettings?.sectionTag ?? '',
+        sectionTitle: mergedSettings?.sectionTitle ?? '',
         communityPosts: cleanCommunityPosts
       };
 

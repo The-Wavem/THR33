@@ -2,38 +2,47 @@ import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import Button from '../../components/ui/Button';
-import largoDaOrdemBg from '@assets/images/largo-da-ordem-bg.jpeg';
-import largoDaOrdemBg2 from '@assets/images/largo-da-ordem-bg2.jpeg';
 import styles from './Hero.module.css';
 
-const DEFAULT_HERO_SLIDES = [
-  {
-    id: 'slide_1',
-    title: 'A RUA É NOSSA ESSÊNCIA',
-    subtitle: 'LEAK TWO — DROP EXCLUSIVO',
-    badge: 'NOVO DROP',
-    bgImage: largoDaOrdemBg,
-    active: true,
-    buttons: [
-      { id: 'btn_1', text: 'VER LANÇAMENTOS', link: '/catalogo', variant: 'primary' },
-      { id: 'btn_2', text: 'CONHEÇA A MARCA', link: '/sobre', variant: 'secondary' }
-    ]
-  },
-  {
-    id: 'slide_2',
-    title: 'FOR THE FEW.',
-    subtitle: 'STREETWEAR URBANO & CURITIBANO',
-    badge: 'COLEÇÃO 2026',
-    bgImage: largoDaOrdemBg2,
-    active: true,
-    buttons: [
-      { id: 'btn_1', text: 'EXPLORAR CATÁLOGO', link: '/catalogo', variant: 'primary' },
-      { id: 'btn_2', text: 'CONHEÇA A MARCA', link: '/sobre', variant: 'secondary' }
-    ]
-  }
-];
-
 const AUTOPLAY_DELAY = 5000; // 5 segundos por slide
+
+const extractActiveSlides = (bannerData) => {
+  if (!bannerData) return [];
+
+  const rawList = Array.isArray(bannerData.slides)
+    ? bannerData.slides
+    : Array.isArray(bannerData)
+      ? bannerData
+      : [];
+
+  if (rawList.length > 0) {
+    return rawList.filter(
+      (s) =>
+        s &&
+        s.active !== false &&
+        Boolean(s.bgImage || s.mobileBgImage || s.mediaUrl || s.image)
+    );
+  }
+
+  if (bannerData.mediaUrl || bannerData.bgImage || bannerData.mobileBgImage) {
+    return [
+      {
+        id: bannerData.id || 'hero_banner_1',
+        title: bannerData.title ?? '',
+        subtitle: bannerData.subtitle ?? '',
+        badge: bannerData.badge ?? '',
+        bgImage: bannerData.bgImage || bannerData.mediaUrl || '',
+        mobileBgImage: bannerData.mobileBgImage || '',
+        type: bannerData.type || 'image',
+        mediaUrl: bannerData.mediaUrl || '',
+        active: true,
+        buttons: Array.isArray(bannerData.buttons) ? bannerData.buttons : []
+      }
+    ];
+  }
+
+  return [];
+};
 
 // Fallback circular brutalista para modelos 3D ou mídia em carregamento no Hero
 export function HeroBadgeFallback() {
@@ -95,59 +104,34 @@ const textVariants = {
 };
 
 export function Hero({ bannerData, isLoading = false, children }) {
-  const [slides, setSlides] = useState(DEFAULT_HERO_SLIDES);
+  const [slides, setSlides] = useState(() => extractActiveSlides(bannerData));
   const [currentSlide, setCurrentSlide] = useState(0);
   const [direction, setDirection] = useState(1);
   const [isHovered, setIsHovered] = useState(false);
   const [timerKey, setTimerKey] = useState(0);
+  const [loadedSlides, setLoadedSlides] = useState({});
 
-  // Sincroniza dados da prop bannerData recebida do Firestore
+  const markSlideLoaded = useCallback((key) => {
+    if (!key) return;
+    setLoadedSlides((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
+  }, []);
+
+  // Sincroniza dados da prop bannerData recebida do Firestore (sem injetar slides falsos/mockados)
   useEffect(() => {
-    if (!bannerData) return;
-
-    if (Array.isArray(bannerData.slides) && bannerData.slides.length > 0) {
-      const active = bannerData.slides.filter((s) => s.active !== false);
-      if (active.length > 1) {
-        setSlides(active);
-      } else if (active.length === 1) {
-        const remaining = DEFAULT_HERO_SLIDES.filter((ds) => ds.id !== active[0].id);
-        setSlides([active[0], ...remaining]);
-      }
-    } else if (Array.isArray(bannerData) && bannerData.length > 0) {
-      const active = bannerData.filter((s) => s.active !== false);
-      if (active.length > 1) {
-        setSlides(active);
-      } else if (active.length === 1) {
-        const remaining = DEFAULT_HERO_SLIDES.filter((ds) => ds.id !== active[0].id);
-        setSlides([active[0], ...remaining]);
-      }
-    } else if (bannerData.title || bannerData.mediaUrl || bannerData.bgImage) {
-      setSlides([
-        {
-          id: bannerData.id || 'hero_banner_1',
-          title: bannerData.title || 'THR33 STREETWEAR',
-          subtitle: bannerData.subtitle || 'A RUA É NOSSA ESSÊNCIA',
-          badge: bannerData.badge || 'DESTAQUE',
-          bgImage: bannerData.mediaUrl || bannerData.bgImage || DEFAULT_HERO_SLIDES[0].bgImage,
-          type: bannerData.type || 'image',
-          mediaUrl: bannerData.mediaUrl,
-          active: true,
-          buttons: bannerData.buttons || [
-            { id: 'btn_1', text: 'VER CATÁLOGO', link: '/catalogo', variant: 'primary' }
-          ]
-        },
-        DEFAULT_HERO_SLIDES[1]
-      ]);
-    }
+    const activeSlides = extractActiveSlides(bannerData);
+    setSlides(activeSlides);
+    setCurrentSlide((prev) => (activeSlides.length > 0 && prev >= activeSlides.length ? 0 : prev));
   }, [bannerData]);
 
   const nextSlide = useCallback(() => {
+    if (slides.length <= 1) return;
     setDirection(1);
     setCurrentSlide((prev) => (prev + 1) % slides.length);
     setTimerKey((k) => k + 1);
   }, [slides.length]);
 
   const prevSlide = useCallback(() => {
+    if (slides.length <= 1) return;
     setDirection(-1);
     setCurrentSlide((prev) => (prev - 1 + slides.length) % slides.length);
     setTimerKey((k) => k + 1);
@@ -159,38 +143,56 @@ export function Hero({ bannerData, isLoading = false, children }) {
     setTimerKey((k) => k + 1);
   };
 
-  // Pré-carregamento imediato de todas as imagens do carrossel na memória e cache do navegador
+  // Pré-carregamento imediato de todas as imagens (Desktop e Mobile) do carrossel
   useEffect(() => {
     if (!Array.isArray(slides) || slides.length === 0) return;
 
+    const isMobileViewport =
+      typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
+
     slides.forEach((s, idx) => {
-      const url = s.bgImage || s.mediaUrl;
-      if (url && typeof url === 'string' && !url.match(/\.(mp4|webm|ogg)$/i)) {
-        // Pré-carrega no cache de imagem do navegador e força decodificação na GPU
+      const slideKey = s.id || `slide_${idx}`;
+      const desktopUrl = s.bgImage || s.mediaUrl || s.image || '';
+      const mobileUrl = s.mobileBgImage || '';
+      const primaryUrl = isMobileViewport ? mobileUrl || desktopUrl : desktopUrl || mobileUrl;
+
+      if (primaryUrl && typeof primaryUrl === 'string' && !primaryUrl.match(/\.(mp4|webm|ogg)$/i)) {
         const img = new Image();
-        img.src = url;
-        if (img.decode) {
-          img.decode().catch(() => {});
+        img.onload = () => markSlideLoaded(slideKey);
+        img.onerror = () => markSlideLoaded(slideKey);
+        img.src = primaryUrl;
+        if (img.complete) {
+          markSlideLoaded(slideKey);
         }
-        // Registra link preload de alta prioridade no head
-        if (typeof document !== 'undefined') {
-          const selector = `link[rel="preload"][href="${CSS.escape(url)}"]`;
-          try {
-            if (!document.querySelector(selector)) {
-              const link = document.createElement('link');
-              link.rel = 'preload';
-              link.as = 'image';
-              link.href = url;
-              if (idx === 0) link.fetchPriority = 'high';
-              document.head.appendChild(link);
+        if (img.decode) {
+          img.decode().then(() => markSlideLoaded(slideKey)).catch(() => {});
+        }
+      } else if (primaryUrl) {
+        markSlideLoaded(slideKey);
+      }
+
+      // Pré-carrega também a variante secundária em background
+      [desktopUrl, mobileUrl].forEach((url) => {
+        if (url && typeof url === 'string' && !url.match(/\.(mp4|webm|ogg)$/i)) {
+          if (typeof document !== 'undefined') {
+            try {
+              const selector = `link[rel="preload"][href="${CSS.escape(url)}"]`;
+              if (!document.querySelector(selector)) {
+                const link = document.createElement('link');
+                link.rel = 'preload';
+                link.as = 'image';
+                link.href = url;
+                if (idx === 0) link.fetchPriority = 'high';
+                document.head.appendChild(link);
+              }
+            } catch {
+              // Ignora seletor inválido
             }
-          } catch {
-            // Em caso de caractere especial no seletor, ignora
           }
         }
-      }
+      });
     });
-  }, [slides]);
+  }, [slides, markSlideLoaded]);
 
   // Timer automático para o carrossel ir mudando sozinho
   useEffect(() => {
@@ -205,6 +207,7 @@ export function Hero({ bannerData, isLoading = false, children }) {
 
   // Manipulador de arraste (drag / swipe horizontal)
   const handleDragEnd = (e, { offset, velocity }) => {
+    if (slides.length <= 1) return;
     const swipeConfidenceThreshold = 10000;
     const swipePower = Math.abs(offset.x) * velocity.x;
 
@@ -215,205 +218,254 @@ export function Hero({ bannerData, isLoading = false, children }) {
     }
   };
 
+  // Enquanto carrega os dados iniciais do Firestore, exibe exclusivamente o Skeleton Loading
+  if (isLoading) {
+    return (
+      <section className={styles.heroSection} aria-busy="true" aria-label="Carregando banner principal">
+        <div className={styles.heroSkeletonLayer}>
+          <div className={styles.heroSkeletonShimmer} />
+        </div>
+      </section>
+    );
+  }
+
+  // Se não houver nenhum slide ativo configurado no banco, não renderiza nada
+  if (!slides || slides.length === 0) {
+    return null;
+  }
+
   const slide = slides[currentSlide] || slides[0];
-  const isVideo =
-    slide.type === 'video' || (slide.mediaUrl && slide.mediaUrl.match(/\.(mp4|webm|ogg)$/i));
+  const currentSlideKey = slide.id || `slide_${currentSlide}`;
+  const isCurrentImageLoaded = Boolean(loadedSlides[currentSlideKey]);
+  const hasDedicatedMobileImage = Boolean(slide.mobileBgImage && String(slide.mobileBgImage).trim());
+
+  const cleanBadge = String(slide.badge || '').trim();
+  const cleanTitle = String(slide.title || '').trim();
+  const cleanSubtitle = String(slide.subtitle || '').trim();
+  const validButtons = Array.isArray(slide.buttons)
+    ? slide.buttons.filter((btn) => Boolean(btn && String(btn.text || '').trim()))
+    : [];
+
+  const hasTextOrButtons = Boolean(
+    cleanBadge || cleanTitle || cleanSubtitle || validButtons.length > 0
+  );
 
   return (
-    <section className={styles.heroSection} aria-label="Destaques THR33">
-      {/* Camada Persistente de Backgrounds Pré-carregados (Crossfade Suave Sem Recarregar) */}
-      <div className={styles.backgroundLayer} aria-hidden="true">
-        {slides.map((s, idx) => {
-          const isCurrent = idx === currentSlide;
-          const isVid =
-            s.type === 'video' || (s.mediaUrl && s.mediaUrl.match(/\.(mp4|webm|ogg)$/i));
-          const mediaSrc = s.bgImage || s.mediaUrl;
-          if (!mediaSrc && !isVid) return null;
-
-          return (
-            <motion.div
-              key={`hero-bg-${s.id || idx}`}
-              className={styles.slideBackground}
-              initial={false}
-              animate={{
-                opacity: isCurrent ? 1 : 0,
-                scale: isCurrent ? 1 : 1.05,
-              }}
-              transition={{
-                opacity: { duration: 0.65, ease: [0.16, 1, 0.3, 1] },
-                scale: { duration: 6, ease: 'easeOut' }
-              }}
-              style={{
-                position: 'absolute',
-                inset: 0,
-                zIndex: isCurrent ? 1 : 0,
-                pointerEvents: 'none'
-              }}
-            >
-              {!isVid && mediaSrc && (
-                <img
-                  src={mediaSrc}
-                  alt={s.title || 'Destaque THR33'}
-                  loading="eager"
-                  decoding="async"
-                  fetchPriority={idx === 0 ? 'high' : 'auto'}
-                  className={styles.heroPreloadedImage}
-                />
-              )}
-              {isVid && (
-                <video
-                  src={mediaSrc}
-                  autoPlay
-                  loop
-                  muted
-                  playsInline
-                  className={styles.heroPreloadedImage}
-                />
-              )}
-            </motion.div>
-          );
-        })}
-        <div className={styles.overlay} />
-      </div>
-
-      {/* Área Arrastável com AnimatePresence para os Textos */}
-      <motion.div
-        className={styles.dragWrapper}
-        drag="x"
-        dragConstraints={{ left: 0, right: 0 }}
-        dragElastic={0.15}
-        onDragEnd={handleDragEnd}
+    <div className={styles.heroWrapper}>
+      <section
+        className={`${styles.heroSection} ${
+          hasDedicatedMobileImage ? styles.heroHasMobileArt : styles.heroDesktopOnlyArt
+        }`}
+        aria-label="Destaques THR33"
       >
-        <div className={styles.slideMotionContainer}>
-          {/* Suporte a Modelo 3D opcional no Hero com Suspense e Pulso Brutalista */}
-          {children && (
-            <div className={styles.modelWrapper}>
-              <Suspense fallback={<HeroBadgeFallback />}>{children}</Suspense>
-            </div>
-          )}
+        {/* Skeleton Shimmer visível enquanto a imagem real selecionada no CMS está carregando */}
+        {!isCurrentImageLoaded && (
+          <div className={styles.heroSkeletonLayer} aria-hidden="true">
+            <div className={styles.heroSkeletonShimmer} />
+          </div>
+        )}
 
-          <AnimatePresence custom={direction} mode="wait">
-            <motion.div
-              key={`hero-text-${slide.id || currentSlide}`}
-              variants={textVariants}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              className={styles.contentContainer}
+        {/* Camada Persistente de Backgrounds Pré-carregados (Crossfade Suave Sem Recarregar) */}
+        <div className={styles.backgroundLayer} aria-hidden="true">
+          {slides.map((s, idx) => {
+            const isCurrent = idx === currentSlide;
+            const slideKey = s.id || `slide_${idx}`;
+            const isVid =
+              s.type === 'video' || (s.mediaUrl && s.mediaUrl.match(/\.(mp4|webm|ogg)$/i));
+            const desktopSrc = s.bgImage || s.mediaUrl || s.image || '';
+            const mobileSrc = s.mobileBgImage || '';
+            const fallbackSrc = desktopSrc || mobileSrc;
+            if (!fallbackSrc && !isVid) return null;
+
+            return (
+              <motion.div
+                key={`hero-bg-${slideKey}`}
+                className={styles.slideBackground}
+                initial={false}
+                animate={{
+                  opacity: isCurrent && loadedSlides[slideKey] ? 1 : 0,
+                  scale: isCurrent ? 1 : 1.03
+                }}
+                transition={{
+                  opacity: { duration: 0.5, ease: [0.16, 1, 0.3, 1] },
+                  scale: { duration: 6, ease: 'easeOut' }
+                }}
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  zIndex: isCurrent ? 1 : 0,
+                  pointerEvents: 'none'
+                }}
+              >
+                {!isVid && fallbackSrc && (
+                  <picture className={styles.heroPicture}>
+                    {mobileSrc && <source media="(max-width: 768px)" srcSet={mobileSrc} />}
+                    {desktopSrc && <source media="(min-width: 769px)" srcSet={desktopSrc} />}
+                    <img
+                      src={fallbackSrc}
+                      alt={s.title || 'Banner THR33'}
+                      loading="eager"
+                      decoding="async"
+                      fetchPriority={idx === 0 ? 'high' : 'auto'}
+                      className={styles.heroPreloadedImage}
+                      onLoad={() => markSlideLoaded(slideKey)}
+                      onError={() => markSlideLoaded(slideKey)}
+                    />
+                  </picture>
+                )}
+                {isVid && (
+                  <video
+                    src={fallbackSrc}
+                    autoPlay
+                    loop
+                    muted
+                    playsInline
+                    onLoadedData={() => markSlideLoaded(slideKey)}
+                    className={styles.heroPreloadedImage}
+                  />
+                )}
+              </motion.div>
+            );
+          })}
+          {/* Só aplica a máscara escura se houver textos ou botões ativos no slide */}
+          {hasTextOrButtons && <div className={styles.overlay} />}
+        </div>
+
+        {/* Área Arrastável com AnimatePresence para os Textos (apenas se houver conteúdo ou 3D) */}
+        {(hasTextOrButtons || children || slides.length > 1) && (
+          <motion.div
+            className={styles.dragWrapper}
+            drag={slides.length > 1 ? 'x' : false}
+            dragConstraints={{ left: 0, right: 0 }}
+            dragElastic={0.15}
+            onDragEnd={handleDragEnd}
+          >
+            <div className={styles.slideMotionContainer}>
+              {children && (
+                <div className={styles.modelWrapper}>
+                  <Suspense fallback={<HeroBadgeFallback />}>{children}</Suspense>
+                </div>
+              )}
+
+              {hasTextOrButtons && (
+                <AnimatePresence custom={direction} mode="wait">
+                  <motion.div
+                    key={`hero-text-${slide.id || currentSlide}`}
+                    variants={textVariants}
+                    initial="initial"
+                    animate="animate"
+                    exit="exit"
+                    className={styles.contentContainer}
+                    onMouseEnter={() => setIsHovered(true)}
+                    onMouseLeave={() => setIsHovered(false)}
+                  >
+                    {cleanBadge && (
+                      <div className={styles.badge}>
+                        <span className={styles.badgeDot} />
+                        <span className={styles.badgeText}>{cleanBadge}</span>
+                      </div>
+                    )}
+
+                    {cleanTitle && <h1 className={styles.mainTitle}>{cleanTitle}</h1>}
+                    {cleanSubtitle && <p className={styles.subtitle}>{cleanSubtitle}</p>}
+
+                    {validButtons.length > 0 && (
+                      <div className={styles.actions}>
+                        {validButtons.map((btn, bIdx) => (
+                          <Button
+                            key={btn.id || bIdx}
+                            variant={btn.variant === 'secondary' ? 'secondary' : 'primary'}
+                            size="md"
+                            to={btn.link || '/catalogo'}
+                          >
+                            {btn.text}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
+              )}
+            </div>
+          </motion.div>
+        )}
+
+        {/* Botões de Navegação Lateral */}
+        {slides.length > 1 && (
+          <>
+            <button
+              className={`${styles.navArrow} ${styles.navArrowPrev}`}
+              onClick={prevSlide}
               onMouseEnter={() => setIsHovered(true)}
               onMouseLeave={() => setIsHovered(false)}
+              aria-label="Slide anterior"
             >
-              {slide.badge && (
-                <div className={styles.badge}>
-                  <span className={styles.badgeDot} />
-                  <span className={styles.badgeText}>{slide.badge}</span>
-                </div>
-              )}
+              <ChevronLeft size={22} />
+            </button>
 
-              <h1 className={styles.mainTitle}>{slide.title}</h1>
-              {slide.subtitle && <p className={styles.subtitle}>{slide.subtitle}</p>}
+            <button
+              className={`${styles.navArrow} ${styles.navArrowNext}`}
+              onClick={nextSlide}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
+              aria-label="Próximo slide"
+            >
+              <ChevronRight size={22} />
+            </button>
 
-              {/* Botões de Ação do Slide via Camada UI (Button) */}
-              {Array.isArray(slide.buttons) && slide.buttons.length > 0 ? (
-                <div className={styles.actions}>
-                  {slide.buttons.map((btn, bIdx) => (
-                    <Button
-                      key={btn.id || bIdx}
-                      variant={btn.variant === 'secondary' ? 'secondary' : 'primary'}
-                      size="md"
-                      to={btn.link || '/catalogo'}
+            {/* Indicadores do Carrossel com Timer em Linha Minimalista */}
+            <div className={styles.dotsContainer}>
+              <div className={styles.slideCounter}>
+                <span>0{currentSlide + 1}</span>
+                <span className={styles.slideCounterTotal}> / 0{slides.length}</span>
+              </div>
+
+              <div className={styles.dotsTrack}>
+                {slides.map((_, index) => {
+                  const isActive = index === currentSlide;
+                  return (
+                    <button
+                      key={index}
+                      className={`${styles.dot} ${isActive ? styles.activeDot : ''}`}
+                      onClick={() => goToSlide(index)}
+                      aria-label={`Ir para slide ${index + 1}`}
                     >
-                      {btn.text || 'VER MAIS'}
-                    </Button>
-                  ))}
-                </div>
-              ) : slide.cta || slide.link ? (
-                <div className={styles.actions}>
-                  <Button variant="primary" size="md" to={slide.link || '/catalogo'}>
-                    {slide.cta || 'VER LANÇAMENTOS'}
-                  </Button>
-                </div>
-              ) : null}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-      </motion.div>
-
-      {/* Botões de Navegação Lateral */}
-      {slides.length > 1 && (
-        <>
-          <button
-            className={`${styles.navArrow} ${styles.navArrowPrev}`}
-            onClick={prevSlide}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-            aria-label="Slide anterior"
-          >
-            <ChevronLeft size={22} />
-          </button>
-
-          <button
-            className={`${styles.navArrow} ${styles.navArrowNext}`}
-            onClick={nextSlide}
-            onMouseEnter={() => setIsHovered(true)}
-            onMouseLeave={() => setIsHovered(false)}
-            aria-label="Próximo slide"
-          >
-            <ChevronRight size={22} />
-          </button>
-
-          {/* Indicadores do Carrossel com Timer em Linha Minimalista */}
-          <div className={styles.dotsContainer}>
-            <div className={styles.slideCounter}>
-              <span>0{currentSlide + 1}</span>
-              <span className={styles.slideCounterTotal}> / 0{slides.length}</span>
+                      {isActive && (
+                        <motion.span
+                          key={`progress-${currentSlide}-${timerKey}`}
+                          className={styles.dotProgressBar}
+                          initial={{ scaleX: 0 }}
+                          animate={{ scaleX: isHovered ? 0 : 1 }}
+                          transition={{
+                            duration: AUTOPLAY_DELAY / 1000,
+                            ease: 'linear'
+                          }}
+                          style={{ originX: 0 }}
+                        />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
+          </>
+        )}
+      </section>
 
-            <div className={styles.dotsTrack}>
-              {slides.map((_, index) => {
-                const isActive = index === currentSlide;
-                return (
-                  <button
-                    key={index}
-                    className={`${styles.dot} ${isActive ? styles.activeDot : ''}`}
-                    onClick={() => goToSlide(index)}
-                    aria-label={`Ir para slide ${index + 1}`}
-                  >
-                    {isActive && (
-                      <motion.span
-                        key={`progress-${currentSlide}-${timerKey}`}
-                        className={styles.dotProgressBar}
-                        initial={{ scaleX: 0 }}
-                        animate={{ scaleX: isHovered ? 0 : 1 }}
-                        transition={{
-                          duration: AUTOPLAY_DELAY / 1000,
-                          ease: 'linear'
-                        }}
-                        style={{ originX: 0 }}
-                      />
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* FAIXA MARQUEE STREETWEAR CONTÍNUA */}
+      {/* FAIXA MARQUEE STREETWEAR CONTÍNUA — POSICIONADA FORA DO BANNER (LOGO ABAIXO) */}
       <div className={styles.marqueeStrip} aria-hidden="true">
         <div className={styles.marqueeTrack}>
           <span>
-            THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSO
-            THR33 // TIRAGENS LIMITADAS //{' '}
+            THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSA ESSÊNCIA //{' '}
+            TIRAGENS LIMITADAS //{' '}
           </span>
           <span>
-            THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSO
-            THR33 // TIRAGENS LIMITADAS //{' '}
+            THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSO ESSÊNCIA //{' '}
+            TIRAGENS LIMITADAS //{' '}
           </span>
         </div>
       </div>
-    </section>
+    </div>
   );
 }
 

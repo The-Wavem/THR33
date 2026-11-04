@@ -80,8 +80,8 @@ export const getVitrineSettings = async (forceRefresh = false) => {
       const data = {
         hero: bannerData ? { slides: bannerData.slides || [] } : null,
         bentoGrid: bentoData ? bentoData.cards || [] : [],
-        sectionTag: bentoData?.sectionTag || 'ENSAIO DE CAMPANHA',
-        sectionTitle: bentoData?.sectionTitle || 'A RUA COMO NOSSA ESSÊNCIA'
+        sectionTag: bentoData?.sectionTag ?? '',
+        sectionTitle: bentoData?.sectionTitle ?? ''
       };
       memoryCache.vitrine = data;
       memoryCache.vitrineTimestamp = Date.now();
@@ -128,8 +128,8 @@ export const saveVitrineSettings = async (settingsData) => {
         doc(db, 'storefront', 'home_bento'),
         {
           cards: settingsData.bentoGrid,
-          sectionTag: settingsData.sectionTag || 'ENSAIO DE CAMPANHA',
-          sectionTitle: settingsData.sectionTitle || 'A RUA COMO NOSSA ESSÊNCIA',
+          sectionTag: settingsData.sectionTag ?? '',
+          sectionTitle: settingsData.sectionTitle ?? '',
           updatedAt: new Date().toISOString()
         },
         { merge: true }

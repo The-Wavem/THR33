@@ -29,36 +29,18 @@ import { storage } from '../../services/firebaseConfig';
 import { getVitrineSettings, saveVitrineSettings, getFeaturedProducts } from '../../services/catalogService';
 import styles from './CmsVitrine.module.css';
 
-// Configuração padrão limpa para inicialização da Grade Bento
+// Configuração padrão limpa para inicialização da Grade Bento (sem textos fantasmas)
 const DEFAULT_BENTO_CONFIG = {
-  sectionTag: "ENSAIO DE CAMPANHA",
-  sectionTitle: "A RUA É NOSSA ESSÊNCIA",
+  sectionTag: "",
+  sectionTitle: "",
   cards: [
     {
       id: "bento_1",
-      title: "OVERSIZED FIT",
-      buttonText: "VER MAIS",
-      link: "/catalogo?modelagem=oversized",
+      title: "",
+      buttonText: "",
+      link: "/catalogo",
       image: "",
       size: "large",
-      active: true
-    },
-    {
-      id: "bento_2",
-      title: "BOXY TEES",
-      buttonText: "VER MAIS",
-      link: "/catalogo?modelagem=boxy",
-      image: "",
-      size: "normal",
-      active: true
-    },
-    {
-      id: "bento_3",
-      title: "EDITION FOR THE FEW",
-      buttonText: "VER MAIS",
-      link: "/catalogo?drop=leak-two",
-      image: "",
-      size: "normal",
       active: true
     }
   ]
@@ -87,6 +69,11 @@ export function CmsVitrine() {
   const [isUploadingHero, setIsUploadingHero] = useState(false);
   const [heroUploadProgress, setHeroUploadProgress] = useState(0);
 
+  // Estados da Imagem Mobile do Banner Hero
+  const [showHeroMobileUrlInput, setShowHeroMobileUrlInput] = useState(false);
+  const [isUploadingHeroMobile, setIsUploadingHeroMobile] = useState(false);
+  const [heroMobileUploadProgress, setHeroMobileUploadProgress] = useState(0);
+
   // Estados da Grade Bento
   const [bentoConfig, setBentoConfig] = useState(DEFAULT_BENTO_CONFIG);
   const [selectedBentoIndex, setSelectedBentoIndex] = useState(0);
@@ -104,9 +91,10 @@ export function CmsVitrine() {
   const [saveSuccess, setSaveSuccess] = useState(false);
 
   const heroFileInputRef = useRef(null);
+  const heroMobileFileInputRef = useRef(null);
   const bentoFileInputRef = useRef(null);
 
-  // 1. Carrega dados do Firestore
+  // 1. Carrega dados do Firestore (sem injetar textos mockados quando campos estão vazios)
   useEffect(() => {
     async function fetchData() {
       setLoading(true);
@@ -115,54 +103,55 @@ export function CmsVitrine() {
         if (settings) {
           if (settings.hero?.slides?.length > 0) {
             const rawSlides = settings.hero.slides;
-            const normalized = rawSlides.map(s => ({
+            const normalized = rawSlides.map((s) => ({
               ...s,
-              buttons: Array.isArray(s.buttons) 
-                ? s.buttons 
-                : [
-                    { id: "btn_1", text: s.cta || "VER LANÇAMENTOS", link: s.link || "/catalogo", variant: "primary" }
-                  ]
+              title: s.title ?? "",
+              subtitle: s.subtitle ?? "",
+              badge: s.badge ?? "",
+              bgImage: s.bgImage || s.mediaUrl || "",
+              mobileBgImage: s.mobileBgImage || "",
+              buttons: Array.isArray(s.buttons) ? s.buttons : []
             }));
             setSlides(normalized);
           } else {
             setSlides([
               {
                 id: "slide_1",
-                title: "A RUA É NOSSA ESSÊNCIA",
-                subtitle: "LEAK TWO — DROP EXCLUSIVO",
-                badge: "NOVO DROP",
+                title: "",
+                subtitle: "",
+                badge: "",
                 bgImage: "",
+                mobileBgImage: "",
                 active: true,
-                buttons: [
-                  { id: "btn_1", text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" },
-                  { id: "btn_2", text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
-                ]
+                buttons: []
               }
             ]);
           }
 
           if (settings.bentoGrid?.length > 0) {
             setBentoConfig({
-              sectionTag: settings.sectionTag || "ENSAIO DE CAMPANHA",
-              sectionTitle: settings.sectionTitle || "A RUA É NOSSA ESSÊNCIA",
+              sectionTag: settings.sectionTag ?? "",
+              sectionTitle: settings.sectionTitle ?? "",
               cards: settings.bentoGrid
             });
           } else {
-            setBentoConfig(DEFAULT_BENTO_CONFIG);
+            setBentoConfig({
+              sectionTag: settings.sectionTag ?? "",
+              sectionTitle: settings.sectionTitle ?? "",
+              cards: DEFAULT_BENTO_CONFIG.cards
+            });
           }
         } else {
           setSlides([
             {
               id: "slide_1",
-              title: "A RUA É NOSSA ESSÊNCIA",
-              subtitle: "LEAK TWO — DROP EXCLUSIVO",
-              badge: "NOVO DROP",
+              title: "",
+              subtitle: "",
+              badge: "",
               bgImage: "",
+              mobileBgImage: "",
               active: true,
-              buttons: [
-                { id: "btn_1", text: "VER LANÇAMENTOS", link: "/catalogo", variant: "primary" },
-                { id: "btn_2", text: "CONHEÇA A MARCA", link: "/sobre", variant: "secondary" }
-              ]
+              buttons: []
             }
           ]);
           setBentoConfig(DEFAULT_BENTO_CONFIG);
@@ -239,6 +228,7 @@ export function CmsVitrine() {
     subtitle: "",
     badge: "",
     bgImage: "",
+    mobileBgImage: "",
     active: true,
     buttons: []
   };
@@ -258,14 +248,13 @@ export function CmsVitrine() {
   const handleAddSlide = () => {
     const newSlide = {
       id: `slide_${Date.now()}`,
-      title: "NOVO TÍTULO DE IMPACTO",
-      subtitle: "SUBTÍTULO DO DROP OU LANÇAMENTO",
-      badge: "NOVO",
+      title: "",
+      subtitle: "",
+      badge: "",
       bgImage: "",
+      mobileBgImage: "",
       active: true,
-      buttons: [
-        { id: `btn_1_${Date.now()}`, text: "VER COLEÇÃO", link: "/catalogo", variant: "primary" }
-      ]
+      buttons: []
     };
     setSlides(prev => [...prev, newSlide]);
     setSelectedSlideIndex(slides.length);
@@ -273,7 +262,7 @@ export function CmsVitrine() {
 
   const handleDeleteSlide = (indexToDelete) => {
     if (slides.length <= 1) {
-      alert("A vitrine precisa ter pelo menos 1 slide cadastrado.");
+      alert("A vitrine precisa ter pelo menos 1 slide cadastrado. Caso queira ocultá-lo na loja, desmarque 'Banner Visível na Loja'.");
       return;
     }
     if (!window.confirm("Deseja realmente remover este slide?")) return;
@@ -282,7 +271,7 @@ export function CmsVitrine() {
     setSelectedSlideIndex(0);
   };
 
-  // Upload direto do Banner Hero para o Firebase Storage
+  // Upload direto do Banner Hero DESKTOP para o Firebase Storage
   const handleUploadHeroImage = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -326,6 +315,55 @@ export function CmsVitrine() {
       }
       setIsUploadingHero(false);
       setHeroUploadProgress(0);
+    }
+
+    e.target.value = '';
+  };
+
+  // Upload direto do Banner Hero MOBILE para o Firebase Storage
+  const handleUploadHeroMobileImage = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploadingHeroMobile(true);
+    setHeroMobileUploadProgress(10);
+
+    const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileRef = ref(storage, `vitrine/hero_mobile/${Date.now()}_${safeName}`);
+
+    try {
+      const uploadTask = uploadBytesResumable(fileRef, file);
+
+      uploadTask.on(
+        'state_changed',
+        (snapshot) => {
+          const progress = Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100);
+          setHeroMobileUploadProgress(Math.max(10, progress));
+        },
+        async (error) => {
+          console.warn("Upload Storage Mobile oscilou, acionando fallback local otimizado:", error);
+          const fallbackUrl = await compressImageFile(file, 1080, 1920);
+          if (fallbackUrl) {
+            handleUpdateSlide('mobileBgImage', fallbackUrl);
+          }
+          setIsUploadingHeroMobile(false);
+          setHeroMobileUploadProgress(0);
+        },
+        async () => {
+          const downloadUrl = await getDownloadURL(uploadTask.snapshot.ref);
+          handleUpdateSlide('mobileBgImage', downloadUrl);
+          setIsUploadingHeroMobile(false);
+          setHeroMobileUploadProgress(0);
+        }
+      );
+    } catch (err) {
+      console.warn("Erro no disparo do upload mobile:", err);
+      const fallbackUrl = await compressImageFile(file, 1080, 1920);
+      if (fallbackUrl) {
+        handleUpdateSlide('mobileBgImage', fallbackUrl);
+      }
+      setIsUploadingHeroMobile(false);
+      setHeroMobileUploadProgress(0);
     }
 
     e.target.value = '';
@@ -404,8 +442,8 @@ export function CmsVitrine() {
   const handleAddBentoCard = () => {
     const newCard = {
       id: `bento_${Date.now()}`,
-      title: "NOVO ESTILO",
-      buttonText: "VER MAIS",
+      title: "",
+      buttonText: "",
       link: "/catalogo",
       image: "",
       size: "normal",
@@ -494,8 +532,8 @@ export function CmsVitrine() {
           slides
         },
         bentoGrid: bentoConfig.cards || [],
-        sectionTag: bentoConfig.sectionTag || "ENSAIO DE CAMPANHA",
-        sectionTitle: bentoConfig.sectionTitle || "A RUA É NOSSA ESSÊNCIA"
+        sectionTag: bentoConfig.sectionTag ?? "",
+        sectionTitle: bentoConfig.sectionTitle ?? ""
       });
 
       setSaveSuccess(true);
@@ -644,11 +682,16 @@ export function CmsVitrine() {
               </div>
 
               <div className={styles.formBody}>
-                {/* BLOCO 1: FOTO DE FUNDO (UPLOAD FIREBASE STORAGE) */}
+                {/* BLOCO 1A: FOTO DE FUNDO DESKTOP (WIDESCREEN) */}
                 <div className={styles.sectionBlock}>
-                  <div className={styles.blockTitle}>
-                    <ImageIcon size={14} />
-                    <span>IMAGEM DE FUNDO DO BANNER</span>
+                  <div className={styles.blockTitleRow}>
+                    <div className={styles.blockTitle}>
+                      <Monitor size={14} />
+                      <span>1. IMAGEM DO BANNER — DESKTOP (COMPUTADOR / TELAS LARGAS)</span>
+                    </div>
+                    <span className={styles.specBadge}>
+                      IDEAL: 1440 × 730 px (Proporção ~2:1 Horizontal)
+                    </span>
                   </div>
 
                   <div className={styles.uploadZone}>
@@ -656,13 +699,13 @@ export function CmsVitrine() {
                       <div className={styles.currentImageCard}>
                         <img 
                           src={currentSlide.bgImage} 
-                          alt="Banner atual" 
+                          alt="Banner Desktop atual" 
                           className={styles.currentImageThumb} 
                         />
                         <div className={styles.currentImageDetails}>
                           <div className={styles.currentImageInfo}>
                             <span className={styles.imageStatusBadge}>
-                              <Check size={11} /> IMAGEM CARREGADA
+                              <Check size={11} /> ARTE DESKTOP CARREGADA (1440×730)
                             </span>
                             <span className={styles.imageUrlTruncated}>
                               {currentSlide.bgImage}
@@ -677,7 +720,7 @@ export function CmsVitrine() {
                               disabled={isUploadingHero}
                             >
                               <Upload size={12} />
-                              <span>Trocar Imagem</span>
+                              <span>Trocar Imagem Desktop</span>
                             </button>
 
                             <button
@@ -706,18 +749,18 @@ export function CmsVitrine() {
                         onClick={() => heroFileInputRef.current?.click()}
                       >
                         <div className={styles.dropzoneIconWrapper}>
-                          <Upload size={20} />
+                          <Monitor size={20} />
                         </div>
                         <div className={styles.dropzoneMainText}>
-                          {isUploadingHero ? 'Enviando imagem ao Firebase Storage...' : 'Clique para selecionar a foto do computador'}
+                          {isUploadingHero ? 'Enviando arte Desktop ao Firebase Storage...' : 'Clique para selecionar a arte DESKTOP (Horizontal)'}
                         </div>
                         <div className={styles.dropzoneSubText}>
-                          Formatos aceitos: JPG, PNG ou WebP // Proporção recomendada: 1920x1080 (16:9)
+                          Tamanho recomendado: <strong>1440 × 730 px</strong> ou <strong>1920 × 970 px</strong> (Proporção ~2:1 Widescreen) // JPG, PNG ou WebP
                         </div>
                       </div>
                     )}
 
-                    {/* Input de arquivo invisível */}
+                    {/* Input de arquivo invisível Desktop */}
                     <input 
                       ref={heroFileInputRef}
                       type="file" 
@@ -727,7 +770,7 @@ export function CmsVitrine() {
                       onChange={handleUploadHeroImage}
                     />
 
-                    {/* Barra de progresso de upload */}
+                    {/* Barra de progresso de upload Desktop */}
                     {isUploadingHero && (
                       <div className={styles.progressBarContainer}>
                         <div className={styles.progressBarTrack}>
@@ -737,17 +780,17 @@ export function CmsVitrine() {
                           />
                         </div>
                         <div className={styles.progressLabel}>
-                          <span>Enviando...</span>
+                          <span>Enviando arte Desktop...</span>
                           <span>{heroUploadProgress}%</span>
                         </div>
                       </div>
                     )}
 
-                    {/* Modo alternativo de URL externa */}
+                    {/* Modo alternativo de URL externa Desktop */}
                     {showHeroUrlInput && (
                       <div className={styles.urlToggleBox}>
                         <label style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text-muted)' }}>
-                          URL DIRETA DA IMAGEM
+                          URL DIRETA DA IMAGEM DESKTOP
                         </label>
                         <input 
                           type="url" 
@@ -760,20 +803,147 @@ export function CmsVitrine() {
                   </div>
                 </div>
 
-                {/* BLOCO 2: MENSAGENS E TEXTOS */}
+                {/* BLOCO 1B: FOTO DE FUNDO MOBILE (VERTICAL / SMARTPHONES) */}
                 <div className={styles.sectionBlock}>
-                  <div className={styles.blockTitle}>
-                    <SlidersHorizontal size={14} />
-                    <span>TEXTOS E IDENTIDADE DO BANNER</span>
+                  <div className={styles.blockTitleRow}>
+                    <div className={styles.blockTitle}>
+                      <Smartphone size={14} />
+                      <span>2. IMAGEM DO BANNER — MOBILE (CELULARES / VERTICAL)</span>
+                    </div>
+                    <span className={styles.specBadge}>
+                      IDEAL: 1080 × 1350 px (Proporção 4:5 Vertical)
+                    </span>
+                  </div>
+
+                  <p className={styles.helperNote}>
+                    Envie uma versão vertical pensada para a tela do celular. Assim a arte nunca será cortada nas laterais e manterá 100% das informações legíveis no mobile.
+                  </p>
+
+                  <div className={styles.uploadZone}>
+                    {currentSlide.mobileBgImage ? (
+                      <div className={styles.currentImageCard}>
+                        <img 
+                          src={currentSlide.mobileBgImage} 
+                          alt="Banner Mobile atual" 
+                          className={styles.currentImageThumbMobile} 
+                        />
+                        <div className={styles.currentImageDetails}>
+                          <div className={styles.currentImageInfo}>
+                            <span className={styles.imageStatusBadge}>
+                              <Check size={11} /> ARTE MOBILE CARREGADA (1080×1350)
+                            </span>
+                            <span className={styles.imageUrlTruncated}>
+                              {currentSlide.mobileBgImage}
+                            </span>
+                          </div>
+
+                          <div className={styles.imageActionsRow}>
+                            <button
+                              type="button"
+                              className={styles.actionSmallBtn}
+                              onClick={() => heroMobileFileInputRef.current?.click()}
+                              disabled={isUploadingHeroMobile}
+                            >
+                              <Upload size={12} />
+                              <span>Trocar Imagem Mobile</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.actionSmallBtn}
+                              onClick={() => setShowHeroMobileUrlInput(!showHeroMobileUrlInput)}
+                            >
+                              <LinkIcon size={12} />
+                              <span>{showHeroMobileUrlInput ? 'Ocultar Link' : 'Editar URL Externa'}</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              className={styles.removeSmallBtn}
+                              onClick={() => handleUpdateSlide('mobileBgImage', '')}
+                            >
+                              <Trash2 size={12} />
+                              <span>Remover</span>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div 
+                        className={styles.dropzone}
+                        onClick={() => heroMobileFileInputRef.current?.click()}
+                      >
+                        <div className={styles.dropzoneIconWrapper}>
+                          <Smartphone size={20} />
+                        </div>
+                        <div className={styles.dropzoneMainText}>
+                          {isUploadingHeroMobile ? 'Enviando arte Mobile ao Firebase Storage...' : 'Clique para selecionar a arte MOBILE (Vertical)'}
+                        </div>
+                        <div className={styles.dropzoneSubText}>
+                          Tamanho recomendado: <strong>1080 × 1350 px (Proporção 4:5 Retrato)</strong> // Evita cortes em telas de celular
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Input de arquivo invisível Mobile */}
+                    <input 
+                      ref={heroMobileFileInputRef}
+                      type="file" 
+                      accept="image/*" 
+                      className={styles.hiddenFileInput}
+                      style={{ display: 'none' }}
+                      onChange={handleUploadHeroMobileImage}
+                    />
+
+                    {/* Barra de progresso de upload Mobile */}
+                    {isUploadingHeroMobile && (
+                      <div className={styles.progressBarContainer}>
+                        <div className={styles.progressBarTrack}>
+                          <div 
+                            className={styles.progressBarFill} 
+                            style={{ width: `${heroMobileUploadProgress}%` }}
+                          />
+                        </div>
+                        <div className={styles.progressLabel}>
+                          <span>Enviando arte Mobile...</span>
+                          <span>{heroMobileUploadProgress}%</span>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Modo alternativo de URL externa Mobile */}
+                    {showHeroMobileUrlInput && (
+                      <div className={styles.urlToggleBox}>
+                        <label style={{ fontSize: '0.68rem', fontWeight: 800, color: 'var(--text-muted)' }}>
+                          URL DIRETA DA IMAGEM MOBILE
+                        </label>
+                        <input 
+                          type="url" 
+                          placeholder="https://..." 
+                          value={currentSlide.mobileBgImage || ''} 
+                          onChange={(e) => handleUpdateSlide('mobileBgImage', e.target.value)} 
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* BLOCO 2: MENSAGENS E TEXTOS (100% OPCIONAIS) */}
+                <div className={styles.sectionBlock}>
+                  <div className={styles.blockTitleRow}>
+                    <div className={styles.blockTitle}>
+                      <SlidersHorizontal size={14} />
+                      <span>TEXTOS SOBREPOSTOS NO BANNER</span>
+                    </div>
                   </div>
 
                   <div className={styles.inputGroup}>
                     <div className={styles.inputLabelRow}>
-                      <label>TAG / BADGE SUPERIOR</label>
+                      <label>TAG / BADGE SUPERIOR (OPCIONAL)</label>
                     </div>
                     <input 
                       type="text" 
-                      placeholder="Ex: NOVO DROP, EXCLUSIVO, COLEÇÃO 2026" 
+                      placeholder="Deixe em branco para ocultar (Ex: NOVO DROP)" 
                       value={currentSlide.badge || ''} 
                       onChange={(e) => handleUpdateSlide('badge', e.target.value)} 
                     />
@@ -781,24 +951,23 @@ export function CmsVitrine() {
 
                   <div className={styles.inputGroup}>
                     <div className={styles.inputLabelRow}>
-                      <label>TÍTULO PRINCIPAL (MANCHETE) *</label>
+                      <label>TÍTULO PRINCIPAL / MANCHETE (OPCIONAL)</label>
                     </div>
                     <input 
                       type="text" 
-                      placeholder="Ex: A RUA É NOSSA ESSÊNCIA" 
+                      placeholder="Deixe em branco se a arte já possuir título próprio" 
                       value={currentSlide.title || ''} 
                       onChange={(e) => handleUpdateSlide('title', e.target.value)} 
-                      required 
                     />
                   </div>
 
                   <div className={styles.inputGroup}>
                     <div className={styles.inputLabelRow}>
-                      <label>SUBTÍTULO / SLOGAN</label>
+                      <label>SUBTÍTULO / SLOGAN (OPCIONAL)</label>
                     </div>
                     <input 
                       type="text" 
-                      placeholder="Ex: LEAK TWO — DROP EXCLUSIVO" 
+                      placeholder="Deixe em branco para ocultar" 
                       value={currentSlide.subtitle || ''} 
                       onChange={(e) => handleUpdateSlide('subtitle', e.target.value)} 
                     />
@@ -935,56 +1104,96 @@ export function CmsVitrine() {
                 </div>
               </div>
 
-              <div className={`${styles.previewContainer} ${previewDevice === 'mobile' ? styles.previewMobileWrapper : ''}`}>
-                {currentSlide.bgImage ? (
-                  <div 
-                    className={styles.previewSlide} 
-                    style={{ backgroundImage: `url(${currentSlide.bgImage})` }}
-                  >
-                    <div className={styles.previewOverlay} />
-                    
-                    <div className={styles.previewContent}>
-                      {currentSlide.badge && (
-                        <span className={styles.previewBadge}>
-                          <span className={styles.badgeDot} />
-                          <span>{currentSlide.badge}</span>
-                        </span>
+              {(() => {
+                const activePreviewImage =
+                  previewDevice === 'mobile'
+                    ? currentSlide.mobileBgImage || currentSlide.bgImage
+                    : currentSlide.bgImage || currentSlide.mobileBgImage;
+                const cleanBadge = String(currentSlide.badge || '').trim();
+                const cleanTitle = String(currentSlide.title || '').trim();
+                const cleanSubtitle = String(currentSlide.subtitle || '').trim();
+                const validButtons = (currentSlide.buttons || []).filter((btn) =>
+                  Boolean(btn && String(btn.text || '').trim())
+                );
+                const hasOverlayElements = Boolean(
+                  cleanBadge || cleanTitle || cleanSubtitle || validButtons.length > 0
+                );
+
+                return (
+                  <>
+                    <div
+                      className={`${styles.previewContainer} ${
+                        previewDevice === 'mobile'
+                          ? currentSlide.mobileBgImage
+                            ? styles.previewMobileWrapper
+                            : styles.previewMobileFallbackHorizontal
+                          : ''
+                      }`}
+                    >
+                      {activePreviewImage ? (
+                        <div
+                          className={styles.previewSlide}
+                          style={{ backgroundImage: `url(${activePreviewImage})` }}
+                        >
+                          {hasOverlayElements && <div className={styles.previewOverlay} />}
+
+                          {hasOverlayElements && (
+                            <div className={styles.previewContent}>
+                              {cleanBadge && (
+                                <span className={styles.previewBadge}>
+                                  <span className={styles.badgeDot} />
+                                  <span>{cleanBadge}</span>
+                                </span>
+                              )}
+
+                              {cleanTitle && (
+                                <h2 className={styles.previewTitle}>{cleanTitle}</h2>
+                              )}
+
+                              {cleanSubtitle && (
+                                <p className={styles.previewSubtitle}>{cleanSubtitle}</p>
+                              )}
+
+                              {validButtons.length > 0 && (
+                                <div className={styles.previewBtnsRow}>
+                                  {validButtons.map((btn, bIdx) => (
+                                    <span
+                                      key={btn.id || bIdx}
+                                      className={`${styles.previewCtaBtn} ${
+                                        btn.variant === 'secondary'
+                                          ? styles.previewCtaSecondary
+                                          : styles.previewCtaPrimary
+                                      }`}
+                                    >
+                                      {btn.text}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className={styles.emptyPreviewBox}>
+                          <ImageIcon size={32} />
+                          <span>Nenhuma imagem selecionada</span>
+                          <small>
+                            Faça upload da foto Desktop (1440×730) e Mobile (1080×1350) no formulário ao lado.
+                          </small>
+                        </div>
                       )}
-
-                      <h2 className={styles.previewTitle}>
-                        {currentSlide.title || 'SEU TÍTULO AQUI'}
-                      </h2>
-
-                      {currentSlide.subtitle && (
-                        <p className={styles.previewSubtitle}>{currentSlide.subtitle}</p>
-                      )}
-
-                      <div className={styles.previewBtnsRow}>
-                        {(currentSlide.buttons || []).map((btn, bIdx) => (
-                          <span 
-                            key={btn.id || bIdx} 
-                            className={`${styles.previewCtaBtn} ${btn.variant === 'secondary' ? styles.previewCtaSecondary : styles.previewCtaPrimary}`}
-                          >
-                            {btn.text || 'BOTÃO'}
-                          </span>
-                        ))}
-                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className={styles.emptyPreviewBox}>
-                    <ImageIcon size={32} />
-                    <span>Nenhuma imagem selecionada</span>
-                    <small>Faça upload de uma foto no formulário ao lado para pré-visualizar o banner.</small>
-                  </div>
-                )}
-              </div>
 
-              <small className={styles.previewNotice}>
-                {(currentSlide.buttons || []).length === 0 
-                  ? 'Slide configurado sem botões de ação.' 
-                  : `Exibindo ${(currentSlide.buttons || []).length} botão(ões) de chamada.`}
-              </small>
+                    <small className={styles.previewNotice}>
+                      {previewDevice === 'mobile'
+                        ? currentSlide.mobileBgImage
+                          ? 'Exibindo Arte Mobile dedicada (Proporção 4:5 — 1080×1350px).'
+                          : 'Nenhuma Arte Mobile enviada ainda — exibindo Arte Desktop redimensionada.'
+                        : 'Exibindo Arte Desktop (Proporção ~2:1 — 1440×730px).'}
+                    </small>
+                  </>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1190,21 +1399,20 @@ export function CmsVitrine() {
                 <div className={styles.sectionBlock}>
                   <div className={styles.gridTwo}>
                     <div className={styles.inputGroup}>
-                      <label>LEGENDA / TÍTULO DO CARD *</label>
+                      <label>LEGENDA / TÍTULO DO CARD (OPCIONAL)</label>
                       <input 
                         type="text" 
-                        placeholder="Ex: OVERSIZED FIT, BOXY TEES" 
+                        placeholder="Deixe vazio para ocultar (Ex: OVERSIZED FIT)" 
                         value={currentBentoCard.title || ''} 
                         onChange={(e) => handleUpdateBentoCard('title', e.target.value)} 
-                        required
                       />
                     </div>
 
                     <div className={styles.inputGroup}>
-                      <label>TEXTO DO BOTÃO</label>
+                      <label>TEXTO DO BOTÃO (OPCIONAL)</label>
                       <input 
                         type="text" 
-                        placeholder="Ex: VER MAIS, EXPLORAR" 
+                        placeholder="Deixe vazio para ocultar (Ex: VER MAIS)" 
                         value={currentBentoCard.buttonText || ''} 
                         onChange={(e) => handleUpdateBentoCard('buttonText', e.target.value)} 
                       />
@@ -1273,31 +1481,43 @@ export function CmsVitrine() {
               </div>
 
               <div className={styles.bentoPreviewSection}>
-                <div className={styles.bentoPreviewHead}>
-                  <span className={styles.bentoPreviewTag}>{bentoConfig.sectionTag || 'TAG'}</span>
-                  <h3 className={styles.bentoPreviewTitle}>{bentoConfig.sectionTitle || 'TÍTULO DA SEÇÃO'}</h3>
-                </div>
+                {(String(bentoConfig.sectionTag || '').trim() || String(bentoConfig.sectionTitle || '').trim()) && (
+                  <div className={styles.bentoPreviewHead}>
+                    {String(bentoConfig.sectionTag || '').trim() && (
+                      <span className={styles.bentoPreviewTag}>{bentoConfig.sectionTag}</span>
+                    )}
+                    {String(bentoConfig.sectionTitle || '').trim() && (
+                      <h3 className={styles.bentoPreviewTitle}>{bentoConfig.sectionTitle}</h3>
+                    )}
+                  </div>
+                )}
 
                 <div className={styles.bentoPreviewGrid}>
-                  {bentoConfig.cards.filter(c => c.active).map((c, idx) => (
-                    <div 
-                      key={c.id || idx} 
-                      className={`${styles.bentoPreviewCard} ${c.size === 'large' ? styles.bentoCardLarge : ''}`}
-                    >
-                      {c.image ? (
-                        <img src={c.image} alt={c.title} className={styles.bentoPreviewImg} />
-                      ) : (
-                        <div className={styles.emptyPreviewBox} style={{ height: '100%' }}>
-                          <ImageIcon size={20} />
-                          <span style={{ fontSize: '0.65rem' }}>Sem foto</span>
-                        </div>
-                      )}
-                      <div className={styles.bentoPreviewOverlay}>
-                        <span className={styles.bentoPreviewCaption}>{c.title || 'CARD BENTO'}</span>
-                        <span className={styles.bentoPreviewBtn}>{c.buttonText || 'VER MAIS'}</span>
+                  {bentoConfig.cards.filter(c => c.active).map((c, idx) => {
+                    const cleanCardTitle = String(c.title || '').trim();
+                    const cleanCardBtn = String(c.buttonText || '').trim();
+                    return (
+                      <div 
+                        key={c.id || idx} 
+                        className={`${styles.bentoPreviewCard} ${c.size === 'large' ? styles.bentoCardLarge : ''}`}
+                      >
+                        {c.image ? (
+                          <img src={c.image} alt={cleanCardTitle || 'Card Bento'} className={styles.bentoPreviewImg} />
+                        ) : (
+                          <div className={styles.emptyPreviewBox} style={{ height: '100%' }}>
+                            <ImageIcon size={20} />
+                            <span style={{ fontSize: '0.65rem' }}>Sem foto</span>
+                          </div>
+                        )}
+                        {(cleanCardTitle || cleanCardBtn) && (
+                          <div className={styles.bentoPreviewOverlay}>
+                            {cleanCardTitle ? <span className={styles.bentoPreviewCaption}>{cleanCardTitle}</span> : <span />}
+                            {cleanCardBtn && <span className={styles.bentoPreviewBtn}>{cleanCardBtn}</span>}
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

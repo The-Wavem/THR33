@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import ProductCard from '../../components/catalog/ProductCard';
 import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
-import largoDaOrdemBg from '@assets/images/largo-da-ordem-bg.jpeg';
 import { catalogService } from '../../services/catalogService';
 import { reviewService } from '../../services/reviewService';
 import { shippingService } from '../../services/shippingService';
@@ -239,7 +238,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
     if (product?.image) {
       return [{ id: 'img_0', url: product.image, colorId: '' }];
     }
-    return [{ id: 'img_0', url: largoDaOrdemBg, colorId: '' }];
+    return [];
   }, [product]);
 
   const images = useMemo(() => imagesGallery.map(img => img.url), [imagesGallery]);

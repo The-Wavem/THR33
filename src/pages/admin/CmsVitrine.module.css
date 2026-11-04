@@ -246,6 +246,50 @@
   flex-direction: column;
 }
 
+.marketingGuideCard {
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 1rem 1.25rem;
+  margin-bottom: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.guideHeaderIcon {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #ffffff;
+}
+
+.guideText {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 0;
+}
+
+.guidePointsGrid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.45rem;
+  margin-top: 0.2rem;
+}
+
+.guidePoint {
+  font-size: 0.7rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.guidePoint strong {
+  color: #ffffff;
+}
+
 /* ------------------------------------------------------------
    TABS DE SLIDES / CARDS
    ------------------------------------------------------------ */
@@ -384,6 +428,14 @@
   padding-bottom: 0;
 }
 
+.blockTitleRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
 .blockTitle {
   font-size: 0.72rem;
   font-weight: 800;
@@ -392,6 +444,23 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.specBadge {
+  background-color: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+  font-size: 0.62rem;
+  padding: 0.2rem 0.55rem;
+  letter-spacing: 1px;
+  font-weight: 800;
+}
+
+.helperNote {
+  font-size: 0.72rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  margin: 0;
 }
 
 .blockBadge {
@@ -521,8 +590,17 @@
 }
 
 .currentImageThumb {
-  width: 130px;
-  aspect-ratio: 16/9;
+  width: 140px;
+  aspect-ratio: 1440 / 730;
+  object-fit: cover;
+  border: 1px solid var(--border-color);
+  background-color: #000;
+  flex-shrink: 0;
+}
+
+.currentImageThumbMobile {
+  width: 84px;
+  aspect-ratio: 4 / 5;
   object-fit: cover;
   border: 1px solid var(--border-color);
   background-color: #000;
@@ -858,17 +936,24 @@
   background-color: #000;
   overflow: hidden;
   position: relative;
-  aspect-ratio: 16/9;
+  aspect-ratio: 1440 / 730;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
 }
 
 .previewMobileWrapper {
-  max-width: 290px;
+  max-width: 310px;
   margin: 0 auto;
-  aspect-ratio: 9/16;
+  aspect-ratio: 4 / 5;
+}
+
+.previewMobileFallbackHorizontal {
+  max-width: 340px;
+  margin: 0 auto;
+  aspect-ratio: 1440 / 730;
 }
 
 .previewSlide {
