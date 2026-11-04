@@ -2766,7 +2766,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                                               <span>{copiedGiftCode === card.code ? 'COPIADO!' : 'COPIAR'}</span>
                                             </button>
                                             <a
-                                              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`🎁 Você recebeu um Vale-Presente Digital THR33 no valor de R$ ${Number(card.amount || 0).toFixed(2)}!\n\nResgate no site https://thr33.com.br usando o código: ${card.code}`)}`}
+                                              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`🎁 Você recebeu um Vale-Presente Digital THR33 no valor de R$ ${Number(card.amount || 0).toFixed(2)}!\n\nResgate no site https://lojathr33.com.br usando o código: ${card.code}`)}`}
                                               target="_blank"
                                               rel="noopener noreferrer"
                                               className={styles.copyGiftBtn}
@@ -3125,7 +3125,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                                   <span>{copiedGiftCode === card.code ? 'COPIADO!' : 'COPIAR'}</span>
                                 </button>
                                 <a
-                                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`🎁 Você recebeu um Vale-Presente Digital THR33 no valor de R$ ${Number(card.amount || 0).toFixed(2)}!\n\nResgate no site https://thr33.com.br usando o código: ${card.code}`)}`}
+                                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`🎁 Você recebeu um Vale-Presente Digital THR33 no valor de R$ ${Number(card.amount || 0).toFixed(2)}!\n\nResgate no site https://lojathr33.com.br usando o código: ${card.code}`)}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
                                   className={styles.copyGiftBtn}

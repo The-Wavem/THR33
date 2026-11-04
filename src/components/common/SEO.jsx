@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 
-const BASE_URL = 'https://thr33-streetwear.web.app';
+const BASE_URL = 'https://lojathr33.com.br';
 const DEFAULT_IMAGE = `${BASE_URL}/favicon/apple-touch-icon.png`;
 const DEFAULT_DESCRIPTION =
   'THR33 Streetwear — Moda urbana autoral em Curitiba com modelagens Boxy e Oversized exclusivas, malha pesada heavyweight e produção sob demanda para todo o Brasil. For the few.';

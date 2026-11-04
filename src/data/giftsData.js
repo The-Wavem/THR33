@@ -1,17 +1,4 @@
-import valeImage from '@assets/images/vale-presente.jpg';
-
-/**
- * IMAGEM DO VALE-PRESENTE DIGITAL THR33
- * 
- * Para substituir por uma nova foto:
- * 1. Opcao A (src/assets): Salve seu arquivo dentro de "src/assets/images/" (ex: vale-presente.jpg)
- *    e troque o import no topo deste arquivo:
- *    import giftCardImg from '@assets/images/vale-presente.jpg';
- * 
- * 2. Opcao B (pasta public): Salve seu arquivo em "public/assets/vale-presente.jpg"
- *    e aponte a variavel GIFT_CARD_COVER diretamente como string: '/assets/vale-presente.jpg'.
- */
-export const GIFT_CARD_COVER = valeImage;
+export const GIFT_CARD_COVER = '/assets/vale-presente.jpg';
 
 export const GIFTS_DATA = [
   {

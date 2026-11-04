@@ -12,7 +12,7 @@ import {
   verifyPasswordResetCode,
   confirmPasswordReset
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../services/firebaseConfig';
 import { emailService } from '../services/emailService';
 
@@ -33,19 +33,47 @@ export const getAdminEmailsFromEnv = () => {
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [dynamicAdminEmails, setDynamicAdminEmails] = useState([]);
 
   // Modal and Navigation State (Compatibilidade com Checkout e Navbar)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authOriginPath, setAuthOriginPath] = useState(null);
   const [initialAuthTab, setInitialAuthTab] = useState('login');
 
+  // Listener em tempo real da lista dinâmica de administradores em settings/admins
+  useEffect(() => {
+    try {
+      const unsub = onSnapshot(
+        doc(db, 'settings', 'admins'),
+        (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (Array.isArray(data?.adminEmails)) {
+              const list = data.adminEmails
+                .map((e) => String(e || '').trim().toLowerCase())
+                .filter(Boolean);
+              setDynamicAdminEmails(list);
+            }
+          }
+        },
+        (err) => {
+          console.warn('Aviso ao sincronizar admins dinâmicos do Firestore:', err.message);
+        }
+      );
+      return () => unsub();
+    } catch (err) {
+      console.warn('Erro ao configurar listener de admins:', err.message);
+    }
+  }, []);
+
   const checkIsAdmin = (email, dataRole, dataIsAdmin) => {
     // 1. Prioridade máxima: Definição gravada no banco de dados Firestore
     if (dataRole === 'admin' || dataIsAdmin === true) return true;
     
-    // 2. Verificação via variáveis de ambiente seguras (.env)
-    const adminEmails = getAdminEmailsFromEnv();
-    if (email && adminEmails.length > 0 && adminEmails.includes(email.trim().toLowerCase())) {
+    // 2. Verificação via variáveis de ambiente seguras (.env) + lista dinâmica no Firestore (settings/admins)
+    const envEmails = getAdminEmailsFromEnv();
+    const allEmails = [...new Set([...envEmails, ...dynamicAdminEmails])];
+    if (email && allEmails.includes(email.trim().toLowerCase())) {
       return true;
     }
     return false;
@@ -370,14 +398,26 @@ export function AuthProvider({ children }) {
   const isUserAdmin = Boolean(
     currentUser?.isAdmin || 
     currentUser?.role === 'admin' || 
-    (currentUser?.email && getAdminEmailsFromEnv().includes(currentUser.email.trim().toLowerCase()))
+    (currentUser?.email && [...getAdminEmailsFromEnv(), ...dynamicAdminEmails].includes(currentUser.email.trim().toLowerCase()))
   );
+
+  // Sincroniza em tempo real a elevação de permissão do usuário logado se for adicionado à lista de administradores
+  useEffect(() => {
+    if (!currentUser?.uid || !currentUser?.email) return;
+    const cleanEmail = currentUser.email.trim().toLowerCase();
+    const isDynamicAdmin = dynamicAdminEmails.includes(cleanEmail) || getAdminEmailsFromEnv().includes(cleanEmail);
+    if (isDynamicAdmin && (!currentUser.isAdmin || currentUser.role !== 'admin')) {
+      setCurrentUser((prev) => ({ ...prev, role: 'admin', isAdmin: true }));
+      setDoc(doc(db, 'users', currentUser.uid), { role: 'admin', isAdmin: true }, { merge: true }).catch(() => {});
+    }
+  }, [dynamicAdminEmails, currentUser?.uid, currentUser?.email, currentUser?.isAdmin, currentUser?.role]);
 
   const value = {
     currentUser,
     user: currentUser,
     isAuthenticated: !!currentUser,
     isAdmin: isUserAdmin,
+    dynamicAdminEmails,
     role: isUserAdmin ? 'admin' : (currentUser?.role || 'customer'),
     login,
     register,

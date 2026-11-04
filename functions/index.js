@@ -771,6 +771,10 @@ exports.createPagBankOrder = onCall(
         const targetUid = uid || request.auth?.uid;
         return await sendAbandonedCartEmailIfNeeded(db, targetUid, {
           forceTest: Boolean(request.data?.forceTest),
+          email: request.data?.email,
+          items: request.data?.items,
+          subtotal: request.data?.subtotal,
+          name: request.data?.name,
         });
       }
       return { sent: false, reason: "unknown_email_type" };
@@ -2761,6 +2765,61 @@ exports.cleanupExpiredPixOrdersManual = onRequest(
  * Callable Function exclusiva para administradores da THR33.
  * Executa estorno financeiro seguro na API PagBank e devolve estoque ao catalogo.
  */
+/**
+ * Função utilitária central para validar se quem está chamando a função é Administrador da THR33.
+ * Verifica:
+ * 1. Lista de e-mails em process.env.ADMIN_EMAILS (ou lista padrão dos 4 membros)
+ * 2. Coleção dinâmica settings/admins no Firestore
+ * 3. Documento users/{uid} (role === 'admin' || isAdmin === true) ou adminUsers/{uid}
+ */
+async function checkCallerIsAdmin(db, request) {
+  if (!request?.auth) return false;
+  const callerUid = request.auth.uid;
+  const callerEmail = (request.auth.token?.email || "").toLowerCase().trim();
+
+  const envEmails = (
+    process.env.ADMIN_EMAILS ||
+    "contato.thewavem@gmail.com,thewavem@gmail.com,kampaweslley@gmail.com,suzanakampa.sk@gmail.com"
+  )
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+
+  if (callerEmail && envEmails.includes(callerEmail)) {
+    return true;
+  }
+
+  // Consulta lista dinâmica em settings/admins
+  try {
+    const settingsDoc = await db.collection("settings").doc("admins").get();
+    if (settingsDoc.exists) {
+      const dynamicList = settingsDoc.data()?.adminEmails || [];
+      const cleanDynamic = dynamicList.map((e) => String(e).trim().toLowerCase()).filter(Boolean);
+      if (callerEmail && cleanDynamic.includes(callerEmail)) {
+        return true;
+      }
+    }
+  } catch (err) {
+    logger.warn("Aviso ao checar settings/admins no backend:", err.message);
+  }
+
+  // Consulta documento do usuário em users/{uid} ou adminUsers/{uid}
+  try {
+    const userDoc = await db.collection("users").doc(callerUid).get();
+    if (userDoc.exists && (userDoc.data()?.role === "admin" || userDoc.data()?.isAdmin === true)) {
+      return true;
+    }
+    const adminDoc = await db.collection("adminUsers").doc(callerUid).get();
+    if (adminDoc.exists && adminDoc.data()?.role === "admin") {
+      return true;
+    }
+  } catch (err) {
+    logger.warn("Aviso ao checar papel de admin no Firestore:", err.message);
+  }
+
+  return false;
+}
+
 exports.refundPagBankOrder = onCall(
   {
     region: FUNCTION_REGION,
@@ -2777,19 +2836,7 @@ exports.refundPagBankOrder = onCall(
     const callerUid = request.auth.uid;
     const callerEmail = (request.auth.token?.email || "").toLowerCase();
 
-    const adminEmails = (process.env.ADMIN_EMAILS || "contato.thewavem@gmail.com,eduianbf@gmail.com")
-      .split(",")
-      .map((e) => e.trim().toLowerCase());
-
-    let isAdmin = adminEmails.includes(callerEmail);
-
-    if (!isAdmin) {
-      const adminDoc = await db.collection("adminUsers").doc(callerUid).get();
-      if (adminDoc.exists && adminDoc.data()?.role === "admin") {
-        isAdmin = true;
-      }
-    }
-
+    const isAdmin = await checkCallerIsAdmin(db, request);
     if (!isAdmin) {
       throw new HttpsError("permission-denied", "Apenas administradores podem solicitar estornos.");
     }
@@ -2962,17 +3009,7 @@ exports.cancelOrderAndRefund = onCall(
 
       const isOwner = orderData.userId === callerUid || orderData.clientId === callerUid;
       if (!isOwner) {
-        const callerEmail = (request.auth.token?.email || "").toLowerCase();
-        const adminEmails = (process.env.ADMIN_EMAILS || "contato.thewavem@gmail.com,eduianbf@gmail.com")
-          .split(",")
-          .map((e) => e.trim().toLowerCase());
-        let isAdmin = adminEmails.includes(callerEmail);
-        if (!isAdmin) {
-          const adminDoc = await db.collection("adminUsers").doc(callerUid).get();
-          if (adminDoc.exists && adminDoc.data()?.role === "admin") {
-            isAdmin = true;
-          }
-        }
+        const isAdmin = await checkCallerIsAdmin(db, request);
         if (!isAdmin) {
           throw new HttpsError("permission-denied", "Você não tem permissão para cancelar este pedido.");
         }
@@ -3346,7 +3383,7 @@ exports.calculateShipping = onRequest(
                 Accept: "application/json",
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${meToken}`,
-                "User-Agent": "THR33 Streetwear (contato@thr33.com.br)",
+                "User-Agent": "THR33 Streetwear (contato@lojathr33.com.br)",
               },
               timeout: 6000,
             });
@@ -3587,7 +3624,7 @@ exports.sitemap = onRequest(
   },
   async (req, res) => {
     try {
-      const BASE_URL = "https://thr33-streetwear.web.app";
+      const BASE_URL = "https://lojathr33.com.br";
 
       const escapeXml = (unsafe) => {
         if (!unsafe) return "";
@@ -3757,7 +3794,7 @@ async function sendResendEmail({ to, subject, html }) {
 
   const configuredFrom =
     (process.env.RESEND_FROM_EMAIL || "").trim() ||
-    "THR33 Streetwear <contato@thr33.com.br>";
+    "THR33 Streetwear <contato@lojathr33.com.br>";
 
   const headers = {
     Authorization: `Bearer ${apiKey}`,
@@ -3823,7 +3860,7 @@ async function sendResendEmail({ to, subject, html }) {
 }
 
 function buildThr33EmailWrapper({ preheader, title, subtitle, bodyHtml, recipientEmail }) {
-  const unsubUrl = `https://thr33.com.br/perfil?tab=dados&unsubscribe=1&unsubscribeEmail=${encodeURIComponent(recipientEmail || "")}`;
+  const unsubUrl = `https://lojathr33.com.br/perfil?tab=dados&unsubscribe=1&unsubscribeEmail=${encodeURIComponent(recipientEmail || "")}`;
 
   return `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -3865,12 +3902,12 @@ function buildThr33EmailWrapper({ preheader, title, subtitle, bodyHtml, recipien
               <p style="margin:0 0 16px 0;font-size:11px;color:#737373;line-height:1.7;">
                 Confecção autoral sob demanda, modelagens pesadas e tiragens limitadas.<br/>
                 WhatsApp: <a href="https://wa.me/554188410374" style="color:#FFFFFF;text-decoration:underline;font-weight:600;">+55 41 8841-0374</a> &bull; E-mail: <a href="mailto:contato.thr33@gmail.com" style="color:#FFFFFF;text-decoration:underline;">contato.thr33@gmail.com</a><br/>
-                Instagram: <a href="https://instagram.com/madebythr33" style="color:#A3A3A3;text-decoration:none;">@madebythr33</a> &bull; <a href="https://thr33.com.br/suporte" style="color:#A3A3A3;text-decoration:underline;">Central de Suporte</a>
+                Instagram: <a href="https://instagram.com/madebythr33" style="color:#A3A3A3;text-decoration:none;">@madebythr33</a> &bull; <a href="https://lojathr33.com.br/suporte" style="color:#A3A3A3;text-decoration:underline;">Central de Suporte</a>
               </p>
               <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0">
                 <tr>
                   <td align="left" style="font-size:11px;">
-                    <a href="https://thr33.com.br" style="color:#A3A3A3;text-decoration:underline;letter-spacing:1px;">thr33.com.br</a>
+                    <a href="https://lojathr33.com.br" style="color:#A3A3A3;text-decoration:underline;letter-spacing:1px;">lojathr33.com.br</a>
                   </td>
                   <td align="right" style="font-size:11px;">
                     <a href="${unsubUrl}" style="color:#737373;text-decoration:underline;letter-spacing:0.5px;">Cancelar recebimento de e-mails</a>
@@ -4008,6 +4045,39 @@ async function handleUnsubscribeEmailAction(db, { email, uid }) {
   return { success: true, email: cleanEmail };
 }
 
+// Helper central para resolução infalível de imagens em e-mails
+function resolveItemEmailImageUrl(item) {
+  if (!item) return "";
+  let imgUrl = item.image ? String(item.image).trim() : "";
+  const isGift = Boolean(item.isGiftCard || String(item.name || "").toLowerCase().includes("vale-presente"));
+
+  if (isGift) {
+    return "https://thr33-streetwear.web.app/assets/vale-presente.jpg";
+  }
+
+  if (!imgUrl) return "";
+
+  // Imagens do Firebase Storage ou CDN externo (já completas)
+  if (imgUrl.startsWith("https://firebasestorage.googleapis.com") || imgUrl.startsWith("https://storage.googleapis.com")) {
+    return imgUrl;
+  }
+
+  // Se vier com o domínio customizado na pasta /assets/, redireciona para o CDN ativo do hosting
+  if (imgUrl.includes("lojathr33.com.br/assets/")) {
+    return imgUrl.replace("lojathr33.com.br", "thr33-streetwear.web.app");
+  }
+
+  if (imgUrl.startsWith("/")) {
+    return `https://thr33-streetwear.web.app${imgUrl}`;
+  }
+
+  if (imgUrl.startsWith("http")) {
+    return imgUrl;
+  }
+
+  return `https://thr33-streetwear.web.app/${imgUrl}`;
+}
+
 // GATILHO A — Boas-vindas ao Criar Conta (welcome_register) — Minimalista P&B
 function buildWelcomeEmailHtml({ userName, coupon, recipientEmail }) {
   const rawFirst = String(userName || "Cliente").trim().split(" ")[0] || "Cliente";
@@ -4041,7 +4111,7 @@ function buildWelcomeEmailHtml({ userName, coupon, recipientEmail }) {
     </p>
     ${couponBlockHtml}
     <div style="margin-top:32px;text-align:left;">
-      <a href="https://thr33.com.br/catalogo" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+      <a href="https://lojathr33.com.br/catalogo" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
         EXPLORAR CATÁLOGO
       </a>
     </div>
@@ -4117,7 +4187,7 @@ function buildOrderPixEmailHtml({ orderId, orderData, recipientEmail }) {
     </div>
 
     <div style="margin-top:32px;text-align:left;">
-      <a href="https://thr33.com.br/perfil" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+      <a href="https://lojathr33.com.br/perfil" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
         ACOMPANHAR PEDIDO
       </a>
     </div>
@@ -4161,7 +4231,7 @@ function buildOrderPaidEmailHtml({ orderId, orderData, recipientEmail }) {
           </div>
           ${gc.giftMessage ? `<p style="margin:6px 0 0 0;font-size:12px;color:#A3A3A3;font-style:italic;">"${gc.giftMessage}"</p>` : ""}
           <span style="display:block;margin-top:10px;font-size:11px;color:#737373;">
-            Para resgatar, acesse <strong style="color:#FFFFFF;">Minha Conta &gt; Carteira Digital</strong> em thr33.com.br e insira o código acima.
+            Para resgatar, acesse <strong style="color:#FFFFFF;">Minha Conta &gt; Carteira Digital</strong> em lojathr33.com.br e insira o código acima.
           </span>
         </div>
       `,
@@ -4186,12 +4256,12 @@ function buildOrderPaidEmailHtml({ orderId, orderData, recipientEmail }) {
       const qty = Number(item.quantity || 1);
       const unitPrice = Number(item.price || 0);
       const lineTotal = unitPrice * qty;
-      const imgTag =
-        item.image && String(item.image).startsWith("http")
-          ? `<td width="56" valign="top" style="padding:14px 14px 14px 0;border-bottom:1px solid #222222;">
-               <img src="${item.image}" alt="${item.name || "THR33"}" width="48" height="56" style="display:block;object-fit:cover;background-color:#111111;border:1px solid #222222;" />
-             </td>`
-          : "";
+      const resolvedImg = resolveItemEmailImageUrl(item);
+      const imgTag = resolvedImg
+        ? `<td width="58" valign="top" style="padding:14px 14px 14px 0;border-bottom:1px solid #222222;">
+             <img src="${resolvedImg}" alt="${item.name || "THR33"}" width="48" height="56" style="display:block;width:48px;max-width:48px;height:56px;max-height:56px;object-fit:cover;background-color:#111111;border:1px solid #222222;" />
+           </td>`
+        : "";
 
       return `
         <tr>
@@ -4297,7 +4367,7 @@ function buildOrderPaidEmailHtml({ orderId, orderData, recipientEmail }) {
     ${addressBlockHtml}
 
     <div style="margin-top:32px;text-align:left;">
-      <a href="https://thr33.com.br/perfil" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+      <a href="https://lojathr33.com.br/perfil" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
         ACOMPANHAR PEDIDO
       </a>
     </div>
@@ -4379,12 +4449,12 @@ function buildAbandonedCartEmailHtml({ userName, items, subtotal, recipientEmail
       const qty = Number(item.quantity || 1);
       const unitPrice = Number(item.price || 0);
       const lineTotal = unitPrice * qty;
-      const imgTag =
-        item.image && String(item.image).startsWith("http")
-          ? `<td width="56" valign="top" style="padding:14px 14px 14px 0;border-bottom:1px solid #222222;">
-               <img src="${item.image}" alt="${item.name || "THR33"}" width="48" height="56" style="display:block;object-fit:cover;background-color:#111111;border:1px solid #222222;" />
-             </td>`
-          : "";
+      const resolvedImg = resolveItemEmailImageUrl(item);
+      const imgTag = resolvedImg
+        ? `<td width="58" valign="top" style="padding:14px 14px 14px 0;border-bottom:1px solid #222222;">
+             <img src="${resolvedImg}" alt="${item.name || "THR33"}" width="48" height="56" style="display:block;width:48px;max-width:48px;height:56px;max-height:56px;object-fit:cover;background-color:#111111;border:1px solid #222222;" />
+           </td>`
+        : "";
 
       return `
         <tr>
@@ -4423,7 +4493,7 @@ function buildAbandonedCartEmailHtml({ userName, items, subtotal, recipientEmail
     </div>
 
     <div style="margin-top:32px;text-align:left;">
-      <a href="https://thr33.com.br/checkout" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+      <a href="https://lojathr33.com.br/checkout" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
         FINALIZAR MINHA COMPRA
       </a>
     </div>
@@ -4735,69 +4805,146 @@ async function sendOrderShippedEmailIfNeeded(db, orderRef, orderDataInput) {
   }
 }
 
-async function sendAbandonedCartEmailIfNeeded(db, uid, { forceTest = false } = {}) {
-  if (!uid) return { sent: false, reason: "missing_uid" };
-  const userRef = db.collection("users").doc(String(uid));
+async function sendAbandonedCartEmailIfNeeded(db, uid, { forceTest = false, email, items: customItems, subtotal: customSubtotal, name: customName } = {}) {
+  let targetUid = uid;
+  const cleanEmail = email ? String(email).trim().toLowerCase() : "";
+
+  // Se uid não foi passado mas temos o e-mail, busca o usuário correspondente no Firestore
+  if (!targetUid && cleanEmail) {
+    const userQuery = await db.collection("users").where("email", "==", cleanEmail).limit(1).get().catch(() => null);
+    if (userQuery && !userQuery.empty) {
+      targetUid = userQuery.docs[0].id;
+    }
+  }
+
+  const userRef = targetUid ? db.collection("users").doc(String(targetUid)) : null;
   const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
   try {
     const nowMs = Date.now();
-    const txState = await db.runTransaction(async (transaction) => {
-      const userSnap = await transaction.get(userRef);
-      if (!userSnap.exists) return { shouldSend: false, reason: "user_not_found" };
+    let txState = null;
 
-      const userData = userSnap.data() || {};
-      const targetEmail = String(userData.email || "").trim();
-      if (!targetEmail || !targetEmail.includes("@")) {
-        return { shouldSend: false, reason: "missing_email" };
-      }
+    if (userRef) {
+      txState = await db.runTransaction(async (transaction) => {
+        const userSnap = await transaction.get(userRef);
+        if (!userSnap.exists) {
+          if (forceTest) {
+            return {
+              shouldSend: true,
+              targetEmail: cleanEmail || "cliente@lojathr33.com.br",
+              userName: customName || "Cliente",
+              items: Array.isArray(customItems) && customItems.length > 0 ? customItems : [
+                {
+                  name: "Vale-Presente Digital THR33 (R$ 100)",
+                  price: 100,
+                  quantity: 1,
+                  size: "R$ 100",
+                  color: "Preto",
+                  isGiftCard: true,
+                  image: "https://thr33-streetwear.web.app/assets/vale-presente.jpg"
+                }
+              ],
+              subtotal: Number(customSubtotal || 100),
+              updatedAtMs: nowMs,
+              cartSnapshot: {},
+            };
+          }
+          return { shouldSend: false, reason: "user_not_found" };
+        }
 
-      const cart = userData.abandonedCart || {};
-      const items = Array.isArray(cart.items) ? cart.items : [];
-      if (items.length === 0) {
-        return { shouldSend: false, reason: "empty_cart" };
-      }
+        const userData = userSnap.data() || {};
+        const targetEmail = cleanEmail || String(userData.email || "").trim();
+        if (!targetEmail || !targetEmail.includes("@")) {
+          return { shouldSend: false, reason: "missing_email" };
+        }
 
-      if (!forceTest && cart.abandonedEmailSent === true) {
-        return { shouldSend: false, alreadySent: true };
-      }
-      if (
-        !forceTest &&
-        cart.abandonedEmailLockUntil &&
-        Number(cart.abandonedEmailLockUntil) > nowMs
-      ) {
-        return { shouldSend: false, alreadySent: true, reason: "in_flight_lock" };
-      }
+        const cart = userData.abandonedCart || {};
+        let items = Array.isArray(cart.items) && cart.items.length > 0 ? cart.items : (Array.isArray(customItems) && customItems.length > 0 ? customItems : []);
 
-      const updatedAtMs = Number(cart.UpdatedAtMs || 0);
-      if (!forceTest && (!updatedAtMs || nowMs - updatedAtMs < TWENTY_FOUR_HOURS_MS)) {
-        return { shouldSend: false, reason: "not_24h_yet" };
-      }
+        if (items.length === 0) {
+          if (forceTest) {
+            items = [
+              {
+                name: "Vale-Presente Digital THR33 (R$ 100)",
+                price: 100,
+                quantity: 1,
+                size: "R$ 100",
+                color: "Preto",
+                isGiftCard: true,
+                image: "https://thr33-streetwear.web.app/assets/vale-presente.jpg"
+              }
+            ];
+          } else {
+            return { shouldSend: false, reason: "empty_cart" };
+          }
+        }
 
-      transaction.set(
-        userRef,
-        {
-          abandonedCart: {
-            ...cart,
-            abandonedEmailLockUntil: nowMs + 60000,
-          },
-        },
-        { merge: true },
-      );
+        if (!forceTest && cart.abandonedEmailSent === true) {
+          return { shouldSend: false, alreadySent: true };
+        }
+        if (
+          !forceTest &&
+          cart.abandonedEmailLockUntil &&
+          Number(cart.abandonedEmailLockUntil) > nowMs
+        ) {
+          return { shouldSend: false, alreadySent: true, reason: "in_flight_lock" };
+        }
 
-      return {
+        const updatedAtMs = Number(cart.UpdatedAtMs || 0);
+        if (!forceTest && (!updatedAtMs || nowMs - updatedAtMs < TWENTY_FOUR_HOURS_MS)) {
+          return { shouldSend: false, reason: "not_24h_yet" };
+        }
+
+        if (!forceTest) {
+          transaction.set(
+            userRef,
+            {
+              abandonedCart: {
+                ...cart,
+                abandonedEmailLockUntil: nowMs + 60000,
+              },
+            },
+            { merge: true },
+          );
+        }
+
+        return {
+          shouldSend: true,
+          targetEmail,
+          userName: customName || userData.name || "Cliente",
+          items,
+          subtotal: Number(cart.subtotal || customSubtotal || items.reduce((acc, i) => acc + (Number(i.price || 0) * Number(i.quantity || 1)), 0)),
+          updatedAtMs,
+          cartSnapshot: cart,
+        };
+      });
+    } else if (forceTest && cleanEmail) {
+      // Teste direto com e-mail especificado
+      txState = {
         shouldSend: true,
-        targetEmail,
-        userName: userData.name || "Cliente",
-        items,
-        subtotal: Number(cart.subtotal || 0),
-        updatedAtMs,
-        cartSnapshot: cart,
+        targetEmail: cleanEmail,
+        userName: customName || "Cliente THR33",
+        items: Array.isArray(customItems) && customItems.length > 0 ? customItems : [
+          {
+            name: "Vale-Presente Digital THR33 (R$ 100)",
+            price: 100,
+            quantity: 1,
+            size: "R$ 100",
+            color: "Preto",
+            isGiftCard: true,
+            image: "https://thr33-streetwear.web.app/assets/vale-presente.jpg"
+          }
+        ],
+        subtotal: Number(customSubtotal || 100),
+        updatedAtMs: nowMs,
+        cartSnapshot: {},
       };
-    });
+    } else {
+      return { sent: false, reason: "missing_uid_and_email" };
+    }
 
-    if (!txState.shouldSend) {
-      return { sent: false, ...txState };
+    if (!txState || !txState.shouldSend) {
+      return { sent: false, ...(txState || {}) };
     }
 
     // Verifica se o cliente já concluiu algum pedido após a última modificação da sacola
@@ -4996,7 +5143,7 @@ function buildDropWaitlistWelcomeHtml({ name, dropName, dropId, recipientEmail }
     </p>
 
     <div style="margin-top:32px;text-align:left;">
-      <a href="https://thr33.com.br/catalogo" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+      <a href="https://lojathr33.com.br/catalogo" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
         EXPLORAR CATÁLOGO
       </a>
     </div>
@@ -5221,7 +5368,7 @@ async function sendResendBatchEmails(emailsPayloadArray) {
 
   const configuredFrom =
     (process.env.RESEND_FROM_EMAIL || "").trim() ||
-    "THR33 Streetwear <contato@thr33.com.br>";
+    "THR33 Streetwear <contato@lojathr33.com.br>";
 
   const headers = {
     Authorization: `Bearer ${apiKey}`,
@@ -5321,21 +5468,7 @@ async function handleDropBroadcastCampaign(db, request) {
 
   const callerUid = request.auth.uid;
   const callerEmail = (request.auth.token?.email || "").toLowerCase();
-  const adminEmails = (
-    process.env.ADMIN_EMAILS ||
-    "contato.thewavem@gmail.com,thewavem@gmail.com,eduianbf@gmail.com,kampaweslley@gmail.com,contato.thr33@gmail.com,admin@thr33.com,sac@thr33.com,contato@thr33.com"
-  )
-    .split(",")
-    .map((e) => e.trim().toLowerCase());
-
-  let isAdmin = adminEmails.includes(callerEmail);
-  if (!isAdmin) {
-    const userDoc = await db.collection("users").doc(callerUid).get();
-    if (userDoc.exists && (userDoc.data()?.role === "admin" || userDoc.data()?.isAdmin === true)) {
-      isAdmin = true;
-    }
-  }
-
+  const isAdmin = await checkCallerIsAdmin(db, request);
   if (!isAdmin) {
     throw new HttpsError("permission-denied", "Apenas administradores podem disparar campanhas para a Lista VIP.");
   }

@@ -124,7 +124,7 @@ export function CmsCampanhas() {
   const [dropCouponDesc, setDropCouponDesc] = useState('Utilize este código no checkout antes que o lote esgote.');
   const [enableCtaModule, setEnableCtaModule] = useState(true);
   const [dropCtaLabel, setDropCtaLabel] = useState('ACESSAR O DROP AGORA');
-  const [dropCtaUrl, setDropCtaUrl] = useState('https://thr33.com.br/catalogo?utm_source=email&utm_medium=newsletter&utm_campaign=drop_vip_launch');
+  const [dropCtaUrl, setDropCtaUrl] = useState('https://lojathr33.com.br/catalogo?utm_source=email&utm_medium=newsletter&utm_campaign=drop_vip_launch');
 
   // Filtros e Seleção da Base de Inscritos VIP
   // Múltiplas Fontes de Imagem para o Banner
@@ -215,7 +215,7 @@ export function CmsCampanhas() {
     }
   }, [isModalOpen]);
 
-  const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://thr33-streetwear.web.app';
+  const baseUrl = typeof window !== 'undefined' && !window.location.origin.includes('localhost') && !window.location.origin.includes('web.app') ? window.location.origin : 'https://lojathr33.com.br';
 
   // Lista consolidada de Origens (Padrão + Customizadas + Usadas em Campanhas)
   const allSources = useMemo(() => {
@@ -596,7 +596,7 @@ export function CmsCampanhas() {
 
     let targetEmails = [];
     if (dropAudienceSegment === 'test_admin') {
-      targetEmails = [String(dropTestEmail || currentUser?.email || 'admin@thr33.com.br').trim().toLowerCase()];
+      targetEmails = [String(dropTestEmail || currentUser?.email || 'admin@lojathr33.com.br').trim().toLowerCase()];
     } else if (selectedSubEmails.length > 0) {
       targetEmails = selectedSubEmails;
     } else if (dropAudienceSegment === 'vip_customers') {
@@ -744,7 +744,7 @@ export function CmsCampanhas() {
   const formatResendErrorForAdmin = (rawErr) => {
     const str = String(rawErr || '');
     if (str.toLowerCase().includes('only send testing emails to your own email address') || str.includes('403')) {
-      return 'Aviso Resend Sandbox: Enquanto o domínio thr33.com.br não estiver verificado no painel DNS do Resend, o remetente de testes permite envios apenas para o e-mail proprietário da conta Resend.';
+      return 'Aviso Resend Sandbox: Enquanto o domínio lojathr33.com.br não estiver verificado no painel DNS do Resend, o remetente de testes permite envios apenas para o e-mail proprietário da conta Resend.';
     }
     return str || 'Verifique a configuração do Resend.';
   };
@@ -803,6 +803,60 @@ export function CmsCampanhas() {
       setBroadcastFeedback({
         type: 'error',
         message: err.message || 'Erro ao disparar e-mail de teste.'
+      });
+    } finally {
+      setSendingTestEmail(false);
+    }
+  };
+
+  // Disparo de Teste do E-mail de Recuperação de Carrinho Abandonado (24h)
+  const handleTestAbandonedCart = async () => {
+    const targetEmail = (dropTestEmail || currentUser?.email || '').trim();
+    if (!targetEmail || !targetEmail.includes('@')) {
+      setBroadcastFeedback({
+        type: 'error',
+        message: 'Informe um e-mail válido para receber o teste de carrinho abandonado.'
+      });
+      return;
+    }
+
+    setSendingTestEmail(true);
+    setBroadcastFeedback({ type: '', message: '' });
+    try {
+      const res = await emailService.triggerAbandonedCartEmail({
+        email: targetEmail,
+        uid: currentUser?.uid,
+        forceTest: true,
+        items: [
+          {
+            name: "Vale-Presente Digital THR33 (R$ 100)",
+            price: 100,
+            quantity: 1,
+            size: "R$ 100",
+            color: "Preto",
+            isGiftCard: true,
+            image: "https://thr33-streetwear.web.app/assets/vale-presente.jpg"
+          }
+        ],
+        subtotal: 100,
+        name: currentUser?.displayName || 'Wavem teste'
+      });
+
+      if (res?.sent) {
+        setBroadcastFeedback({
+          type: 'success',
+          message: `E-mail de Carrinho Abandonado (24h) disparado para ${targetEmail}! Verifique sua caixa de entrada (e pasta de Spam).`
+        });
+      } else {
+        setBroadcastFeedback({
+          type: 'error',
+          message: `Não foi possível enviar para ${targetEmail}: ${formatResendErrorForAdmin(res?.error || res?.reason)}`
+        });
+      }
+    } catch (err) {
+      setBroadcastFeedback({
+        type: 'error',
+        message: formatResendErrorForAdmin(err.message)
       });
     } finally {
       setSendingTestEmail(false);
@@ -2107,7 +2161,7 @@ export function CmsCampanhas() {
                       </div>
                       <input
                         type="url"
-                        placeholder="https://thr33.com.br/catalogo"
+                        placeholder="https://lojathr33.com.br/catalogo"
                         value={dropCtaUrl}
                         onChange={(e) => setDropCtaUrl(e.target.value)}
                       />
@@ -2185,7 +2239,7 @@ export function CmsCampanhas() {
                     <div className={styles.vipTestInputRow}>
                       <input
                         type="email"
-                        placeholder="admin@thr33.com.br"
+                        placeholder="admin@lojathr33.com.br"
                         value={dropTestEmail || currentUser?.email || ''}
                         onChange={(e) => setDropTestEmail(e.target.value)}
                         className={styles.vipTestInput}
@@ -2215,8 +2269,21 @@ export function CmsCampanhas() {
                 </div>
               )}
 
-              {/* RODAPÉ DE ENVIO: BOTÃO PRINCIPAL ÚNICO E ELEGANTE */}
+              {/* RODAPÉ DE ENVIO: BOTÕES DE TESTE E DISPARO OFICIAL */}
               <div className={styles.vipActionsFooter}>
+                {dropAudienceSegment === 'test_admin' && (
+                  <button
+                    type="button"
+                    onClick={handleTestAbandonedCart}
+                    disabled={sendingBroadcast || sendingTestEmail}
+                    className={styles.vipCartTestBtn}
+                    title="Dispara imediatamente o e-mail de recuperação de carrinho abandonado com o layout oficial P&B"
+                  >
+                    <ShoppingBag size={13} />
+                    <span>TESTAR CARRINHO ABANDONADO (24H)</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={handleBroadcastDropEmail}
@@ -2511,7 +2578,7 @@ export function CmsCampanhas() {
                 <span>WhatsApp: +55 41 8841-0374 • E-mail: contato.thr33@gmail.com</span>
                 <span>Instagram: @madebythr33 • Central de Suporte</span>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.6rem', width: '100%' }}>
-                  <span style={{ color: '#a3a3a3' }}>thr33.com.br</span>
+                  <span style={{ color: '#a3a3a3' }}>lojathr33.com.br</span>
                   <span style={{ color: '#737373', fontSize: '0.68rem', textDecoration: 'underline' }}>Cancelar recebimento de e-mails</span>
                 </div>
               </div>

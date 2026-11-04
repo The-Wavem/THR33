@@ -144,12 +144,16 @@ export const emailService = {
   /**
    * Feature 3 — Disparo de E-mail de Recuperação de Carrinho Abandonado (abandoned_cart)
    */
-  triggerAbandonedCartEmail({ uid, forceTest = false }) {
-    if (!uid) return Promise.resolve({ sent: false });
+  triggerAbandonedCartEmail({ uid, email, forceTest = false, items, subtotal, name } = {}) {
+    if (!uid && !email) return Promise.resolve({ sent: false, reason: 'missing_recipient' });
     return invokeTransactionalEmail({
       type: 'abandoned_cart',
       uid,
-      forceTest
+      email,
+      forceTest,
+      items,
+      subtotal,
+      name
     });
   }
 };

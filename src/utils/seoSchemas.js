@@ -3,7 +3,7 @@
  * Otimizados para as diretrizes oficiais do Google Merchant & Search Console
  */
 
-const BASE_URL = 'https://thr33-streetwear.web.app';
+const BASE_URL = 'https://lojathr33.com.br';
 
 /**
  * Constrói o Schema de Produto (Google Merchant / Search)

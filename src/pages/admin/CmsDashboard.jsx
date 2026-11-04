@@ -1,7 +1,19 @@
 import newsletterService from '../../services/newsletterService';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { collection, getDocs, doc, getDoc } from 'firebase/firestore';
+import { 
+  collection, 
+  getDocs, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  onSnapshot, 
+  arrayUnion, 
+  arrayRemove, 
+  query, 
+  where 
+} from 'firebase/firestore';
 import { 
   DollarSign, 
   ShoppingBag, 
@@ -18,9 +30,14 @@ import {
   Clock,
   Calendar,
   Check,
-  X
+  X,
+  ShieldCheck,
+  Mail,
+  UserPlus,
+  Trash2
 } from 'lucide-react';
 import { db } from '../../services/firebaseConfig';
+import { useAuth } from '../../context/AuthContext';
 import { catalogService } from '../../services/catalogService';
 import { maskCPF } from '../../utils/validators';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
@@ -60,6 +77,147 @@ export function CmsDashboard() {
   const [cpfSearch, setCpfSearch] = useState('');
   const [crmResult, setCrmResult] = useState(null);
   const [crmLoading, setCrmLoading] = useState(false);
+
+  // GESTÃO DE EQUIPE & ADMINISTRADORES DO CMS
+  const { currentUser } = useAuth();
+  const [adminTeam, setAdminTeam] = useState([]);
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [adminActionLoading, setAdminActionLoading] = useState(false);
+  const [adminFeedback, setAdminFeedback] = useState(null);
+
+  const DEFAULT_INITIAL_ADMINS = useMemo(() => [
+    'contato.thewavem@gmail.com',
+    'thewavem@gmail.com',
+    'kampaweslley@gmail.com',
+    'suzanakampa.sk@gmail.com'
+  ], []);
+
+  // Sincroniza em tempo real a lista de administradores do CMS (settings/admins)
+  useEffect(() => {
+    const unsub = onSnapshot(doc(db, 'settings', 'admins'), async (snap) => {
+      if (snap.exists()) {
+        const data = snap.data();
+        const emails = Array.isArray(data?.adminEmails)
+          ? data.adminEmails.map(e => String(e || '').trim().toLowerCase()).filter(Boolean)
+          : [];
+        setAdminTeam(emails);
+      } else {
+        // Inicializa com a equipe oficial se ainda não existir o documento
+        try {
+          await setDoc(doc(db, 'settings', 'admins'), {
+            adminEmails: DEFAULT_INITIAL_ADMINS,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+          setAdminTeam(DEFAULT_INITIAL_ADMINS);
+        } catch (err) {
+          console.warn('Aviso ao inicializar lista padrão de admins:', err.message);
+          setAdminTeam(DEFAULT_INITIAL_ADMINS);
+        }
+      }
+    }, (err) => {
+      console.warn('Aviso ao escutar settings/admins:', err.message);
+      setAdminTeam(DEFAULT_INITIAL_ADMINS);
+    });
+
+    return () => unsub();
+  }, [DEFAULT_INITIAL_ADMINS]);
+
+  const handleAddAdminEmail = async (e) => {
+    e.preventDefault();
+    const cleanEmail = String(newAdminEmail || '').trim().toLowerCase();
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(cleanEmail)) {
+      setAdminFeedback({ type: 'error', message: 'Por favor, insira um e-mail válido.' });
+      return;
+    }
+
+    if (adminTeam.includes(cleanEmail)) {
+      setAdminFeedback({ type: 'error', message: 'Este e-mail já possui acesso de Administrador.' });
+      return;
+    }
+
+    setAdminActionLoading(true);
+    setAdminFeedback(null);
+    try {
+      await setDoc(doc(db, 'settings', 'admins'), {
+        adminEmails: arrayUnion(cleanEmail),
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      // Se o usuário já tiver conta criada em users/{uid}, promove imediatamente
+      try {
+        const userQuery = query(collection(db, 'users'), where('email', '==', cleanEmail));
+        const userSnap = await getDocs(userQuery);
+        if (!userSnap.empty) {
+          const userUpdates = userSnap.docs.map(d => 
+            setDoc(doc(db, 'users', d.id), { role: 'admin', isAdmin: true }, { merge: true })
+          );
+          await Promise.all(userUpdates);
+        }
+      } catch (userErr) {
+        console.warn('Aviso ao sincronizar documento do usuário:', userErr.message);
+      }
+
+      setNewAdminEmail('');
+      setAdminFeedback({ type: 'success', message: `Administrador ${cleanEmail} adicionado com sucesso!` });
+      setTimeout(() => setAdminFeedback(null), 5000);
+    } catch (err) {
+      console.error('Erro ao adicionar administrador:', err);
+      setAdminFeedback({ type: 'error', message: `Erro ao adicionar: ${err.message}` });
+    } finally {
+      setAdminActionLoading(false);
+    }
+  };
+
+  const handleRemoveAdminEmail = async (emailToRemove) => {
+    const cleanEmail = String(emailToRemove || '').trim().toLowerCase();
+    
+    if (currentUser?.email && currentUser.email.trim().toLowerCase() === cleanEmail) {
+      alert('Por segurança, você não pode revogar o seu próprio acesso de Administrador.');
+      return;
+    }
+
+    if (cleanEmail === 'contato.thewavem@gmail.com') {
+      alert('O e-mail principal/master da THR33 não pode ser removido.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Tem certeza que deseja revogar o acesso de Administrador de "${cleanEmail}"?`);
+    if (!confirmed) return;
+
+    setAdminActionLoading(true);
+    setAdminFeedback(null);
+    try {
+      await updateDoc(doc(db, 'settings', 'admins'), {
+        adminEmails: arrayRemove(cleanEmail),
+        updatedAt: new Date().toISOString()
+      });
+
+      // Atualiza usuário existente para customer
+      try {
+        const userQuery = query(collection(db, 'users'), where('email', '==', cleanEmail));
+        const userSnap = await getDocs(userQuery);
+        if (!userSnap.empty) {
+          const userUpdates = userSnap.docs.map(d => 
+            setDoc(doc(db, 'users', d.id), { role: 'customer', isAdmin: false }, { merge: true })
+          );
+          await Promise.all(userUpdates);
+        }
+      } catch (userErr) {
+        console.warn('Aviso ao sincronizar documento do usuário revogado:', userErr.message);
+      }
+
+      setAdminFeedback({ type: 'success', message: `Acesso de administrador revogado para ${cleanEmail}.` });
+      setTimeout(() => setAdminFeedback(null), 5000);
+    } catch (err) {
+      console.error('Erro ao remover administrador:', err);
+      setAdminFeedback({ type: 'error', message: `Erro ao revogar: ${err.message}` });
+    } finally {
+      setAdminActionLoading(false);
+    }
+  };
 
   const loadDashboardData = async () => {
     setLoading(true);
@@ -806,6 +964,99 @@ export function CmsDashboard() {
             )}
           </div>
         )}
+      </section>
+
+      {/* SEÇÃO GESTÃO DE EQUIPE & ADMINISTRADORES DO CMS */}
+      <section className={styles.teamSection}>
+        <div className={styles.teamHeader}>
+          <div className={styles.teamHeaderInfo}>
+            <div className={styles.titleWithIcon}>
+              <ShieldCheck size={18} />
+              <h3>EQUIPE & ACESSO ADMINISTRATIVO AO CMS</h3>
+            </div>
+            <p>Cadastre e gerencie os e-mails dos membros da equipe que possuem permissão total de acesso ao painel CMS da THR33.</p>
+          </div>
+          <span className={styles.teamCountBadge}>
+            {adminTeam.length} {adminTeam.length === 1 ? 'ADMINISTRADOR ATIVO' : 'ADMINISTRADORES ATIVOS'}
+          </span>
+        </div>
+
+        {adminFeedback && (
+          <div className={`${styles.teamFeedbackMessage} ${adminFeedback.type === 'success' ? styles.teamFeedbackSuccess : styles.teamFeedbackError}`}>
+            {adminFeedback.type === 'success' ? <Check size={15} /> : <AlertTriangle size={15} />}
+            <span>{adminFeedback.message}</span>
+          </div>
+        )}
+
+        <form onSubmit={handleAddAdminEmail} className={styles.teamAddForm}>
+          <div className={styles.teamInputWrapper}>
+            <Mail size={16} className={styles.teamInputIcon} />
+            <input 
+              type="email"
+              placeholder="Digite o e-mail do integrante para torná-lo Administrador..."
+              value={newAdminEmail}
+              onChange={(e) => setNewAdminEmail(e.target.value)}
+              className={styles.teamInput}
+              disabled={adminActionLoading}
+              required
+            />
+          </div>
+          <button 
+            type="submit" 
+            disabled={adminActionLoading || !newAdminEmail.trim()} 
+            className={styles.teamAddBtn}
+          >
+            <UserPlus size={15} />
+            <span>{adminActionLoading ? 'ADICIONANDO...' : 'ADICIONAR ADMINISTRADOR'}</span>
+          </button>
+        </form>
+
+        <div className={styles.teamGrid}>
+          {adminTeam.map((email) => {
+            const isMe = currentUser?.email && currentUser.email.trim().toLowerCase() === email.toLowerCase();
+            const isMaster = email.toLowerCase() === 'contato.thewavem@gmail.com';
+            const initialLetter = email.charAt(0).toUpperCase();
+
+            return (
+              <div key={email} className={styles.teamCard}>
+                <div className={styles.teamCardInfo}>
+                  <div className={styles.teamAvatar}>
+                    {initialLetter}
+                  </div>
+                  <div className={styles.teamMeta}>
+                    <span className={styles.teamEmailText} title={email}>
+                      {email}
+                    </span>
+                    <div className={styles.teamBadgesRow}>
+                      {isMaster ? (
+                        <span className={styles.teamBadgeMaster}>MASTER</span>
+                      ) : (
+                        <span className={styles.teamBadgeAdmin}>ADMINISTRADOR</span>
+                      )}
+                      {isMe && <span className={styles.teamBadgeYou}>VOCÊ</span>}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => handleRemoveAdminEmail(email)}
+                  disabled={adminActionLoading || isMe || isMaster}
+                  className={styles.teamDeleteBtn}
+                  title={
+                    isMaster 
+                      ? 'O e-mail principal/master não pode ser removido' 
+                      : isMe 
+                        ? 'Você não pode revogar o seu próprio acesso' 
+                        : `Revogar acesso de Administrador de ${email}`
+                  }
+                >
+                  <Trash2 size={16} />
+                </button>
+              </div>
+            );
+          })}
+        </div>
       </section>
     </div>
   );

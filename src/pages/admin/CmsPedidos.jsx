@@ -1642,22 +1642,6 @@ export function CmsPedidos() {
         </div>
       )}
 
-      {/* RADAR AO VIVO COM STATUS FIRESTORE */}
-      <div className={styles.liveRadarBar}>
-        <div className={styles.radarStatus}>
-          <span className={styles.radarPulseDot} />
-          <span className={styles.radarText}>
-            <strong>RADAR AO VIVO:</strong> Conectado ao Firestore em tempo real
-            {lastSaleMinutesAgo && (
-              <> • Última venda aprovada há <strong>{lastSaleMinutesAgo}</strong></>
-            )}
-          </span>
-        </div>
-        <div className={styles.radarRightSide}>
-          <span className={styles.radarBadge}>ESTOQUE & CORTE SOB DEMANDA</span>
-        </div>
-      </div>
-
       {/* FEEDBACK VISUAL DO PERÍODO SELECIONADO */}
       {(startDate || endDate) && (
         <div className={styles.activePeriodBadge}>

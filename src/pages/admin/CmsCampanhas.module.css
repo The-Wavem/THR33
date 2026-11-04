@@ -1615,6 +1615,34 @@
   border-color: #E5E5E5;
 }
 
+.vipCartTestBtn {
+  width: 100%;
+  background-color: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-main);
+  padding: 0.75rem 1.25rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  transition: all var(--transition-fast);
+}
+
+.vipCartTestBtn:hover:not(:disabled) {
+  background-color: #111111;
+  border-color: #FFFFFF;
+  color: #FFFFFF;
+}
+
+.vipCartTestBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .vipBroadcastBtn:disabled,
 .vipTestBtn:disabled {
   opacity: 0.45;
