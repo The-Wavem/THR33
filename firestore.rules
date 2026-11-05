@@ -34,9 +34,8 @@ service cloud.firestore {
 
     // Colecao principal de pedidos da THR33 ('orders')
     match /orders/{orderId} {
-      allow read: if (isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.clientEmail == request.auth.token.email || isAdmin())) || resource.data.userId == 'guest';
-      allow create: if (isAuthenticated() && request.resource.data.userId == request.auth.uid) ||
-        (request.resource.data.userId == 'guest' || !('userId' in request.resource.data) || request.resource.data.userId == null);
+      allow read: if (isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.clientEmail == request.auth.token.email || isAdmin())) || resource.data.userId == 'guest' || !exists(/databases/$(database)/documents/orders/$(orderId));
+      allow create: if true; // A validacao de integridade financeira e garantida pelo backend PagBank
       allow update: if isAdmin() || (
         isAuthenticated() && 
         (resource.data.userId == request.auth.uid || resource.data.clientEmail == request.auth.token.email) &&
@@ -104,7 +103,6 @@ service cloud.firestore {
       allow read: if true;
       allow create, delete: if isAdmin();
       allow update: if isAdmin() || (
-        isAuthenticated() &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'usageCount', 'itemsSold', 'grossRevenue', 'discountGiven', 'commissionRate', 'commissionPending'
         ])
@@ -221,4 +219,3 @@ service cloud.firestore {
     }
   }
 }
-

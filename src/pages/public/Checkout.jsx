@@ -1287,12 +1287,13 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       // 1. Gravação 100% GARANTIDA do pedido na coleção 'orders'
       const targetOrderId = finalDocId || orderRefId;
       const orderDocRef = doc(db, 'orders', targetOrderId);
+      const finalUserId = user?.uid || authUser?.uid || currentUser?.uid || cleanPayload.userId || 'guest';
 
       await setDoc(orderDocRef, {
         ...cleanPayload,
         orderId: targetOrderId,
         id: targetOrderId,
-        userId: cleanPayload.userId || resolvedUid,
+        userId: finalUserId,
         clientEmail: cleanPayload.clientEmail || resolvedEmail,
         clientName: cleanPayload.clientName || clientData.name || user?.displayName || user?.name || 'Cliente THR33',
         clientCpf: cleanPayload.clientCpf || clientData.cpf || '',
@@ -1371,13 +1372,17 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
       // Notifica time operacional se já iniciou aprovado
       if (initialStatus === ORDER_STATUSES.PAGAMENTO_APROVADO) {
-        webhookService.notifyInternalTeam({
-          orderId: finalDocId,
-          clientName: cleanPayload.clientName,
-          total: cleanPayload.total,
-          items: cleanPayload.items,
-          paymentMethod: cleanPayload.paymentMethod
-        });
+        try {
+          webhookService.notifyInternalTeam({
+            orderId: finalDocId,
+            clientName: cleanPayload.clientName,
+            total: cleanPayload.total,
+            items: cleanPayload.items,
+            paymentMethod: cleanPayload.paymentMethod
+          });
+        } catch (whErr) {
+          console.warn("Aviso ao notificar equipe interna:", whErr.message);
+        }
       }
 
       // 2. Se um cupom foi utilizado, atualiza métricas e saldo de comissões do parceiro
@@ -1464,33 +1469,42 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       }
 
       // 4. Marca a sessão de checkout como concluída na telemetria
-      await analyticsService.trackCheckoutSession(sessionId, {
-        completed: true,
-        orderId: finalDocId,
-        status: 'concluido'
-      });
+      try {
+        await analyticsService.trackCheckoutSession(sessionId, {
+          completed: true,
+          orderId: finalDocId,
+          status: 'concluido'
+        });
+      } catch (analyticsErr) {
+        console.warn("Aviso na telemetria de sessão:", analyticsErr.message);
+      }
 
       // 5. Registra a conversão de compra por produto, atribuição UTM e telemetria logística/pagamento
-      await analyticsService.trackPurchase(cartItems, total, {
-        paymentMethod: finalAmountToPay === 0 ? 'Carteira Digital THR33' : (paymentMethod || 'PIX'),
-        shippingState: addressToSave?.state || resolveOrderDestinationUF({ shippingAddress: addressToSave }) || '',
-        shippingCity: addressToSave?.city || '',
-        shippingMethod: selectedShippingMethod || 'padrao',
-        carrier: selectedShippingOption?.carrier || selectedShippingOption?.name || (isFreeShippingActive ? 'Frete Grátis' : 'Transportadora')
-      });
+      try {
+        await analyticsService.trackPurchase(cartItems, total, {
+          paymentMethod: finalAmountToPay === 0 ? 'Carteira Digital THR33' : (paymentMethod || 'PIX'),
+          shippingState: addressToSave?.state || resolveOrderDestinationUF({ shippingAddress: addressToSave }) || '',
+          shippingCity: addressToSave?.city || '',
+          shippingMethod: selectedShippingMethod || 'padrao',
+          carrier: selectedShippingOption?.carrier || selectedShippingOption?.name || (isFreeShippingActive ? 'Frete Grátis' : 'Transportadora')
+        });
+      } catch (purchaseErr) {
+        console.warn("Aviso na telemetria de compra:", purchaseErr.message);
+      }
 
-      // 6. Decrementa o estoque físico por tamanho no Firestore de forma automatizada
-      await catalogService.decrementProductStock(cartItems);
-
-      // 7. Registra o comprador na Lista VIP de Drops (checkout_opt_in) sem bloquear
+      // 6. Registra o comprador na Lista VIP de Drops (checkout_opt_in) sem bloquear
       if (clientData.email || user?.email) {
-        dropSubscriberService.subscribeToDropWaitlist({
-          email: clientData.email || user?.email,
-          name: clientData.name || user?.displayName || user?.name || '',
-          dropId: currentDropConfig?.id || 'drop-thr33',
-          dropName: currentDropConfig?.title || 'PRÓXIMO DROP THR33',
-          source: 'checkout_opt_in'
-        }).catch(() => {});
+        try {
+          dropSubscriberService.subscribeToDropWaitlist({
+            email: clientData.email || user?.email,
+            name: clientData.name || user?.displayName || user?.name || '',
+            dropId: currentDropConfig?.id || 'drop-thr33',
+            dropName: currentDropConfig?.title || 'PRÓXIMO DROP THR33',
+            source: 'checkout_opt_in'
+          }).catch(() => {});
+        } catch (dropErr) {
+          console.warn("Aviso ao registrar na Lista VIP:", dropErr.message);
+        }
       }
 
     } catch (err) {

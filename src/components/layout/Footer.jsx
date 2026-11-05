@@ -298,12 +298,12 @@ export function Footer() {
         <div className={styles.legalInfoSection}>
           <div className={styles.legalTextBlock}>
             <strong>
-              THR33 STREETWEAR COMERCIO E CONFECCAO DE VESTUARIO LTDA
+              THR33 STREETWEAR
             </strong>
-            <span>CNPJ: 00.000.000/0001-00 • INSCRIÇÃO ESTADUAL: ISENTO</span>
+            <span>CNPJ: 67.662.871/0001-41 • INSCRIÇÃO ESTADUAL: ISENTO</span>
             <span>
-              ENDEREÇO: RUA COMENDADOR ARAÚJO, 333 - BATEL, CURITIBA - PR, CEP:
-              80420-000
+              ENDEREÇO: RUA VALDECI DOS SANTOS, 114 - PINHEIRINHO, CURITIBA - PR, CEP:
+              81150-370
             </span>
             <span>
               ATENDIMENTO AO CONSUMIDOR: CONTATO.THR33@GMAIL.COM • WHATSAPP: +55 41
@@ -319,7 +319,7 @@ export function Footer() {
               RESERVADOS.
             </span>
             <MotionAnchor
-              href="https://thewavem.web.app"
+              href="https://wavem.com.br"
               target="_blank"
               rel="noreferrer"
               className={styles.wavemSignature}
