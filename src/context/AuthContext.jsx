@@ -15,6 +15,7 @@ import {
 import { doc, setDoc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../services/firebaseConfig';
 import { emailService } from '../services/emailService';
+import { dropSubscriberService } from '../services/dropSubscriberService';
 
 // Configura o idioma do Firebase Auth para português para disparo de e-mails nativos em pt-BR
 auth.languageCode = 'pt-BR';
@@ -190,8 +191,18 @@ export function AuthProvider({ children }) {
         acceptedTermsAt: new Date().toISOString(),
         termsVersion: '1.0',
         createdAt: new Date().toISOString(),
-        provider: 'password'
+        provider: 'password',
+        emailMarketing: true,
+        emailNotifications: true
       }, { merge: true });
+
+      // Inscreve automaticamente na Lista VIP e Base de Campanhas de E-mail
+      dropSubscriberService.subscribeToDropWaitlist({
+        email: email.trim(),
+        name: name ? name.trim() : 'Cliente THR33',
+        source: 'cadastro',
+        sendConfirmationEmail: false
+      }).catch(() => {});
 
       emailService.triggerWelcomeEmail({
         uid: user.uid,
@@ -235,8 +246,17 @@ export function AuthProvider({ children }) {
           acceptedTermsAt: new Date().toISOString(),
           termsVersion: '1.0',
           createdAt: new Date().toISOString(),
-          provider: 'google'
+          provider: 'google',
+          emailMarketing: true,
+          emailNotifications: true
         });
+
+        dropSubscriberService.subscribeToDropWaitlist({
+          email: user.email,
+          name: user.displayName || 'Cliente THR33',
+          source: 'cadastro_google',
+          sendConfirmationEmail: false
+        }).catch(() => {});
 
         emailService.triggerWelcomeEmail({
           uid: user.uid,

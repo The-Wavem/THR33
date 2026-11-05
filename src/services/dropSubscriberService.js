@@ -97,29 +97,61 @@ export const dropSubscriberService = {
   },
 
   /**
-   * Lista todos os inscritos da coleção drop_subscribers para o painel Admin (CmsCampanhas)
+   * Lista todos os inscritos da coleção drop_subscribers e usuários cadastrados para o painel Admin (CmsCampanhas)
    */
   async getAllSubscribers() {
     try {
-      const snap = await getDocs(collection(db, 'drop_subscribers'));
+      const [dropSnap, usersSnap] = await Promise.all([
+        getDocs(collection(db, 'drop_subscribers')).catch(() => ({ forEach: () => {} })),
+        getDocs(collection(db, 'users')).catch(() => ({ forEach: () => {} }))
+      ]);
+
+      const seenEmails = new Set();
       const list = [];
-      snap.forEach((docSnap) => {
+
+      dropSnap.forEach((docSnap) => {
         const raw = docSnap.data() || {};
-        const cleanDropId =
-          raw.dropId && String(raw.dropId).toLowerCase().includes('cactus')
-            ? 'drop-thr33'
-            : (raw.dropId || 'drop-thr33');
-        const cleanDropName =
-          raw.dropName && String(raw.dropName).toLowerCase().includes('cactus')
-            ? 'PRÓXIMO DROP THR33'
-            : (raw.dropName || 'PRÓXIMO DROP THR33');
-        list.push({
-          id: docSnap.id,
-          ...raw,
-          dropId: cleanDropId,
-          dropName: cleanDropName,
-          status: raw.status || 'active'
-        });
+        const email = String(raw.email || '').trim().toLowerCase();
+        if (email && email.includes('@')) {
+          seenEmails.add(email);
+          const cleanDropId =
+            raw.dropId && String(raw.dropId).toLowerCase().includes('cactus')
+              ? 'drop-thr33'
+              : (raw.dropId || 'drop-thr33');
+          const cleanDropName =
+            raw.dropName && String(raw.dropName).toLowerCase().includes('cactus')
+              ? 'PRÓXIMO DROP THR33'
+              : (raw.dropName || 'PRÓXIMO DROP THR33');
+          list.push({
+            id: docSnap.id,
+            ...raw,
+            email,
+            dropId: cleanDropId,
+            dropName: cleanDropName,
+            status: raw.status || 'active'
+          });
+        }
+      });
+
+      // Incorpora usuários cadastrados que ainda não estavam explicitamente na coleção drop_subscribers
+      usersSnap.forEach((docSnap) => {
+        const u = docSnap.data() || {};
+        const email = String(u.email || '').trim().toLowerCase();
+        if (email && email.includes('@') && !seenEmails.has(email)) {
+          seenEmails.add(email);
+          const isUnsubscribed = u.emailMarketing === false || u.unsubscribedAll === true;
+          list.push({
+            id: `user_${docSnap.id}`,
+            email,
+            name: u.name || u.displayName || 'Cliente Cadastrado',
+            source: u.provider === 'google' ? 'cadastro_google' : 'cadastro',
+            status: isUnsubscribed ? 'unsubscribed' : 'active',
+            dropId: 'drop-thr33',
+            dropName: 'PRÓXIMO DROP THR33',
+            createdAt: u.createdAt ? { seconds: Math.floor(new Date(u.createdAt).getTime() / 1000) } : null,
+            subscribedAtISO: u.createdAt || new Date().toISOString()
+          });
+        }
       });
 
       return list.sort((a, b) => {

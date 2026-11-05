@@ -3808,8 +3808,9 @@ async function sendResendEmail({ to, subject, html }) {
   }
 
   const configuredFrom =
-    (process.env.RESEND_FROM_EMAIL || "").trim() ||
-    "THR33 Streetwear <contato@lojathr33.com.br>";
+    (process.env.RESEND_FROM_EMAIL || "")
+      .replace(/^["']|["']$/g, "")
+      .trim() || "THR33 Streetwear <contato@lojathr33.com.br>";
 
   const headers = {
     Authorization: `Bearer ${apiKey}`,
@@ -3835,42 +3836,8 @@ async function sendResendEmail({ to, subject, html }) {
   } catch (err) {
     const status = err.response?.status;
     const errMsg = JSON.stringify(err.response?.data || err.message);
-
-    // Fallback inteligente caso o domínio customizado ainda esteja pendente de verificação DNS no Resend
-    if (
-      (status === 403 || status === 422 || errMsg.toLowerCase().includes("domain")) &&
-      !configuredFrom.includes("onboarding@resend.dev")
-    ) {
-      try {
-        const fallbackRes = await axios.post(
-          "https://api.resend.com/emails",
-          {
-            from: "THR33 Streetwear <onboarding@resend.dev>",
-            to: [recipient],
-            subject,
-            html,
-          },
-          { headers, timeout: 10000 },
-        );
-        logger.info(
-          `[RESEND] E-mail enviado via remetente fallback onboarding@resend.dev para ${recipient} | ID: ${fallbackRes.data?.id}`,
-        );
-        return { sent: true, id: fallbackRes.data?.id, fallbackSender: true };
-      } catch (fallbackErr) {
-        const fbErrMsg = JSON.stringify(
-          fallbackErr.response?.data || fallbackErr.message,
-        );
-        logger.warn("[RESEND] Falha também no remetente fallback:", fbErrMsg);
-        return {
-          sent: false,
-          error: fbErrMsg,
-          primaryError: errMsg,
-        };
-      }
-    }
-
-    logger.warn(`[RESEND] Falha ao enviar e-mail para ${recipient}:`, errMsg);
-    return { sent: false, error: errMsg };
+    logger.error(`[RESEND] Falha ao enviar e-mail para ${recipient} (${subject}) [HTTP ${status}]:`, errMsg);
+    return { sent: false, error: errMsg, statusCode: status };
   }
 }
 
@@ -5866,8 +5833,9 @@ async function sendResendBatchEmails(emailsPayloadArray) {
   }
 
   const configuredFrom =
-    (process.env.RESEND_FROM_EMAIL || "").trim() ||
-    "THR33 Streetwear <contato@lojathr33.com.br>";
+    (process.env.RESEND_FROM_EMAIL || "")
+      .replace(/^["']|["']$/g, "")
+      .trim() || "THR33 Streetwear <contato@lojathr33.com.br>";
 
   const headers = {
     Authorization: `Bearer ${apiKey}`,
@@ -5898,53 +5866,29 @@ async function sendResendBatchEmails(emailsPayloadArray) {
       const status = batchErr.response?.status;
       const errMsg = JSON.stringify(batchErr.response?.data || batchErr.message);
       lastErrorMsg = errMsg;
+      logger.warn(`[RESEND BATCH] Lote com ${chunk.length} e-mails falhou [HTTP ${status}], tentando envio individual:`, errMsg);
 
-      let batchRecovered = false;
-      // 1º Fallback: Tenta lote com onboarding@resend.dev caso domínio ainda não esteja verificado
-      if (
-        (status === 403 || status === 422 || errMsg.toLowerCase().includes("domain")) &&
-        !configuredFrom.includes("onboarding@resend.dev")
-      ) {
-        try {
-          const fallbackChunk = chunk.map((c) => ({
-            ...c,
-            from: "THR33 Streetwear <onboarding@resend.dev>",
-          }));
-          await axios.post("https://api.resend.com/emails/batch", fallbackChunk, {
-            headers,
-            timeout: 20000,
+      // Fallback Individual: Se o lote foi recusado por algum item específico ou timeout,
+      // dispara individualmente para garantir que todos os destinatários válidos recebam!
+      for (let idx = 0; idx < rawSlice.length; idx++) {
+        const item = rawSlice[idx];
+        const singleRes = await sendResendEmail({
+          to: item.to,
+          subject: item.subject,
+          html: item.html,
+        });
+        if (singleRes.sent) {
+          totalSent += 1;
+        } else {
+          failedRecipients.push({
+            email: item.to,
+            error: singleRes.error || "Falha no envio individual",
           });
-          totalSent += fallbackChunk.length;
-          batchRecovered = true;
-        } catch (fbErr) {
-          lastErrorMsg = JSON.stringify(fbErr.response?.data || fbErr.message);
-          logger.warn("[RESEND BATCH] Lote fallback falhou, iniciando envio individual:", lastErrorMsg);
+          if (singleRes.error) lastErrorMsg = singleRes.error;
         }
-      }
-
-      // 2º Fallback Individual: Se o lote inteiro foi recusado (ex: restrição de Sandbox para 1 destinatário do lote),
-      // dispara individualmente para garantir que todos os destinatários válidos recebam o e-mail!
-      if (!batchRecovered) {
-        for (let idx = 0; idx < rawSlice.length; idx++) {
-          const item = rawSlice[idx];
-          const singleRes = await sendResendEmail({
-            to: item.to,
-            subject: item.subject,
-            html: item.html,
-          });
-          if (singleRes.sent) {
-            totalSent += 1;
-          } else {
-            failedRecipients.push({
-              email: item.to,
-              error: singleRes.error || "Falha no envio individual",
-            });
-            if (singleRes.error) lastErrorMsg = singleRes.error;
-          }
-          // Pausa curta para respeitar o rate limit da Resend (2 req/s)
-          if (idx < rawSlice.length - 1) {
-            await new Promise((r) => setTimeout(r, 520));
-          }
+        // Pausa curta para respeitar o rate limit da Resend (2 req/s)
+        if (idx < rawSlice.length - 1) {
+          await new Promise((r) => setTimeout(r, 520));
         }
       }
     }
@@ -6111,7 +6055,7 @@ async function handleDropBroadcastCampaign(db, request) {
       targetSource,
       couponCode: couponCode || null,
       ctaUrl: ctaUrl || null,
-      totalRecipients: recipients.length,
+      totalRecipients: validRecipients.length,
       sentCount: batchResult.count,
       failedCount: batchResult.failedCount || 0,
       sentByEmail: callerEmail,
@@ -6127,7 +6071,7 @@ async function handleDropBroadcastCampaign(db, request) {
     failedCount: batchResult.failedCount || 0,
     failedRecipients: batchResult.failedRecipients || [],
     error: batchResult.error,
-    totalRecipients: recipients.length,
+    totalRecipients: validRecipients.length,
     mode: "broadcast",
   };
 }
