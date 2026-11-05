@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, doc, getDoc, setDoc } from 'firebase/firestore';
 import { 
   Plus, 
   RotateCw, 
@@ -154,6 +154,24 @@ export function CmsCampanhas() {
   const [sendingTestEmail, setSendingTestEmail] = useState(false);
   const [sendingBroadcast, setSendingBroadcast] = useState(false);
   const [broadcastFeedback, setBroadcastFeedback] = useState({ type: '', message: '' });
+
+  // Estados da Seção C: E-MAIL DE BOAS-VINDAS (CADASTRO)
+  const [welcomeSettings, setWelcomeSettings] = useState({
+    enabled: true,
+    includeCoupon: false,
+    subject: 'Bem-vindo à THR33',
+    heading: 'Bem-vindo à THR33, {nome}.',
+    subtitle: '',
+    bodyText: 'Sua conta foi criada com sucesso. A partir de agora você tem acesso direto ao nosso acervo, acompanhamento de pedidos em tempo real e lançamentos limitados da marca.',
+    ctaText: 'EXPLORAR CATÁLOGO',
+    ctaUrl: 'https://lojathr33.com.br/catalogo'
+  });
+  const [welcomeLoading, setWelcomeLoading] = useState(false);
+  const [welcomeSaving, setWelcomeSaving] = useState(false);
+  const [welcomeSaveSuccess, setWelcomeSaveSuccess] = useState(false);
+  const [welcomeTestEmail, setWelcomeTestEmail] = useState('');
+  const [welcomeSendingTest, setWelcomeSendingTest] = useState(false);
+  const [welcomeTestResult, setWelcomeTestResult] = useState(null);
 
   // Opções customizadas de Origem e Mídia (gravadas no Firestore)
   const [customSources, setCustomSources] = useState([]);
@@ -378,7 +396,105 @@ export function CmsCampanhas() {
     if (currentUser?.email && !dropTestEmail) {
       setDropTestEmail(currentUser.email);
     }
+    if (currentUser?.email && !welcomeTestEmail) {
+      setWelcomeTestEmail(currentUser.email);
+    }
   }, [currentUser]);
+
+  // Carrega configurações persistidas do E-mail de Boas-vindas (settings/welcome_email)
+  useEffect(() => {
+    async function loadWelcomeSettings() {
+      try {
+        setWelcomeLoading(true);
+        const refDoc = doc(db, 'settings', 'welcome_email');
+        const snap = await getDoc(refDoc);
+        if (snap.exists()) {
+          const data = snap.data();
+          setWelcomeSettings((prev) => ({
+            ...prev,
+            ...data,
+            includeCoupon: Boolean(data.includeCoupon), // Padrão seguro: false a menos que salvo como true
+          }));
+        }
+      } catch (err) {
+        console.error('Erro ao carregar settings/welcome_email:', err);
+      } finally {
+        setWelcomeLoading(false);
+      }
+    }
+    loadWelcomeSettings();
+  }, []);
+
+  const handleSaveWelcomeSettings = async () => {
+    try {
+      setWelcomeSaving(true);
+      setWelcomeSaveSuccess(false);
+      const refDoc = doc(db, 'settings', 'welcome_email');
+      await setDoc(
+        refDoc,
+        {
+          ...welcomeSettings,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser?.email || 'admin',
+        },
+        { merge: true },
+      );
+      setWelcomeSaveSuccess(true);
+      setTimeout(() => setWelcomeSaveSuccess(false), 4000);
+    } catch (err) {
+      console.error('Erro ao salvar settings/welcome_email:', err);
+      alert('Erro ao salvar configurações de boas-vindas: ' + (err.message || 'Tente novamente'));
+    } finally {
+      setWelcomeSaving(false);
+    }
+  };
+
+  const handleSendWelcomeTest = async () => {
+    const target = (welcomeTestEmail || currentUser?.email || '').trim();
+    if (!target) {
+      alert('Informe um e-mail de destino para o teste.');
+      return;
+    }
+    try {
+      setWelcomeSendingTest(true);
+      setWelcomeTestResult(null);
+
+      // Salva antes de testar para que a Cloud Function leia exatamente as opções atuais
+      const refDoc = doc(db, 'settings', 'welcome_email');
+      await setDoc(
+        refDoc,
+        {
+          ...welcomeSettings,
+          updatedAt: new Date().toISOString(),
+          updatedBy: currentUser?.email || 'admin',
+        },
+        { merge: true },
+      );
+
+      const res = await emailService.triggerWelcomeEmail({
+        email: target,
+        name: currentUser?.displayName || 'Admin THR33',
+        forceTest: true,
+      });
+
+      if (res && res.sent) {
+        setWelcomeTestResult({
+          success: true,
+          message: `E-mail de teste enviado com sucesso para ${target}!`,
+        });
+      } else {
+        setWelcomeTestResult({
+          success: false,
+          message: res?.error || res?.reason || 'Falha ao disparar e-mail de teste.',
+        });
+      }
+    } catch (err) {
+      console.error('Erro ao disparar teste de boas-vindas:', err);
+      setWelcomeTestResult({ success: false, message: err.message || 'Erro inesperado.' });
+    } finally {
+      setWelcomeSendingTest(false);
+    }
+  };
 
   // Presets Rápidos de E-mail para Flexibilidade Total do Admin
   const applyEmailPreset = (presetId) => {
@@ -1313,14 +1429,42 @@ export function CmsCampanhas() {
         <div>
           <span className={styles.breadcrumb}>CMS // MARKETING, COMUNICAÇÃO & RASTREIOS</span>
           <h1 className={styles.title}>
-            {activeMainTab === 'vip'
+            {activeMainTab === 'welcome'
+              ? 'E-MAIL DE BOAS-VINDAS // CADASTRO'
+              : activeMainTab === 'vip'
               ? 'EARLY ACCESS // LISTA VIP & E-MAIL'
               : 'CAMPANHAS, UTMS & LINKS RASTREÁVEIS'}
           </h1>
         </div>
 
         <div className={styles.headerActions}>
-          {activeMainTab === 'utms' ? (
+          {activeMainTab === 'welcome' ? (
+            <div className={styles.vipHeaderQuickBar}>
+              <button
+                type="button"
+                onClick={handleSaveWelcomeSettings}
+                disabled={welcomeSaving}
+                className={styles.createBtn}
+              >
+                {welcomeSaving ? (
+                  <>
+                    <RotateCw size={13} className={styles.spinning} />
+                    <span>SALVANDO...</span>
+                  </>
+                ) : welcomeSaveSuccess ? (
+                  <>
+                    <Check size={13} />
+                    <span>SALVO COM SUCESSO!</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={13} />
+                    <span>SALVAR CONFIGURAÇÕES</span>
+                  </>
+                )}
+              </button>
+            </div>
+          ) : activeMainTab === 'utms' ? (
             <>
               {/* FILTRO DE PERÍODO COM SELETOR DE DATAS */}
               <div className={styles.periodControlWrapper}>
@@ -1475,6 +1619,23 @@ export function CmsCampanhas() {
           <Mail size={14} />
           <span>EARLY ACCESS // LISTA VIP & E-MAIL</span>
           <span className={styles.mainTabCounter}>{vipKpis.totalActive}</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setActiveMainTab('welcome')}
+          className={`${styles.mainTabBtn} ${activeMainTab === 'welcome' ? styles.mainTabBtnActive : ''}`}
+        >
+          <UserPlus size={14} />
+          <span>E-MAIL DE BOAS-VINDAS (CADASTRO)</span>
+          <span
+            className={styles.mainTabCounter}
+            style={{
+              color: welcomeSettings.enabled ? '#00FF66' : '#737373',
+              borderColor: welcomeSettings.enabled ? '#00FF66' : 'var(--border-color)',
+            }}
+          >
+            {welcomeSettings.enabled ? 'ATIVO' : 'PAUSADO'}
+          </span>
         </button>
         <button
           type="button"
@@ -2445,6 +2606,353 @@ export function CmsCampanhas() {
                   })}
                 </div>
               )}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ====================================================================
+          SEÇÃO C: E-MAIL DE BOAS-VINDAS (CADASTRO DE NOVOS CLIENTES)
+         ==================================================================== */}
+      {activeMainTab === 'welcome' && (
+        <section className={styles.welcomeWorkspace}>
+          {/* BANNER INFORMATIVO */}
+          <div className={styles.welcomeIntroBanner}>
+            <div className={styles.welcomeIntroText}>
+              <span className={styles.welcomeIntroTag}>GATILHO AUTOMÁTICO // TRANSACIONAL</span>
+              <h3>E-mail de Boas-Vindas da Loja</h3>
+              <p>
+                Disparado automaticamente pelo Resend assim que um visitante cria uma conta na THR33 ou faz login com Google pela primeira vez.
+                Personalize os textos, o link do botão e controle se deseja ou não incluir cupom de desconto.
+              </p>
+            </div>
+            <div className={styles.welcomeStatusCard}>
+              <span className={styles.welcomeStatusLabel}>STATUS DO DISPARO:</span>
+              <strong className={welcomeSettings.enabled ? styles.welcomeStatusOnline : styles.welcomeStatusOffline}>
+                {welcomeSettings.enabled ? '● DISPARO ATIVO' : '○ DISPARO PAUSADO'}
+              </strong>
+              <small>
+                {welcomeSettings.enabled
+                  ? 'Novos cadastros recebem este e-mail imediatamente.'
+                  : 'Nenhum e-mail será enviado ao registrar novas contas.'}
+              </small>
+            </div>
+          </div>
+
+          <div className={styles.welcomeGrid}>
+            {/* COLUNA ESQUERDA: FORMULÁRIO DE CONFIGURAÇÕES */}
+            <div className={styles.welcomeFormCol}>
+              {/* CARD 1: CONTROLES & GATILHOS */}
+              <div className={styles.welcomeCard}>
+                <div className={styles.welcomeCardHeader}>
+                  <div className={styles.welcomeCardHeaderTitle}>
+                    <Settings2 size={15} />
+                    <span>CONTROLES DE DISPARO & CUPOM</span>
+                  </div>
+                </div>
+
+                <div className={styles.welcomeFieldGroup}>
+                  {/* TOGGLE: STATUS GERAL */}
+                  <div className={styles.welcomeToggleBox}>
+                    <div className={styles.welcomeToggleMeta}>
+                      <strong>Envio Automático ao Criar Conta</strong>
+                      <span>Habilitar disparo do e-mail assim que a conta for registrada no site.</span>
+                    </div>
+                    <div className={styles.welcomeToggleButtons}>
+                      <button
+                        type="button"
+                        onClick={() => setWelcomeSettings((prev) => ({ ...prev, enabled: true }))}
+                        className={`${styles.welcomeToggleBtn} ${welcomeSettings.enabled ? styles.welcomeToggleBtnActive : ''}`}
+                      >
+                        ATIVADO
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWelcomeSettings((prev) => ({ ...prev, enabled: false }))}
+                        className={`${styles.welcomeToggleBtn} ${!welcomeSettings.enabled ? styles.welcomeToggleBtnInactive : ''}`}
+                      >
+                        PAUSADO
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* TOGGLE: CUPOM DE PRIMEIRA COMPRA */}
+                  <div className={styles.welcomeToggleBox}>
+                    <div className={styles.welcomeToggleMeta}>
+                      <strong>Incluir Cupom de Primeira Compra</strong>
+                      <span>
+                        {welcomeSettings.includeCoupon
+                          ? 'Ativado: O sistema anexará um cupom ativo de primeira compra no e-mail.'
+                          : 'Desativado (Padrão): Nenhum cupom será enviado. O cliente recebe apenas as boas-vindas da marca.'}
+                      </span>
+                    </div>
+                    <div className={styles.welcomeToggleButtons}>
+                      <button
+                        type="button"
+                        onClick={() => setWelcomeSettings((prev) => ({ ...prev, includeCoupon: false }))}
+                        className={`${styles.welcomeToggleBtn} ${!welcomeSettings.includeCoupon ? styles.welcomeToggleBtnInactive : ''}`}
+                      >
+                        SEM CUPOM (PADRÃO)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setWelcomeSettings((prev) => ({ ...prev, includeCoupon: true }))}
+                        className={`${styles.welcomeToggleBtn} ${welcomeSettings.includeCoupon ? styles.welcomeToggleBtnActive : ''}`}
+                      >
+                        COM CUPOM
+                      </button>
+                    </div>
+                  </div>
+
+                  {!welcomeSettings.includeCoupon && (
+                    <div className={styles.welcomeNoticeClean}>
+                      <Sparkles size={13} />
+                      <span>
+                        Modo sem cupom ativo. O e-mail terá um visual limpo e minimalista focado na apresentação da marca e direcionamento para o catálogo.
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* CARD 2: CONTEÚDO E TEXTOS DO E-MAIL */}
+              <div className={styles.welcomeCard}>
+                <div className={styles.welcomeCardHeader}>
+                  <div className={styles.welcomeCardHeaderTitle}>
+                    <Mail size={15} />
+                    <span>CONTEÚDO & TIPOGRAFIA P&B</span>
+                  </div>
+                  <span className={styles.welcomeCardBadge}>TAG DINÂMICA: &#123;nome&#125;</span>
+                </div>
+
+                <div className={styles.welcomeFieldGroup}>
+                  {/* ASSUNTO */}
+                  <div className={styles.welcomeInputBlock}>
+                    <label className={styles.welcomeInputLabel}>
+                      ASSUNTO DO E-MAIL (CAIXA DE ENTRADA) *
+                    </label>
+                    <input
+                      type="text"
+                      value={welcomeSettings.subject}
+                      onChange={(e) => setWelcomeSettings((prev) => ({ ...prev, subject: e.target.value }))}
+                      placeholder="Ex: Bem-vindo à THR33"
+                      className={styles.welcomeInput}
+                    />
+                  </div>
+
+                  {/* TÍTULO / SAUDAÇÃO */}
+                  <div className={styles.welcomeInputBlock}>
+                    <label className={styles.welcomeInputLabel}>
+                      TÍTULO PRINCIPAL (CABEÇALHO) *
+                    </label>
+                    <input
+                      type="text"
+                      value={welcomeSettings.heading}
+                      onChange={(e) => setWelcomeSettings((prev) => ({ ...prev, heading: e.target.value }))}
+                      placeholder="Ex: Bem-vindo à THR33, {nome}."
+                      className={styles.welcomeInput}
+                    />
+                    <small className={styles.welcomeInputHelp}>
+                      A tag <code>&#123;nome&#125;</code> será substituída automaticamente pelo primeiro nome do cliente cadastrado.
+                    </small>
+                  </div>
+
+                  {/* SUBTÍTULO (OPCIONAL) */}
+                  <div className={styles.welcomeInputBlock}>
+                    <label className={styles.welcomeInputLabel}>
+                      SUBTÍTULO / ETIQUETA (OPCIONAL)
+                    </label>
+                    <input
+                      type="text"
+                      value={welcomeSettings.subtitle || ''}
+                      onChange={(e) => setWelcomeSettings((prev) => ({ ...prev, subtitle: e.target.value }))}
+                      placeholder="Ex: CONTA ATIVADA // SESSÃO EXCLUSIVA"
+                      className={styles.welcomeInput}
+                    />
+                  </div>
+
+                  {/* MENSAGEM / CORPO */}
+                  <div className={styles.welcomeInputBlock}>
+                    <label className={styles.welcomeInputLabel}>
+                      MENSAGEM DE BOAS-VINDAS (CORPO) *
+                    </label>
+                    <textarea
+                      rows={4}
+                      value={welcomeSettings.bodyText}
+                      onChange={(e) => setWelcomeSettings((prev) => ({ ...prev, bodyText: e.target.value }))}
+                      placeholder="Escreva a mensagem que o cliente lerá..."
+                      className={styles.welcomeTextarea}
+                    />
+                    <small className={styles.welcomeInputHelp}>
+                      Dê 2 enters para criar novos parágrafos.
+                    </small>
+                  </div>
+
+                  {/* BOTÃO CTA */}
+                  <div className={styles.welcomeTwoCol}>
+                    <div className={styles.welcomeInputBlock}>
+                      <label className={styles.welcomeInputLabel}>TEXTO DO BOTÃO (CTA)</label>
+                      <input
+                        type="text"
+                        value={welcomeSettings.ctaText}
+                        onChange={(e) => setWelcomeSettings((prev) => ({ ...prev, ctaText: e.target.value }))}
+                        placeholder="Ex: EXPLORAR CATÁLOGO"
+                        className={styles.welcomeInput}
+                      />
+                    </div>
+                    <div className={styles.welcomeInputBlock}>
+                      <label className={styles.welcomeInputLabel}>LINK DO BOTÃO (URL)</label>
+                      <input
+                        type="text"
+                        value={welcomeSettings.ctaUrl}
+                        onChange={(e) => setWelcomeSettings((prev) => ({ ...prev, ctaUrl: e.target.value }))}
+                        placeholder="https://lojathr33.com.br/catalogo"
+                        className={styles.welcomeInput}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* CARD 3: TESTE DE DISPARO E SALVAR */}
+              <div className={styles.welcomeCard}>
+                <div className={styles.welcomeCardHeader}>
+                  <div className={styles.welcomeCardHeaderTitle}>
+                    <Send size={15} />
+                    <span>TESTAR DISPARO & PUBLICAR</span>
+                  </div>
+                </div>
+
+                <div className={styles.welcomeFieldGroup}>
+                  <div className={styles.welcomeTestRow}>
+                    <div className={styles.welcomeTestInputWrap}>
+                      <label className={styles.welcomeInputLabel}>ENVIAR DISPARO DE TESTE PARA:</label>
+                      <input
+                        type="email"
+                        value={welcomeTestEmail}
+                        onChange={(e) => setWelcomeTestEmail(e.target.value)}
+                        placeholder="seu-email@dominio.com"
+                        className={styles.welcomeInput}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleSendWelcomeTest}
+                      disabled={welcomeSendingTest || !welcomeTestEmail}
+                      className={styles.welcomeSendTestBtn}
+                    >
+                      {welcomeSendingTest ? (
+                        <>
+                          <RotateCw size={13} className={styles.spinning} />
+                          <span>ENVIANDO...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Send size={13} />
+                          <span>ENVIAR TESTE</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+
+                  {welcomeTestResult && (
+                    <div className={`${styles.welcomeFeedbackBox} ${welcomeTestResult.success ? styles.welcomeFeedbackSuccess : styles.welcomeFeedbackError}`}>
+                      {welcomeTestResult.success ? <Check size={14} /> : <AlertCircle size={14} />}
+                      <span>{welcomeTestResult.message}</span>
+                    </div>
+                  )}
+
+                  <div className={styles.welcomeActionsFooter}>
+                    <button
+                      type="button"
+                      onClick={handleSaveWelcomeSettings}
+                      disabled={welcomeSaving}
+                      className={styles.welcomePrimarySaveBtn}
+                    >
+                      {welcomeSaving ? (
+                        <>
+                          <RotateCw size={14} className={styles.spinning} />
+                          <span>SALVANDO CONFIGURAÇÕES...</span>
+                        </>
+                      ) : welcomeSaveSuccess ? (
+                        <>
+                          <Check size={14} />
+                          <span>CONFIGURAÇÕES SALVAS NO BANCO!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles size={14} />
+                          <span>SALVAR TODAS AS ALTERAÇÕES</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* COLUNA DIREITA: LIVE PREVIEW FIEL */}
+            <div className={styles.welcomePreviewCol}>
+              <div className={styles.welcomePreviewSticky}>
+                <div className={styles.welcomePreviewHeaderRow}>
+                  <div className={styles.welcomePreviewHeaderTitle}>
+                    <Eye size={14} />
+                    <span>PRÉVIA EM TEMPO REAL</span>
+                  </div>
+                  <span className={styles.welcomePreviewBadge}>ESTÉTICA P&B OFICIAL</span>
+                </div>
+
+                <div className={styles.emailPreviewContainer}>
+                  <div className={styles.emailPreviewHeader}>
+                    <span className={styles.emailPreviewLogo}>THR33</span>
+                    <span className={styles.emailPreviewSubLogo}>STREETWEAR // CURITIBA / PR</span>
+                  </div>
+
+                  <div className={styles.emailPreviewBody}>
+                    <h3 className={styles.emailPreviewTitle}>
+                      {(welcomeSettings.heading || 'Bem-vindo à THR33, {nome}.').replace(/\{nome\}/gi, 'Eduardo')}
+                    </h3>
+
+                    {welcomeSettings.subtitle && (
+                      <p className={styles.emailPreviewSubtitle}>
+                        {welcomeSettings.subtitle.replace(/\{nome\}/gi, 'Eduardo').toUpperCase()}
+                      </p>
+                    )}
+
+                    <div className={styles.emailPreviewParagraphs}>
+                      {(welcomeSettings.bodyText || '')
+                        .replace(/\{nome\}/gi, 'Eduardo')
+                        .split(/\n\n+/)
+                        .filter(Boolean)
+                        .map((p, idx) => (
+                          <p key={idx} style={{ whiteSpace: 'pre-line' }}>{p}</p>
+                        ))}
+                    </div>
+
+                    {welcomeSettings.includeCoupon && (
+                      <div className={styles.emailPreviewCoupon}>
+                        <span className={styles.emailPreviewCouponEyebrow}>PRIMEIRA COMPRA</span>
+                        <strong className={styles.emailPreviewCouponCode}>CUPOM10</strong>
+                        <span className={styles.emailPreviewCouponDesc}>
+                          Utilize este código na sacola para 10% OFF no seu primeiro pedido.
+                        </span>
+                      </div>
+                    )}
+
+                    <div className={styles.emailPreviewCtaRow}>
+                      <span className={styles.emailPreviewCtaBtn}>
+                        {(welcomeSettings.ctaText || 'EXPLORAR CATÁLOGO').toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className={styles.emailPreviewFooter}>
+                    <strong>THR33 STREETWEAR — CURITIBA / PR</strong>
+                    <span>Confecção autoral sob demanda, modelagens pesadas e tiragens limitadas.</span>
+                    <span>contato@lojathr33.com.br</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </section>

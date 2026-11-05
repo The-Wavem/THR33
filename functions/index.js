@@ -746,7 +746,11 @@ exports.createPagBankOrder = onCall(
       const { type, orderId, uid, email, name } = request.data;
       if (type === "welcome_register") {
         const targetUid = uid || request.auth?.uid;
-        return await sendWelcomeEmailIfNeeded(db, targetUid, { email, name });
+        return await sendWelcomeEmailIfNeeded(db, targetUid, {
+          email,
+          name,
+          forceTest: Boolean(request.data?.forceTest),
+        });
       }
       if (type === "order_paid" && orderId) {
         const orderRef = db.collection("orders").doc(String(orderId));
@@ -4080,12 +4084,18 @@ function formatEmailItemSpecs(item, qty) {
 }
 
 // GATILHO A — Boas-vindas ao Criar Conta (welcome_register) — Minimalista P&B
-function buildWelcomeEmailHtml({ userName, coupon, recipientEmail }) {
+function buildWelcomeEmailHtml({ userName, coupon, recipientEmail, config = {} }) {
   const rawFirst = String(userName || "Cliente").trim().split(" ")[0] || "Cliente";
   const firstName = rawFirst.charAt(0).toUpperCase() + rawFirst.slice(1).toLowerCase();
 
+  const rawTitle = (config.heading || "Bem-vindo à THR33, {nome}.").trim();
+  const title = rawTitle.replace(/\{nome\}/gi, firstName);
+
+  const rawSubtitle = (config.subtitle || "").trim();
+  const subtitle = rawSubtitle.replace(/\{nome\}/gi, firstName);
+
   let couponBlockHtml = "";
-  if (coupon && coupon.code) {
+  if (config.includeCoupon === true && coupon && coupon.code) {
     const discountLabel =
       coupon.discountType === "fixed"
         ? `${formatBRLBackend(coupon.discountValue)} OFF`
@@ -4106,22 +4116,31 @@ function buildWelcomeEmailHtml({ userName, coupon, recipientEmail }) {
     `;
   }
 
+  const defaultBody = "Sua conta foi criada com sucesso. A partir de agora você tem acesso direto ao nosso acervo, acompanhamento de pedidos em tempo real e lançamentos limitados da marca.";
+  const rawBody = (config.bodyText || defaultBody).trim();
+  const formattedBody = rawBody
+    .replace(/\{nome\}/gi, firstName)
+    .split("\n\n")
+    .map((p) => `<p style="margin:0 0 20px 0;font-size:14px;color:#A3A3A3;line-height:1.7;">${p.replace(/\n/g, "<br/>")}</p>`)
+    .join("");
+
+  const ctaText = (config.ctaText || "EXPLORAR CATÁLOGO").trim().toUpperCase();
+  const ctaUrl = (config.ctaUrl || "https://lojathr33.com.br/catalogo").trim();
+
   const bodyHtml = `
-    <p style="margin:0 0 24px 0;font-size:14px;color:#A3A3A3;line-height:1.7;">
-      Sua conta foi criada com sucesso. A partir de agora você tem acesso direto ao nosso acervo, acompanhamento de pedidos em tempo real e lançamentos limitados da marca.
-    </p>
+    ${formattedBody}
     ${couponBlockHtml}
     <div style="margin-top:32px;text-align:left;">
-      <a href="https://lojathr33.com.br/catalogo" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
-        EXPLORAR CATÁLOGO
+      <a href="${ctaUrl}" style="display:inline-block;padding:16px 36px;background-color:#FFFFFF;color:#000000;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;text-decoration:none;">
+        ${ctaText}
       </a>
     </div>
   `;
 
   return buildThr33EmailWrapper({
     preheader: `Bem-vindo à THR33, ${firstName}. Sua conta está ativa.`,
-    title: `Bem-vindo à THR33, ${firstName}.`,
-    subtitle: "",
+    title,
+    subtitle,
     bodyHtml,
     recipientEmail,
   });
@@ -4729,95 +4748,143 @@ function buildAbandonedCartEmailHtml({ userName, items, subtotal, recipientEmail
 }
 
 // DISPARADORES TRANSACIONAIS 100% IDEMPOTENTES (COM TRAVA DE 60S E GRAVAÇÃO DE SENT APÓS CONFIRMAÇÃO REAL DO RESEND)
-async function sendWelcomeEmailIfNeeded(db, uid, { email, name } = {}) {
-  if (!uid) return { sent: false, reason: "missing_uid" };
-  const userRef = db.collection("users").doc(String(uid));
+async function sendWelcomeEmailIfNeeded(db, uid, { email, name, forceTest } = {}) {
+  const isForceTest = Boolean(forceTest);
+  if (!uid && !isForceTest) return { sent: false, reason: "missing_uid" };
+  const userRef = uid ? db.collection("users").doc(String(uid)) : null;
 
   try {
     const nowMs = Date.now();
-    const lockResult = await db.runTransaction(async (transaction) => {
-      const userSnap = await transaction.get(userRef);
-      const userData = userSnap.exists ? userSnap.data() : {};
 
-      if (userData.welcomeEmailSent === true) {
-        return { allowed: false, reason: "already_sent" };
+    // 1. Carrega configurações do E-mail de Boas-vindas salvas no CMS (settings/welcome_email)
+    let welcomeConfig = {
+      enabled: true,
+      includeCoupon: false,
+      subject: "Bem-vindo à THR33",
+      heading: "Bem-vindo à THR33, {nome}.",
+      subtitle: "",
+      bodyText: "Sua conta foi criada com sucesso. A partir de agora você tem acesso direto ao nosso acervo, acompanhamento de pedidos em tempo real e lançamentos limitados da marca.",
+      ctaText: "EXPLORAR CATÁLOGO",
+      ctaUrl: "https://lojathr33.com.br/catalogo",
+    };
+
+    try {
+      const snap = await db.collection("settings").doc("welcome_email").get();
+      if (snap.exists) {
+        welcomeConfig = { ...welcomeConfig, ...snap.data() };
       }
-      if (userData.welcomeEmailLockUntil && Number(userData.welcomeEmailLockUntil) > nowMs) {
-        return { allowed: false, reason: "in_flight_lock" };
-      }
-
-      transaction.set(
-        userRef,
-        { welcomeEmailLockUntil: nowMs + 60000 },
-        { merge: true },
-      );
-      return { allowed: true, userData };
-    });
-
-    if (!lockResult.allowed) {
-      return { sent: false, alreadySent: true, reason: lockResult.reason };
+    } catch (confErr) {
+      logger.warn("Aviso ao ler settings/welcome_email:", confErr.message);
     }
 
-    const userData = lockResult.userData || {};
-    const targetEmail = (email || userData.email || "").trim();
-    const targetName = (name || userData.name || "Cliente THR33").trim();
+    // Se o envio automático estiver desativado no CMS e não for um teste manual forçado, aborta
+    if (welcomeConfig.enabled === false && !isForceTest) {
+      return { sent: false, reason: "welcome_email_disabled" };
+    }
+
+    let targetEmail = (email || "").trim();
+    let targetName = (name || "Cliente THR33").trim();
+
+    if (!isForceTest && userRef) {
+      const lockResult = await db.runTransaction(async (transaction) => {
+        const userSnap = await transaction.get(userRef);
+        const userData = userSnap.exists ? userSnap.data() : {};
+
+        if (userData.welcomeEmailSent === true) {
+          return { allowed: false, reason: "already_sent" };
+        }
+        if (userData.welcomeEmailLockUntil && Number(userData.welcomeEmailLockUntil) > nowMs) {
+          return { allowed: false, reason: "in_flight_lock" };
+        }
+
+        transaction.set(
+          userRef,
+          { welcomeEmailLockUntil: nowMs + 60000 },
+          { merge: true },
+        );
+        return { allowed: true, userData };
+      });
+
+      if (!lockResult.allowed) {
+        return { sent: false, alreadySent: true, reason: lockResult.reason };
+      }
+
+      const userData = lockResult.userData || {};
+      targetEmail = (email || userData.email || "").trim();
+      targetName = (name || userData.name || "Cliente THR33").trim();
+    }
+
     if (!targetEmail) {
-      await userRef.set({ welcomeEmailLockUntil: 0 }, { merge: true });
+      if (userRef && !isForceTest) {
+        await userRef.set({ welcomeEmailLockUntil: 0 }, { merge: true });
+      }
       return { sent: false, reason: "missing_email" };
     }
 
+    // CUPOM DE PRIMEIRA COMPRA:
+    // Por padrão DESATIVADO (false), só consulta e anexa se o administrador ligar explicitamente no CMS!
     let welcomeCoupon = null;
-    try {
-      const couponsSnap = await db
-        .collection("coupons")
-        .where("active", "==", true)
-        .limit(15)
-        .get();
-      const todayStr = new Date().toISOString().split("T")[0];
-      for (const docSnap of couponsSnap.docs) {
-        const c = docSnap.data();
-        const notExpired = !c.validUntil || todayStr <= c.validUntil;
-        if (!notExpired) continue;
-        if (
-          c.onlyFirstPurchase === true ||
-          String(c.code || "").toUpperCase().includes("BEMVINDO")
-        ) {
-          welcomeCoupon = c;
-          break;
+    if (welcomeConfig.includeCoupon === true) {
+      try {
+        const couponsSnap = await db
+          .collection("coupons")
+          .where("active", "==", true)
+          .limit(15)
+          .get();
+        const todayStr = new Date().toISOString().split("T")[0];
+        for (const docSnap of couponsSnap.docs) {
+          const c = docSnap.data();
+          const notExpired = !c.validUntil || todayStr <= c.validUntil;
+          if (!notExpired) continue;
+          if (
+            c.onlyFirstPurchase === true ||
+            String(c.code || "").toUpperCase().includes("BEMVINDO")
+          ) {
+            welcomeCoupon = c;
+            break;
+          }
         }
+      } catch (couponErr) {
+        logger.warn("Aviso ao consultar cupom para e-mail de boas-vindas:", couponErr.message);
       }
-    } catch (couponErr) {
-      logger.warn("Aviso ao consultar cupom para e-mail de boas-vindas:", couponErr.message);
     }
 
     const html = buildWelcomeEmailHtml({
       userName: targetName,
       coupon: welcomeCoupon,
+      recipientEmail: targetEmail,
+      config: welcomeConfig,
     });
+
+    const emailSubject = (welcomeConfig.subject || "Bem-vindo à THR33").trim();
 
     const result = await sendResendEmail({
       to: targetEmail,
-      subject: "Bem-vindo à THR33",
+      subject: emailSubject,
       html,
     });
 
-    if (result.sent) {
-      await userRef.set(
-        {
-          welcomeEmailSent: true,
-          welcomeEmailLockUntil: 0,
-          welcomeEmailSentAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true },
-      );
-    } else {
-      // Libera a trava imediatamente caso o Resend tenha falhado
-      await userRef.set({ welcomeEmailLockUntil: 0 }, { merge: true });
+    if (!isForceTest && userRef) {
+      if (result.sent) {
+        await userRef.set(
+          {
+            welcomeEmailSent: true,
+            welcomeEmailLockUntil: 0,
+            welcomeEmailSentAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+      } else {
+        // Libera a trava imediatamente caso o Resend tenha falhado
+        await userRef.set({ welcomeEmailLockUntil: 0 }, { merge: true });
+      }
     }
 
     return result;
   } catch (err) {
-    await userRef.set({ welcomeEmailLockUntil: 0 }, { merge: true }).catch(() => {});
+    if (userRef && !isForceTest) {
+      await userRef.set({ welcomeEmailLockUntil: 0 }, { merge: true }).catch(() => {});
+    }
     logger.warn("Erro não-bloqueante em sendWelcomeEmailIfNeeded:", err.message);
     return { sent: false, error: err.message };
   }
@@ -5508,7 +5575,11 @@ exports.sendTransactionalEmail = onCall(
 
     if (type === "welcome_register") {
       const targetUid = uid || request.auth?.uid;
-      return await sendWelcomeEmailIfNeeded(db, targetUid, { email, name });
+      return await sendWelcomeEmailIfNeeded(db, targetUid, {
+        email,
+        name,
+        forceTest: Boolean(forceTest),
+      });
     }
     if (type === "order_paid" && orderId) {
       const orderRef = db.collection("orders").doc(String(orderId));

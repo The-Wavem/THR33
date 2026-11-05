@@ -72,13 +72,14 @@ export const emailService = {
   /**
    * Gatilho A — Boas-vindas ao Criar Conta (welcome_register)
    */
-  triggerWelcomeEmail({ uid, email, name }) {
-    if (!uid || !email) return Promise.resolve({ sent: false });
+  triggerWelcomeEmail({ uid, email, name, forceTest = false }) {
+    if (!email) return Promise.resolve({ sent: false });
     return invokeTransactionalEmail({
       type: 'welcome_register',
-      uid,
+      uid: uid || 'welcome_test_user',
       email,
-      name: name || 'Cliente THR33'
+      name: name || 'Cliente THR33',
+      forceTest: Boolean(forceTest)
     });
   },
 
