@@ -32,6 +32,15 @@ export function BentoGrid({ gridItems = [], sectionTag, sectionTitle, isLoading 
 
   if (!items || items.length === 0) return null;
 
+  const hasLargeCard = items.some((c) => c.size === 'large');
+  const isThreeNormalCards = items.length === 3 && !hasLargeCard;
+  const isSingleCard = items.length === 1;
+
+  const gridClass = [
+    styles.grid,
+    isSingleCard ? styles.gridSingle : isThreeNormalCards ? styles.gridThree : ''
+  ].filter(Boolean).join(' ');
+
   return (
     <section className={styles.section}>
       {(cleanSectionTag || cleanSectionTitle) && (
@@ -41,10 +50,11 @@ export function BentoGrid({ gridItems = [], sectionTag, sectionTitle, isLoading 
         </div>
       )}
 
-      <div className={styles.grid}>
+      <div className={gridClass}>
         {items.map((item, index) => {
           const imgSrc = item.imageUrl || item.image;
           const isLarge = item.size === 'large';
+          const isFullWidth = isLarge || (items.length === 2 && hasLargeCard);
           const cleanItemTitle = String(item.title || '').trim();
           const cleanBtnText = String(item.buttonText || '').trim();
           const hasCardOverlayContent = Boolean(cleanItemTitle || cleanBtnText);
@@ -52,12 +62,12 @@ export function BentoGrid({ gridItems = [], sectionTag, sectionTitle, isLoading 
           return (
             <div
               key={item.id || index}
-              className={`${styles.card} ${isLarge ? styles.cardLarge : ''}`}
+              className={`${styles.card} ${isFullWidth ? styles.cardLarge : ''}`}
             >
               <ImageWithSkeleton
                 src={imgSrc}
                 alt={cleanItemTitle || 'Destaque THR33'}
-                aspectRatio={isLarge ? '16/10' : '4/5'}
+                aspectRatio={isFullWidth ? '16/10' : '4/5'}
                 className={styles.cardImage}
                 style={{ width: '100%', height: '100%' }}
               />
