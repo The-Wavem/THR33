@@ -1284,45 +1284,53 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     }));
 
     try {
-      // 1. Gravação 100% GARANTIDA do pedido na coleção 'orders'
+      // 1. Gravação / enriquecimento do pedido na coleção 'orders'
       const targetOrderId = finalDocId || orderRefId;
       const orderDocRef = doc(db, 'orders', targetOrderId);
       const finalUserId = user?.uid || authUser?.uid || currentUser?.uid || cleanPayload.userId || 'guest';
 
-      await setDoc(orderDocRef, {
-        ...cleanPayload,
-        orderId: targetOrderId,
-        id: targetOrderId,
-        userId: finalUserId,
-        clientEmail: cleanPayload.clientEmail || resolvedEmail,
-        clientName: cleanPayload.clientName || clientData.name || user?.displayName || user?.name || 'Cliente THR33',
-        clientCpf: cleanPayload.clientCpf || clientData.cpf || '',
-        clientPhone: cleanPayload.clientPhone || clientData.phone || '',
-        subtotal: Number(cleanPayload.subtotal ?? subtotal ?? 0),
-        discountAmount: Number(cleanPayload.discountAmount ?? discountAmount ?? 0),
-        couponCode: cleanPayload.couponCode || appliedCoupon?.code || null,
-        couponId: cleanPayload.couponId || appliedCoupon?.id || null,
-        walletDeduction: Number(cleanPayload.walletDeduction ?? walletDeduction ?? 0),
-        walletRefunded: Boolean(cleanPayload.walletRefunded || false),
-        originalTotal: Number(cleanPayload.originalTotal ?? total ?? 0),
-        freeShippingApplied: Boolean(cleanPayload.freeShippingApplied || isFreeShippingActive),
-        freeShippingReason: cleanPayload.freeShippingReason || null,
-        hasGiftCard: Boolean(cleanPayload.hasGiftCard),
-        carrier: cleanPayload.carrier || selectedShippingOption?.carrier || selectedShippingOption?.name || '',
-        serviceName: cleanPayload.serviceName || selectedShippingOption?.serviceName || '',
-        shippingDeadline: cleanPayload.shippingDeadline || selectedShippingOption?.deadline || '',
-        paymentMethod: cleanPayload.paymentMethod,
-        utm_source: utmSource,
-        utm_medium: utmMedium,
-        utm_campaign: utmCampaign,
-        paymentDetails: cleanPayload.paymentDetails,
-        items: cleanPayload.items,
-        shippingAddress: cleanPayload.shippingAddress,
-        clientState: cleanPayload.clientState || cleanPayload.shippingAddress?.state || resolveOrderDestinationUF(cleanPayload) || '',
-        clientCity: cleanPayload.clientCity || cleanPayload.shippingAddress?.city || '',
-        stockReserved: true,
-        updatedAt: new Date().toISOString()
-      }, { merge: true });
+      try {
+        await setDoc(orderDocRef, {
+          ...cleanPayload,
+          orderId: targetOrderId,
+          id: targetOrderId,
+          userId: finalUserId,
+          clientEmail: cleanPayload.clientEmail || resolvedEmail,
+          clientName: cleanPayload.clientName || clientData.name || user?.displayName || user?.name || 'Cliente THR33',
+          clientCpf: cleanPayload.clientCpf || clientData.cpf || '',
+          clientPhone: cleanPayload.clientPhone || clientData.phone || '',
+          subtotal: Number(cleanPayload.subtotal ?? subtotal ?? 0),
+          discountAmount: Number(cleanPayload.discountAmount ?? discountAmount ?? 0),
+          couponCode: cleanPayload.couponCode || appliedCoupon?.code || null,
+          couponId: cleanPayload.couponId || appliedCoupon?.id || null,
+          walletDeduction: Number(cleanPayload.walletDeduction ?? walletDeduction ?? 0),
+          walletRefunded: Boolean(cleanPayload.walletRefunded || false),
+          originalTotal: Number(cleanPayload.originalTotal ?? total ?? 0),
+          freeShippingApplied: Boolean(cleanPayload.freeShippingApplied || isFreeShippingActive),
+          freeShippingReason: cleanPayload.freeShippingReason || null,
+          hasGiftCard: Boolean(cleanPayload.hasGiftCard),
+          carrier: cleanPayload.carrier || selectedShippingOption?.carrier || selectedShippingOption?.name || '',
+          serviceName: cleanPayload.serviceName || selectedShippingOption?.serviceName || '',
+          shippingDeadline: cleanPayload.shippingDeadline || selectedShippingOption?.deadline || '',
+          paymentMethod: cleanPayload.paymentMethod,
+          utm_source: utmSource,
+          utm_medium: utmMedium,
+          utm_campaign: utmCampaign,
+          paymentDetails: cleanPayload.paymentDetails,
+          items: cleanPayload.items,
+          shippingAddress: cleanPayload.shippingAddress,
+          clientState: cleanPayload.clientState || cleanPayload.shippingAddress?.state || resolveOrderDestinationUF(cleanPayload) || '',
+          clientCity: cleanPayload.clientCity || cleanPayload.shippingAddress?.city || '',
+          stockReserved: true,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (orderWriteErr) {
+        if (pagbankRes?.success || pagbankRes?.orderId) {
+          console.warn("Aviso ao sincronizar metadados do pedido no client (pedido ja salvo pelo backend):", orderWriteErr.message);
+        } else {
+          throw orderWriteErr;
+        }
+      }
 
       finalDocId = targetOrderId;
 
