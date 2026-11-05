@@ -7,6 +7,46 @@
  */
 
 /**
+ * FONTE ÚNICA DA VERDADE - Modelagens, Grades e Tabelas de Medidas Oficiais THR33
+ */
+export const OFFICIAL_THR33_FITS = ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
+
+export const GLOBAL_CATALOG_SIZES = ['P', 'M', 'G', 'GG', 'EXG'];
+
+export const OVERSIZED_SIZES = ['P', 'M', 'G', 'GG', 'EXG'];
+export const BOXY_SIZES = ['P', 'M', 'G', 'GG'];
+
+export const OFFICIAL_MEASURES_TABLE = {
+  oversized: [
+    { size: 'P', largura: '54 cm', comprimento: '71 cm', manga: '24 cm', ombro: '19 cm' },
+    { size: 'M', largura: '58 cm', comprimento: '73 cm', manga: '25 cm', ombro: '20 cm' },
+    { size: 'G', largura: '60 cm', comprimento: '75 cm', manga: '26 cm', ombro: '21 cm' },
+    { size: 'GG', largura: '62 cm', comprimento: '78 cm', manga: '27 cm', ombro: '22 cm' },
+    { size: 'EXG', largura: '64 cm', comprimento: '80 cm', manga: '28 cm', ombro: '23 cm' }
+  ],
+  boxy: [
+    { size: 'P', largura: '57 cm', comprimento: '64 cm', manga: '23 cm', ombro: '21 cm' },
+    { size: 'M', largura: '59 cm', comprimento: '66 cm', manga: '24 cm', ombro: '22 cm' },
+    { size: 'G', largura: '61 cm', comprimento: '68 cm', manga: '25 cm', ombro: '23 cm' },
+    { size: 'GG', largura: '63 cm', comprimento: '70 cm', manga: '26 cm', ombro: '24 cm' }
+  ]
+};
+
+export const getSizesForFit = (fit) => {
+  if (!fit) return OVERSIZED_SIZES;
+  const s = String(fit).toLowerCase();
+  if (s.includes('boxy')) return BOXY_SIZES;
+  return OVERSIZED_SIZES;
+};
+
+export const getMeasuresForFit = (fit) => {
+  if (!fit) return OFFICIAL_MEASURES_TABLE.oversized;
+  const s = String(fit).toLowerCase();
+  if (s.includes('boxy')) return OFFICIAL_MEASURES_TABLE.boxy;
+  return OFFICIAL_MEASURES_TABLE.oversized;
+};
+
+/**
  * Normaliza uma chave/slug de modelagem para comparação consistente.
  * Trata acentuações, espaços, hífens e variações de escrita.
  */
@@ -21,6 +61,8 @@ export const normalizeFitSlug = (raw) => {
     .replace(/^_+|_+$/g, '');
 
   if (s === 'boxy' || s === 'boxy_fit') return 'boxy';
+  if (s === 'oversized_heavy' || s === 'oversized_heavy_fit') return 'oversized_heavy';
+  if (s === 'oversized_classica' || s === 'oversized_classica_fit') return 'oversized_classica';
   if (s === 'oversized' || s === 'oversized_fit') return 'oversized';
   if (s === 'normal' || s === 'regular' || s === 'regular_fit' || s === 'normal_fit') return 'normal';
   if (s === 'slim' || s === 'slim_fit') return 'slim';
@@ -42,7 +84,9 @@ export const formatFitLabel = (fitKey) => {
 
   const officialLabels = {
     'boxy': 'BOXY FIT',
-    'oversized': 'OVERSIZED (HEAVY & CLÁSSICA)',
+    'oversized_heavy': 'OVERSIZED HEAVY',
+    'oversized_classica': 'OVERSIZED CLÁSSICA',
+    'oversized': 'OVERSIZED FIT',
     'normal': 'NORMAL / REGULAR FIT',
     'regular': 'NORMAL / REGULAR FIT',
     'regata': 'REGATA ATHLETIC',
@@ -73,6 +117,8 @@ export const formatFitBadgeLabel = (fitKey) => {
   if (!fitKey) return '';
   const key = normalizeFitSlug(fitKey);
   if (key === 'unico' || key === 'padrao') return '';
+  if (key === 'oversized_heavy') return 'OVERSIZED HEAVY';
+  if (key === 'oversized_classica') return 'OVERSIZED CLÁSSICA';
   if (key === 'oversized') return 'OVERSIZED FIT';
   if (key === 'boxy') return 'BOXY FIT';
   if (key === 'normal' || key === 'regular') return 'REGULAR FIT';
@@ -143,25 +189,33 @@ export const formatCategoryBadgeLabel = (category) => {
 export const extractAvailableFits = (products = []) => {
   const fitMap = new Map();
 
-  // 1. Extrai modelagens de cada produto cadastrado
+  // 1. Extrai modelagens de cada produto cadastrado (suporta p.fits array e p.fit singular)
   if (Array.isArray(products)) {
     products.forEach(p => {
       // Ignora brindes da lista de modelagens
       if (p.type === 'brinde' || p.category === 'brinde') return;
-      if (!p.fit) return;
+      
+      const productFits = Array.isArray(p.fits) && p.fits.length > 0
+        ? p.fits
+        : (Array.isArray(p.availableFits) && p.availableFits.length > 0)
+          ? p.availableFits
+          : (p.fit ? [p.fit] : ['Boxy']);
 
-      const normSlug = normalizeFitSlug(p.fit);
-      if (!normSlug || normSlug === 'unico' || normSlug === 'padrao') return;
+      productFits.forEach(rawFit => {
+        if (!rawFit) return;
+        const normSlug = normalizeFitSlug(rawFit);
+        if (!normSlug || normSlug === 'unico' || normSlug === 'padrao') return;
 
-      if (!fitMap.has(normSlug)) {
-        fitMap.set(normSlug, {
-          id: normSlug,
-          label: formatFitLabel(p.fit),
-          count: 1
-        });
-      } else {
-        fitMap.get(normSlug).count += 1;
-      }
+        if (!fitMap.has(normSlug)) {
+          fitMap.set(normSlug, {
+            id: normSlug,
+            label: formatFitLabel(rawFit),
+            count: 1
+          });
+        } else {
+          fitMap.get(normSlug).count += 1;
+        }
+      });
     });
   }
 
@@ -200,6 +254,8 @@ export const extractAvailableFits = (products = []) => {
 
   // 4. Ordenação prioritária das modelagens
   const priorityOrder = [
+    'oversized_heavy',
+    'oversized_classica',
     'boxy',
     'oversized',
     'normal',

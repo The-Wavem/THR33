@@ -1156,7 +1156,11 @@ export function CmsPedidos() {
         const fit = formatFitBadgeLabel(item.fit) || 'Boxy Fit';
         const color = extractItemColor(item);
         const rawSize = (item.size || 'M').trim().toUpperCase();
-        const sizeKey = ['PP', 'P', 'M', 'G', 'GG', 'XG'].includes(rawSize) ? rawSize : 'OUTROS';
+        const sizeKey = ['P', 'M', 'G', 'GG', 'EXG'].includes(rawSize)
+          ? rawSize
+          : rawSize === 'XG'
+            ? 'EXG'
+            : 'OUTROS';
 
         sizeTotals[sizeKey] = (sizeTotals[sizeKey] || 0) + qty;
         colorTotals[color] = (colorTotals[color] || 0) + qty;
@@ -1167,7 +1171,7 @@ export function CmsPedidos() {
             name,
             fit,
             color,
-            sizes: { PP: 0, P: 0, M: 0, G: 0, GG: 0, XG: 0, OUTROS: 0 },
+            sizes: { P: 0, M: 0, G: 0, GG: 0, EXG: 0, OUTROS: 0 },
             total: 0
           };
         }
@@ -1255,7 +1259,7 @@ export function CmsPedidos() {
       text += `*${idx + 1}. ${item.name.toUpperCase()}*\n`;
       text += `   • Cor: *${item.color}* | Modelagem: ${item.fit}\n`;
       const sizeBreakdown = [];
-      ['PP', 'P', 'M', 'G', 'GG', 'XG'].forEach(s => {
+      ['P', 'M', 'G', 'GG', 'EXG'].forEach(s => {
         if (item.sizes[s] > 0) sizeBreakdown.push(`${s}: ${item.sizes[s]}`);
       });
       if (item.sizes.OUTROS > 0) sizeBreakdown.push(`OUTROS: ${item.sizes.OUTROS}`);
@@ -1969,7 +1973,10 @@ export function CmsPedidos() {
                       <div className={styles.itemsSummary}>
                         {order.items?.map((it, idx) => (
                           <span key={idx} className={styles.itemTag}>
-                            {it.quantity}x {it.name} <small>({it.size} • {extractItemColor(it)})</small>
+                            {it.quantity}x {it.name}{' '}
+                            <small>
+                              ({it.size} • {extractItemColor(it)}{it.fit ? ` • ${formatFitBadgeLabel(it.fit)}` : ''})
+                            </small>
                           </span>
                         ))}
                       </div>
@@ -2307,7 +2314,7 @@ export function CmsPedidos() {
                       <img src={it.image} alt={it.name} className={styles.itemThumb} />
                       <div className={styles.itemDetails}>
                         <strong>{it.name}</strong>
-                        <span>Tamanho: <strong>{it.size}</strong> • Cor: <strong>{extractItemColor(it)}</strong> {it.fit ? `• ${formatFitBadgeLabel(it.fit)}` : ''}</span>
+                        <span>Tamanho: <strong>{it.size}</strong> • Cor: <strong>{extractItemColor(it)}</strong> • Modelagem: <strong>{it.fit ? formatFitBadgeLabel(it.fit) : 'OVERSIZED'}</strong></span>
                         <small>Qtd: {it.quantity} un. • R$ {Number(it.price || 0).toFixed(2)} un.</small>
                       </div>
 
@@ -3120,12 +3127,11 @@ export function CmsPedidos() {
                         <th>ITEM / MODELO</th>
                         <th>MODELAGEM</th>
                         <th>COR</th>
-                        <th className={styles.sizeTh}>PP</th>
                         <th className={styles.sizeTh}>P</th>
                         <th className={styles.sizeTh}>M</th>
                         <th className={styles.sizeTh}>G</th>
                         <th className={styles.sizeTh}>GG</th>
-                        <th className={styles.sizeTh}>XG</th>
+                        <th className={styles.sizeTh}>EXG</th>
                         <th className={styles.totalTh}>TOTAL</th>
                       </tr>
                     </thead>
@@ -3136,12 +3142,11 @@ export function CmsPedidos() {
                           <td><strong>{prod.name}</strong></td>
                           <td>{prod.fit}</td>
                           <td><span className={styles.docColorTag}>{prod.color}</span></td>
-                          <td className={styles.sizeTd}>{prod.sizes.PP || '-'}</td>
                           <td className={styles.sizeTd}>{prod.sizes.P || '-'}</td>
                           <td className={styles.sizeTd}>{prod.sizes.M || '-'}</td>
                           <td className={styles.sizeTd}>{prod.sizes.G || '-'}</td>
                           <td className={styles.sizeTd}>{prod.sizes.GG || '-'}</td>
-                          <td className={styles.sizeTd}>{prod.sizes.XG || '-'}</td>
+                          <td className={styles.sizeTd}>{prod.sizes.EXG || '-'}</td>
                           <td className={styles.totalTd}><strong>{prod.total} un.</strong></td>
                         </tr>
                       ))}
@@ -3150,12 +3155,11 @@ export function CmsPedidos() {
                       <tr className={styles.docTableFooterRow}>
                         <td style={{ textAlign: 'center' }}>-</td>
                         <td colSpan="3"><strong>TOTAL CONSOLIDADO DO LOTE</strong></td>
-                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.PP}</strong></td>
-                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.P}</strong></td>
-                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.M}</strong></td>
-                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.G}</strong></td>
-                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.GG}</strong></td>
-                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.XG}</strong></td>
+                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.P || 0}</strong></td>
+                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.M || 0}</strong></td>
+                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.G || 0}</strong></td>
+                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.GG || 0}</strong></td>
+                        <td className={styles.sizeTd}><strong>{productionSummary.sizeTotals.EXG || 0}</strong></td>
                         <td className={styles.totalTd}><strong>{productionSummary.totalPieces} PEÇAS</strong></td>
                       </tr>
                     </tfoot>

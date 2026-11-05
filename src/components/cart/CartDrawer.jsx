@@ -144,12 +144,15 @@ export function CartDrawer() {
                 </div>
               ) : (
                 cartItems.map((item) => (
-                  <article key={`${item.id}-${item.size}-${item.color?.id || 'default'}`} className={styles.itemCard}>
+                  <article key={`${item.id}-${item.size}-${item.color?.id || 'default'}-${item.fit || 'default'}`} className={styles.itemCard}>
                     <img src={item.image} alt={item.name} className={styles.itemImage} />
                     <div className={styles.itemDetails}>
                       <div className={styles.itemMeta}>
                         <strong className={styles.itemName}>{item.name}</strong>
                         <span className={styles.itemFit}>
+                          {item.fit && item.fit !== 'Vale-Presente Digital' && (
+                            <><strong>{item.fit}</strong> • </>
+                          )}
                           Tam: <strong>{item.size}</strong> {item.color?.name && `• Cor: ${item.color.name}`}
                         </span>
                       </div>
@@ -162,7 +165,7 @@ export function CartDrawer() {
                         <div className={styles.qtyPicker}>
                           <button 
                             type="button"
-                            onClick={() => updateQuantity(item.id, item.size, -1, item.color?.id)}
+                            onClick={() => updateQuantity(item.id, item.size, -1, item.color?.id, item.fit)}
                             aria-label="Diminuir quantidade"
                           >
                             <Minus size={12} />
@@ -170,7 +173,7 @@ export function CartDrawer() {
                           <span>{item.quantity}</span>
                           <button 
                             type="button"
-                            onClick={() => updateQuantity(item.id, item.size, 1, item.color?.id)}
+                            onClick={() => updateQuantity(item.id, item.size, 1, item.color?.id, item.fit)}
                             aria-label="Aumentar quantidade"
                           >
                             <Plus size={12} />
@@ -179,7 +182,7 @@ export function CartDrawer() {
 
                         <button 
                           type="button"
-                          onClick={() => removeFromCart(item.id, item.size, item.color?.id)} 
+                          onClick={() => removeFromCart(item.id, item.size, item.color?.id, item.fit)} 
                           className={styles.removeBtn}
                           aria-label="Remover item"
                         >

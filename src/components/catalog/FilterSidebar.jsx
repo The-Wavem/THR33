@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, X, SlidersHorizontal } from 'lucide-react';
 import { analyticsService } from '../../services/analyticsService';
-import { extractAvailableFits, normalizeFitSlug } from '../../utils/fitUtils';
+import { extractAvailableFits, normalizeFitSlug, GLOBAL_CATALOG_SIZES } from '../../utils/fitUtils';
 import styles from './FilterSidebar.module.css';
 
 export function FilterSidebar({
@@ -234,11 +234,11 @@ export function FilterSidebar({
             </div>
           </div>
 
-          {/* 4. GRADE DE TAMANHOS DE VESTUÁRIO (PP AO GG) */}
+          {/* 4. GRADE DE TAMANHOS DE VESTUÁRIO (P AO EXG) */}
           <div className={styles.filterGroup}>
             <span className={styles.groupLabel}>TAMANHO</span>
             <div className={styles.gridSizes}>
-              {['PP', 'P', 'M', 'G', 'GG'].map((size) => {
+              {GLOBAL_CATALOG_SIZES.map((size) => {
                 const isSelected = selectedSizes.includes(size);
                 return (
                   <button

@@ -571,9 +571,10 @@ export function Sobre() {
                 <tr>
                   <th>MODELAGEM</th>
                   <th>TAMANHO</th>
-                  <th>TÓRAX (LARGURA)</th>
+                  <th>LARGURA</th>
                   <th>COMPRIMENTO</th>
                   <th>MANGA</th>
+                  <th>OMBRO</th>
                 </tr>
               </thead>
               <tbody>
@@ -581,70 +582,73 @@ export function Sobre() {
                   <td rowSpan={5}>
                     <strong>Oversized Heavy &amp; Clássica</strong>
                   </td>
-                  <td>PP</td>
-                  <td>54 cm</td>
-                  <td>72 cm</td>
-                  <td>23 cm</td>
-                </tr>
-                <tr>
                   <td>P</td>
-                  <td>57 cm</td>
-                  <td>74 cm</td>
+                  <td>54 cm</td>
+                  <td>71 cm</td>
                   <td>24 cm</td>
+                  <td>19 cm</td>
                 </tr>
                 <tr>
                   <td>M</td>
-                  <td>60 cm</td>
-                  <td>76 cm</td>
+                  <td>58 cm</td>
+                  <td>73 cm</td>
                   <td>25 cm</td>
+                  <td>20 cm</td>
                 </tr>
                 <tr>
                   <td>G</td>
-                  <td>63 cm</td>
-                  <td>78 cm</td>
+                  <td>60 cm</td>
+                  <td>75 cm</td>
                   <td>26 cm</td>
+                  <td>21 cm</td>
                 </tr>
                 <tr>
                   <td>GG</td>
-                  <td>66 cm</td>
-                  <td>80 cm</td>
+                  <td>62 cm</td>
+                  <td>78 cm</td>
                   <td>27 cm</td>
-                </tr>
-                <tr className={styles.dividerRow}>
-                  <td colSpan={5}></td>
-                </tr>
-                <tr>
-                  <td rowSpan={5}>
-                    <strong>Boxy Fit</strong>
-                  </td>
-                  <td>PP</td>
-                  <td>56 cm</td>
-                  <td>66 cm</td>
                   <td>22 cm</td>
                 </tr>
                 <tr>
-                  <td>P</td>
-                  <td>58 cm</td>
-                  <td>68 cm</td>
+                  <td>EXG</td>
+                  <td>64 cm</td>
+                  <td>80 cm</td>
+                  <td>28 cm</td>
                   <td>23 cm</td>
+                </tr>
+                <tr className={styles.dividerRow}>
+                  <td colSpan={6}></td>
+                </tr>
+                <tr>
+                  <td rowSpan={4}>
+                    <strong>Boxy Fit</strong>
+                  </td>
+                  <td>P</td>
+                  <td>57 cm</td>
+                  <td>64 cm</td>
+                  <td>23 cm</td>
+                  <td>21 cm</td>
                 </tr>
                 <tr>
                   <td>M</td>
-                  <td>61 cm</td>
-                  <td>70 cm</td>
+                  <td>59 cm</td>
+                  <td>66 cm</td>
                   <td>24 cm</td>
+                  <td>22 cm</td>
                 </tr>
                 <tr>
                   <td>G</td>
-                  <td>64 cm</td>
-                  <td>72 cm</td>
+                  <td>61 cm</td>
+                  <td>68 cm</td>
                   <td>25 cm</td>
+                  <td>23 cm</td>
                 </tr>
                 <tr>
                   <td>GG</td>
-                  <td>67 cm</td>
-                  <td>74 cm</td>
+                  <td>63 cm</td>
+                  <td>70 cm</td>
                   <td>26 cm</td>
+                  <td>24 cm</td>
                 </tr>
               </tbody>
             </table>

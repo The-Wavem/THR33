@@ -13,7 +13,13 @@ import { shippingService } from '../../services/shippingService';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { analyticsService } from '../../services/analyticsService';
-import { formatFitBadgeLabel, formatCategoryBadgeLabel } from '../../utils/fitUtils';
+import { 
+  formatFitBadgeLabel, 
+  formatCategoryBadgeLabel,
+  getSizesForFit,
+  getMeasuresForFit,
+  OFFICIAL_MEASURES_TABLE
+} from '../../utils/fitUtils';
 import { SEO } from '../../components/common/SEO';
 import { buildProductSchema, buildBreadcrumbSchema } from '../../utils/seoSchemas';
 import styles from './ProdutoDetalhe.module.css';
@@ -49,6 +55,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedColor, setSelectedColor] = useState(null);
   const [selectedSize, setSelectedSize] = useState('M');
+  const [selectedFit, setSelectedFit] = useState('Boxy');
   const [quantity, setQuantity] = useState(1);
   const [openAccordion, setOpenAccordion] = useState('measures');
   const [isAddedFeedback, setIsAddedFeedback] = useState(false);
@@ -120,7 +127,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
           if (data.unlimitedStock || data.isUnlimitedStock) {
             defaultSize = 'M';
           } else if (data.stock && typeof data.stock === 'object') {
-            const firstAvail = ['PP', 'P', 'M', 'G', 'GG'].find(sz => Number(data.stock[sz] ?? 0) > 0);
+            const firstAvail = ['P', 'M', 'G', 'GG', 'EXG'].find(sz => Number(data.stock[sz] ?? 0) > 0);
             if (firstAvail) defaultSize = firstAvail;
           }
           setSelectedSize(defaultSize);
@@ -176,32 +183,75 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
   const isUnlimitedStock = Boolean(product?.unlimitedStock || product?.isUnlimitedStock);
 
+  const isGiftCard = Boolean(
+    product?.isGiftCard || 
+    product?.category === 'gift-card' || 
+    String(product?.id || '').includes('vale-presente')
+  );
+
+  // Lista de modelagens disponíveis (suporta product.fits ou fallback padrão da marca)
+  const availableFits = useMemo(() => {
+    if (isGiftCard) return [];
+    if (Array.isArray(product?.fits) && product.fits.length > 0) {
+      return product.fits;
+    }
+    if (Array.isArray(product?.availableFits) && product.availableFits.length > 0) {
+      return product.availableFits;
+    }
+    return ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
+  }, [product, isGiftCard]);
+
+  // Sincroniza a modelagem selecionada com o primeiro fit disponível do produto
+  useEffect(() => {
+    if (availableFits && availableFits.length > 0) {
+      if (product?.fit && availableFits.includes(product.fit)) {
+        setSelectedFit(product.fit);
+      } else {
+        setSelectedFit(availableFits[0]);
+      }
+    }
+  }, [availableFits, product?.fit]);
+
+  // Grade de tamanhos dinâmica conforme a modelagem selecionada
+  const activeSizes = useMemo(() => {
+    return getSizesForFit(selectedFit);
+  }, [selectedFit]);
+
+  // Se o cliente estava com 'EXG' selecionado e trocou para 'Boxy', ajusta para 'GG' (Boxy não tem EXG)
+  useEffect(() => {
+    if (selectedFit && String(selectedFit).toLowerCase().includes('boxy')) {
+      if (selectedSize === 'EXG') {
+        setSelectedSize('GG');
+      }
+    }
+  }, [selectedFit, selectedSize]);
+
   // Consolidação da grade de estoque (com suporte a estoque individual por cor e modo ilimitado)
   const parsedStock = useMemo(() => {
     if (isUnlimitedStock) {
-      return { PP: 9999, P: 9999, M: 9999, G: 9999, GG: 9999 };
+      return { P: 9999, M: 9999, G: 9999, GG: 9999, EXG: 9999 };
     }
     if (product?.hasColorStock && product?.colorStock && selectedColor?.id && product.colorStock[selectedColor.id]) {
       const cStock = product.colorStock[selectedColor.id];
       return {
-        PP: Number(cStock.PP ?? 0),
         P: Number(cStock.P ?? 0),
         M: Number(cStock.M ?? 0),
         G: Number(cStock.G ?? 0),
-        GG: Number(cStock.GG ?? 0)
+        GG: Number(cStock.GG ?? 0),
+        EXG: Number(cStock.EXG ?? cStock.PP ?? 0)
       };
     }
     if (product?.stock && typeof product.stock === 'object') {
       return {
-        PP: Number(product.stock.PP ?? 0),
         P: Number(product.stock.P ?? 0),
         M: Number(product.stock.M ?? 0),
         G: Number(product.stock.G ?? 0),
-        GG: Number(product.stock.GG ?? 0)
+        GG: Number(product.stock.GG ?? 0),
+        EXG: Number(product.stock.EXG ?? product.stock.PP ?? 0)
       };
     }
     if (Array.isArray(product?.variants) && product.variants.length > 0) {
-      const s = { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
+      const s = { P: 0, M: 0, G: 0, GG: 0, EXG: 0 };
       product.variants.forEach(v => {
         if (selectedColor?.id && v.colorId && v.colorId !== selectedColor.id) return;
         const sz = String(v.size || '').toUpperCase();
@@ -210,15 +260,15 @@ export function ProdutoDetalhe({ onAddToCart }) {
       return s;
     }
     if (Array.isArray(product?.sizes) && product.sizes.length > 0) {
-      const s = { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
+      const s = { P: 0, M: 0, G: 0, GG: 0, EXG: 0 };
       product.sizes.forEach(sz => {
         const upper = String(sz).toUpperCase();
         if (s[upper] !== undefined) s[upper] = 10;
       });
       return s;
     }
-    return { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
-  }, [product, selectedColor]);
+    return { P: 0, M: 0, G: 0, GG: 0, EXG: 0 };
+  }, [product, isUnlimitedStock, selectedColor]);
 
   const availableStock = isUnlimitedStock ? 9999 : (parsedStock[selectedSize] ?? 0);
   const isAllOutOfStock = isUnlimitedStock ? false : Object.values(parsedStock).every(q => q <= 0);
@@ -261,7 +311,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
     if (product?.hasColorStock && product?.colorStock?.[color.id]) {
       const colorSizes = product.colorStock[color.id];
       if (Number(colorSizes[selectedSize] ?? 0) <= 0) {
-        const firstAvailable = ['PP', 'P', 'M', 'G', 'GG'].find(sz => Number(colorSizes[sz] ?? 0) > 0);
+        const firstAvailable = activeSizes.find(sz => Number(colorSizes[sz] ?? 0) > 0);
         if (firstAvailable) {
           setSelectedSize(firstAvailable);
         }
@@ -488,14 +538,15 @@ export function ProdutoDetalhe({ onAddToCart }) {
       originalPrice: priceNum,
       image: currentImg,
       color: finalColor,
+      fit: selectedFit,
       category: product?.category || 'camisa',
       freeShipping: hasFreeShipping
     };
 
     if (onAddToCart) {
-      onAddToCart(cartProduct, selectedSize, quantity, finalColor);
+      onAddToCart(cartProduct, selectedSize, quantity, finalColor, selectedFit);
     } else {
-      addToCart(cartProduct, selectedSize, quantity, finalColor);
+      addToCart(cartProduct, selectedSize, quantity, finalColor, selectedFit);
     }
 
 
@@ -761,6 +812,28 @@ export function ProdutoDetalhe({ onAddToCart }) {
             </div>
           </div>
 
+          {/* SELETOR DE MODELAGEM (FIT) */}
+          {!isGiftCard && availableFits && availableFits.length > 0 && (
+            <div className={styles.fitSelectorBlock}>
+              <div className={styles.selectorHeader}>
+                <span className={styles.selectorLabel}>MODELAGEM:</span>
+                <span className={styles.selectedValue}>{selectedFit}</span>
+              </div>
+              <div className={styles.fitOptionsRow}>
+                {availableFits.map((fitOption) => (
+                  <button
+                    key={fitOption}
+                    type="button"
+                    onClick={() => setSelectedFit(fitOption)}
+                    className={`${styles.fitOptionBtn} ${selectedFit === fitOption ? styles.fitOptionBtnActive : ''}`}
+                  >
+                    {fitOption}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* SELETOR DE COR */}
           {colors && colors.length > 0 && (
             <div className={styles.colorSelector}>
@@ -793,7 +866,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
               </span>
             </div>
             <div className={styles.sizeOptions}>
-              {['PP', 'P', 'M', 'G', 'GG'].map((size) => {
+              {activeSizes.map((size) => {
                 const stockQty = parsedStock[size] ?? 0;
                 const isOutOfStock = !isUnlimitedStock && stockQty <= 0;
 
@@ -1002,26 +1075,56 @@ export function ProdutoDetalhe({ onAddToCart }) {
                     className={styles.accordionBodyWrapper}
                   >
                     <div className={styles.accordionBody}>
+                      <div style={{ marginBottom: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#FFFFFF', letterSpacing: '0.5px' }}>
+                          MEDIDAS OFICIAIS // {selectedFit?.toUpperCase() || 'OVERSIZED'}
+                        </span>
+                        <small style={{ fontSize: '0.68rem', color: '#a3a3a3' }}>
+                          Medidas da modelagem selecionada (tolerância têxtil de ±1,5 cm).
+                        </small>
+                      </div>
+
                       <table className={styles.measuresTable}>
                         <thead>
                           <tr>
-                            <th>Tamanho</th>
-                            <th>Tórax</th>
-                            <th>Comprimento</th>
-                            <th>Manga</th>
+                            <th>TAMANHO</th>
+                            <th>LARGURA</th>
+                            <th>COMPRIMENTO</th>
+                            <th>MANGA</th>
+                            <th>OMBRO</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {sizeChart.map((row) => (
-                            <tr key={row.size}>
-                              <td><strong>{row.size}</strong></td>
-                              <td>{row.chest}</td>
-                              <td>{row.length}</td>
-                              <td>{row.sleeve}</td>
-                            </tr>
-                          ))}
+                          {getMeasuresForFit(selectedFit).map((row) => {
+                            const isSelectedSize = row.size === selectedSize;
+                            return (
+                              <tr 
+                                key={row.size} 
+                                style={isSelectedSize ? { backgroundColor: 'rgba(255, 255, 255, 0.1)', fontWeight: 700 } : {}}
+                              >
+                                <td><strong>{row.size} {isSelectedSize ? '●' : ''}</strong></td>
+                                <td>{row.largura}</td>
+                                <td>{row.comprimento}</td>
+                                <td>{row.manga}</td>
+                                <td>{row.ombro}</td>
+                              </tr>
+                            );
+                          })}
                         </tbody>
                       </table>
+
+                      {/* GUIA DE COMO MEDIR */}
+                      <div style={{ marginTop: '1rem', padding: '0.85rem', background: '#0a0a0a', border: '1px solid #262626', borderRadius: '3px' }}>
+                        <strong style={{ fontSize: '0.72rem', color: '#ffffff', display: 'block', marginBottom: '0.4rem', letterSpacing: '0.5px' }}>
+                          📐 GUIA: COMO MEDIR SUA PEÇA
+                        </strong>
+                        <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.68rem', color: '#a3a3a3', lineHeight: 1.6 }}>
+                          <li><strong>Largura:</strong> Medida em linha reta de axila a axila com a peça esticada.</li>
+                          <li><strong>Comprimento:</strong> Do ponto mais alto do ombro (junto à gola) até a barra inferior.</li>
+                          <li><strong>Manga:</strong> Da costura do ombro até a extremidade do punho.</li>
+                          <li><strong>Ombro:</strong> Da costura de um ombro à costura do outro ombro.</li>
+                        </ul>
+                      </div>
                     </div>
                   </motion.div>
                 )}

@@ -481,7 +481,7 @@ export const decrementProductStock = async (items = []) => {
         const prodData = prodSnap.data() || {};
         const currentStock = prodData.stock
           ? { ...prodData.stock }
-          : { PP: 5, P: 10, M: 15, G: 10, GG: 5 };
+          : { P: 10, M: 15, G: 15, GG: 10, EXG: 5 };
 
         const currentSizeQty = Number(currentStock[size] ?? 0);
         const newSizeQty = Math.max(0, currentSizeQty - qtyToDeduct);

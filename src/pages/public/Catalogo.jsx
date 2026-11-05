@@ -205,15 +205,23 @@ export function Catalogo() {
         }
         // 3. Modelagens Dinâmicas (Multi-Seleção: OR)
         if (filters.fits && filters.fits.length > 0) {
-          const prodFitNorm = normalizeFitSlug(product.fit);
+          const productFits = Array.isArray(product.fits) && product.fits.length > 0
+            ? product.fits
+            : (Array.isArray(product.availableFits) && product.availableFits.length > 0)
+              ? product.availableFits
+              : (product.fit ? [product.fit] : ['Boxy']);
+
           const matchFit = filters.fits.some((f) => {
             const filterNorm = normalizeFitSlug(f);
-            return (
-              filterNorm === prodFitNorm ||
-              product.fit?.toLowerCase() === f.toLowerCase() ||
-              product.fit?.toLowerCase().includes(f.toLowerCase()) ||
-              f.toLowerCase().includes(product.fit?.toLowerCase())
-            );
+            return productFits.some((pf) => {
+              const pfNorm = normalizeFitSlug(pf);
+              return (
+                filterNorm === pfNorm ||
+                pf?.toLowerCase() === f.toLowerCase() ||
+                pf?.toLowerCase().includes(f.toLowerCase()) ||
+                f.toLowerCase().includes(pf?.toLowerCase())
+              );
+            });
           });
           if (!matchFit) return false;
         }

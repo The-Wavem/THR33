@@ -110,11 +110,20 @@ export function Hero({ bannerData, isLoading = false, children }) {
   const [isHovered, setIsHovered] = useState(false);
   const [timerKey, setTimerKey] = useState(0);
   const [loadedSlides, setLoadedSlides] = useState({});
+  const [slideRatios, setSlideRatios] = useState({});
 
   const markSlideLoaded = useCallback((key) => {
     if (!key) return;
     setLoadedSlides((prev) => (prev[key] ? prev : { ...prev, [key]: true }));
   }, []);
+
+  const handleImageLoaded = useCallback((e, slideKey) => {
+    markSlideLoaded(slideKey);
+    if (e?.target?.naturalWidth && e?.target?.naturalHeight) {
+      const ratio = e.target.naturalWidth / e.target.naturalHeight;
+      setSlideRatios((prev) => (prev[slideKey] === ratio ? prev : { ...prev, [slideKey]: ratio }));
+    }
+  }, [markSlideLoaded]);
 
   // Sincroniza dados da prop bannerData recebida do Firestore (sem injetar slides falsos/mockados)
   useEffect(() => {
@@ -158,14 +167,30 @@ export function Hero({ bannerData, isLoading = false, children }) {
 
       if (primaryUrl && typeof primaryUrl === 'string' && !primaryUrl.match(/\.(mp4|webm|ogg)$/i)) {
         const img = new Image();
-        img.onload = () => markSlideLoaded(slideKey);
+        img.onload = () => {
+          markSlideLoaded(slideKey);
+          if (img.naturalWidth && img.naturalHeight) {
+            const ratio = img.naturalWidth / img.naturalHeight;
+            setSlideRatios((prev) => (prev[slideKey] === ratio ? prev : { ...prev, [slideKey]: ratio }));
+          }
+        };
         img.onerror = () => markSlideLoaded(slideKey);
         img.src = primaryUrl;
         if (img.complete) {
           markSlideLoaded(slideKey);
+          if (img.naturalWidth && img.naturalHeight) {
+            const ratio = img.naturalWidth / img.naturalHeight;
+            setSlideRatios((prev) => (prev[slideKey] === ratio ? prev : { ...prev, [slideKey]: ratio }));
+          }
         }
         if (img.decode) {
-          img.decode().then(() => markSlideLoaded(slideKey)).catch(() => {});
+          img.decode().then(() => {
+            markSlideLoaded(slideKey);
+            if (img.naturalWidth && img.naturalHeight) {
+              const ratio = img.naturalWidth / img.naturalHeight;
+              setSlideRatios((prev) => (prev[slideKey] === ratio ? prev : { ...prev, [slideKey]: ratio }));
+            }
+          }).catch(() => {});
         }
       } else if (primaryUrl) {
         markSlideLoaded(slideKey);
@@ -256,6 +281,7 @@ export function Hero({ bannerData, isLoading = false, children }) {
         className={`${styles.heroSection} ${
           hasDedicatedMobileImage ? styles.heroHasMobileArt : styles.heroDesktopOnlyArt
         }`}
+        style={slideRatios[currentSlideKey] ? { aspectRatio: `${slideRatios[currentSlideKey]}` } : undefined}
         aria-label="Destaques THR33"
       >
         {/* Skeleton Shimmer visível enquanto a imagem real selecionada no CMS está carregando */}
@@ -284,11 +310,10 @@ export function Hero({ bannerData, isLoading = false, children }) {
                 initial={false}
                 animate={{
                   opacity: isCurrent && loadedSlides[slideKey] ? 1 : 0,
-                  scale: isCurrent ? 1 : 1.03
+                  scale: 1
                 }}
                 transition={{
-                  opacity: { duration: 0.5, ease: [0.16, 1, 0.3, 1] },
-                  scale: { duration: 6, ease: 'easeOut' }
+                  opacity: { duration: 0.5, ease: [0.16, 1, 0.3, 1] }
                 }}
                 style={{
                   position: 'absolute',
@@ -308,7 +333,7 @@ export function Hero({ bannerData, isLoading = false, children }) {
                       decoding="async"
                       fetchPriority={idx === 0 ? 'high' : 'auto'}
                       className={styles.heroPreloadedImage}
-                      onLoad={() => markSlideLoaded(slideKey)}
+                      onLoad={(e) => handleImageLoaded(e, slideKey)}
                       onError={() => markSlideLoaded(slideKey)}
                     />
                   </picture>
@@ -460,7 +485,7 @@ export function Hero({ bannerData, isLoading = false, children }) {
             TIRAGENS LIMITADAS //{' '}
           </span>
           <span>
-            THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSO ESSÊNCIA //{' '}
+            THR33 // PRODUÇÃO SOB DEMANDA // CURITIBA // OVERSIZED & BOXY // A RUA COMO NOSSA ESSÊNCIA //{' '}
             TIRAGENS LIMITADAS //{' '}
           </span>
         </div>

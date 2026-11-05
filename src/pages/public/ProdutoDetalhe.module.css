@@ -378,6 +378,48 @@
   color: var(--text-primary);
 }
 
+/* Seletor de Modelagem (Fit) */
+.fitSelectorBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.fitOptionsRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.fitOptionBtn {
+  position: relative;
+  border: 1px solid var(--border-color);
+  background-color: var(--bg-card);
+  color: var(--text-secondary);
+  padding: 0.6rem 0.95rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  font-family: var(--font-body);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: center;
+}
+
+.fitOptionBtn:hover {
+  border-color: var(--text-primary);
+  color: var(--text-primary);
+}
+
+.fitOptionBtnActive {
+  border-color: #FFFFFF !important;
+  background-color: #FFFFFF !important;
+  color: #000000 !important;
+  font-weight: 800 !important;
+}
+
 /* Seletor de Cores */
 .colorSelector {
   display: flex;

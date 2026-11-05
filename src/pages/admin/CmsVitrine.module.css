@@ -945,15 +945,23 @@
 }
 
 .previewMobileWrapper {
-  max-width: 310px;
-  margin: 0 auto;
+  max-width: 380px;
+  width: 100%;
+  margin: 1.25rem auto;
   aspect-ratio: 4 / 5;
+  border-radius: 18px;
+  border: 3px solid #222222;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.9);
 }
 
 .previewMobileFallbackHorizontal {
-  max-width: 340px;
-  margin: 0 auto;
+  max-width: 440px;
+  width: 100%;
+  margin: 1.25rem auto;
   aspect-ratio: 1440 / 730;
+  border-radius: 12px;
+  border: 2px solid #222222;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.9);
 }
 
 .previewSlide {

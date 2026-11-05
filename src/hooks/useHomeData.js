@@ -20,7 +20,7 @@ const isProductInStock = (product) => {
 /**
  * Hook customizado para gerenciar a camada de dados reais da Home (Sem Mocks da Unsplash)
  */
-export function useHomeData(limitProducts = 8) {
+export function useHomeData(limitProducts = 0) {
   const [vitrine, setVitrine] = useState(null);
   const [featuredProducts, setFeaturedProducts] = useState([]);
   const [communityPosts, setCommunityPosts] = useState([]);
@@ -50,43 +50,41 @@ export function useHomeData(limitProducts = 8) {
         ...(vitrineData || {})
       };
 
-      // Filtra apenas produtos reais de vestuário (sem brindes/vales)
+      // Filtra apenas produtos reais de vestuário/camisas (sem brindes/vales)
       const validProducts = (Array.isArray(allProducts) ? allProducts : []).filter(
-        (p) => p && p.type !== 'brinde' && p.category !== 'gift-card'
+        (p) =>
+          p &&
+          p.type !== 'brinde' &&
+          p.category !== 'gift-card' &&
+          !String(p.id || '').includes('vale')
       );
       const inStockProducts = validProducts.filter(isProductInStock);
       const basePool = inStockProducts.length > 0 ? inStockProducts : validProducts;
 
-      // Resolve bestSellers / featuredProducts a partir de settings/home ou dos produtos reais em estoque
-      let resolvedBestSellers = [];
-      const configuredBestSellers = mergedSettings?.bestSellers;
+      // Ordena rigorosamente todas as camisas disponíveis por mais vendidas (purchases / salesCount)
+      const sortedBySales = [...basePool].sort((a, b) => {
+        const salesA = Number(a.purchases ?? a.salesCount ?? a.sales ?? 0);
+        const salesB = Number(b.purchases ?? b.salesCount ?? b.sales ?? 0);
+        if (salesB !== salesA) return salesB - salesA;
 
-      if (Array.isArray(configuredBestSellers) && configuredBestSellers.length > 0) {
-        if (typeof configuredBestSellers[0] === 'string') {
-          resolvedBestSellers = configuredBestSellers
-            .map((idOrSlug) =>
-              validProducts.find((p) => p.id === idOrSlug || p.slug === idOrSlug)
-            )
-            .filter(Boolean);
-        } else if (typeof configuredBestSellers[0] === 'object') {
-          resolvedBestSellers = configuredBestSellers
-            .map((item) => {
-              const match = validProducts.find(
-                (p) => p.id === item.id || p.slug === item.slug || p.name === item.name
-              );
-              return match || (item.image && !String(item.image).includes('unsplash.com') ? item : null);
-            })
-            .filter(Boolean);
-        }
-      }
+        // Desempate 1: Marcados como destaque
+        const featA = a.isFeatured ? 1 : 0;
+        const featB = b.isFeatured ? 1 : 0;
+        if (featB !== featA) return featB - featA;
 
-      if (resolvedBestSellers.length === 0) {
-        const featuredFlagged = basePool.filter((p) => p.isFeatured);
-        resolvedBestSellers =
-          featuredFlagged.length > 0
-            ? featuredFlagged.slice(0, limitProducts)
-            : basePool.slice(0, limitProducts);
-      }
+        // Desempate 2: Mais visualizados / acessados
+        const viewsA = Number(a.views ?? 0);
+        const viewsB = Number(b.views ?? 0);
+        if (viewsB !== viewsA) return viewsB - viewsA;
+
+        // Desempate 3: Mais recentes
+        return new Date(b.updatedAt || b.createdAt || 0) - new Date(a.updatedAt || a.createdAt || 0);
+      });
+
+      // Todas as camisas cadastradas disponíveis na ordem das mais vendidas
+      const resolvedBestSellers = limitProducts && limitProducts > 0
+        ? sortedBySales.slice(0, limitProducts)
+        : sortedBySales;
 
       // Remove qualquer slide ou bento card que contenha URL mockada da Unsplash/Picsum
       const isCleanUrl = (url) =>

@@ -286,6 +286,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           name: i.name, 
           size: i.size || 'M',
           color: i.color || null,
+          fit: i.fit || 'Boxy',
           qty: i.quantity || 1, 
           price: i.price 
         })),
@@ -2678,11 +2679,14 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
           <div className={styles.orderItemsList}>
             {cartItems.map((item) => (
-              <div key={`${item.id}-${item.size}`} className={styles.orderCard}>
+              <div key={`${item.id}-${item.size}-${item.color?.id || 'default'}-${item.fit || 'default'}`} className={styles.orderCard}>
                 <img src={item.image} alt={item.name} />
                 <div className={styles.orderCardInfo}>
                   <strong className={styles.orderCardName}>{item.name}</strong>
                   <span className={styles.orderCardMeta}>
+                    {item.fit && item.fit !== 'Vale-Presente Digital' && (
+                      <><strong>{item.fit}</strong> • </>
+                    )}
                     Tam: <strong>{item.size}</strong> {item.color?.name && `• ${item.color.name}`}
                   </span>
                   <span className={styles.orderCardQty}>Qtd: {item.quantity}</span>

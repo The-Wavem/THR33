@@ -20,9 +20,7 @@ export function BestSellers({ products: initialProducts, isLoading = false }) {
 
     if (Array.isArray(initialProducts) && initialProducts.length > 0) {
       setProducts(
-        initialProducts
-          .filter((p) => p && p.type !== 'brinde' && p.category !== 'gift-card')
-          .slice(0, 4)
+        initialProducts.filter((p) => p && p.type !== 'brinde' && p.category !== 'gift-card')
       );
       setLoading(false);
       return;
@@ -31,11 +29,19 @@ export function BestSellers({ products: initialProducts, isLoading = false }) {
     async function loadBestSellers() {
       setLoading(true);
       try {
-        const all = await catalogService.getFeaturedProducts(4);
-        const vestuario = (Array.isArray(all) ? all : []).filter(
-          (p) => p && p.type !== 'brinde' && p.category !== 'gift-card'
-        );
-        setProducts(vestuario.slice(0, 4));
+        const all = await catalogService.getAllProducts();
+        const vestuario = (Array.isArray(all) ? all : [])
+          .filter((p) => p && p.type !== 'brinde' && p.category !== 'gift-card')
+          .sort((a, b) => {
+            const salesA = Number(a.purchases ?? a.salesCount ?? a.sales ?? 0);
+            const salesB = Number(b.purchases ?? b.salesCount ?? b.sales ?? 0);
+            if (salesB !== salesA) return salesB - salesA;
+            const featA = a.isFeatured ? 1 : 0;
+            const featB = b.isFeatured ? 1 : 0;
+            if (featB !== featA) return featB - featA;
+            return Number(b.views ?? 0) - Number(a.views ?? 0);
+          });
+        setProducts(vestuario);
       } catch (err) {
         console.error('Erro ao carregar mais vendidos:', err);
         setProducts([]);
@@ -94,6 +100,14 @@ export function BestSellers({ products: initialProducts, isLoading = false }) {
         {products.map((product) => (
           <ProductCard key={product.id || product.slug} product={product} />
         ))}
+      </div>
+
+      {/* Botão de destaque para ver todas as camisas no catálogo */}
+      <div className={styles.ctaContainer}>
+        <Link to="/catalogo" className={styles.viewAllButton}>
+          <span>VER TODAS AS CAMISAS</span>
+          <ArrowRight size={16} />
+        </Link>
       </div>
     </section>
   );

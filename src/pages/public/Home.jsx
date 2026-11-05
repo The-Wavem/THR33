@@ -39,7 +39,7 @@ const DropFaq = lazyWithRetry(() => import('../../components/common/DropFaq'));
 const NewsletterVIP = lazyWithRetry(() => import('../../components/common/NewsletterVIP'));
 
 export function Home() {
-  const { vitrine, featuredProducts, communityPosts, loading } = useHomeData(8);
+  const { vitrine, featuredProducts, communityPosts, loading } = useHomeData(0);
 
   return (
     <main className={styles.homeContainer}>

@@ -10,11 +10,10 @@ const FITS_SPECS = {
     gsm: '220 GSM ALGODÃO ESTRUTURADO',
     description: 'Corte contemporâneo quadrado com ombros caídos e comprimento levemente mais curto na cintura. Proporciona volume e presença sem sobras de tecido na barra.',
     measures: [
-      { size: 'PP', largura: '56 cm', comprimento: '66 cm', manga: '22 cm' },
-      { size: 'P', largura: '58 cm', comprimento: '68 cm', manga: '23 cm' },
-      { size: 'M', largura: '61 cm', comprimento: '70 cm', manga: '24 cm' },
-      { size: 'G', largura: '64 cm', comprimento: '72 cm', manga: '25 cm' },
-      { size: 'GG', largura: '67 cm', comprimento: '74 cm', manga: '26 cm' }
+      { size: 'P', largura: '57 cm', comprimento: '64 cm', manga: '23 cm', ombro: '21 cm' },
+      { size: 'M', largura: '59 cm', comprimento: '66 cm', manga: '24 cm', ombro: '22 cm' },
+      { size: 'G', largura: '61 cm', comprimento: '68 cm', manga: '25 cm', ombro: '23 cm' },
+      { size: 'GG', largura: '63 cm', comprimento: '70 cm', manga: '26 cm', ombro: '24 cm' }
     ]
   },
   heavy: {
@@ -23,11 +22,11 @@ const FITS_SPECS = {
     gsm: '260 GSM HEAVYWEIGHT',
     description: 'Malha pesada 100% algodão de caimento reto e rígido. Gola canelada 2x1 de 3cm pespontada para máxima durabilidade.',
     measures: [
-      { size: 'PP', largura: '54 cm', comprimento: '72 cm', manga: '23 cm' },
-      { size: 'P', largura: '57 cm', comprimento: '74 cm', manga: '24 cm' },
-      { size: 'M', largura: '60 cm', comprimento: '76 cm', manga: '25 cm' },
-      { size: 'G', largura: '63 cm', comprimento: '78 cm', manga: '26 cm' },
-      { size: 'GG', largura: '66 cm', comprimento: '80 cm', manga: '27 cm' }
+      { size: 'P', largura: '54 cm', comprimento: '71 cm', manga: '24 cm', ombro: '19 cm' },
+      { size: 'M', largura: '58 cm', comprimento: '73 cm', manga: '25 cm', ombro: '20 cm' },
+      { size: 'G', largura: '60 cm', comprimento: '75 cm', manga: '26 cm', ombro: '21 cm' },
+      { size: 'GG', largura: '62 cm', comprimento: '78 cm', manga: '27 cm', ombro: '22 cm' },
+      { size: 'EXG', largura: '64 cm', comprimento: '80 cm', manga: '28 cm', ombro: '23 cm' }
     ]
   },
   classica: {
@@ -36,11 +35,11 @@ const FITS_SPECS = {
     gsm: '190 GSM ALGODÃO PENTEADO',
     description: 'Caimento streetwear clássico e fluido em fio 30.1 encorpado. Toque suave ideal para o uso diário.',
     measures: [
-      { size: 'PP', largura: '54 cm', comprimento: '72 cm', manga: '23 cm' },
-      { size: 'P', largura: '57 cm', comprimento: '74 cm', manga: '24 cm' },
-      { size: 'M', largura: '60 cm', comprimento: '76 cm', manga: '25 cm' },
-      { size: 'G', largura: '63 cm', comprimento: '78 cm', manga: '26 cm' },
-      { size: 'GG', largura: '66 cm', comprimento: '80 cm', manga: '27 cm' }
+      { size: 'P', largura: '54 cm', comprimento: '71 cm', manga: '24 cm', ombro: '19 cm' },
+      { size: 'M', largura: '58 cm', comprimento: '73 cm', manga: '25 cm', ombro: '20 cm' },
+      { size: 'G', largura: '60 cm', comprimento: '75 cm', manga: '26 cm', ombro: '21 cm' },
+      { size: 'GG', largura: '62 cm', comprimento: '78 cm', manga: '27 cm', ombro: '22 cm' },
+      { size: 'EXG', largura: '64 cm', comprimento: '80 cm', manga: '28 cm', ombro: '23 cm' }
     ]
   }
 };
@@ -97,9 +96,10 @@ export function GuiaTamanhos() {
             <thead>
               <tr>
                 <th>TAMANHO</th>
-                <th>TÓRAX (LARGURA)</th>
+                <th>LARGURA</th>
                 <th>COMPRIMENTO</th>
                 <th>MANGA</th>
+                <th>OMBRO</th>
               </tr>
             </thead>
             <tbody>
@@ -109,6 +109,7 @@ export function GuiaTamanhos() {
                   <td>{m.largura}</td>
                   <td>{m.comprimento}</td>
                   <td>{m.manga}</td>
+                  <td>{m.ombro}</td>
                 </tr>
               ))}
             </tbody>

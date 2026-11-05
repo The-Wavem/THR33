@@ -150,6 +150,7 @@ export function CartProvider({ children }) {
                 id: item.id,
                 name: item.name,
                 size: item.size || 'U',
+                fit: item.fit || 'Boxy',
                 quantity: Number(item.quantity || 1),
                 price: Number(item.price || 0),
                 image: item.image || ''
@@ -258,7 +259,7 @@ export function CartProvider({ children }) {
   }, [cartItems.length, appliedCoupon, validatingCoupon]);
 
   // Adicionar item ao carrinho
-  const addToCart = (product, size = 'M', quantity = 1, color = null) => {
+  const addToCart = (product, size = 'M', quantity = 1, color = null, selectedFit = null) => {
     const qty = typeof quantity === 'number' && quantity > 0 ? quantity : 1;
     let colorObj = color || (product.colors && product.colors[0]) || product.color || { id: 'preto', name: 'Preto', hex: '#000000' };
     if (!colorObj || typeof colorObj !== 'object' || !colorObj.name || colorObj.name.toLowerCase() === 'padrão' || colorObj.name.toLowerCase() === 'padrao') {
@@ -267,12 +268,13 @@ export function CartProvider({ children }) {
     const sizeStr = size || (product.sizes && product.sizes[0]) || 'M';
     const cleanPrice = parsePriceNumber(product.price || product.priceNum);
 
-
     const isGift = Boolean(
       product.isGiftCard || 
       product.category === 'gift-card' || 
       String(product.id || '').includes('vale-presente')
     );
+
+    const fitVal = selectedFit || product.selectedFit || product.fit || (isGift ? "Vale-Presente Digital" : "Boxy");
 
     const itemToAdd = {
       id: product.id,
@@ -280,7 +282,7 @@ export function CartProvider({ children }) {
       size: sizeStr,
       color: colorObj,
       category: isGift ? 'gift-card' : (product.category || 'camisa'),
-      fit: product.fit || (isGift ? "Vale-Presente Digital" : "Boxy Fit"),
+      fit: fitVal,
       price: cleanPrice,
       quantity: qty,
       image: product.image || (product.images && product.images[0]),
@@ -297,6 +299,7 @@ export function CartProvider({ children }) {
         (item) => item.id === product.id && 
                   item.size === sizeStr && 
                   item.color?.id === colorObj?.id &&
+                  (item.fit || '') === (itemToAdd.fit || '') &&
                   item.giftDeliveryMode === itemToAdd.giftDeliveryMode &&
                   item.recipientName === itemToAdd.recipientName
       );
@@ -316,12 +319,11 @@ export function CartProvider({ children }) {
   };
 
   // Remover item
-  const removeFromCart = (id, size, colorId = null) => {
+  const removeFromCart = (id, size, colorId = null, fit = null) => {
     const itemToRemove = cartItems.find((item) => {
-      if (colorId && item.color) {
-        return item.id === id && item.size === size && item.color.id === colorId;
-      }
-      return item.id === id && item.size === size;
+      const matchColor = colorId && item.color ? item.color.id === colorId : true;
+      const matchFit = fit ? (item.fit || '') === fit : true;
+      return item.id === id && item.size === size && matchColor && matchFit;
     });
 
     if (itemToRemove) {
@@ -330,19 +332,19 @@ export function CartProvider({ children }) {
 
     setCartItems((prev) => 
       prev.filter((item) => {
-        if (colorId && item.color) {
-          return !(item.id === id && item.size === size && item.color.id === colorId);
-        }
-        return !(item.id === id && item.size === size);
+        const matchColor = colorId && item.color ? item.color.id === colorId : true;
+        const matchFit = fit ? (item.fit || '') === fit : true;
+        return !(item.id === id && item.size === size && matchColor && matchFit);
       })
     );
   };
 
   // Alterar quantidade
-  const updateQuantity = (id, size, delta, colorId = null) => {
+  const updateQuantity = (id, size, delta, colorId = null, fit = null) => {
     const currentItem = cartItems.find((item) => {
       const matchColor = colorId && item.color ? item.color.id === colorId : true;
-      return item.id === id && item.size === size && matchColor;
+      const matchFit = fit ? (item.fit || '') === fit : true;
+      return item.id === id && item.size === size && matchColor && matchFit;
     });
 
     if (!currentItem) return;
@@ -358,7 +360,8 @@ export function CartProvider({ children }) {
       prev
         .map((item) => {
           const matchColor = colorId && item.color ? item.color.id === colorId : true;
-          if (item.id === id && item.size === size && matchColor) {
+          const matchFit = fit ? (item.fit || '') === fit : true;
+          if (item.id === id && item.size === size && matchColor && matchFit) {
             const newQty = item.quantity + delta;
             return newQty > 0 ? { ...item, quantity: newQty } : null;
           }

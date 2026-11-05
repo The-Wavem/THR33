@@ -441,7 +441,7 @@
 
 .drawer {
   width: 100%;
-  max-width: 540px;
+  max-width: 720px;
   height: 100%;
   background-color: var(--bg-surface);
   border-left: 1px solid var(--border-color);
@@ -814,6 +814,12 @@
 .uploadDropzone:hover {
   border-color: var(--text-primary);
   background-color: rgba(255, 255, 255, 0.04);
+}
+
+.uploadDropzoneActive {
+  border-color: #FFFFFF !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.15);
 }
 
 .uploadInputHidden {
@@ -1403,4 +1409,157 @@
   .header { flex-direction: column; align-items: flex-start; gap: 1rem; }
   .drawer { max-width: 100%; }
   .imagesGrid { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Blocos Ergonômicos do Modal de Produto (P&B Brutalista) */
+.formSectionBlock {
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--border-color);
+  padding: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.15rem;
+  transition: border-color var(--transition-fast);
+}
+
+.formSectionBlock:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.sectionBlockHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 0.65rem;
+  margin-bottom: 0.25rem;
+}
+
+.sectionBlockTitle {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  font-family: var(--font-heading);
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.sectionBlockNumber {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 2px;
+  background-color: #FFFFFF;
+  color: #000000;
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.priceGridRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .priceGridRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Chips de Seleção Múltipla de Modelagens (Fits) */
+.fitChipsGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.fitChipBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background-color: #0d0d0d;
+  border: 1px solid #262626;
+  color: #a3a3a3;
+  padding: 0.6rem 0.95rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-family: var(--font-body);
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.fitChipBtn:hover {
+  border-color: #737373;
+  color: #FFFFFF;
+}
+
+.fitChipBtnSelected {
+  background-color: #FFFFFF !important;
+  color: #000000 !important;
+  border-color: #FFFFFF !important;
+  font-weight: 800 !important;
+}
+
+.fitChipCheck {
+  font-size: 0.85rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.fitChipText {
+  letter-spacing: 0.5px;
+}
+
+.fitChipRemoveBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 0.35rem;
+  padding: 0.15rem 0.25rem;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: inherit;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.fitChipBtnSelected .fitChipRemoveBtn {
+  background: rgba(0, 0, 0, 0.1);
+  border-color: rgba(0, 0, 0, 0.25);
+  color: #000000;
+}
+
+.fitChipRemoveBtn:hover,
+.fitChipBtnSelected .fitChipRemoveBtn:hover {
+  background: #ef4444 !important;
+  border-color: #ef4444 !important;
+  color: #FFFFFF !important;
+}
+
+.resetCustomFitsBtn {
+  background: transparent;
+  border: none;
+  color: #f87171;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.4rem;
+  transition: color var(--transition-fast);
+}
+
+.resetCustomFitsBtn:hover {
+  color: #ef4444;
+  text-decoration: underline;
 }

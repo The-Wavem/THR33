@@ -4093,6 +4093,25 @@ function resolveItemEmailImageUrl(item) {
   return `https://thr33-streetwear.web.app/${imgUrl}`;
 }
 
+// Helper para exibição detalhada de especificações da peça em e-mails (Modelagem, Tamanho, Cor, Qtd)
+function formatEmailItemSpecs(item, qty) {
+  if (item.isGiftCard || String(item.name || "").toLowerCase().includes("vale-presente")) {
+    return "Entrega Digital";
+  }
+  const parts = [];
+  if (item.fit) {
+    parts.push(`Modelagem: <span style="color:#FFFFFF;font-weight:600;">${item.fit}</span>`);
+  }
+  if (item.size) {
+    parts.push(`Tamanho: <span style="color:#FFFFFF;font-weight:600;">${item.size}</span>`);
+  }
+  if (item.color) {
+    parts.push(`Cor: <span style="color:#FFFFFF;font-weight:600;">${item.color}</span>`);
+  }
+  parts.push(`Qtd: <span style="color:#A3A3A3;">${qty}</span>`);
+  return parts.join(" • ");
+}
+
 // GATILHO A — Boas-vindas ao Criar Conta (welcome_register) — Minimalista P&B
 function buildWelcomeEmailHtml({ userName, coupon, recipientEmail }) {
   const rawFirst = String(userName || "Cliente").trim().split(" ")[0] || "Cliente";
@@ -4286,7 +4305,7 @@ function buildOrderPaidEmailHtml({ orderId, orderData, recipientEmail }) {
               ${item.name || item.title || "Peça THR33"}
             </div>
             <div style="font-size:12px;color:#737373;margin-top:4px;">
-              ${item.isGiftCard ? "Entrega Digital" : `Tamanho: <span style="color:#A3A3A3;">${item.size || "U"}</span>`} • Qtd: <span style="color:#A3A3A3;">${qty}</span>
+              ${formatEmailItemSpecs(item, qty)}
             </div>
           </td>
           <td align="right" valign="middle" style="padding:14px 0;border-bottom:1px solid #222222;font-size:13px;font-weight:600;color:#FFFFFF;white-space:nowrap;">
@@ -4483,7 +4502,7 @@ function buildOrderInProductionEmailHtml({ orderId, orderData, recipientEmail })
               ${item.name || item.title || "Peça THR33"}
             </div>
             <div style="font-size:12px;color:#737373;margin-top:4px;">
-              Tamanho: <span style="color:#A3A3A3;">${item.size || "U"}</span> • Qtd: <span style="color:#A3A3A3;">${qty}</span>
+              ${formatEmailItemSpecs(item, qty)}
             </div>
           </td>
           <td align="right" valign="middle" style="padding:14px 0;border-bottom:1px solid #1A1A1A;font-size:11px;font-weight:700;letter-spacing:1px;color:#FFFFFF;text-transform:uppercase;white-space:nowrap;">
@@ -4550,7 +4569,7 @@ function buildOrderDeliveredEmailHtml({ orderId, orderData, recipientEmail }) {
               ${item.name || item.title || "Peça THR33"}
             </div>
             <div style="font-size:12px;color:#737373;margin-top:4px;">
-              ${item.isGiftCard ? "Entrega Digital" : `Tamanho: <span style="color:#A3A3A3;">${item.size || "U"}</span>`} • Qtd: <span style="color:#A3A3A3;">${qty}</span>
+              ${formatEmailItemSpecs(item, qty)}
             </div>
           </td>
           <td align="right" valign="middle" style="padding:14px 0;border-bottom:1px solid #1A1A1A;font-size:11px;font-weight:700;letter-spacing:1px;color:#FFFFFF;text-transform:uppercase;white-space:nowrap;">
@@ -4697,7 +4716,7 @@ function buildAbandonedCartEmailHtml({ userName, items, subtotal, recipientEmail
               ${item.name || item.title || "Peça THR33"}
             </div>
             <div style="font-size:12px;color:#737373;margin-top:4px;">
-              ${item.isGiftCard ? "Entrega Digital" : `Tamanho: <span style="color:#A3A3A3;">${item.size || "U"}</span>`} • Qtd: <span style="color:#A3A3A3;">${qty}</span>
+              ${formatEmailItemSpecs(item, qty)}
             </div>
           </td>
           <td align="right" valign="middle" style="padding:14px 0;border-bottom:1px solid #222222;font-size:13px;font-weight:600;color:#FFFFFF;white-space:nowrap;">

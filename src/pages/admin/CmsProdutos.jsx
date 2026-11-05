@@ -35,6 +35,34 @@ import { catalogService } from '../../services/catalogService';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsProdutos.module.css';
 
+// Constantes e utilitários de Modelagens e Máscaras de Moeda
+const OFFICIAL_THR33_FITS = ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
+
+const formatCurrencyInput = (val) => {
+  if (val === null || val === undefined || val === '') return '';
+  let digits = '';
+  if (typeof val === 'number') {
+    digits = Math.round(val * 100).toString();
+  } else {
+    digits = String(val).replace(/\D/g, '');
+  }
+  if (!digits) return '';
+  const num = parseInt(digits, 10);
+  if (isNaN(num)) return '';
+  const reais = (num / 100).toFixed(2);
+  const [inteiro, centavos] = reais.split('.');
+  const inteiroFormatado = inteiro.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `R$ ${inteiroFormatado},${centavos}`;
+};
+
+const parseCurrencyToFloat = (val) => {
+  if (val === null || val === undefined || val === '') return 0;
+  if (typeof val === 'number') return val;
+  const digits = String(val).replace(/\D/g, '');
+  if (!digits) return 0;
+  return parseFloat((parseInt(digits, 10) / 100).toFixed(2));
+};
+
 export function CmsProdutos() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -91,10 +119,13 @@ export function CmsProdutos() {
     name: '',
     type: 'vestuario', // 'vestuario' ou 'brinde'
     category: 'camisa',
-    fit: 'boxy',
+    fits: ['Oversized Heavy', 'Oversized Clássica', 'Boxy'],
+    fit: 'Oversized Heavy',
     drop: 'leak-two',
     price: '',
+    priceFormatted: '',
     originalPrice: '',
+    originalPriceFormatted: '',
     discount: '',
     customBadge: '',
     isRelease: true,
@@ -103,11 +134,11 @@ export function CmsProdutos() {
     image: '',
     description: '',
     stock: {
-      PP: 5,
       P: 15,
       M: 20,
       G: 15,
-      GG: 5
+      GG: 10,
+      EXG: 5
     },
     colors: [
       { id: 'preto', name: 'Preto', hex: '#000000' }
@@ -118,7 +149,7 @@ export function CmsProdutos() {
     maxValue: 2000,
     values: [50, 100, 200],
     colorStock: {
-      preto: { PP: 5, P: 15, M: 20, G: 15, GG: 5 }
+      preto: { P: 15, M: 20, G: 15, GG: 10, EXG: 5 }
     }
   });
 
@@ -127,6 +158,7 @@ export function CmsProdutos() {
   const [isUploadingImages, setIsUploadingImages] = useState(false);
   const [uploadStatusText, setUploadStatusText] = useState('');
   const [draggedImageIndex, setDraggedImageIndex] = useState(null);
+  const [isDraggingFiles, setIsDraggingFiles] = useState(false);
   const [urlInput, setUrlInput] = useState('');
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [storageWarning, setStorageWarning] = useState('');
@@ -196,6 +228,39 @@ export function CmsProdutos() {
     setNewCategoryName('');
   };
 
+  // Lista completa de opções de modelagem disponíveis
+  const allAvailableFitOptions = useMemo(() => {
+    const list = [...OFFICIAL_THR33_FITS];
+    (customFits || []).forEach(cf => {
+      const label = cf.label || cf.name;
+      if (label && !list.some(item => item.toLowerCase() === label.toLowerCase())) {
+        list.push(label);
+      }
+    });
+    return list;
+  }, [customFits]);
+
+  // Alterna a seleção de uma modelagem (mantém no mínimo 1 ativa)
+  const toggleFitSelection = (fitOption) => {
+    setFormData(prev => {
+      const current = Array.isArray(prev.fits) && prev.fits.length > 0
+        ? [...prev.fits]
+        : [...OFFICIAL_THR33_FITS];
+      let updated;
+      if (current.includes(fitOption)) {
+        if (current.length === 1) return prev; // Não remove o último fit
+        updated = current.filter(f => f !== fitOption);
+      } else {
+        updated = [...current, fitOption];
+      }
+      return {
+        ...prev,
+        fits: updated,
+        fit: updated[0] || 'Boxy'
+      };
+    });
+  };
+
   const handleConfirmAddFit = () => {
     const raw = newFitName.trim();
     if (!raw) {
@@ -208,17 +273,81 @@ export function CmsProdutos() {
       .replace(/[^a-z0-9]+/g, "_")
       .replace(/^_+|_+$/g, "");
 
-    const formattedLabel = raw.toLowerCase().includes('fit') 
-      ? raw.charAt(0).toUpperCase() + raw.slice(1) 
-      : `${raw.charAt(0).toUpperCase() + raw.slice(1)} Fit`;
+    const formattedLabel = raw.charAt(0).toUpperCase() + raw.slice(1);
 
     setCustomFits(prev => {
       if (prev.some(f => f.key === slug)) return prev;
       return [...prev, { key: slug, label: formattedLabel }];
     });
-    setFormData(prev => ({ ...prev, fit: slug }));
+
+    setFormData(prev => {
+      const current = Array.isArray(prev.fits) ? [...prev.fits] : [];
+      if (!current.includes(formattedLabel)) {
+        const updated = [...current, formattedLabel];
+        return {
+          ...prev,
+          fits: updated,
+          fit: updated[0] || formattedLabel
+        };
+      }
+      return prev;
+    });
+
     setIsAddingFit(false);
     setNewFitName('');
+  };
+
+  // Exclui permanentemente uma modelagem customizada
+  const handleDeleteCustomFit = (e, fitLabel) => {
+    e.stopPropagation();
+    if (!window.confirm(`Deseja remover permanentemente a modelagem "${fitLabel}" da lista?`)) return;
+
+    setCustomFits(prev => prev.filter(cf => (cf.label || cf.name) !== fitLabel && cf.key !== fitLabel));
+    setFormData(prev => {
+      const currentFits = Array.isArray(prev.fits) ? prev.fits : [];
+      const updated = currentFits.filter(f => f !== fitLabel);
+      return {
+        ...prev,
+        fits: updated.length > 0 ? updated : ['Oversized Heavy', 'Oversized Clássica', 'Boxy'],
+        fit: updated[0] || 'Oversized Heavy'
+      };
+    });
+  };
+
+  // Restaura lista padrão para os 3 fits oficiais
+  const handleResetCustomFits = (e) => {
+    e.stopPropagation();
+    if (!window.confirm("Deseja remover todas as modelagens extras e manter apenas as 3 oficiais (Oversized Heavy, Oversized Clássica e Boxy)?")) return;
+    setCustomFits([]);
+    try {
+      localStorage.removeItem('thr33_custom_fits');
+    } catch (err) {}
+    setFormData(prev => ({
+      ...prev,
+      fits: ['Oversized Heavy', 'Oversized Clássica', 'Boxy'],
+      fit: 'Oversized Heavy'
+    }));
+  };
+
+  // Handlers com máscara monetária
+  const handlePriceChange = (e) => {
+    const formatted = formatCurrencyInput(e.target.value);
+    const num = parseCurrencyToFloat(formatted);
+    setFormData(prev => ({
+      ...prev,
+      price: num,
+      priceFormatted: formatted
+    }));
+  };
+
+  const handleOriginalPriceChange = (e) => {
+    const formatted = formatCurrencyInput(e.target.value);
+    const num = parseCurrencyToFloat(formatted);
+    setFormData(prev => ({
+      ...prev,
+      originalPrice: num,
+      originalPriceFormatted: formatted
+    }));
   };
 
   const handleStockChange = (size, qty) => {
@@ -249,23 +378,27 @@ export function CmsProdutos() {
       name: '',
       type: 'vestuario',
       category: 'camisa',
-      fit: 'boxy',
+      fits: ['Oversized Heavy', 'Oversized Clássica', 'Boxy'],
+      fit: 'Oversized Heavy',
       drop: 'leak-two',
       price: '',
+      priceFormatted: '',
+      originalPrice: '',
+      originalPriceFormatted: '',
       customBadge: '',
       isRelease: true,
       isFeatured: false,
       freeShipping: false,
       image: '',
       description: '',
-      stock: { PP: 10, P: 15, M: 20, G: 15, GG: 5 },
+      stock: { P: 15, M: 20, G: 15, GG: 10, EXG: 5 },
       colors: [
         { id: 'preto', name: 'Preto', hex: '#000000' }
       ],
       unlimitedStock: false,
       hasColorStock: false,
       colorStock: {
-        preto: { PP: 10, P: 15, M: 20, G: 15, GG: 5 }
+        preto: { P: 15, M: 20, G: 15, GG: 10, EXG: 5 }
       }
     });
     setImagesList([]);
@@ -319,24 +452,37 @@ export function CmsProdutos() {
     const initialColorStock = product.colorStock || {};
     initialColors.forEach(c => {
       if (!initialColorStock[c.id]) {
-        initialColorStock[c.id] = product.stock || { PP: 5, P: 10, M: 15, G: 10, GG: 5 };
+        initialColorStock[c.id] = product.stock || { P: 10, M: 15, G: 15, GG: 10, EXG: 5 };
       }
     });
+
+    const initialFits = Array.isArray(product.fits) && product.fits.length > 0
+      ? product.fits
+      : (Array.isArray(product.availableFits) && product.availableFits.length > 0)
+        ? product.availableFits
+        : (product.fit ? [product.fit] : ['Oversized Heavy', 'Oversized Clássica', 'Boxy']);
+
+    const prodPrice = product.price ?? product.priceNum ?? '';
+    const prodOrigPrice = product.originalPrice ?? '';
 
     setFormData({
       name: product.name || product.title || '',
       type: product.type || (product.category === 'brinde' ? 'brinde' : 'vestuario'),
-      category: product.category || 'camisa',
-      fit: product.fit || 'boxy',
+      category: 'camisa',
+      fits: initialFits,
+      fit: initialFits[0] || product.fit || 'Boxy',
       drop: product.drop || 'leak-two',
-      price: product.price || product.priceNum || product.originalPrice || '',
+      price: prodPrice,
+      priceFormatted: formatCurrencyInput(prodPrice),
+      originalPrice: prodOrigPrice,
+      originalPriceFormatted: formatCurrencyInput(prodOrigPrice),
       customBadge: product.customBadge || '',
       isRelease: product.isRelease ?? false,
       isFeatured: product.isFeatured ?? false,
       freeShipping: Boolean(product.freeShipping || product.hasFreeShipping),
       image: product.image || initialImages[0]?.url || '',
       description: product.description || '',
-      stock: product.stock || { PP: 0, P: 0, M: 0, G: 0, GG: 0 },
+      stock: product.stock || { P: 0, M: 0, G: 0, GG: 0, EXG: 0 },
       colors: initialColors,
       unlimitedStock: Boolean(product.unlimitedStock || product.isUnlimitedStock),
       hasColorStock: product.hasColorStock ?? false,
@@ -391,10 +537,9 @@ export function CmsProdutos() {
     });
   };
 
-  // Upload de Imagens no Firebase Storage com Fallback Local Resiliente
-  const handleUploadFiles = async (e) => {
-    const files = Array.from(e.target.files || []);
-    if (files.length === 0) return;
+  // Upload de Imagens no Firebase Storage com Suporte Completo a Drag & Drop
+  const processFilesUpload = async (files) => {
+    if (!files || files.length === 0) return;
 
     setIsUploadingImages(true);
     setUploadStatusText(`Processando ${files.length} imagem(ns)...`);
@@ -451,7 +596,20 @@ export function CmsProdutos() {
 
     setIsUploadingImages(false);
     setUploadStatusText('');
+  };
+
+  const handleUploadFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    await processFilesUpload(files);
     e.target.value = '';
+  };
+
+  const handleDropFiles = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDraggingFiles(false);
+    const files = Array.from(e.dataTransfer.files || []);
+    await processFilesUpload(files);
   };
 
 
@@ -547,7 +705,7 @@ export function CmsProdutos() {
 
     const updatedColorStock = { ...formData.colorStock };
     if (!updatedColorStock[slug]) {
-      updatedColorStock[slug] = { PP: 5, P: 15, M: 20, G: 15, GG: 5 };
+      updatedColorStock[slug] = { P: 15, M: 20, G: 15, GG: 10, EXG: 5 };
     }
 
     setFormData(prev => ({
@@ -574,7 +732,7 @@ export function CmsProdutos() {
 
     const updatedColorStock = { ...formData.colorStock };
     if (!updatedColorStock[slug]) {
-      updatedColorStock[slug] = { PP: 5, P: 15, M: 20, G: 15, GG: 5 };
+      updatedColorStock[slug] = { P: 15, M: 20, G: 15, GG: 10, EXG: 5 };
     }
 
     setFormData(prev => ({
@@ -643,7 +801,17 @@ export function CmsProdutos() {
       productSlug = cleanSlug;
     }
 
-    const priceNum = parseFloat(formData.price) || 0;
+    const priceNum = typeof formData.price === 'number' && !isNaN(formData.price) && formData.price > 0
+      ? formData.price
+      : parseCurrencyToFloat(formData.priceFormatted || formData.price || 0);
+
+    const origPriceNum = typeof formData.originalPrice === 'number' && !isNaN(formData.originalPrice) && formData.originalPrice > 0
+      ? formData.originalPrice
+      : (formData.originalPriceFormatted ? parseCurrencyToFloat(formData.originalPriceFormatted) : priceNum);
+
+    const chosenFits = Array.isArray(formData.fits) && formData.fits.length > 0
+      ? formData.fits
+      : ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
     const existingProd = editingId ? products.find(p => p.id === editingId) : null;
     
     // Preserva histórico de slugs anteriores para redirecionamentos amigáveis
@@ -653,9 +821,9 @@ export function CmsProdutos() {
     }
     
     // Se o produto já possuir desconto configurado na aba de Descontos, mantém a integridade
-    const origPriceNum = existingProd?.originalPrice && existingProd.originalPrice > priceNum
-      ? existingProd.originalPrice
-      : priceNum;
+    const finalOrigPrice = origPriceNum > priceNum 
+      ? origPriceNum 
+      : (existingProd?.originalPrice && existingProd.originalPrice > priceNum ? existingProd.originalPrice : priceNum);
     const discountPercent = existingProd?.discount || 0;
 
     // Define imagem de capa e array consolidado
@@ -666,9 +834,9 @@ export function CmsProdutos() {
       : (formData.image ? [formData.image] : [finalCoverUrl]);
 
     // Calcula estoque agregado e variantes com SKU
-    let aggregatedStock = { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
+    let aggregatedStock = { P: 0, M: 0, G: 0, GG: 0, EXG: 0 };
     if (formData.hasColorStock && formData.colors.length > 0) {
-      ['PP', 'P', 'M', 'G', 'GG'].forEach(size => {
+      ['P', 'M', 'G', 'GG', 'EXG'].forEach(size => {
         aggregatedStock[size] = formData.colors.reduce((total, col) => {
           return total + (Number(formData.colorStock[col.id]?.[size]) || 0);
         }, 0);
@@ -683,7 +851,7 @@ export function CmsProdutos() {
     let variants = [];
     if (formData.hasColorStock && formData.colors.length > 0) {
       formData.colors.forEach(col => {
-        ['PP', 'P', 'M', 'G', 'GG'].forEach(size => {
+        ['P', 'M', 'G', 'GG', 'EXG'].forEach(size => {
           const qty = Number(formData.colorStock[col.id]?.[size]) || 0;
           variants.push({
             sku: `THR33-${catCode}-${col.id.slice(0, 3).toUpperCase()}-${size}-${idSuffix}`,
@@ -709,12 +877,13 @@ export function CmsProdutos() {
       name: formData.name.trim(),
       title: formData.name.trim(),
       type: formData.type,
-      category: formData.category,
-      fit: formData.type === 'vestuario' ? formData.fit : 'único',
+      category: 'camisa',
+      fits: chosenFits,
+      fit: chosenFits[0] || formData.fit || 'Boxy',
       drop: formData.drop,
       price: priceNum,
       priceNum: priceNum,
-      originalPrice: origPriceNum,
+      originalPrice: finalOrigPrice > priceNum ? finalOrigPrice : priceNum,
       discount: discountPercent,
       ...(existingProd?.discountPrice !== undefined ? { discountPrice: existingProd.discountPrice } : {}),
       ...(existingProd?.discountActive !== undefined ? { discountActive: existingProd.discountActive } : {}),
@@ -743,7 +912,7 @@ export function CmsProdutos() {
       } : {}),
       stock: aggregatedStock,
       sizes: formData.unlimitedStock
-        ? ['PP', 'P', 'M', 'G', 'GG']
+        ? ['P', 'M', 'G', 'GG', 'EXG']
         : Object.keys(aggregatedStock).filter(size => (aggregatedStock[size] || 0) > 0),
       variants,
       createdAt: existingProd?.createdAt || new Date().toISOString(),
@@ -1360,8 +1529,12 @@ export function CmsProdutos() {
                       </span>
                     </td>
                     <td>
-                      <span className={styles.categoryBadge}>{(prod.category || 'GERAL').toUpperCase()}</span>
-                      <small className={styles.fitText}>{(prod.fit || 'PADRÃO').toUpperCase()} FIT</small>
+                      <span className={styles.categoryBadge}>{(prod.category || 'CAMISA').toUpperCase()}</span>
+                      <small className={styles.fitText}>
+                        {Array.isArray(prod.fits) && prod.fits.length > 0 
+                          ? prod.fits.join(' • ')
+                          : `${(prod.fit || 'BOXY').toUpperCase()}`}
+                      </small>
                     </td>
                     <td>
                       <div className={styles.priceColumn}>
@@ -1453,60 +1626,115 @@ export function CmsProdutos() {
             </div>
 
             <form onSubmit={handleSubmitProduct} className={styles.drawerForm}>
-              {/* TIPO DE ITEM */}
-              <div className={styles.formGroup}>
-                <label>TIPO DE PRODUTO</label>
-                <div className={styles.typeSwitcher}>
-                  <button
-                    type="button"
-                    className={`${styles.switchBtn} ${formData.type === 'vestuario' ? styles.activeSwitch : ''}`}
-                    onClick={() => setFormData({ ...formData, type: 'vestuario', category: 'camisa' })}
-                  >
-                    VESTUÁRIO (ROUPAS)
-                  </button>
-                  <button
-                    type="button"
-                    className={`${styles.switchBtn} ${formData.type === 'brinde' ? styles.activeSwitch : ''}`}
-                    onClick={() => setFormData({ ...formData, type: 'brinde', category: 'brinde', fit: 'único' })}
-                  >
-                    BRINDES & VALES
-                  </button>
+              {/* BLOCO 1: IDENTIFICAÇÃO & PREÇO */}
+              <div className={styles.formSectionBlock}>
+                <div className={styles.sectionBlockHeader}>
+                  <div className={styles.sectionBlockTitle}>
+                    <span className={styles.sectionBlockNumber}>1</span>
+                    <span>IDENTIFICAÇÃO & PREÇOS</span>
+                  </div>
+                  <div className={styles.typeSwitcher}>
+                    <button
+                      type="button"
+                      className={`${styles.switchBtn} ${formData.type === 'vestuario' ? styles.activeSwitch : ''}`}
+                      onClick={() => setFormData({ ...formData, type: 'vestuario', category: 'camisa' })}
+                    >
+                      VESTUÁRIO
+                    </button>
+                    <button
+                      type="button"
+                      className={`${styles.switchBtn} ${formData.type === 'brinde' ? styles.activeSwitch : ''}`}
+                      onClick={() => setFormData({ ...formData, type: 'brinde', category: 'brinde', fit: 'único' })}
+                    >
+                      BRINDE / VALE
+                    </button>
+                  </div>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label>NOME DA PEÇA *</label>
+                  <input 
+                    type="text" 
+                    name="name"
+                    placeholder="Ex: Camiseta THR33 Boxy Heavy Black"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    required
+                  />
+                  {formData.name.trim() && (
+                    <span className={styles.slugPreview}>
+                      URL amigável: <code>/produto/{generateSlug(formData.name)}</code>
+                    </span>
+                  )}
+                </div>
+
+                <div className={styles.priceGridRow}>
+                  <div className={styles.formGroup}>
+                    <label>
+                      PREÇO DA PEÇA (R$) *
+                      <InfoTooltip text="Preço real de venda da peça. Digite os números e a formatação R$ é automática." title="Valor de Venda" />
+                    </label>
+                    <input 
+                      type="text" 
+                      name="priceFormatted"
+                      placeholder="R$ 189,90"
+                      value={formData.priceFormatted || (formData.price ? formatCurrencyInput(formData.price) : '')}
+                      onChange={handlePriceChange}
+                      required
+                    />
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label>
+                      PREÇO DE / ANCORAGEM (R$)
+                      <InfoTooltip text="Preço original riscado de comparação (ex: De R$ 220,00 por R$ 189,90). Opcional." title="Preço De" />
+                    </label>
+                    <input 
+                      type="text" 
+                      name="originalPriceFormatted"
+                      placeholder="R$ 220,00"
+                      value={formData.originalPriceFormatted || (formData.originalPrice ? formatCurrencyInput(formData.originalPrice) : '')}
+                      onChange={handleOriginalPriceChange}
+                    />
+                  </div>
+
+                  <div className={styles.formGroup}>
+                    <label>
+                      BADGE PERSONALIZADO
+                      <InfoTooltip text="Destaque visual sobre a imagem do card na vitrine e catálogo." title="Tag Promocional" />
+                    </label>
+                    <input 
+                      type="text" 
+                      name="customBadge"
+                      placeholder="Ex: NOVO DROP, EXCLUSIVO..."
+                      value={formData.customBadge}
+                      onChange={handleInputChange}
+                    />
+                  </div>
                 </div>
               </div>
 
-              {/* NOME & IMAGEM */}
-              <div className={styles.formGroup}>
-                <label>NOME DA PEÇA *</label>
-                <input 
-                  type="text" 
-                  name="name"
-                  placeholder="Ex: Camiseta THR33 Boxy Heavy Black"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                />
-                {formData.name.trim() && (
-                  <span className={styles.slugPreview}>
-                    URL amigável: <code>/produto/{generateSlug(formData.name)}</code>
-                  </span>
-                )}
-              </div>
-
-              {/* SEÇÃO 1: GALERIA DE FOTOS (FIREBASE STORAGE) */}
-              <div className={styles.galleryFormSection}>
-                <div className={styles.gallerySectionHeader}>
-                  <div className={styles.galleryHeaderTitle}>
-                    <ImageIcon size={16} />
-                    <label>FOTOS DO PRODUTO & CAPA (FIREBASE STORAGE)</label>
+              {/* BLOCO 2: FOTOS DO PRODUTO (FIREBASE STORAGE) */}
+              <div className={styles.formSectionBlock}>
+                <div className={styles.sectionBlockHeader}>
+                  <div className={styles.sectionBlockTitle}>
+                    <span className={styles.sectionBlockNumber}>2</span>
+                    <span>FOTOS DA PEÇA & CAPA (FIREBASE STORAGE)</span>
                   </div>
                   <InfoTooltip 
-                    text="Envie quantas imagens quiser direto para o Firebase Storage. Defina a foto de capa e vincule cores a fotos específicas para o carrossel do cliente." 
+                    text="Arraste quantas fotos quiser para o upload direto no Storage. Defina a foto de capa e vincule cores a fotos para o carrossel do cliente." 
                     title="Galeria e Capa" 
                   />
                 </div>
 
-                {/* DROPZONE DE UPLOAD */}
-                <div className={styles.uploadDropzone}>
+                {/* DROPZONE DE UPLOAD COM DRAG & DROP 100% FUNCIONAL */}
+                <div 
+                  className={`${styles.uploadDropzone} ${isDraggingFiles ? styles.uploadDropzoneActive : ''}`}
+                  onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFiles(true); }}
+                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFiles(true); }}
+                  onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setIsDraggingFiles(false); }}
+                  onDrop={handleDropFiles}
+                >
                   <input 
                     type="file" 
                     id="productImagesUpload"
@@ -1517,9 +1745,9 @@ export function CmsProdutos() {
                     disabled={isUploadingImages}
                   />
                   <label htmlFor="productImagesUpload" className={styles.uploadDropzoneLabel}>
-                    <Upload size={22} className={styles.uploadIcon} />
-                    <strong>CLIQUE OU ARRASTE FOTOS AQUI</strong>
-                    <span>Envie quantas imagens quiser (.jpg, .png, .webp). Upload direto no Storage.</span>
+                    <Upload size={24} className={styles.uploadIcon} />
+                    <strong>ARRASTE FOTOS AQUI OU CLIQUE PARA SELECIONAR</strong>
+                    <span>Envie múltiplas imagens (.jpg, .png, .webp). Upload automático para o Storage.</span>
                   </label>
                 </div>
 
@@ -1540,38 +1768,15 @@ export function CmsProdutos() {
                     display: 'flex',
                     alignItems: 'flex-start',
                     gap: '0.6rem',
-                    marginBottom: '1rem',
                     lineHeight: 1.5
                   }}>
                     <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px', color: '#facc15' }} />
                     <div style={{ flex: 1 }}>
                       <strong style={{ color: '#ffffff', display: 'block', marginBottom: '0.2rem' }}>Aviso sobre o Firebase Storage:</strong>
                       <span>{storageWarning}</span>
-                      <div style={{ marginTop: '0.5rem' }}>
-                        <a 
-                          href="https://console.firebase.google.com/project/thr33-streetwear/storage" 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          style={{ 
-                            color: '#000000', 
-                            backgroundColor: '#facc15', 
-                            padding: '0.35rem 0.65rem', 
-                            fontWeight: 800, 
-                            fontSize: '0.72rem',
-                            textDecoration: 'none', 
-                            display: 'inline-flex', 
-                            alignItems: 'center', 
-                            gap: '0.3rem' 
-                          }}
-                        >
-                          <span>Ativar Storage no Console do Firebase</span>
-                          <ExternalLink size={11} />
-                        </a>
-                      </div>
                     </div>
                   </div>
                 )}
-
 
                 {/* BOTÃO PARA INSERIR URL EXTERNA (OPCIONAL) */}
                 <div className={styles.externalUrlRow}>
@@ -1715,84 +1920,31 @@ export function CmsProdutos() {
                 )}
               </div>
 
-              {/* CATEGORIA, FIT E DROP */}
-              <div className={styles.gridTwo}>
-                <div className={styles.formGroup}>
-                  <div className={styles.labelWithAction}>
-                    <label>CATEGORIA *</label>
-                    {!isAddingCategory && (
-                      <button
-                        type="button"
-                        onClick={() => { setIsAddingCategory(true); setNewCategoryName(''); }}
-                        className={styles.addInlineBtn}
-                        title="Criar nova categoria customizada"
-                      >
-                        <Plus size={11} />
-                        <span>Nova</span>
-                      </button>
-                    )}
+              {/* BLOCO 3: MODELAGENS & ESTOQUE */}
+              <div className={styles.formSectionBlock}>
+                <div className={styles.sectionBlockHeader}>
+                  <div className={styles.sectionBlockTitle}>
+                    <span className={styles.sectionBlockNumber}>3</span>
+                    <span>MODELAGENS & ESTOQUE</span>
                   </div>
-
-                  {isAddingCategory ? (
-                    <div className={styles.inlineAddBox}>
-                      <input
-                        type="text"
-                        placeholder="Nome da categoria (ex: Bonés, Shorts...)"
-                        value={newCategoryName}
-                        onChange={(e) => setNewCategoryName(e.target.value)}
-                        autoFocus
-                        className={styles.inlineInput}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            handleConfirmAddCategory();
-                          }
-                        }}
-                      />
-                      <div className={styles.inlineActions}>
-                        <button
-                          type="button"
-                          onClick={handleConfirmAddCategory}
-                          className={styles.inlineConfirmBtn}
-                          title="Confirmar categoria"
-                        >
-                          <Check size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => { setIsAddingCategory(false); setNewCategoryName(''); }}
-                          className={styles.inlineCancelBtn}
-                          title="Cancelar"
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <select
-                      name="category"
-                      value={formData.category}
-                      onChange={(e) => {
-                        if (e.target.value === '__NEW__') {
-                          setIsAddingCategory(true);
-                          setNewCategoryName('');
-                        } else {
-                          handleInputChange(e);
-                        }
-                      }}
-                    >
-                      {formCategoryOptions.map(opt => (
-                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                      ))}
-                      <option value="__NEW__">+ Criar Nova Categoria...</option>
-                    </select>
-                  )}
                 </div>
 
-                {formData.type === 'vestuario' && (
-                  <div className={styles.formGroup}>
-                    <div className={styles.labelWithAction}>
-                      <label>MODELAGEM (FIT)</label>
+                {/* SELEÇÃO MÚLTIPLA DE MODELAGENS (FITS) */}
+                <div className={styles.formGroup}>
+                  <div className={styles.labelWithAction}>
+                    <label>MODELAGENS DISPONÍVEIS NESTA PEÇA (FITS) *</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                      {customFits.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={handleResetCustomFits}
+                          className={styles.resetCustomFitsBtn}
+                          title="Restaurar lista para os 3 fits oficiais da marca"
+                        >
+                          <RotateCw size={11} />
+                          <span>Limpar extras</span>
+                        </button>
+                      )}
                       {!isAddingFit && (
                         <button
                           type="button"
@@ -1805,372 +1957,380 @@ export function CmsProdutos() {
                         </button>
                       )}
                     </div>
+                  </div>
 
-                    {isAddingFit ? (
-                      <div className={styles.inlineAddBox}>
-                        <input
-                          type="text"
-                          placeholder="Nome da modelagem (ex: Drop Shoulder, Cargo...)"
-                          value={newFitName}
-                          onChange={(e) => setNewFitName(e.target.value)}
-                          autoFocus
-                          className={styles.inlineInput}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              handleConfirmAddFit();
-                            }
-                          }}
-                        />
-                        <div className={styles.inlineActions}>
-                          <button
-                            type="button"
-                            onClick={handleConfirmAddFit}
-                            className={styles.inlineConfirmBtn}
-                            title="Confirmar modelagem"
-                          >
-                            <Check size={13} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => { setIsAddingFit(false); setNewFitName(''); }}
-                            className={styles.inlineCancelBtn}
-                            title="Cancelar"
-                          >
-                            <X size={13} />
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      <select
-                        name="fit"
-                        value={formData.fit}
-                        onChange={(e) => {
-                          if (e.target.value === '__NEW__') {
-                            setIsAddingFit(true);
-                            setNewFitName('');
-                          } else {
-                            handleInputChange(e);
+                  {isAddingFit && (
+                    <div className={styles.inlineAddBox} style={{ marginBottom: '0.65rem' }}>
+                      <input
+                        type="text"
+                        placeholder="Nome do fit (ex: Cropped, Street...)"
+                        value={newFitName}
+                        onChange={(e) => setNewFitName(e.target.value)}
+                        autoFocus
+                        className={styles.inlineInput}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleConfirmAddFit();
                           }
                         }}
-                      >
-                        {formFitOptions.map(opt => (
-                          <option key={opt.value} value={opt.value}>{opt.label}</option>
-                        ))}
-                        <option value="__NEW__">+ Criar Nova Modelagem...</option>
-                      </select>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* PREÇO DA PEÇA */}
-              <div className={styles.formGroup}>
-                <label>
-                  PREÇO DA PEÇA (R$) *
-                  <InfoTooltip text="Preço real de venda da peça. Descontos e liquidações são gerenciados na aba Descontos & Liquidações." title="Valor do Produto" />
-                </label>
-                <input 
-                  type="number" 
-                  step="0.01"
-                  name="price"
-                  placeholder="189.90"
-                  value={formData.price}
-                  onChange={handleInputChange}
-                  required
-                />
-              </div>
-
-              {/* BADGE CUSTOMIZADO */}
-              <div className={styles.formGroup}>
-                <label>
-                  BADGE PERSONALIZADO (TAG NA VITRINE)
-                  <InfoTooltip text="Destaque visual sobre a imagem do card na vitrine e catálogo." title="Tag Promocional" />
-                </label>
-                <input 
-                  type="text" 
-                  name="customBadge"
-                  placeholder="Opcional (ex: LANÇAMENTO, -20% OFF, FOR THE FEW...)"
-                  value={formData.customBadge}
-                  onChange={handleInputChange}
-                />
-              </div>
-
-              {/* SEÇÃO 2: GESTÃO DE CORES */}
-              <div className={styles.colorsManagerSection}>
-                <div className={styles.gallerySectionHeader}>
-                  <div className={styles.galleryHeaderTitle}>
-                    <Palette size={16} />
-                    <label>CORES DO PRODUTO (GERENCIAMENTO & VÍNCULO)</label>
-                  </div>
-                  <InfoTooltip 
-                    text="Cadastre as variações de cor da peça. O cliente poderá selecionar a cor e o carrossel exibirá automaticamente a foto correspondente." 
-                    title="Cores da Peça" 
-                  />
-                </div>
-
-                {/* PRESETS RÁPIDOS */}
-                <div className={styles.colorPresetsRow}>
-                  <span className={styles.presetsLabel}>Sugestões Streetwear:</span>
-                  <div className={styles.presetChipsList}>
-                    {COLOR_PRESETS.map((p) => (
-                      <button
-                        key={p.name}
-                        type="button"
-                        onClick={() => handleApplyColorPreset(p)}
-                        className={styles.presetChip}
-                        title={`Adicionar cor ${p.name}`}
-                      >
-                        <span className={styles.colorPillDot} style={{ backgroundColor: p.hex }} />
-                        <span>{p.name}</span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* ADICIONAR NOVA COR CUSTOMIZADA */}
-                <div className={styles.addColorInlineRow}>
-                  <input 
-                    type="color" 
-                    value={newColorHex}
-                    onChange={(e) => setNewColorHex(e.target.value)}
-                    className={styles.colorPickerInput}
-                    title="Escolha a tonalidade da cor"
-                  />
-                  <input 
-                    type="text" 
-                    placeholder="Nome da cor (ex: Preto Piano, Off-White Heavy...)" 
-                    value={newColorName}
-                    onChange={(e) => setNewColorName(e.target.value)}
-                    className={styles.colorNameInput}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        handleAddColor();
-                      }
-                    }}
-                  />
-                  <button 
-                    type="button" 
-                    onClick={handleAddColor} 
-                    className={styles.addColorBtn}
-                  >
-                    <Plus size={13} />
-                    <span>Adicionar Cor</span>
-                  </button>
-                </div>
-
-                {/* LISTA DE CORES ATIVAS */}
-                <div className={styles.activeColorsTagsList}>
-                  {formData.colors.map((c) => (
-                    <div key={c.id} className={styles.activeColorTag}>
-                      <span className={styles.colorTagDot} style={{ backgroundColor: c.hex }} />
-                      <strong className={styles.colorTagName}>{c.name}</strong>
-                      {formData.colors.length > 1 && (
-                        <button 
-                          type="button" 
-                          onClick={() => handleRemoveColor(c.id)}
-                          className={styles.removeColorBtn}
-                          title={`Remover cor ${c.name}`}
+                      />
+                      <div className={styles.inlineActions}>
+                        <button
+                          type="button"
+                          onClick={handleConfirmAddFit}
+                          className={styles.inlineConfirmBtn}
+                          title="Confirmar modelagem"
                         >
-                          <X size={12} />
+                          <Check size={13} />
                         </button>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() => { setIsAddingFit(false); setNewFitName(''); }}
+                          className={styles.inlineCancelBtn}
+                          title="Cancelar"
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
                     </div>
-                  ))}
+                  )}
+
+                  <div className={styles.fitChipsGrid}>
+                    {allAvailableFitOptions.map((fitOption) => {
+                      const isSelected = (formData.fits || []).includes(fitOption);
+                      const isOfficial = OFFICIAL_THR33_FITS.includes(fitOption);
+
+                      return (
+                        <button
+                          key={fitOption}
+                          type="button"
+                          onClick={() => toggleFitSelection(fitOption)}
+                          className={`${styles.fitChipBtn} ${isSelected ? styles.fitChipBtnSelected : ''}`}
+                        >
+                          <span className={styles.fitChipCheck}>
+                            {isSelected ? '✓' : '+'}
+                          </span>
+                          <span className={styles.fitChipText}>{fitOption}</span>
+
+                          {!isOfficial && (
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => handleDeleteCustomFit(e, fitOption)}
+                              className={styles.fitChipRemoveBtn}
+                              title={`Excluir permanentemente "${fitOption}" da lista`}
+                              aria-label={`Excluir ${fitOption}`}
+                            >
+                              <X size={12} />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <small style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.35rem', display: 'block' }}>
+                    O cliente poderá alternar livremente entre essas modelagens direto na página do produto antes de adicionar à sacola.
+                  </small>
                 </div>
 
-                {/* CHECKBOX DE ESTOQUE POR COR */}
-                <div className={styles.colorStockCheckboxWrapper}>
-                  <label className={styles.checkboxLabel}>
-                    <input 
-                      type="checkbox" 
-                      name="hasColorStock" 
-                      checked={formData.hasColorStock}
-                      onChange={handleInputChange}
+                {/* GESTÃO DE CORES */}
+                <div className={styles.colorsManagerSection}>
+                  <div className={styles.gallerySectionHeader}>
+                    <div className={styles.galleryHeaderTitle}>
+                      <Palette size={16} />
+                      <label>CORES DO PRODUTO (GERENCIAMENTO & VÍNCULO)</label>
+                    </div>
+                    <InfoTooltip 
+                      text="Cadastre as variações de cor da peça. O cliente poderá selecionar a cor e o carrossel exibirá automaticamente a foto correspondente." 
+                      title="Cores da Peça" 
                     />
-                    <strong>Controlar estoque individualmente por cor (cada cor com sua própria grade de tamanhos)</strong>
-                  </label>
-                </div>
-              </div>
-
-              {/* CONFIGURAÇÃO ESPECÍFICA PARA VALE-PRESENTE DIGITAL */}
-              {formData.category === 'gift-card' ? (
-                <div className={styles.giftCardConfigBox}>
-                  <div className={styles.giftCardConfigHeader}>
-                    <Gift size={16} color="#00ff88" />
-                    <strong>CONFIGURAÇÕES DO VALE-PRESENTE DIGITAL</strong>
                   </div>
-                  <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '0.2rem 0 0.85rem' }}>
-                    Vales-Presente possuem geração digital instantânea por demanda e não utilizam controle físico por grade P/M/G/GG.
-                  </p>
 
-                  <div className={styles.gridTwo}>
-                    <div className={styles.formGroup}>
-                      <label>VALOR MÍNIMO PERMITIDO (R$)</label>
-                      <input 
-                        type="number" 
-                        min="1" 
-                        value={formData.minValue ?? 30} 
-                        onChange={(e) => setFormData(prev => ({ ...prev, minValue: Number(e.target.value) || 30 }))}
-                        placeholder="Ex: 30"
-                      />
-                    </div>
-                    <div className={styles.formGroup}>
-                      <label>VALOR MÁXIMO PERMITIDO (R$)</label>
-                      <input 
-                        type="number" 
-                        min="1" 
-                        value={formData.maxValue ?? 2000} 
-                        onChange={(e) => setFormData(prev => ({ ...prev, maxValue: Number(e.target.value) || 2000 }))}
-                        placeholder="Ex: 2000"
-                      />
+                  {/* PRESETS RÁPIDOS */}
+                  <div className={styles.colorPresetsRow}>
+                    <span className={styles.presetsLabel}>Sugestões Streetwear:</span>
+                    <div className={styles.presetChipsList}>
+                      {COLOR_PRESETS.map((p) => (
+                        <button
+                          key={p.name}
+                          type="button"
+                          onClick={() => handleApplyColorPreset(p)}
+                          className={styles.presetChip}
+                          title={`Adicionar cor ${p.name}`}
+                        >
+                          <span className={styles.colorPillDot} style={{ backgroundColor: p.hex }} />
+                          <span>{p.name}</span>
+                        </button>
+                      ))}
                     </div>
                   </div>
 
-                  <div className={styles.formGroup} style={{ marginTop: '0.75rem' }}>
-                    <label>VALORES PRÉ-SETADOS DE BOTÃO (SEPARADOS POR VÍRGULA)</label>
+                  {/* ADICIONAR NOVA COR CUSTOMIZADA */}
+                  <div className={styles.addColorInlineRow}>
+                    <input 
+                      type="color" 
+                      value={newColorHex}
+                      onChange={(e) => setNewColorHex(e.target.value)}
+                      className={styles.colorPickerInput}
+                      title="Escolha a tonalidade da cor"
+                    />
                     <input 
                       type="text" 
-                      value={Array.isArray(formData.values) ? formData.values.join(', ') : (formData.values || '50, 100, 200')} 
-                      onChange={(e) => setFormData(prev => ({ ...prev, values: e.target.value.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n) && n > 0) }))}
-                      placeholder="Ex: 50, 100, 200"
+                      placeholder="Nome da cor (ex: Preto Piano, Off-White Heavy...)" 
+                      value={newColorName}
+                      onChange={(e) => setNewColorName(e.target.value)}
+                      className={styles.colorNameInput}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          handleAddColor();
+                        }
+                      }}
                     />
-                    <small style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Estes valores aparecem como botões rápidos de 1-clique no detalhe do vale.</small>
+                    <button 
+                      type="button" 
+                      onClick={handleAddColor} 
+                      className={styles.addColorBtn}
+                    >
+                      <Plus size={13} />
+                      <span>Adicionar Cor</span>
+                    </button>
                   </div>
-                </div>
-              ) : (
-                /* GRADE DE ESTOQUE POR TAMANHO (SKUS) */
-                <div className={styles.stockSection}>
-                <div className={styles.stockHeader}>
-                  <Package size={14} className={styles.stockIcon} />
-                  <label>
-                    {formData.unlimitedStock
-                      ? 'ESTOQUE DO PRODUTO (MODO SOB DEMANDA)'
-                      : formData.hasColorStock 
-                        ? 'GRADE DE ESTOQUE POR COR & TAMANHO (SKUs)' 
-                        : 'ESTOQUE POR TAMANHO (GRADE COMPARTILHADA)'}
-                    <InfoTooltip text="No modo ilimitado, a peça fica sempre disponível para venda sem travas de inventário. Desmarque para controlar quantidades por tamanho." title="Controle de Estoque" />
-                  </label>
-                </div>
 
-                {/* OPÇÃO DE ESTOQUE ILIMITADO / SOB DEMANDA */}
-                <div className={styles.unlimitedStockToggleBox}>
-                  <label className={styles.checkboxLabel}>
-                    <input 
-                      type="checkbox" 
-                      name="unlimitedStock" 
-                      checked={formData.unlimitedStock}
-                      onChange={(e) => setFormData(prev => ({ ...prev, unlimitedStock: e.target.checked }))}
-                    />
-                    <div className={styles.unlimitedStockLabelCol}>
-                      <strong>Estoque Ilimitado / Sob Demanda (Venda Contínua)</strong>
-                      <small>Permite vender sem limite de peças, não exibe contadores de estoque no PDP e mantém a peça ativa até você decidir pausar.</small>
-                    </div>
-                  </label>
-                </div>
-
-                {formData.unlimitedStock ? (
-                  <div className={styles.unlimitedActiveBanner}>
-                    <InfinityIcon size={20} />
-                    <div>
-                      <strong>Modo Ilimitado Ativo</strong>
-                      <p>Todos os tamanhos (PP, P, M, G, GG) ficarão liberados para compra no site sem restrições ou contadores regressivos.</p>
-                    </div>
-                  </div>
-                ) : formData.hasColorStock ? (
-                  <div className={styles.colorStockTabsContainer}>
-                    {/* ABAS POR COR */}
-                    <div className={styles.colorStockTabsList}>
-                      {formData.colors.map(col => {
-                        const colStock = formData.colorStock[col.id] || {};
-                        const colTotal = Object.values(colStock).reduce((a, b) => a + (Number(b) || 0), 0);
-                        const isTabActive = activeColorStockTab === col.id;
-
-                        return (
-                          <button
-                            key={col.id}
-                            type="button"
-                            onClick={() => setActiveColorStockTab(col.id)}
-                            className={`${styles.colorStockTabBtn} ${isTabActive ? styles.activeStockTab : ''}`}
+                  {/* LISTA DE CORES ATIVAS */}
+                  <div className={styles.activeColorsTagsList}>
+                    {formData.colors.map((c) => (
+                      <div key={c.id} className={styles.activeColorTag}>
+                        <span className={styles.colorTagDot} style={{ backgroundColor: c.hex }} />
+                        <strong className={styles.colorTagName}>{c.name}</strong>
+                        {formData.colors.length > 1 && (
+                          <button 
+                            type="button" 
+                            onClick={() => handleRemoveColor(c.id)}
+                            className={styles.removeColorBtn}
+                            title={`Remover cor ${c.name}`}
                           >
-                            <span className={styles.colorPillDot} style={{ backgroundColor: col.hex }} />
-                            <span>{col.name}</span>
-                            <small>({colTotal} un.)</small>
+                            <X size={12} />
                           </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* GRADE DE TAMANHOS PARA A COR SELECIONADA */}
-                    {activeColorStockTab && (
-                      <div className={styles.activeColorStockBox}>
-                        <div className={styles.stockGrid}>
-                          {['PP', 'P', 'M', 'G', 'GG'].map(size => (
-                            <div key={size} className={styles.stockBox}>
-                              <span>{size}</span>
-                              <input 
-                                type="number"
-                                min="0"
-                                value={formData.colorStock[activeColorStockTab]?.[size] ?? 0}
-                                onChange={(e) => handleColorStockChange(activeColorStockTab, size, e.target.value)}
-                              />
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className={styles.stockGrid}>
-                    {['PP', 'P', 'M', 'G', 'GG'].map(size => (
-                      <div key={size} className={styles.stockBox}>
-                        <span>{size}</span>
-                        <input 
-                          type="number"
-                          min="0"
-                          value={formData.stock[size] ?? 0}
-                          onChange={(e) => handleStockChange(size, e.target.value)}
-                        />
+                        )}
                       </div>
                     ))}
                   </div>
+
+                  {/* CHECKBOX DE ESTOQUE POR COR */}
+                  <div className={styles.colorStockCheckboxWrapper}>
+                    <label className={styles.checkboxLabel}>
+                      <input 
+                        type="checkbox" 
+                        name="hasColorStock" 
+                        checked={formData.hasColorStock}
+                        onChange={handleInputChange}
+                      />
+                      <strong>Controlar estoque individualmente por cor (cada cor com sua própria grade de tamanhos)</strong>
+                    </label>
+                  </div>
+                </div>
+
+                {/* CONFIGURAÇÃO ESPECÍFICA PARA VALE-PRESENTE DIGITAL OU ESTOQUE FÍSICO */}
+                {formData.category === 'gift-card' ? (
+                  <div className={styles.giftCardConfigBox}>
+                    <div className={styles.giftCardConfigHeader}>
+                      <Gift size={16} color="#00ff88" />
+                      <strong>CONFIGURAÇÕES DO VALE-PRESENTE DIGITAL</strong>
+                    </div>
+                    <p style={{ fontSize: '0.72rem', color: 'var(--text-muted)', margin: '0.2rem 0 0.85rem' }}>
+                      Vales-Presente possuem geração digital instantânea por demanda e não utilizam controle físico por grade P/M/G/GG.
+                    </p>
+
+                    <div className={styles.gridTwo}>
+                      <div className={styles.formGroup}>
+                        <label>VALOR MÍNIMO PERMITIDO (R$)</label>
+                        <input 
+                          type="number" 
+                          min="1" 
+                          value={formData.minValue ?? 30} 
+                          onChange={(e) => setFormData(prev => ({ ...prev, minValue: Number(e.target.value) || 30 }))}
+                          placeholder="Ex: 30"
+                        />
+                      </div>
+                      <div className={styles.formGroup}>
+                        <label>VALOR MÁXIMO PERMITIDO (R$)</label>
+                        <input 
+                          type="number" 
+                          min="1" 
+                          value={formData.maxValue ?? 2000} 
+                          onChange={(e) => setFormData(prev => ({ ...prev, maxValue: Number(e.target.value) || 2000 }))}
+                          placeholder="Ex: 2000"
+                        />
+                      </div>
+                    </div>
+
+                    <div className={styles.formGroup} style={{ marginTop: '0.75rem' }}>
+                      <label>VALORES PRÉ-SETADOS DE BOTÃO (SEPARADOS POR VÍRGULA)</label>
+                      <input 
+                        type="text" 
+                        value={Array.isArray(formData.values) ? formData.values.join(', ') : (formData.values || '50, 100, 200')} 
+                        onChange={(e) => setFormData(prev => ({ ...prev, values: e.target.value.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n) && n > 0) }))}
+                        placeholder="Ex: 50, 100, 200"
+                      />
+                      <small style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Estes valores aparecem como botões rápidos de 1-clique no detalhe do vale.</small>
+                    </div>
+                  </div>
+                ) : (
+                  /* GRADE DE ESTOQUE POR TAMANHO */
+                  <div className={styles.stockSection}>
+                    <div className={styles.stockHeader}>
+                      <Package size={14} className={styles.stockIcon} />
+                      <label>
+                        {formData.unlimitedStock
+                          ? 'ESTOQUE DO PRODUTO (MODO SOB DEMANDA)'
+                          : formData.hasColorStock 
+                            ? 'GRADE DE ESTOQUE POR COR & TAMANHO (SKUs)' 
+                            : 'ESTOQUE POR TAMANHO (GRADE COMPARTILHADA)'}
+                        <InfoTooltip text="No modo ilimitado, a peça fica sempre disponível para venda sem travas de inventário. Desmarque para controlar quantidades por tamanho." title="Controle de Estoque" />
+                      </label>
+                    </div>
+
+                    {/* OPÇÃO DE ESTOQUE ILIMITADO / SOB DEMANDA */}
+                    <div className={styles.unlimitedStockToggleBox}>
+                      <label className={styles.checkboxLabel}>
+                        <input 
+                          type="checkbox" 
+                          name="unlimitedStock" 
+                          checked={formData.unlimitedStock}
+                          onChange={(e) => setFormData(prev => ({ ...prev, unlimitedStock: e.target.checked }))}
+                        />
+                        <div className={styles.unlimitedStockLabelCol}>
+                          <strong>Estoque Ilimitado / Sob Demanda (Venda Contínua)</strong>
+                          <small>Permite vender sem limite de peças, não exibe contadores de estoque no PDP e mantém a peça ativa até você decidir pausar.</small>
+                        </div>
+                      </label>
+                    </div>
+
+                    {formData.unlimitedStock ? (
+                      <div className={styles.unlimitedActiveBanner}>
+                        <InfinityIcon size={20} />
+                        <div>
+                          <strong>Modo Ilimitado Ativo</strong>
+                          <p>Todos os tamanhos (P, M, G, GG, EXG) ficarão liberados para compra no site sem restrições ou contadores regressivos.</p>
+                        </div>
+                      </div>
+                    ) : formData.hasColorStock ? (
+                      <div className={styles.colorStockTabsContainer}>
+                        {/* ABAS POR COR */}
+                        <div className={styles.colorStockTabsList}>
+                          {formData.colors.map(col => {
+                            const colStock = formData.colorStock[col.id] || {};
+                            const colTotal = Object.values(colStock).reduce((a, b) => a + (Number(b) || 0), 0);
+                            const isTabActive = activeColorStockTab === col.id;
+
+                            return (
+                              <button
+                                key={col.id}
+                                type="button"
+                                onClick={() => setActiveColorStockTab(col.id)}
+                                className={`${styles.colorStockTabBtn} ${isTabActive ? styles.activeStockTab : ''}`}
+                              >
+                                <span className={styles.colorPillDot} style={{ backgroundColor: col.hex }} />
+                                <span>{col.name}</span>
+                                <small>({colTotal} un.)</small>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        {/* GRADE DE TAMANHOS PARA A COR SELECIONADA */}
+                        {activeColorStockTab && (
+                          <div className={styles.activeColorStockBox}>
+                            <div className={styles.stockGrid}>
+                              {['P', 'M', 'G', 'GG', 'EXG'].map(size => (
+                                <div key={size} className={styles.stockBox}>
+                                  <span>{size}</span>
+                                  <input 
+                                    type="number"
+                                    min="0"
+                                    value={formData.colorStock[activeColorStockTab]?.[size] ?? 0}
+                                    onChange={(e) => handleColorStockChange(activeColorStockTab, size, e.target.value)}
+                                  />
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className={styles.stockGrid}>
+                        {['P', 'M', 'G', 'GG', 'EXG'].map(size => (
+                          <div key={size} className={styles.stockBox}>
+                            <span>{size}</span>
+                            <input 
+                              type="number"
+                              min="0"
+                              value={formData.stock[size] ?? 0}
+                              onChange={(e) => handleStockChange(size, e.target.value)}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
-              )}
 
-              {/* FLAGS DE DESTAQUE */}
-              <div className={styles.checkboxGroup}>
-                <label className={styles.checkboxLabel}>
-                  <input 
-                    type="checkbox" 
-                    name="isRelease" 
-                    checked={formData.isRelease}
+              {/* BLOCO 4: DETALHES & PUBLICAÇÃO */}
+              <div className={styles.formSectionBlock}>
+                <div className={styles.sectionBlockHeader}>
+                  <div className={styles.sectionBlockTitle}>
+                    <span className={styles.sectionBlockNumber}>4</span>
+                    <span>DETALHES & PUBLICAÇÃO</span>
+                  </div>
+                </div>
+
+                <div className={styles.formGroup}>
+                  <label>DESCRIÇÃO / MANIFESTO DA PEÇA</label>
+                  <textarea 
+                    name="description"
+                    rows="4"
+                    placeholder="Conte sobre o caimento, corte, gramatura têxtil e inspiração artística da peça..."
+                    value={formData.description}
                     onChange={handleInputChange}
                   />
-                  <span>Destacar como Lançamento</span>
-                </label>
-                <label className={styles.checkboxLabel}>
-                  <input 
-                    type="checkbox" 
-                    name="isFeatured" 
-                    checked={formData.isFeatured}
-                    onChange={handleInputChange}
-                  />
-                  <span>Priorizar no Topo do Catálogo</span>
-                </label>
-                <label className={styles.checkboxLabel}>
-                  <input 
-                    type="checkbox" 
-                    name="freeShipping" 
-                    checked={Boolean(formData.freeShipping)} 
-                    onChange={handleInputChange}
-                    style={{ accentColor: '#10b981' }}
-                  />
-                  <span style={{ color: formData.freeShipping ? '#10b981' : 'inherit', fontWeight: formData.freeShipping ? 600 : 400 }}>
-                    Frete Grátis nesta Peça (Faixa Transversal no Catálogo/PDP)
-                  </span>
-                </label>
+                </div>
+
+                {/* FLAGS DE DESTAQUE & FRETE */}
+                <div className={styles.checkboxGroup}>
+                  <label className={styles.checkboxLabel}>
+                    <input 
+                      type="checkbox" 
+                      name="isRelease" 
+                      checked={formData.isRelease}
+                      onChange={handleInputChange}
+                    />
+                    <span>Destacar como Lançamento Oficial</span>
+                  </label>
+                  <label className={styles.checkboxLabel}>
+                    <input 
+                      type="checkbox" 
+                      name="isFeatured" 
+                      checked={formData.isFeatured}
+                      onChange={handleInputChange}
+                    />
+                    <span>Priorizar no Topo do Catálogo e Vitrine</span>
+                  </label>
+                  <label className={styles.checkboxLabel}>
+                    <input 
+                      type="checkbox" 
+                      name="freeShipping" 
+                      checked={Boolean(formData.freeShipping)} 
+                      onChange={handleInputChange}
+                      style={{ accentColor: '#10b981' }}
+                    />
+                    <span style={{ color: formData.freeShipping ? '#10b981' : 'inherit', fontWeight: formData.freeShipping ? 600 : 400 }}>
+                      Frete Grátis nesta Peça (Faixa Especial no Catálogo e PDP)
+                    </span>
+                  </label>
+                </div>
               </div>
 
               <button type="submit" disabled={submitting} className={styles.submitProductBtn}>

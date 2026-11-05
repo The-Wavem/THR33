@@ -93,7 +93,7 @@ const CATALOG_DROPS = [
   { id: 'drops_passados', label: 'DROPS PASSADOS' }
 ];
 
-const CATALOG_SIZES = ['PP', 'P', 'M', 'G', 'GG', 'XGG'];
+const CATALOG_SIZES = ['P', 'M', 'G', 'GG', 'EXG'];
 
 export function CmsCampanhas() {
   const { currentUser } = useAuth() || {};
