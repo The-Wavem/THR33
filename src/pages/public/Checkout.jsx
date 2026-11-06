@@ -899,10 +899,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     setPaymentError(null);
     setPaidTotalAmount(finalAmountToPay);
 
-    // Validação preventiva contra erro 40002 da PagBank (buyer email must not be equals to merchant email)
+    // Validação preventiva contra erro 40002 da PagBank (buyer email/merchant self-purchase)
     const buyerEmail = (clientData.email || user?.email || '').trim().toLowerCase();
-    if (buyerEmail === 'contato.thewavem@gmail.com') {
-      setPaymentError('O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista (contato.thewavem@gmail.com). Para testar compras ou realizar pedidos, retorne à Etapa 1 e informe outro e-mail (por exemplo, um e-mail pessoal).');
+    if (buyerEmail === 'contato.thewavem@gmail.com' || buyerEmail === 'contato.thr33@gmail.com') {
+      setPaymentError('O PagBank não permite auto-compra com cartão usando os dados da conta da loja. Para testar compras com cartão em produção, utilize o cartão e CPF de outra pessoa (amigo/familiar) ou realize o pagamento via PIX.');
       return;
     }
 
@@ -1197,8 +1197,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       } catch (gatewayErr) {
         console.warn("Aviso ao processar gateway PagBank:", gatewayErr.message);
         let userMessage = gatewayErr.message || 'Erro temporário de conexão com o PagBank. Tente novamente em instantes.';
-        if (userMessage.includes("40002") || userMessage.includes("buyer email must not be equals to merchant email")) {
-          userMessage = "O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista (contato.thewavem@gmail.com). Por favor, retorne à Etapa 1 e utilize outro e-mail (por exemplo, seu e-mail pessoal).";
+        if (userMessage.includes("40002") || userMessage.includes("buyer email must not be equals to merchant email") || userMessage.includes("auto-compra")) {
+          userMessage = "O PagBank não permite auto-compra com cartão (o comprador/titular do cartão não pode ser o mesmo titular ou dados cadastrados na conta PagBank da loja). Para testar compras com cartão em produção, utilize o cartão de outra pessoa ou realize o pagamento via PIX.";
         }
 
         let cat = 'ERRO_GATEWAY';
