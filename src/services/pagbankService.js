@@ -43,6 +43,39 @@ export const detectCardBrand = (number = '') => {
   return 'generic';
 };
 
+/**
+ * Sanitiza o nome do comprador/titular para atender as regras estritas da API PagBank e do SDK 3DS:
+ * - Proibido conter dígitos numéricos (ex: 'Thr33' é rejeitado pelo PagBank com erro 400)
+ * - Exige pelo menos duas palavras (Nome e Sobrenome)
+ * - Apenas letras e espaços
+ */
+export const sanitizePagBankName = (rawName, fallbackHolder = '') => {
+  const clean = String(rawName || '')
+    .replace(/[0-9]/g, '')
+    .replace(/[^a-zA-Z\u00C0-\u00FF\s]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const parts = clean.split(' ').filter(p => p.length >= 2);
+  if (parts.length >= 2) {
+    return parts.slice(0, 4).join(' ').toUpperCase();
+  }
+
+  if (fallbackHolder) {
+    const cleanFallback = String(fallbackHolder)
+      .replace(/[0-9]/g, '')
+      .replace(/[^a-zA-Z\u00C0-\u00FF\s]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const fallbackParts = cleanFallback.split(' ').filter(p => p.length >= 2);
+    if (fallbackParts.length >= 2) {
+      return fallbackParts.slice(0, 4).join(' ').toUpperCase();
+    }
+  }
+
+  return 'CLIENTE OFICIAL';
+};
+
 const PAGBANK_TOKEN = import.meta.env.VITE_PAGBANK_TOKEN || '';
 
 export const isSandboxMode = () => {
@@ -222,15 +255,22 @@ export const pagbankService = {
 
                 const cleanPhone = (customer?.phone || '').replace(/\D/g, '');
                 const area = cleanPhone.length >= 10 ? cleanPhone.slice(0, 2) : '41';
-                const number = cleanPhone.length >= 10 ? cleanPhone.slice(2) : '999999999';
+                let phoneNum = cleanPhone.length >= 10 ? cleanPhone.slice(2) : '999999999';
+                if (phoneNum.length > 9) phoneNum = phoneNum.slice(-9);
+                if (phoneNum.length < 8) phoneNum = '99999999';
+
                 const cleanCep = (shippingAddress?.cep || '80420000').replace(/\D/g, '').padEnd(8, '0').slice(0, 8);
+                const cleanState = (shippingAddress?.state || 'PR').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) || 'PR';
+                const cleanNumber = String(shippingAddress?.number || '333').replace(/\D/g, '') || '333';
+                const cleanComplement = shippingAddress?.complement ? String(shippingAddress.complement).trim().slice(0, 40) : '';
+                const sanitizedCustomerName = sanitizePagBankName(customer?.name || cardData?.holder, cardData?.holder);
 
                 const auth3dsResult = await pagSeguroSdk.authenticate3DS({
                   data: {
                     customer: {
-                      name: customer?.name || 'Cliente THR33',
+                      name: sanitizedCustomerName,
                       email: customer?.email || 'cliente@thr33.com',
-                      phones: [{ country: '55', area, number, type: 'MOBILE' }]
+                      phones: [{ country: '55', area, number: phoneNum, type: 'MOBILE' }]
                     },
                     paymentMethod: {
                       type: 'DEBIT_CARD',
@@ -240,16 +280,16 @@ export const pagbankService = {
                       }
                     },
                     amount: {
-                      value: Math.round(Number(totalAmount || 0) * 100),
+                      value: Math.max(100, Math.round(Number(totalAmount || 0) * 100)),
                       currency: 'BRL'
                     },
                     billingAddress: {
-                      street: shippingAddress?.street || 'Rua',
-                      number: String(shippingAddress?.number || 'S/N').slice(0, 15),
-                      complement: shippingAddress?.complement || '',
-                      regionCode: (shippingAddress?.state || 'PR').toUpperCase().slice(0, 2),
+                      street: String(shippingAddress?.street || 'Rua Comendador Araujo').slice(0, 100),
+                      number: cleanNumber,
+                      ...(cleanComplement ? { complement: cleanComplement } : {}),
+                      regionCode: cleanState,
                       country: 'BRA',
-                      city: shippingAddress?.city || 'Curitiba',
+                      city: String(shippingAddress?.city || 'Curitiba').slice(0, 50),
                       postalCode: cleanCep
                     },
                     dataOnly: false
@@ -284,6 +324,11 @@ export const pagbankService = {
                 throw new Error(err3dsMsg.replace(/^BANK_3DS_[A-Z_]+:\s*/, ''));
               }
               console.warn("Aviso no desafio 3DS do Cartão de Débito:", err3dsMsg);
+
+              // Em produção, não prosseguir sem autenticação 3DS no débito pois a API PagBank rejeitará
+              if (!IS_SANDBOX && !resolvedAuthId) {
+                throw new Error('Não foi possível concluir a autenticação 3DS do Cartão de Débito junto ao banco emissor. Verifique no app do seu banco se o cartão está liberado para compras online no débito (ou utilize o Cartão Virtual do app), ou escolha PIX / Cartão de Crédito.');
+              }
             }
           }
 
@@ -291,7 +336,7 @@ export const pagbankService = {
             type: 'DEBIT_CARD',
             installments: 1,
             cardEncrypted: encCardStr,
-            holderName: (cardData?.holder || customer?.name || 'CLIENTE THR33').toUpperCase(),
+            holderName: sanitizePagBankName(cardData?.holder || customer?.name, cardData?.holder),
             authenticationId: resolvedAuthId
           };
         }
@@ -408,7 +453,7 @@ export const pagbankService = {
       if (errMsg.includes("Estoque insuficiente") || errMsg.includes("não encontrado no catálogo") || errMsg.includes("não está habilitado para compras online") || errMsg.includes("autenticação de segurança 3DS")) {
         throw new Error(errMsg);
       }
-      if (errMsg.includes("buyer email must not be equals to merchant email") || errMsg.includes("40002")) {
+      if (errMsg.includes("buyer email must not be equals to merchant email")) {
         throw new Error("O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista. Por favor, informe outro e-mail na Etapa 1.");
       }
       if (!isSandboxMode() && !isTestCard) {
