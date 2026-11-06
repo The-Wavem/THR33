@@ -168,7 +168,6 @@ export function CmsProdutos() {
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [storageWarning, setStorageWarning] = useState('');
   const [removedImageUrls, setRemovedImageUrls] = useState([]);
-  const [isCleaningStorage, setIsCleaningStorage] = useState(false);
 
   // Gestão de Cores Inline
 
@@ -1236,32 +1235,6 @@ export function CmsProdutos() {
     }
   };
 
-  // Faxina manual no Firebase Storage: Remove pastas órfãs de produtos excluídos
-  const handleCleanupStorage = async () => {
-    if (!window.confirm("Deseja realizar a Faxina no Firebase Storage?\n\nIsso irá escanear o banco de imagens e excluir permanentemente pastas e fotos de produtos que já foram excluídos do catálogo.\n\nTodas as fotos dos produtos ativos serão preservadas.")) return;
-
-    setIsCleaningStorage(true);
-    try {
-      const cleanupFn = httpsCallable(functions, 'cleanupOrphanedStorage');
-      const res = await cleanupFn();
-      const data = res?.data || {};
-
-      if (data.deletedCount > 0) {
-        const foldersList = data.deletedFolders || [];
-        const preview = foldersList.slice(0, 5).join(', ');
-        const extra = foldersList.length > 5 ? ` e mais ${foldersList.length - 5} pasta(s)` : '';
-        alert(`✅ Faxina concluída com sucesso!\n\n${data.deletedCount} arquivo(s) em ${foldersList.length} pasta(s) órfã(s) foram excluídos permanentemente do Storage.\n\nPastas limpas: ${preview}${extra}`);
-      } else {
-        alert("✨ Seu Storage já está 100% limpo! Nenhuma imagem órfã foi encontrada.");
-      }
-    } catch (err) {
-      console.error("Erro na faxina do Storage:", err);
-      alert(`Erro ao executar faxina no Storage: ${err.message || 'Verifique sua conexão ou permissões.'}`);
-    } finally {
-      setIsCleaningStorage(false);
-    }
-  };
-
   // Manipulador de ordenação com 3 estados (Maior/A-Z -> Menor/Z-A -> Padrão)
   const handleSort = (key) => {
     setSortConfig(prev => {
@@ -1630,22 +1603,10 @@ export function CmsProdutos() {
           <span className={styles.breadcrumb}>CMS / CATÁLOGO & ESTOQUE</span>
           <h1 className={styles.title}>GESTÃO DE PRODUTOS & SKUS</h1>
         </div>
-        <div className={styles.headerActions}>
-          <button 
-            type="button" 
-            onClick={handleCleanupStorage} 
-            disabled={isCleaningStorage}
-            className={styles.cleanupStorageBtn}
-            title="Escanear e remover imagens de produtos excluídos do Firebase Storage"
-          >
-            {isCleaningStorage ? <RotateCw size={14} className={styles.spinIcon} /> : <Trash2 size={14} />}
-            <span>{isCleaningStorage ? 'FAZENDO FAXINA...' : 'FAXINA NO STORAGE'}</span>
-          </button>
-          <button onClick={handleOpenCreate} className={styles.createBtn}>
-            <Plus size={16} />
-            <span>ADICIONAR NOVO ITEM</span>
-          </button>
-        </div>
+        <button onClick={handleOpenCreate} className={styles.createBtn}>
+          <Plus size={16} />
+          <span>ADICIONAR NOVO ITEM</span>
+        </button>
       </header>
 
       {/* BARRA DE CONTROLE & BUSCA */}

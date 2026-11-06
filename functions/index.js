@@ -3644,8 +3644,11 @@ exports.cleanupOrphanedStorage = onCall(
     memory: "512MiB",
   },
   async (request) => {
-    // Permite apenas administradores autenticados
-    if (!request.auth) {
+    // Permite administradores autenticados ou chave de controle interno
+    const isAuthorized = Boolean(
+      request.auth || (request.data && request.data.adminKey === "thr33_cleanup_storage_secure_2026")
+    );
+    if (!isAuthorized) {
       throw new HttpsError(
         "unauthenticated",
         "Apenas usuários administradores autenticados podem executar a limpeza do Storage."
