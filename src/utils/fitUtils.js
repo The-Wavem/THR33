@@ -60,6 +60,7 @@ export const normalizeFitSlug = (raw) => {
     .replace(/[-_ ]+/g, '_')
     .replace(/^_+|_+$/g, '');
 
+  if (s === 'unico' || s === 'modelo_unico' || s === 'tamanho_unico' || s === 'padrao') return 'modelo_unico';
   if (s === 'boxy' || s === 'boxy_fit') return 'boxy';
   if (s === 'oversized_heavy' || s === 'oversized_heavy_fit') return 'oversized_heavy';
   if (s === 'oversized_classica' || s === 'oversized_classica_fit') return 'oversized_classica';
@@ -76,6 +77,15 @@ export const normalizeFitSlug = (raw) => {
 };
 
 /**
+ * Verifica se uma modelagem refere-se à opção neutra/única
+ */
+export const isUnicoFit = (raw) => {
+  if (!raw) return false;
+  const s = normalizeFitSlug(raw);
+  return s === 'modelo_unico' || s === 'unico' || s === 'tamanho_unico' || s === 'padrao';
+};
+
+/**
  * Formata o rótulo visual da modelagem para exibição no catálogo (filtros, chips e breadcrumbs).
  */
 export const formatFitLabel = (fitKey) => {
@@ -83,6 +93,10 @@ export const formatFitLabel = (fitKey) => {
   const key = normalizeFitSlug(fitKey);
 
   const officialLabels = {
+    'modelo_unico': 'MODELO ÚNICO',
+    'unico': 'MODELO ÚNICO',
+    'tamanho_unico': 'MODELO ÚNICO',
+    'padrao': 'MODELO ÚNICO',
     'boxy': 'BOXY FIT',
     'oversized_heavy': 'OVERSIZED HEAVY',
     'oversized_classica': 'OVERSIZED CLÁSSICA',
@@ -116,7 +130,7 @@ export const formatFitLabel = (fitKey) => {
 export const formatFitBadgeLabel = (fitKey) => {
   if (!fitKey) return '';
   const key = normalizeFitSlug(fitKey);
-  if (key === 'unico' || key === 'padrao') return '';
+  if (key === 'unico' || key === 'padrao' || key === 'modelo_unico' || key === 'tamanho_unico') return '';
   if (key === 'oversized_heavy') return 'OVERSIZED HEAVY';
   if (key === 'oversized_classica') return 'OVERSIZED CLÁSSICA';
   if (key === 'oversized') return 'OVERSIZED FIT';
@@ -195,16 +209,43 @@ export const extractAvailableFits = (products = []) => {
       // Ignora brindes da lista de modelagens
       if (p.type === 'brinde' || p.category === 'brinde') return;
       
-      const productFits = Array.isArray(p.fits) && p.fits.length > 0
-        ? p.fits
-        : (Array.isArray(p.availableFits) && p.availableFits.length > 0)
-          ? p.availableFits
-          : (p.fit ? [p.fit] : ['Boxy']);
+      let productFits = [];
+      if (Array.isArray(p.fits) && p.fits.length > 0) {
+        productFits = p.fits;
+      } else if (Array.isArray(p.availableFits) && p.availableFits.length > 0) {
+        productFits = p.availableFits;
+      } else if (p.fit) {
+        const norm = normalizeFitSlug(p.fit);
+        if (norm === 'oversized') {
+          productFits = ['Oversized Heavy', 'Oversized Clássica'];
+        } else {
+          productFits = [p.fit];
+        }
+      } else {
+        productFits = OFFICIAL_THR33_FITS;
+      }
 
       productFits.forEach(rawFit => {
         if (!rawFit) return;
         const normSlug = normalizeFitSlug(rawFit);
         if (!normSlug || normSlug === 'unico' || normSlug === 'padrao') return;
+
+        // Se for o slug genérico 'oversized', mapeia para as 2 vertentes oficiais da marca
+        if (normSlug === 'oversized') {
+          ['Oversized Heavy', 'Oversized Clássica'].forEach(subFit => {
+            const subSlug = normalizeFitSlug(subFit);
+            if (!fitMap.has(subSlug)) {
+              fitMap.set(subSlug, {
+                id: subSlug,
+                label: formatFitLabel(subFit),
+                count: 1
+              });
+            } else {
+              fitMap.get(subSlug).count += 1;
+            }
+          });
+          return;
+        }
 
         if (!fitMap.has(normSlug)) {
           fitMap.set(normSlug, {
@@ -219,37 +260,16 @@ export const extractAvailableFits = (products = []) => {
     });
   }
 
-  // 2. Mescla com novas modelagens criadas pelo lojista no CMS (localStorage)
-  try {
-    if (typeof window !== 'undefined' && window.localStorage) {
-      const saved = localStorage.getItem('thr33_custom_fits');
-      if (saved) {
-        const customFits = JSON.parse(saved);
-        if (Array.isArray(customFits)) {
-          customFits.forEach(custom => {
-            const rawKey = custom.key || custom.value || custom.label;
-            const normSlug = normalizeFitSlug(rawKey);
-            if (normSlug && !fitMap.has(normSlug)) {
-              fitMap.set(normSlug, {
-                id: normSlug,
-                label: custom.label ? custom.label.toUpperCase() : formatFitLabel(rawKey),
-                count: 0
-              });
-            }
-          });
-        }
-      }
-    }
-  } catch (err) {
-    // fallback seguro se localStorage não estiver disponível
-  }
+  // 2. Filtra apenas modelagens que possuem produtos reais no catálogo (count > 0)
+  const availableItems = Array.from(fitMap.values()).filter(item => item.count > 0);
 
-  // 3. Fallback: se nenhum produto possuir modelagem cadastrada, mantém as bases oficiais
-  if (fitMap.size === 0) {
-    return [
-      { id: 'boxy', label: 'BOXY FIT', count: 0 },
-      { id: 'oversized', label: 'OVERSIZED (HEAVY & CLÁSSICA)', count: 0 }
-    ];
+  // 3. Fallback: se nenhum produto possuir modelagem cadastrada, exibe as 3 bases oficiais
+  if (availableItems.length === 0) {
+    return OFFICIAL_THR33_FITS.map(f => ({
+      id: normalizeFitSlug(f),
+      label: formatFitLabel(f),
+      count: 0
+    }));
   }
 
   // 4. Ordenação prioritária das modelagens
@@ -268,7 +288,7 @@ export const extractAvailableFits = (products = []) => {
     'regata'
   ];
 
-  return Array.from(fitMap.values()).sort((a, b) => {
+  return availableItems.sort((a, b) => {
     const idxA = priorityOrder.indexOf(a.id);
     const idxB = priorityOrder.indexOf(b.id);
     if (idxA !== -1 && idxB !== -1) return idxA - idxB;

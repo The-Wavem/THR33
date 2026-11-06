@@ -14,11 +14,12 @@ import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { analyticsService } from '../../services/analyticsService';
 import { 
-  formatFitBadgeLabel, 
   formatCategoryBadgeLabel,
   getSizesForFit,
   getMeasuresForFit,
-  OFFICIAL_MEASURES_TABLE
+  OFFICIAL_MEASURES_TABLE,
+  normalizeFitSlug,
+  isUnicoFit
 } from '../../utils/fitUtils';
 import { SEO } from '../../components/common/SEO';
 import { buildProductSchema, buildBreadcrumbSchema } from '../../utils/seoSchemas';
@@ -60,6 +61,8 @@ export function ProdutoDetalhe({ onAddToCart }) {
   const [openAccordion, setOpenAccordion] = useState('measures');
   const [isAddedFeedback, setIsAddedFeedback] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const actionsRowRef = useRef(null);
+  const [showStickyBottomBar, setShowStickyBottomBar] = useState(false);
 
   // Cálculo de Frete
   const [cepInput, setCepInput] = useState('');
@@ -99,6 +102,19 @@ export function ProdutoDetalhe({ onAddToCart }) {
     }
     loadApprovedReviews();
   }, [product?.id, product?.slug]);
+
+  // Observer para ativar a barra de compra fixa inferior no mobile quando o botão principal sai da tela
+  useEffect(() => {
+    if (!actionsRowRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShowStickyBottomBar(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+      },
+      { threshold: 0 }
+    );
+    observer.observe(actionsRowRef.current);
+    return () => observer.disconnect();
+  }, [product?.id]);
 
   useEffect(() => {
     let isMounted = true;
@@ -192,13 +208,18 @@ export function ProdutoDetalhe({ onAddToCart }) {
   // Lista de modelagens disponíveis (suporta product.fits ou fallback padrão da marca)
   const availableFits = useMemo(() => {
     if (isGiftCard) return [];
+    let list = [];
     if (Array.isArray(product?.fits) && product.fits.length > 0) {
-      return product.fits;
+      list = product.fits;
+    } else if (Array.isArray(product?.availableFits) && product.availableFits.length > 0) {
+      list = product.availableFits;
+    } else {
+      list = ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
     }
-    if (Array.isArray(product?.availableFits) && product.availableFits.length > 0) {
-      return product.availableFits;
-    }
-    return ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
+
+    // Se houver qualquer modelagem real, remove "Único" / "Modelo Único"
+    const real = list.filter(f => !isUnicoFit(f));
+    return real.length > 0 ? real : ['Modelo Único'];
   }, [product, isGiftCard]);
 
   // Sincroniza a modelagem selecionada com o primeiro fit disponível do produto
@@ -238,7 +259,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
         M: Number(cStock.M ?? 0),
         G: Number(cStock.G ?? 0),
         GG: Number(cStock.GG ?? 0),
-        EXG: Number(cStock.EXG ?? cStock.PP ?? 0)
+        EXG: Number(cStock.EXG ?? cStock.PP ?? 5)
       };
     }
     if (product?.stock && typeof product.stock === 'object') {
@@ -247,7 +268,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
         M: Number(product.stock.M ?? 0),
         G: Number(product.stock.G ?? 0),
         GG: Number(product.stock.GG ?? 0),
-        EXG: Number(product.stock.EXG ?? product.stock.PP ?? 0)
+        EXG: Number(product.stock.EXG ?? product.stock.PP ?? 5)
       };
     }
     if (Array.isArray(product?.variants) && product.variants.length > 0) {
@@ -322,7 +343,20 @@ export function ProdutoDetalhe({ onAddToCart }) {
   const sizeChart = product?.sizeChart || DEFAULT_SIZE_CHART;
   const careInstructions = product?.careInstructions || DEFAULT_CARE_INSTRUCTIONS;
 
-  const priceNum = Number(product?.price || 0);
+  // Preço dinâmico reativo baseado na modelagem selecionada (fitPrices) ou no preço base
+  const priceNum = useMemo(() => {
+    if (!product) return 0;
+    if (product.fitPrices && typeof product.fitPrices === 'object') {
+      const slugKey = normalizeFitSlug(selectedFit);
+      if (product.fitPrices[slugKey] !== undefined && product.fitPrices[slugKey] !== null && Number(product.fitPrices[slugKey]) > 0) {
+        return Number(product.fitPrices[slugKey]);
+      }
+      if (product.fitPrices[selectedFit] !== undefined && product.fitPrices[selectedFit] !== null && Number(product.fitPrices[selectedFit]) > 0) {
+        return Number(product.fitPrices[selectedFit]);
+      }
+    }
+    return Number(product.price || product.priceNum || 0);
+  }, [product, selectedFit]);
   const discountPriceNum = Number(product?.discountPrice || 0);
   const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product?.discountActive !== false);
   const hasFreeShipping = Boolean(product?.freeShipping || product?.hasFreeShipping);
@@ -341,7 +375,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
       product.description ||
       `Camiseta ${name} com modelagem exclusiva THR33, alta gramatura e corte premium. Produção sob demanda for the few.`;
     const image = product.image || (Array.isArray(product.images) && product.images[0]) || '';
-    const rawPrice = Number(product.discountPrice || product.price || 0);
+    const rawPrice = effectivePrice || Number(product.discountPrice || product.price || 0);
 
     const isOutOfStock =
       product.inStock === false ||
@@ -724,9 +758,11 @@ export function ProdutoDetalhe({ onAddToCart }) {
               src={images[selectedImageIndex] || images[0]} 
               alt={`${product?.name || product?.title || 'Produto'} - Foto ${selectedImageIndex + 1}`} 
               aspectRatio="3/4"
+              objectFit="cover"
               priority={true}
               className={styles.mainImage}
-              style={{ width: '100%', height: '100%' }}
+              style={{ width: '100%', height: '100%', backgroundColor: '#000000' }}
+              imgStyle={{ objectFit: 'cover', objectPosition: 'center top' }}
             />
             {images.length > 1 && (
               <button 
@@ -770,7 +806,14 @@ export function ProdutoDetalhe({ onAddToCart }) {
                 onClick={() => setSelectedImageIndex(idx)}
                 aria-label={`Selecionar foto ${idx + 1}`}
               >
-                <ImageWithSkeleton src={img} alt={`Miniatura ${idx + 1}`} aspectRatio="3/4" style={{ width: '100%', height: '100%' }} />
+                <ImageWithSkeleton 
+                  src={img} 
+                  alt={`Miniatura ${idx + 1}`} 
+                  aspectRatio="3/4" 
+                  objectFit="cover"
+                  style={{ width: '100%', height: '100%', backgroundColor: '#000000' }} 
+                  imgStyle={{ objectFit: 'cover', objectPosition: 'center top' }}
+                />
               </button>
             ))}
           </div>
@@ -781,8 +824,8 @@ export function ProdutoDetalhe({ onAddToCart }) {
           <div className={styles.headerInfo}>
             <div className={styles.badgeRow}>
               <span className={styles.categoryBadge}>{formatCategoryBadgeLabel(product?.category)}</span>
-              {formatFitBadgeLabel(product?.fit) && (
-                <span className={styles.fitBadge}>{formatFitBadgeLabel(product?.fit)}</span>
+              {product?.customBadge && (
+                <span className={styles.fitBadge}>{product.customBadge}</span>
               )}
             </div>
             <h1 className={styles.title}>{product?.name || product?.title || 'Produto THR33'}</h1>
@@ -898,7 +941,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
           </div>
 
           {/* Bloco de Ações e Quantidade */}
-          <div className={styles.actionsRow}>
+          <div ref={actionsRowRef} className={styles.actionsRow}>
             <div className={styles.quantityControl}>
               <button 
                 type="button" 
@@ -969,14 +1012,16 @@ export function ProdutoDetalhe({ onAddToCart }) {
               </a>
             </div>
 
-            <form onSubmit={handleCalculateShipping} className={styles.shippingFormCompact}>
+            <form onSubmit={handleCalculateShipping} className={styles.shippingFormCompact} noValidate>
               <input 
                 type="text" 
+                inputMode="numeric"
                 placeholder="00000-000" 
                 value={cepInput}
                 onChange={handleCepChange}
                 className={styles.shippingInputCompact}
                 maxLength={9}
+                aria-label="CEP para cálculo de frete"
               />
               <button type="submit" className={styles.shippingBtnCompact} disabled={isCalculatingShipping}>
                 {isCalculatingShipping ? '...' : 'CALCULAR'}
@@ -1084,34 +1129,37 @@ export function ProdutoDetalhe({ onAddToCart }) {
                         </small>
                       </div>
 
-                      <table className={styles.measuresTable}>
-                        <thead>
-                          <tr>
-                            <th>TAMANHO</th>
-                            <th>LARGURA</th>
-                            <th>COMPRIMENTO</th>
-                            <th>MANGA</th>
-                            <th>OMBRO</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {getMeasuresForFit(selectedFit).map((row) => {
-                            const isSelectedSize = row.size === selectedSize;
-                            return (
-                              <tr 
-                                key={row.size} 
-                                style={isSelectedSize ? { backgroundColor: 'rgba(255, 255, 255, 0.1)', fontWeight: 700 } : {}}
-                              >
-                                <td><strong>{row.size} {isSelectedSize ? '●' : ''}</strong></td>
-                                <td>{row.largura}</td>
-                                <td>{row.comprimento}</td>
-                                <td>{row.manga}</td>
-                                <td>{row.ombro}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                      <div className={styles.tableResponsiveWrapper}>
+                        <table className={styles.measuresTable}>
+                          <thead>
+                            <tr>
+                              <th>TAMANHO</th>
+                              <th>LARGURA</th>
+                              <th>COMPRIMENTO</th>
+                              <th>MANGA</th>
+                              <th>OMBRO</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {getMeasuresForFit(selectedFit).map((row) => {
+                              const isSelectedSize = row.size === selectedSize;
+                              return (
+                                <tr 
+                                  key={row.size} 
+                                  className={isSelectedSize ? styles.selectedMeasureRow : ''}
+                                  style={isSelectedSize ? { backgroundColor: 'rgba(255, 255, 255, 0.1)', fontWeight: 700 } : {}}
+                                >
+                                  <td><strong>{row.size} {isSelectedSize ? '●' : ''}</strong></td>
+                                  <td>{row.largura}</td>
+                                  <td>{row.comprimento}</td>
+                                  <td>{row.manga}</td>
+                                  <td>{row.ombro}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
 
                       {/* GUIA DE COMO MEDIR */}
                       <div style={{ marginTop: '1rem', padding: '0.85rem', background: '#0a0a0a', border: '1px solid #262626', borderRadius: '3px' }}>
@@ -1336,7 +1384,14 @@ export function ProdutoDetalhe({ onAddToCart }) {
                     onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(idx); }}
                     aria-label={`Ver foto ${idx + 1}`}
                   >
-                    <ImageWithSkeleton src={img} alt={`Miniatura ${idx + 1}`} aspectRatio="3/4" style={{ width: '100%', height: '100%' }} />
+                    <ImageWithSkeleton 
+                  src={img} 
+                  alt={`Miniatura ${idx + 1}`} 
+                  aspectRatio="3/4" 
+                  objectFit="cover"
+                  style={{ width: '100%', height: '100%', backgroundColor: '#000000' }} 
+                  imgStyle={{ objectFit: 'cover', objectPosition: 'center top' }}
+                />
                   </button>
                 ))}
               </div>
@@ -1344,6 +1399,31 @@ export function ProdutoDetalhe({ onAddToCart }) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* BARRA FIXA FLUTUANTE DE COMPRA NO RODAPÉ MOBILE (STICKY MOBILE CTA) */}
+      {showStickyBottomBar && (
+        <aside className={styles.mobileStickyBuyBar} aria-label="Ações rápidas de compra">
+          <div className={styles.stickyBuyInfo}>
+            <span className={styles.stickyBuyTitle}>{product?.name || product?.title || 'Camiseta THR33'}</span>
+            <div className={styles.stickyBuyMeta}>
+              <span className={styles.stickyBuyBadge}>{selectedFit} • {selectedSize}</span>
+              <strong className={styles.stickyBuyPrice}>
+                R$ {(hasDiscount ? discountPriceNum : priceNum).toFixed(2).replace('.', ',')}
+              </strong>
+            </div>
+          </div>
+          <button 
+            type="button" 
+            onClick={handleAddToCart}
+            disabled={!isUnlimitedStock && availableStock <= 0}
+            className={styles.stickyBuyBtn}
+            aria-label="Adicionar à sacola"
+          >
+            <ShoppingBag size={15} />
+            <span>{isAddedFeedback ? 'ADICIONADO!' : 'COMPRAR'}</span>
+          </button>
+        </aside>
+      )}
     </main>
   );
 }

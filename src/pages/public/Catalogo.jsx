@@ -27,8 +27,7 @@ export function Catalogo() {
   const [filters, setFilters] = useState({
     categories: [],
     fits: [],
-    drops: [],
-    sizes: []
+    drops: []
   });
   const [priceRange, setPriceRange] = useState([0, 10000]);
   const [onlyInStock, setOnlyInStock] = useState(false);
@@ -65,7 +64,6 @@ export function Catalogo() {
     const catParam = categorySlug || searchParams.get('categoria') || '';
     const fitParam = searchParams.get('fit') || searchParams.get('modelagem') || '';
     const dropParam = searchParams.get('drop') || '';
-    const sizeParam = searchParams.get('tamanho') || searchParams.get('size') || '';
     const searchParam = searchParams.get('search') || '';
     const sortParam = searchParams.get('ordenar') || 'newest';
     const pageParam = parseInt(searchParams.get('pagina'), 10) || 1;
@@ -74,13 +72,11 @@ export function Catalogo() {
     const newCategories = catParam ? catParam.split(',').filter(Boolean) : [];
     const newFits = fitParam ? fitParam.split(',').filter(Boolean) : [];
     const newDrops = dropParam ? dropParam.split(',').filter(Boolean) : [];
-    const newSizes = sizeParam ? sizeParam.split(',').filter(Boolean) : [];
 
     setFilters({
       categories: newCategories,
       fits: newFits,
-      drops: newDrops,
-      sizes: newSizes
+      drops: newDrops
     });
     setSearchQuery(searchParam);
     setSortOrder(sortParam);
@@ -100,9 +96,6 @@ export function Catalogo() {
     }
     if (newFilters.drops && newFilters.drops.length > 0) {
       params.set('drop', newFilters.drops.join(','));
-    }
-    if (newFilters.sizes && newFilters.sizes.length > 0) {
-      params.set('tamanho', newFilters.sizes.join(','));
     }
     if (newSearch && newSearch.trim()) {
       params.set('search', newSearch.trim());
@@ -140,7 +133,7 @@ export function Catalogo() {
   }, [filters, searchQuery, itemsPerPage, sortOrder, currentPage]);
 
   const handleReset = () => {
-    const emptyFilters = { categories: [], fits: [], drops: [], sizes: [] };
+    const emptyFilters = { categories: [], fits: [], drops: [] };
     setFilters(emptyFilters);
     setSearchQuery('');
     setPriceRange([0, 10000]);
@@ -166,13 +159,6 @@ export function Catalogo() {
     const norm = normalizeFitSlug(fit);
     const updated = (filters.fits || []).filter(f => normalizeFitSlug(f) !== norm && f !== fit);
     const newFilters = { ...filters, fits: updated };
-    setFilters(newFilters);
-    applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
-  };
-
-  const removeSize = (size) => {
-    const updated = (filters.sizes || []).filter(s => s !== size);
-    const newFilters = { ...filters, sizes: updated };
     setFilters(newFilters);
     applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
   };
@@ -205,22 +191,30 @@ export function Catalogo() {
         }
         // 3. Modelagens Dinâmicas (Multi-Seleção: OR)
         if (filters.fits && filters.fits.length > 0) {
-          const productFits = Array.isArray(product.fits) && product.fits.length > 0
-            ? product.fits
-            : (Array.isArray(product.availableFits) && product.availableFits.length > 0)
-              ? product.availableFits
-              : (product.fit ? [product.fit] : ['Boxy']);
+          let productFits = [];
+          if (Array.isArray(product.fits) && product.fits.length > 0) {
+            productFits = product.fits;
+          } else if (Array.isArray(product.availableFits) && product.availableFits.length > 0) {
+            productFits = product.availableFits;
+          } else if (product.fit) {
+            const norm = normalizeFitSlug(product.fit);
+            if (norm === 'oversized') {
+              productFits = ['Oversized Heavy', 'Oversized Clássica'];
+            } else {
+              productFits = [product.fit];
+            }
+          } else {
+            productFits = ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
+          }
 
           const matchFit = filters.fits.some((f) => {
             const filterNorm = normalizeFitSlug(f);
             return productFits.some((pf) => {
               const pfNorm = normalizeFitSlug(pf);
-              return (
-                filterNorm === pfNorm ||
-                pf?.toLowerCase() === f.toLowerCase() ||
-                pf?.toLowerCase().includes(f.toLowerCase()) ||
-                f.toLowerCase().includes(pf?.toLowerCase())
-              );
+              if (filterNorm === pfNorm) return true;
+              if (filterNorm === 'oversized' && (pfNorm === 'oversized_heavy' || pfNorm === 'oversized_classica')) return true;
+              if (pfNorm === 'oversized' && (filterNorm === 'oversized_heavy' || filterNorm === 'oversized_classica')) return true;
+              return false;
             });
           });
           if (!matchFit) return false;
@@ -229,14 +223,7 @@ export function Catalogo() {
         if (filters.drops && filters.drops.length > 0) {
           if (!filters.drops.includes(product.drop?.toLowerCase())) return false;
         }
-        // 5. Tamanhos (Multi-Seleção: OR)
-        if (filters.sizes && filters.sizes.length > 0) {
-          const hasMatchingSize =
-            (product.sizes && product.sizes.some((sz) => filters.sizes.includes(sz))) ||
-            (product.stock && filters.sizes.some((sz) => Number(product.stock[sz]) > 0));
-          if (!hasMatchingSize) return false;
-        }
-        // 6. Faixa de preço
+        // 5. Faixa de preço
         const itemPrice = Number(product.discountPrice || product.price || 0);
         if (priceRange && (itemPrice < priceRange[0] || itemPrice > priceRange[1])) {
           return false;
@@ -257,6 +244,12 @@ export function Catalogo() {
       .sort((a, b) => {
         if (sortOrder === 'price-low') return Number(a.price || 0) - Number(b.price || 0);
         if (sortOrder === 'price-high') return Number(b.price || 0) - Number(a.price || 0);
+
+        // Ordem Curada da Marca definida no CMS (Drag and Drop / Posição Oficial)
+        const orderA = a.catalogOrder !== undefined && a.catalogOrder !== null && a.catalogOrder !== '' ? Number(a.catalogOrder) : 9999;
+        const orderB = b.catalogOrder !== undefined && b.catalogOrder !== null && b.catalogOrder !== '' ? Number(b.catalogOrder) : 9999;
+        if (orderA !== orderB) return orderA - orderB;
+
         return (b.isRelease ? 1 : 0) - (a.isRelease ? 1 : 0);
       });
   }, [products, filters, searchQuery, sortOrder, priceRange, onlyInStock]);
@@ -295,9 +288,8 @@ export function Catalogo() {
 
   // Contagem de filtros ativos
   const selectedFits = filters.fits || [];
-  const selectedSizes = filters.sizes || [];
   const activeFiltersCount =
-    selectedFits.length + selectedSizes.length + (searchQuery.trim() ? 1 : 0);
+    selectedFits.length + (searchQuery.trim() ? 1 : 0);
   const totalActiveWithSort = activeFiltersCount + (sortOrder !== 'newest' ? 1 : 0);
 
   // Categoria / modelagem selecionada estável para SEO (evita recálculos em busca, paginação ou sliders)
@@ -422,14 +414,6 @@ export function Catalogo() {
             <span key={fit} className={styles.filterChip}>
               MODELAGEM: {formatFitLabel(fit)}
               <button onClick={() => removeFit(fit)} aria-label={`Remover modelagem ${fit}`}>
-                <X size={12} />
-              </button>
-            </span>
-          ))}
-          {selectedSizes.map((size) => (
-            <span key={size} className={styles.filterChip}>
-              TAMANHO: {size}
-              <button onClick={() => removeSize(size)} aria-label={`Remover tamanho ${size}`}>
                 <X size={12} />
               </button>
             </span>

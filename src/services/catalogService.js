@@ -194,9 +194,21 @@ export const getAllProducts = async (forceRefresh = false) => {
       snap.forEach((d) => {
         const data = d.data();
         if (data && (data.name || data.title) && data.price !== undefined) {
-          list.push({ id: d.id, ...data });
+          list.push({ ...data, id: d.id });
         }
       });
+      const sortListByCatalogOrder = (arr) => {
+        return arr.sort((a, b) => {
+          const ordA = a.catalogOrder !== undefined && a.catalogOrder !== null && a.catalogOrder !== '' ? Number(a.catalogOrder) : 9999;
+          const ordB = b.catalogOrder !== undefined && b.catalogOrder !== null && b.catalogOrder !== '' ? Number(b.catalogOrder) : 9999;
+          if (ordA !== ordB) return ordA - ordB;
+          const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+          const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+          return timeB - timeA;
+        });
+      };
+
+      sortListByCatalogOrder(list);
       memoryCache.products = list;
       memoryCache.productsTimestamp = Date.now();
       return list;
@@ -208,9 +220,20 @@ export const getAllProducts = async (forceRefresh = false) => {
         snap.forEach((d) => {
           const data = d.data();
           if (data && (data.name || data.title) && data.price !== undefined) {
-            list.push({ id: d.id, ...data });
+            list.push({ ...data, id: d.id });
           }
         });
+        const sortListByCatalogOrder = (arr) => {
+          return arr.sort((a, b) => {
+            const ordA = a.catalogOrder !== undefined && a.catalogOrder !== null && a.catalogOrder !== '' ? Number(a.catalogOrder) : 9999;
+            const ordB = b.catalogOrder !== undefined && b.catalogOrder !== null && b.catalogOrder !== '' ? Number(b.catalogOrder) : 9999;
+            if (ordA !== ordB) return ordA - ordB;
+            const timeA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+            const timeB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+            return timeB - timeA;
+          });
+        };
+        sortListByCatalogOrder(list);
         memoryCache.products = list;
         memoryCache.productsTimestamp = Date.now();
         return list;

@@ -197,16 +197,16 @@ export function calculateBestDiscount(product, activeDiscounts = []) {
     };
   }
 
-  const basePrice = Number(product.originalPrice || product.price || 0);
   const currentPrice = Number(product.price || 0);
   const directDiscountPrice = Number(product.discountPrice || 0);
   const directDiscountPercent = Number(product.discount || 0);
 
   let bestFinalPrice = currentPrice;
-  let originalPrice = basePrice > currentPrice ? basePrice : currentPrice;
+  let originalPrice = currentPrice;
   let campaignName = null;
+  let hasDiscount = false;
 
-  // 1. Desconto direto configurado no produto (discountPrice)
+  // 1. Desconto direto configurado explicitamente no produto via CMS (% Descontos ou Edição com discountActive)
   if (
     directDiscountPrice > 0 &&
     directDiscountPrice < currentPrice &&
@@ -214,14 +214,15 @@ export function calculateBestDiscount(product, activeDiscounts = []) {
   ) {
     bestFinalPrice = directDiscountPrice;
     originalPrice = currentPrice;
-  } else if (directDiscountPercent > 0 && directDiscountPercent < 100 && product.discountActive !== false) {
+    hasDiscount = true;
+  } else if (directDiscountPercent > 0 && directDiscountPercent < 100 && product.discountActive === true) {
     const calcPrice = currentPrice * (1 - directDiscountPercent / 100);
-    if (calcPrice < bestFinalPrice) {
-      bestFinalPrice = calcPrice;
-    }
+    bestFinalPrice = calcPrice;
+    originalPrice = currentPrice;
+    hasDiscount = true;
   }
 
-  // 2. Descontos de campanhas ativas (se houver percentual associado à campanha)
+  // 2. Descontos de campanhas ativas (se houver campanha com desconto real ativa)
   if (Array.isArray(activeDiscounts) && activeDiscounts.length > 0) {
     activeDiscounts.forEach((camp) => {
       if (!camp || camp.active === false) return;
@@ -235,18 +236,19 @@ export function calculateBestDiscount(product, activeDiscounts = []) {
           String(camp.drop).toLowerCase() === String(product.drop || '').toLowerCase();
 
         if (appliesToCategory && appliesToDrop) {
-          const candidatePrice = originalPrice * (1 - campPercent / 100);
+          const candidatePrice = currentPrice * (1 - campPercent / 100);
           if (candidatePrice > 0 && candidatePrice < bestFinalPrice) {
             bestFinalPrice = candidatePrice;
+            originalPrice = currentPrice;
             campaignName = camp.name || null;
+            hasDiscount = true;
           }
         }
       }
     });
   }
 
-  const hasDiscount = bestFinalPrice > 0 && bestFinalPrice < originalPrice;
-  const discountPercentage = hasDiscount
+  const discountPercentage = hasDiscount && originalPrice > 0
     ? Math.round(((originalPrice - bestFinalPrice) / originalPrice) * 100)
     : 0;
 

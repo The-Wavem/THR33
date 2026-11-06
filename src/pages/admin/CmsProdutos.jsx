@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { 
   Plus, 
@@ -24,6 +24,8 @@ import {
   Star,
   Palette,
   GripVertical,
+  ChevronUp,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
   Link as LinkIcon,
@@ -31,8 +33,9 @@ import {
   Gift
 } from 'lucide-react';
 import { db, storage } from '../../services/firebaseConfig';
-import { catalogService } from '../../services/catalogService';
+import { catalogService, invalidateCatalogCache } from '../../services/catalogService';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
+import { normalizeFitSlug, formatFitLabel, isUnicoFit } from '../../utils/fitUtils';
 import styles from './CmsProdutos.module.css';
 
 // Constantes e utilitários de Modelagens e Máscaras de Moeda
@@ -170,10 +173,13 @@ export function CmsProdutos() {
   const [activeColorStockTab, setActiveColorStockTab] = useState('preto');
 
   // 1. Carrega produtos 100% do Firestore via catalogService
-  const fetchProducts = async () => {
+  const fetchProducts = async (force = false) => {
     setLoading(true);
     try {
-      const list = await catalogService.getAllProducts();
+      if (force) {
+        invalidateCatalogCache('products');
+      }
+      const list = await catalogService.getAllProducts(force);
       setProducts(list);
     } catch (err) {
       console.error("Erro ao carregar catálogo do Firestore:", err);
@@ -183,8 +189,132 @@ export function CmsProdutos() {
   };
 
   useEffect(() => {
-    fetchProducts();
+    fetchProducts(true);
   }, []);
+
+  const [savingFreeShippingId, setSavingFreeShippingId] = useState(null);
+
+  // Alternância Rápida de Frete Grátis com 1 Clique na Tabela do Catálogo
+  const handleToggleFreeShipping = async (prod) => {
+    const nextStatus = !Boolean(prod.freeShipping || prod.hasFreeShipping);
+    setSavingFreeShippingId(prod.id);
+
+    try {
+      const docRef = doc(db, 'products', prod.id);
+      await setDoc(docRef, {
+        freeShipping: nextStatus,
+        hasFreeShipping: nextStatus,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      invalidateCatalogCache('products');
+
+      setProducts(prev => prev.map(p => p.id === prod.id ? {
+        ...p,
+        freeShipping: nextStatus,
+        hasFreeShipping: nextStatus
+      } : p));
+    } catch (err) {
+      console.error("Erro ao alterar frete grátis:", err);
+      alert("Erro ao salvar frete grátis no Firestore: " + (err.message || err));
+    } finally {
+      setSavingFreeShippingId(null);
+    }
+  };
+
+  // Gestão de Reordenação Manual do Catálogo (Drag and Drop + Setas)
+  const [hasPendingOrderChanges, setHasPendingOrderChanges] = useState(false);
+  const [isSavingOrder, setIsSavingOrder] = useState(false);
+  const [draggedRowIndex, setDraggedRowIndex] = useState(null);
+  const [dragOverRowIndex, setDragOverRowIndex] = useState(null);
+
+  const canReorder = useMemo(() => {
+    return (
+      !searchTerm &&
+      fitFilter === 'all' &&
+      statusFilter === 'all' &&
+      sortConfig.direction === 'none'
+    );
+  }, [searchTerm, fitFilter, statusFilter, sortConfig]);
+
+  const handleMoveRow = (fromIndex, toIndex) => {
+    if (!canReorder) return;
+    if (toIndex < 0 || toIndex >= products.length) return;
+
+    setProducts(prev => {
+      const list = [...prev];
+      const [moved] = list.splice(fromIndex, 1);
+      list.splice(toIndex, 0, moved);
+      return list;
+    });
+    setHasPendingOrderChanges(true);
+  };
+
+  const handleRowDragStart = (e, index) => {
+    if (!canReorder) return;
+    e.dataTransfer.setData('text/plain', String(index));
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedRowIndex(index);
+  };
+
+  const handleRowDragOver = (e, index) => {
+    if (!canReorder) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverRowIndex !== index) {
+      setDragOverRowIndex(index);
+    }
+  };
+
+  const handleRowDragLeave = () => {
+    setDragOverRowIndex(null);
+  };
+
+  const handleRowDrop = (e, targetIndex) => {
+    if (!canReorder) return;
+    e.preventDefault();
+    const sourceIndex = draggedRowIndex !== null ? draggedRowIndex : Number(e.dataTransfer.getData('text/plain'));
+
+    if (sourceIndex !== null && sourceIndex !== targetIndex && !isNaN(sourceIndex)) {
+      handleMoveRow(sourceIndex, targetIndex);
+    }
+    setDraggedRowIndex(null);
+    setDragOverRowIndex(null);
+  };
+
+  const handleRowDragEnd = () => {
+    setDraggedRowIndex(null);
+    setDragOverRowIndex(null);
+  };
+
+  const handleCancelReorder = () => {
+    fetchProducts(true);
+    setHasPendingOrderChanges(false);
+  };
+
+  const handleSaveReorderedList = async () => {
+    setIsSavingOrder(true);
+    try {
+      const batch = writeBatch(db);
+      products.forEach((prod, idx) => {
+        const docRef = doc(db, 'products', prod.id);
+        batch.update(docRef, {
+          catalogOrder: idx + 1,
+          updatedAt: new Date().toISOString()
+        });
+      });
+
+      await batch.commit();
+      invalidateCatalogCache('products');
+      setHasPendingOrderChanges(false);
+      await fetchProducts(true);
+    } catch (err) {
+      console.error('Erro ao salvar nova ordem dos produtos:', err);
+      alert('Erro ao salvar ordem no Firestore: ' + (err.message || err));
+    } finally {
+      setIsSavingOrder(false);
+    }
+  };
 
   // Trava a rolagem do fundo (eixo Y) quando o drawer de produto estiver aberto
   useEffect(() => {
@@ -246,17 +376,36 @@ export function CmsProdutos() {
       const current = Array.isArray(prev.fits) && prev.fits.length > 0
         ? [...prev.fits]
         : [...OFFICIAL_THR33_FITS];
+      
       let updated;
       if (current.includes(fitOption)) {
-        if (current.length === 1) return prev; // Não remove o último fit
         updated = current.filter(f => f !== fitOption);
       } else {
-        updated = [...current, fitOption];
+        // Ao selecionar uma modelagem específica, remove automaticamente qualquer opção neutra ("Modelo Único")
+        const filteredCurrent = current.filter(f => !isUnicoFit(f));
+        updated = [...filteredCurrent, fitOption];
       }
+
+      // Se todas as modelagens forem desmarcadas, assume "Modelo Único"
+      if (updated.length === 0) {
+        updated = ['Modelo Único'];
+      }
+
+      // Garante que o fit adicionado possua um preço padrão inicial
+      const slug = normalizeFitSlug(fitOption);
+      const existingPrices = prev.fitPrices || {};
+      const fallbackPrice = existingPrices[slug] ?? existingPrices[fitOption] ?? prev.price ?? 150;
+      const updatedPrices = {
+        ...existingPrices,
+        [slug]: existingPrices[slug] ?? fallbackPrice,
+        [fitOption]: existingPrices[fitOption] ?? fallbackPrice
+      };
+
       return {
         ...prev,
         fits: updated,
-        fit: updated[0] || 'Boxy'
+        fit: updated[0] || 'Oversized Heavy',
+        fitPrices: updatedPrices
       };
     });
   };
@@ -284,10 +433,16 @@ export function CmsProdutos() {
       const current = Array.isArray(prev.fits) ? [...prev.fits] : [];
       if (!current.includes(formattedLabel)) {
         const updated = [...current, formattedLabel];
+        const fitSlug = normalizeFitSlug(formattedLabel);
         return {
           ...prev,
           fits: updated,
-          fit: updated[0] || formattedLabel
+          fit: updated[0] || formattedLabel,
+          fitPrices: {
+            ...(prev.fitPrices || {}),
+            [fitSlug]: prev.price || 150,
+            [formattedLabel]: prev.price || 150
+          }
         };
       }
       return prev;
@@ -340,6 +495,41 @@ export function CmsProdutos() {
     }));
   };
 
+  const handleFitPriceChange = (fitOption, rawValue) => {
+    const formatted = formatCurrencyInput(rawValue);
+    const num = parseCurrencyToFloat(formatted);
+    const slug = normalizeFitSlug(fitOption);
+    setFormData(prev => ({
+      ...prev,
+      fitPrices: {
+        ...(prev.fitPrices || {}),
+        [slug]: num,
+        [fitOption]: num
+      }
+    }));
+  };
+
+  const handleCopyPriceToAllFits = () => {
+    const activeFits = Array.isArray(formData.fits) ? formData.fits : [];
+    if (activeFits.length === 0) return;
+    const firstFit = activeFits[0];
+    const firstSlug = normalizeFitSlug(firstFit);
+    const baseVal = (formData.fitPrices && (formData.fitPrices[firstSlug] ?? formData.fitPrices[firstFit])) ?? formData.price ?? 150;
+    const num = typeof baseVal === 'number' && !isNaN(baseVal) ? baseVal : parseCurrencyToFloat(baseVal);
+
+    const updated = { ...(formData.fitPrices || {}) };
+    activeFits.forEach(fit => {
+      const slug = normalizeFitSlug(fit);
+      updated[slug] = num;
+      updated[fit] = num;
+    });
+
+    setFormData(prev => ({
+      ...prev,
+      fitPrices: updated
+    }));
+  };
+
   const handleOriginalPriceChange = (e) => {
     const formatted = formatCurrencyInput(e.target.value);
     const num = parseCurrencyToFloat(formatted);
@@ -380,9 +570,17 @@ export function CmsProdutos() {
       category: 'camisa',
       fits: ['Oversized Heavy', 'Oversized Clássica', 'Boxy'],
       fit: 'Oversized Heavy',
+      fitPrices: {
+        'oversized_heavy': 150,
+        'oversized_classica': 150,
+        'boxy': 150,
+        'Oversized Heavy': 150,
+        'Oversized Clássica': 150,
+        'Boxy': 150
+      },
       drop: 'leak-two',
-      price: '',
-      priceFormatted: '',
+      price: 150,
+      priceFormatted: 'R$ 150,00',
       originalPrice: '',
       originalPriceFormatted: '',
       customBadge: '',
@@ -456,14 +654,34 @@ export function CmsProdutos() {
       }
     });
 
-    const initialFits = Array.isArray(product.fits) && product.fits.length > 0
+    const rawInitialFits = Array.isArray(product.fits) && product.fits.length > 0
       ? product.fits
       : (Array.isArray(product.availableFits) && product.availableFits.length > 0)
         ? product.availableFits
         : (product.fit ? [product.fit] : ['Oversized Heavy', 'Oversized Clássica', 'Boxy']);
 
-    const prodPrice = product.price ?? product.priceNum ?? '';
+    // Se houver qualquer modelagem real, remove "Único" / "Modelo Único"
+    const realFits = rawInitialFits.filter(f => !isUnicoFit(f));
+    const initialFits = realFits.length > 0 ? realFits : ['Modelo Único'];
+
+    const prodPrice = product.price ?? product.priceNum ?? 150;
     const prodOrigPrice = product.originalPrice ?? '';
+
+    // Inicializa preços por modelagem a partir do produto ou herda preço base
+    const initialFitPrices = {};
+    if (product.fitPrices && typeof product.fitPrices === 'object') {
+      Object.keys(product.fitPrices).forEach(k => {
+        initialFitPrices[k] = Number(product.fitPrices[k]);
+      });
+    }
+    const fallbackPriceNum = typeof prodPrice === 'number' && !isNaN(prodPrice) && prodPrice > 0 ? prodPrice : 150;
+    initialFits.forEach(f => {
+      const slug = normalizeFitSlug(f);
+      if (initialFitPrices[slug] === undefined && initialFitPrices[f] === undefined) {
+        initialFitPrices[slug] = fallbackPriceNum;
+        initialFitPrices[f] = fallbackPriceNum;
+      }
+    });
 
     setFormData({
       name: product.name || product.title || '',
@@ -471,6 +689,7 @@ export function CmsProdutos() {
       category: 'camisa',
       fits: initialFits,
       fit: initialFits[0] || product.fit || 'Boxy',
+      fitPrices: initialFitPrices,
       drop: product.drop || 'leak-two',
       price: prodPrice,
       priceFormatted: formatCurrencyInput(prodPrice),
@@ -801,17 +1020,34 @@ export function CmsProdutos() {
       productSlug = cleanSlug;
     }
 
-    const priceNum = typeof formData.price === 'number' && !isNaN(formData.price) && formData.price > 0
-      ? formData.price
-      : parseCurrencyToFloat(formData.priceFormatted || formData.price || 0);
-
-    const origPriceNum = typeof formData.originalPrice === 'number' && !isNaN(formData.originalPrice) && formData.originalPrice > 0
-      ? formData.originalPrice
-      : (formData.originalPriceFormatted ? parseCurrencyToFloat(formData.originalPriceFormatted) : priceNum);
-
-    const chosenFits = Array.isArray(formData.fits) && formData.fits.length > 0
+    const rawFits = Array.isArray(formData.fits) && formData.fits.length > 0
       ? formData.fits
       : ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
+
+    // Se houver modelagens específicas ativas, remove qualquer "Modelo Único"
+    const realFitsList = rawFits.filter(f => !isUnicoFit(f));
+    const chosenFits = realFitsList.length > 0 ? realFitsList : ['Modelo Único'];
+
+    // Consolidação rigorosa dos preços por modelagem
+    const consolidatedFitPrices = {};
+    const activePricesList = [];
+
+    chosenFits.forEach(f => {
+      const slug = normalizeFitSlug(f);
+      const raw = formData.fitPrices?.[slug] ?? formData.fitPrices?.[f] ?? formData.price ?? 150;
+      const num = typeof raw === 'number' && !isNaN(raw) && raw > 0
+        ? raw
+        : (parseCurrencyToFloat(raw) || 150);
+      consolidatedFitPrices[slug] = num;
+      consolidatedFitPrices[f] = num;
+      activePricesList.push(num);
+    });
+
+    const effectiveBasePrice = activePricesList.length > 0
+      ? Math.min(...activePricesList)
+      : (typeof formData.price === 'number' && formData.price > 0 ? formData.price : 150);
+
+    const priceNum = effectiveBasePrice;
     const existingProd = editingId ? products.find(p => p.id === editingId) : null;
     
     // Preserva histórico de slugs anteriores para redirecionamentos amigáveis
@@ -820,10 +1056,8 @@ export function CmsProdutos() {
       previousSlugs.push(existingProd.slug);
     }
     
-    // Se o produto já possuir desconto configurado na aba de Descontos, mantém a integridade
-    const finalOrigPrice = origPriceNum > priceNum 
-      ? origPriceNum 
-      : (existingProd?.originalPrice && existingProd.originalPrice > priceNum ? existingProd.originalPrice : priceNum);
+    // Preço original igual ao preço base (sem desconto fictício; descontos são geridos em CmsDescontos)
+    const finalOrigPrice = effectiveBasePrice;
     const discountPercent = existingProd?.discount || 0;
 
     // Define imagem de capa e array consolidado
@@ -880,13 +1114,16 @@ export function CmsProdutos() {
       category: 'camisa',
       fits: chosenFits,
       fit: chosenFits[0] || formData.fit || 'Boxy',
+      fitPrices: consolidatedFitPrices,
       drop: formData.drop,
-      price: priceNum,
-      priceNum: priceNum,
-      originalPrice: finalOrigPrice > priceNum ? finalOrigPrice : priceNum,
+      price: effectiveBasePrice,
+      priceNum: effectiveBasePrice,
+      basePrice: effectiveBasePrice,
+      originalPrice: finalOrigPrice,
       discount: discountPercent,
       ...(existingProd?.discountPrice !== undefined ? { discountPrice: existingProd.discountPrice } : {}),
       ...(existingProd?.discountActive !== undefined ? { discountActive: existingProd.discountActive } : {}),
+      catalogOrder: existingProd?.catalogOrder !== undefined ? Number(existingProd.catalogOrder) : (products.length + 1),
       customBadge: formData.customBadge.trim(),
       isRelease: formData.isRelease,
       isFeatured: formData.isFeatured,
@@ -913,7 +1150,7 @@ export function CmsProdutos() {
       stock: aggregatedStock,
       sizes: formData.unlimitedStock
         ? ['P', 'M', 'G', 'GG', 'EXG']
-        : Object.keys(aggregatedStock).filter(size => (aggregatedStock[size] || 0) > 0),
+        : Object.keys(aggregatedStock).filter(size => size !== 'PP' && (aggregatedStock[size] || 0) > 0),
       variants,
       createdAt: existingProd?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString()
@@ -921,7 +1158,8 @@ export function CmsProdutos() {
 
     try {
       await setDoc(doc(db, 'products', productId), productPayload, { merge: true });
-      await fetchProducts();
+      invalidateCatalogCache('products');
+      await fetchProducts(true);
       setIsFormOpen(false);
     } catch (err) {
       console.error("Erro ao salvar produto:", err);
@@ -1228,12 +1466,7 @@ export function CmsProdutos() {
   const filteredAndSortedProducts = useMemo(() => {
     let list = [...products];
 
-    // 1. Categoria (Tab Chips)
-    if (selectedFilter !== 'all') {
-      list = list.filter(p => (p.category === selectedFilter || p.type === selectedFilter));
-    }
-
-    // 2. Modelagem (Fit)
+    // 1. Modelagem (Fit)
     if (fitFilter !== 'all') {
       list = list.filter(p => (p.fit || '').toLowerCase() === fitFilter.toLowerCase());
     }
@@ -1246,8 +1479,8 @@ export function CmsProdutos() {
           : (p.totalStock ?? 50);
 
         const priceValue = parseFloat(p.price || p.priceNum || 0);
-        const origPrice = parseFloat(p.originalPrice || 0);
-        const hasDiscount = origPrice > priceValue;
+        const discountPriceValue = parseFloat(p.discountPrice || 0);
+        const hasDiscount = Boolean(discountPriceValue > 0 && discountPriceValue < priceValue && p.discountActive !== false);
 
         if (statusFilter === 'unlimited') return Boolean(p.unlimitedStock || p.isUnlimitedStock);
         if (statusFilter === 'in_stock') return (p.unlimitedStock || p.isUnlimitedStock) ? true : totalStock > 5;
@@ -1312,7 +1545,7 @@ export function CmsProdutos() {
     }
 
     return list;
-  }, [products, selectedFilter, fitFilter, statusFilter, searchTerm, sortConfig]);
+  }, [products, fitFilter, statusFilter, searchTerm, sortConfig]);
 
   return (
     <div className={styles.catalogAdmin}>
@@ -1344,19 +1577,6 @@ export function CmsProdutos() {
                 <X size={14} />
               </button>
             )}
-          </div>
-
-          <div className={styles.filtersRow}>
-            {categoryTabs.map(f => (
-              <button
-                key={f.id}
-                className={`${styles.filterChip} ${selectedFilter === f.id ? styles.activeChip : ''}`}
-                onClick={() => setSelectedFilter(f.id)}
-              >
-                <span>{f.label}</span>
-                <small className={styles.chipCount}>({f.count})</small>
-              </button>
-            ))}
           </div>
         </div>
 
@@ -1406,9 +1626,9 @@ export function CmsProdutos() {
           <div className={styles.tableMetaInfo}>
             <span className={styles.tableMetaCount}>
               {filteredAndSortedProducts.length} {filteredAndSortedProducts.length === 1 ? 'produto listado' : 'produtos listados'}
-              {(searchTerm || selectedFilter !== 'all' || fitFilter !== 'all' || statusFilter !== 'all') && ` (de ${products.length})`}
+              {(searchTerm || fitFilter !== 'all' || statusFilter !== 'all') && ` (de ${products.length})`}
             </span>
-            {(searchTerm || selectedFilter !== 'all' || fitFilter !== 'all' || statusFilter !== 'all' || (sortConfig.key && sortConfig.direction !== 'none')) && (
+            {(searchTerm || fitFilter !== 'all' || statusFilter !== 'all' || (sortConfig.key && sortConfig.direction !== 'none')) && (
               <button 
                 type="button" 
                 onClick={handleClearAllFilters}
@@ -1428,6 +1648,7 @@ export function CmsProdutos() {
         <table className={styles.table}>
           <thead>
             <tr>
+              <th style={{ width: '90px', textAlign: 'center' }}>POSIÇÃO</th>
               <th>IMAGEM</th>
               <th 
                 onClick={() => handleSort('name')} 
@@ -1485,7 +1706,7 @@ export function CmsProdutos() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="7" className={styles.centerText}>
+                <td colSpan="8" className={styles.centerText}>
                   <div className={styles.loadingWrapper}>
                     <Package size={20} className={styles.spinningIcon} />
                     <span>Carregando catálogo do Firestore...</span>
@@ -1494,11 +1715,11 @@ export function CmsProdutos() {
               </tr>
             ) : filteredAndSortedProducts.length === 0 ? (
               <tr>
-                <td colSpan="7" className={styles.centerText}>
+                <td colSpan="8" className={styles.centerText}>
                   <div className={styles.emptyWrapper}>
                     <AlertCircle size={20} />
                     <span>
-                      {searchTerm || selectedFilter !== 'all' || fitFilter !== 'all' || statusFilter !== 'all'
+                      {searchTerm || fitFilter !== 'all' || statusFilter !== 'all'
                         ? 'Nenhum produto encontrado com os filtros selecionados.'
                         : 'Nenhum produto cadastrado no catálogo.'}
                     </span>
@@ -1506,17 +1727,62 @@ export function CmsProdutos() {
                 </td>
               </tr>
             ) : (
-              filteredAndSortedProducts.map((prod) => {
+              filteredAndSortedProducts.map((prod, index) => {
                 const totalUnits = prod.stock 
                   ? Object.values(prod.stock).reduce((a, b) => a + (Number(b) || 0), 0)
                   : 50;
 
                 const priceValue = parseFloat(prod.price || prod.priceNum || 0);
-                const originalPriceValue = parseFloat(prod.originalPrice || 0);
-                const hasDiscount = originalPriceValue > priceValue;
+                const discountPriceValue = parseFloat(prod.discountPrice || 0);
+                const hasDiscount = Boolean(discountPriceValue > 0 && discountPriceValue < priceValue && prod.discountActive !== false);
+                const naturalIndex = products.findIndex(p => p.id === prod.id);
+                const posNumber = naturalIndex >= 0 ? naturalIndex + 1 : index + 1;
 
                 return (
-                  <tr key={prod.id} className={styles.tableRow}>
+                  <tr 
+                    key={prod.id} 
+                    className={`${styles.tableRow} ${draggedRowIndex === index ? styles.rowDragging : ''} ${dragOverRowIndex === index ? styles.rowDragOver : ''}`}
+                    draggable={canReorder}
+                    onDragStart={(e) => handleRowDragStart(e, index)}
+                    onDragOver={(e) => handleRowDragOver(e, index)}
+                    onDragLeave={handleRowDragLeave}
+                    onDrop={(e) => handleRowDrop(e, index)}
+                    onDragEnd={handleRowDragEnd}
+                  >
+                    <td>
+                      <div className={styles.positionCell}>
+                        <div 
+                          className={styles.dragHandle} 
+                          title={canReorder ? "Clique e arraste para mudar a posição no catálogo" : "Limpe filtros e ordenação para reordenar"}
+                          style={{ cursor: canReorder ? 'grab' : 'default', opacity: canReorder ? 1 : 0.3 }}
+                        >
+                          <GripVertical size={14} />
+                        </div>
+                        <span className={styles.positionNumber}>#{posNumber}</span>
+                        {canReorder && (
+                          <div className={styles.arrowOrderGroup}>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveRow(index, index - 1)}
+                              disabled={index === 0}
+                              className={styles.arrowOrderBtn}
+                              title="Mover para cima"
+                            >
+                              <ChevronUp size={11} />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleMoveRow(index, index + 1)}
+                              disabled={index === products.length - 1}
+                              className={styles.arrowOrderBtn}
+                              title="Mover para baixo"
+                            >
+                              <ChevronDown size={11} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </td>
                     <td>
                       <div className={styles.thumbWrapper}>
                         <img src={prod.image} alt={prod.name || prod.title} className={styles.thumbImage} />
@@ -1541,7 +1807,7 @@ export function CmsProdutos() {
                         <strong>R$ {priceValue.toFixed(2)}</strong>
                         {hasDiscount && (
                           <span className={styles.discountTag}>
-                            -{prod.discount || Math.round(((originalPriceValue - priceValue) / originalPriceValue) * 100)}% OFF
+                            -{Math.round(((priceValue - discountPriceValue) / priceValue) * 100)}% OFF
                           </span>
                         )}
                       </div>
@@ -1553,22 +1819,30 @@ export function CmsProdutos() {
                         ) : (
                           <span className={styles.noBadge}>Sem Badge</span>
                         )}
-                        {(prod.freeShipping || prod.hasFreeShipping) && (
-                          <span style={{
+                        <button
+                          type="button"
+                          onClick={() => handleToggleFreeShipping(prod)}
+                          disabled={savingFreeShippingId === prod.id}
+                          style={{
                             display: 'inline-flex',
                             alignItems: 'center',
-                            fontSize: '0.64rem',
+                            gap: '0.3rem',
+                            padding: '0.22rem 0.5rem',
+                            borderRadius: '3px',
+                            fontSize: '0.66rem',
                             fontWeight: 700,
                             letterSpacing: '0.5px',
-                            padding: '0.12rem 0.38rem',
-                            background: 'rgba(16, 185, 129, 0.15)',
-                            color: '#10b981',
-                            borderRadius: '3px',
-                            border: '1px solid rgba(16, 185, 129, 0.35)'
-                          }}>
-                            FRETE GRÁTIS
-                          </span>
-                        )}
+                            background: (prod.freeShipping || prod.hasFreeShipping) ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.04)',
+                            border: (prod.freeShipping || prod.hasFreeShipping) ? '1px solid #10b981' : '1px solid rgba(255, 255, 255, 0.1)',
+                            color: (prod.freeShipping || prod.hasFreeShipping) ? '#10b981' : 'var(--text-muted)',
+                            cursor: 'pointer',
+                            transition: 'all 0.15s ease'
+                          }}
+                          title={(prod.freeShipping || prod.hasFreeShipping) ? 'Clique para desativar frete grátis nesta peça' : 'Clique para ativar frete grátis nesta peça com 1 clique'}
+                        >
+                          <Check size={10} style={{ opacity: (prod.freeShipping || prod.hasFreeShipping) ? 1 : 0.3 }} />
+                          <span>{(prod.freeShipping || prod.hasFreeShipping) ? 'FRETE GRÁTIS' : 'FRETE PADRÃO'}</span>
+                        </button>
                       </div>
                     </td>
                     <td>
@@ -1610,6 +1884,49 @@ export function CmsProdutos() {
           </tbody>
         </table>
       </div>
+
+      {/* BARRA FLUTUANTE DE SALVAR REORDENAÇÃO */}
+      {hasPendingOrderChanges && (
+        <div className={styles.floatingSaveOrderBar}>
+          <div className={styles.floatingBarInfo}>
+            <div className={styles.floatingStatusDot} />
+            <div>
+              <strong className={styles.floatingBarTitle}>ORDEM DO CATÁLOGO ALTERADA</strong>
+              <p className={styles.floatingBarText}>
+                As posições das peças foram reorganizadas. Deseja aplicar essa sequência na vitrine pública?
+              </p>
+            </div>
+          </div>
+          <div className={styles.floatingBarActions}>
+            <button
+              type="button"
+              onClick={handleCancelReorder}
+              disabled={isSavingOrder}
+              className={styles.floatingCancelBtn}
+            >
+              DESCARTAR
+            </button>
+            <button
+              type="button"
+              onClick={handleSaveReorderedList}
+              disabled={isSavingOrder}
+              className={styles.floatingSaveBtn}
+            >
+              {isSavingOrder ? (
+                <>
+                  <RotateCw size={13} className={styles.spinning} />
+                  <span>SALVANDO...</span>
+                </>
+              ) : (
+                <>
+                  <Check size={14} />
+                  <span>SALVAR ORDEM NO CATÁLOGO</span>
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* DRAWER / MODAL LATERAL DE CRIAÇÃO & EDIÇÃO */}
       {isFormOpen && (
@@ -1669,44 +1986,31 @@ export function CmsProdutos() {
                 </div>
 
                 <div className={styles.priceGridRow}>
-                  <div className={styles.formGroup}>
-                    <label>
-                      PREÇO DA PEÇA (R$) *
-                      <InfoTooltip text="Preço real de venda da peça. Digite os números e a formatação R$ é automática." title="Valor de Venda" />
-                    </label>
-                    <input 
-                      type="text" 
-                      name="priceFormatted"
-                      placeholder="R$ 189,90"
-                      value={formData.priceFormatted || (formData.price ? formatCurrencyInput(formData.price) : '')}
-                      onChange={handlePriceChange}
-                      required
-                    />
-                  </div>
+                  {formData.type === 'brinde' && (
+                    <div className={styles.formGroup}>
+                      <label>
+                        VALOR DO BRINDE (R$)
+                        <InfoTooltip text="Valor de referência do brinde." title="Valor" />
+                      </label>
+                      <input 
+                        type="text" 
+                        name="priceFormatted"
+                        placeholder="R$ 0,00"
+                        value={formData.priceFormatted || (formData.price ? formatCurrencyInput(formData.price) : '')}
+                        onChange={handlePriceChange}
+                      />
+                    </div>
+                  )}
 
-                  <div className={styles.formGroup}>
+                  <div className={styles.formGroup} style={{ flex: 1 }}>
                     <label>
-                      PREÇO DE / ANCORAGEM (R$)
-                      <InfoTooltip text="Preço original riscado de comparação (ex: De R$ 220,00 por R$ 189,90). Opcional." title="Preço De" />
-                    </label>
-                    <input 
-                      type="text" 
-                      name="originalPriceFormatted"
-                      placeholder="R$ 220,00"
-                      value={formData.originalPriceFormatted || (formData.originalPrice ? formatCurrencyInput(formData.originalPrice) : '')}
-                      onChange={handleOriginalPriceChange}
-                    />
-                  </div>
-
-                  <div className={styles.formGroup}>
-                    <label>
-                      BADGE PERSONALIZADO
-                      <InfoTooltip text="Destaque visual sobre a imagem do card na vitrine e catálogo." title="Tag Promocional" />
+                      BADGE PERSONALIZADO (OPCIONAL)
+                      <InfoTooltip text="Destaque visual sobre a imagem do card na vitrine e catálogo (ex: NOVO DROP, EXCLUSIVO)." title="Tag Promocional" />
                     </label>
                     <input 
                       type="text" 
                       name="customBadge"
-                      placeholder="Ex: NOVO DROP, EXCLUSIVO..."
+                      placeholder="Ex: NOVO DROP, EDIÇÃO LIMITADA..."
                       value={formData.customBadge}
                       onChange={handleInputChange}
                     />
@@ -2032,6 +2336,55 @@ export function CmsProdutos() {
                   <small style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '0.35rem', display: 'block' }}>
                     O cliente poderá alternar livremente entre essas modelagens direto na página do produto antes de adicionar à sacola.
                   </small>
+
+                  {/* VALOR DE VENDA POR MODELAGEM (R$) */}
+                  {Array.isArray(formData.fits) && formData.fits.length > 0 && (
+                    <div className={styles.fitPricesContainer}>
+                      <div className={styles.subSectionHeader}>
+                        <div>
+                          <label className={styles.subSectionLabel}>
+                            VALOR DE VENDA POR MODELAGEM (R$) *
+                          </label>
+                          <p className={styles.fieldHint}>
+                            Defina o preço específico cobrado do cliente para cada corte selecionado acima:
+                          </p>
+                        </div>
+                        {formData.fits.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={handleCopyPriceToAllFits}
+                            className={styles.copyBasePriceBtn}
+                            title="Aplica o preço da 1ª modelagem para todas as outras"
+                          >
+                            Copiar 1º Preço para Todas
+                          </button>
+                        )}
+                      </div>
+
+                      <div className={styles.fitPricesGrid}>
+                        {formData.fits.map((fitOption) => {
+                          const slug = normalizeFitSlug(fitOption);
+                          const rawVal = formData.fitPrices?.[slug] ?? formData.fitPrices?.[fitOption] ?? formData.price ?? 150;
+                          return (
+                            <div key={fitOption} className={styles.fitPriceCard}>
+                              <span className={styles.fitPriceName}>{formatFitLabel(fitOption)}</span>
+                              <div className={styles.priceInputWrapper}>
+                                <span className={styles.currencyPrefix}>R$</span>
+                                <input
+                                  type="text"
+                                  value={formatCurrencyInput(rawVal).replace(/^R\$\s*/, '')}
+                                  onChange={(e) => handleFitPriceChange(fitOption, e.target.value)}
+                                  className={styles.fitPriceInput}
+                                  placeholder="150,00"
+                                  required
+                                />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* GESTÃO DE CORES */}

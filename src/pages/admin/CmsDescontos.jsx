@@ -23,9 +23,9 @@ import {
   ArrowUp,
   ArrowDown
 } from 'lucide-react';
-import { doc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
-import { catalogService } from '../../services/catalogService';
+import { catalogService, invalidateCatalogCache } from '../../services/catalogService';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import styles from './CmsDescontos.module.css';
 
@@ -52,12 +52,15 @@ export function CmsDescontos() {
   const [savingId, setSavingId] = useState(null);
   const [feedbackSuccess, setFeedbackSuccess] = useState(null);
 
-  // Carrega produtos do Firestore
-  const loadProducts = async () => {
+  // Carrega produtos do Firestore (com opção de forçar leitura atualizada)
+  const loadProducts = async (force = true) => {
     setLoading(true);
     setRefreshing(true);
     try {
-      const all = await catalogService.getAllProducts();
+      if (force) {
+        invalidateCatalogCache('products');
+      }
+      const all = await catalogService.getAllProducts(force);
       setProducts(all);
     } catch (err) {
       console.error("Erro ao carregar produtos:", err);
@@ -68,7 +71,7 @@ export function CmsDescontos() {
   };
 
   useEffect(() => {
-    loadProducts();
+    loadProducts(true);
   }, []);
 
   // Análise de Produtos Sugeridos para Promoção (Inteligência Operacional)
@@ -361,11 +364,13 @@ export function CmsDescontos() {
 
     try {
       const docRef = doc(db, 'products', prod.id);
-      await updateDoc(docRef, {
+      await setDoc(docRef, {
         freeShipping: nextStatus,
         hasFreeShipping: nextStatus,
         updatedAt: new Date().toISOString()
-      });
+      }, { merge: true });
+
+      invalidateCatalogCache('products');
 
       setProducts(prev => prev.map(p => p.id === prod.id ? {
         ...p,
@@ -377,7 +382,7 @@ export function CmsDescontos() {
       setTimeout(() => setFeedbackSuccess(null), 3000);
     } catch (err) {
       console.error("Erro ao alterar frete grátis:", err);
-      alert("Erro ao salvar frete grátis no Firestore.");
+      alert("Erro ao salvar frete grátis no Firestore: " + (err.message || err));
     } finally {
       setSavingId(null);
     }
@@ -391,13 +396,15 @@ export function CmsDescontos() {
 
     try {
       const docRef = doc(db, 'products', prod.id);
-      await updateDoc(docRef, {
+      await setDoc(docRef, {
         discountPrice: promoPrice,
         discountActive: true,
         discountPercentage: percentOff,
         discountStartDate: new Date().toISOString().split('T')[0],
         updatedAt: new Date().toISOString()
-      });
+      }, { merge: true });
+
+      invalidateCatalogCache('products');
 
       setProducts(prev => prev.map(p => p.id === prod.id ? {
         ...p,
@@ -410,7 +417,7 @@ export function CmsDescontos() {
       setTimeout(() => setFeedbackSuccess(null), 3000);
     } catch (err) {
       console.error("Erro ao aplicar desconto rápido:", err);
-      alert("Erro ao salvar desconto no Firestore.");
+      alert("Erro ao salvar desconto no Firestore: " + (err.message || err));
     } finally {
       setSavingId(null);
     }
@@ -445,7 +452,9 @@ export function CmsDescontos() {
         updatedAt: new Date().toISOString()
       };
 
-      await updateDoc(docRef, updateData);
+      await setDoc(docRef, updateData, { merge: true });
+
+      invalidateCatalogCache('products');
 
       setProducts(prev => prev.map(p => p.id === editingProduct.id ? {
         ...p,
@@ -457,7 +466,7 @@ export function CmsDescontos() {
       setTimeout(() => setFeedbackSuccess(null), 3000);
     } catch (err) {
       console.error("Erro ao salvar promoção:", err);
-      alert("Erro ao salvar dados no Firestore.");
+      alert("Erro ao salvar dados no Firestore: " + (err.message || err));
     } finally {
       setSavingId(null);
     }
@@ -470,14 +479,16 @@ export function CmsDescontos() {
 
     try {
       const docRef = doc(db, 'products', prod.id);
-      await updateDoc(docRef, {
+      await setDoc(docRef, {
         discountPrice: null,
         discountActive: false,
         discountPercentage: null,
         discountStartDate: null,
         discountEndDate: null,
         updatedAt: new Date().toISOString()
-      });
+      }, { merge: true });
+
+      invalidateCatalogCache('products');
 
       setProducts(prev => prev.map(p => p.id === prod.id ? {
         ...p,

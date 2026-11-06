@@ -809,6 +809,9 @@
   background-color: rgba(255, 255, 255, 0.015);
   transition: all var(--transition-fast);
   cursor: pointer;
+  min-height: 140px;
+  word-break: break-word;
+  box-sizing: border-box;
 }
 
 .uploadDropzone:hover {
@@ -1138,14 +1141,16 @@
   background-color: var(--bg-surface);
 }
 
-/* SEÇÃO GESTÃO DE CORES */
+/* SEÇÃO GESTÃO DE CORES (INTEGRADA AO FUNDO) */
 .colorsManagerSection {
   display: flex;
   flex-direction: column;
   gap: 0.85rem;
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  padding: 1.1rem;
+  background-color: transparent;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 1.25rem 0 0 0;
+  margin-top: 0.5rem;
 }
 
 .colorPresetsRow {
@@ -1321,9 +1326,10 @@
 }
 
 .activeColorStockBox {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
-  padding: 0.85rem;
+  background-color: transparent;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.85rem 0 0 0;
 }
 
 /* ESTOQUE ILIMITADO / SOB DEMANDA */
@@ -1407,8 +1413,9 @@
   .controlBar { flex-direction: column; align-items: stretch; }
   .gridTwo { grid-template-columns: 1fr; }
   .header { flex-direction: column; align-items: flex-start; gap: 1rem; }
-  .drawer { max-width: 100%; }
+  .drawer { max-width: 100%; padding: 1.25rem 1rem; }
   .imagesGrid { grid-template-columns: repeat(2, 1fr); }
+  .formSectionBlock { padding: 1rem; }
 }
 
 /* Blocos Ergonômicos do Modal de Produto (P&B Brutalista) */
@@ -1461,8 +1468,10 @@
 
 .priceGridRow {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 1rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 @media (max-width: 640px) {
@@ -1475,16 +1484,19 @@
 .fitChipsGrid {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.5rem;
+  gap: 0.65rem;
   margin-top: 0.35rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .fitChipBtn {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
-  background-color: #0d0d0d;
-  border: 1px solid #262626;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
   color: #a3a3a3;
   padding: 0.6rem 0.95rem;
   font-size: 0.75rem;
@@ -1497,7 +1509,8 @@
 }
 
 .fitChipBtn:hover {
-  border-color: #737373;
+  border-color: rgba(255, 255, 255, 0.3);
+  background-color: rgba(255, 255, 255, 0.06);
   color: #FFFFFF;
 }
 
@@ -1562,4 +1575,333 @@
 .resetCustomFitsBtn:hover {
   color: #ef4444;
   text-decoration: underline;
+}
+
+/* Preços Diferenciados por Modelagem (Integrado ao Fundo) */
+.fitPricesContainer {
+  margin-top: 1.25rem;
+  padding: 1.25rem 0 0 0;
+  background-color: transparent;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.subSectionHeader {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.subSectionLabel {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-primary);
+  text-transform: uppercase;
+}
+
+.fieldHint {
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  margin-top: 0.2rem;
+  margin-bottom: 0;
+  line-height: 1.3;
+}
+
+.copyBasePriceBtn {
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-secondary);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.copyBasePriceBtn:hover {
+  background-color: #FFFFFF;
+  color: #000000;
+  border-color: #FFFFFF;
+}
+
+.fitPricesGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 0.85rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.fitPriceCard {
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  box-sizing: border-box;
+}
+
+.fitPriceName {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.priceInputWrapper {
+  display: flex;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 2px;
+  padding: 0 0.75rem;
+  transition: all var(--transition-fast);
+}
+
+.priceInputWrapper:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
+.priceInputWrapper:focus-within {
+  border-color: #FFFFFF;
+  background-color: rgba(255, 255, 255, 0.07);
+}
+
+.currencyPrefix {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.4);
+  margin-right: 0.4rem;
+  user-select: none;
+}
+
+.fitPriceInput {
+  background: transparent !important;
+  border: none !important;
+  color: #FFFFFF !important;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.9rem;
+  font-weight: 700;
+  width: 100%;
+  padding: 0.6rem 0 !important;
+  outline: none;
+}
+
+/* POSIÇÃO E REORDENAÇÃO DE PRODUTOS */
+.positionCell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+}
+
+.dragHandle {
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+  padding: 0.2rem;
+  transition: color var(--transition-fast);
+}
+
+.tableRow:hover .dragHandle {
+  color: var(--text-primary);
+}
+
+.positionNumber {
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.18rem 0.45rem;
+  border-radius: 3px;
+  min-width: 28px;
+  text-align: center;
+}
+
+.arrowOrderGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.arrowOrderBtn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  padding: 2px 3px;
+  cursor: pointer;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+
+.arrowOrderBtn:hover:not(:disabled) {
+  background: #fff;
+  color: #000;
+  border-color: #fff;
+}
+
+.arrowOrderBtn:disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+}
+
+.rowDragging {
+  opacity: 0.4;
+  background-color: rgba(255, 255, 255, 0.04) !important;
+}
+
+.rowDragOver {
+  border-top: 2px solid #10b981 !important;
+  background-color: rgba(16, 185, 129, 0.06) !important;
+}
+
+/* BARRA FLUTUANTE DE SALVAR ORDEM */
+.floatingSaveOrderBar {
+  position: fixed;
+  bottom: 1.8rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 2rem;
+  background: #09090b;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.08);
+  padding: 0.85rem 1.4rem;
+  border-radius: 6px;
+  width: 90%;
+  max-width: 720px;
+  animation: slideUpFloat 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideUpFloat {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.floatingBarInfo {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.floatingStatusDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 10px #10b981;
+  flex-shrink: 0;
+  animation: pulseDot 1.5s infinite;
+}
+
+@keyframes pulseDot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.4; transform: scale(0.85); }
+}
+
+.floatingBarTitle {
+  font-family: var(--font-heading);
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #fff;
+  display: block;
+}
+
+.floatingBarText {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  margin: 0.15rem 0 0 0;
+}
+
+.floatingBarActions {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-shrink: 0;
+}
+
+.floatingCancelBtn {
+  background: transparent;
+  color: var(--text-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  padding: 0.55rem 0.95rem;
+  border-radius: 3px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.floatingCancelBtn:hover:not(:disabled) {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.floatingSaveBtn {
+  background: #fff;
+  color: #000;
+  border: none;
+  font-size: 0.74rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  padding: 0.55rem 1.15rem;
+  border-radius: 3px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  transition: all 0.15s ease;
+}
+
+.floatingSaveBtn:hover:not(:disabled) {
+  background: #e4e4e7;
+  transform: translateY(-1px);
+}
+
+.floatingSaveBtn:disabled, .floatingCancelBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinning {
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }

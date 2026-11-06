@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
@@ -41,6 +41,22 @@ export function LookbookItem({
   const hasFreeShipping = Boolean(product.freeShipping || product.hasFreeShipping);
   const customBadgeText = product.customBadge && product.customBadge.trim() ? product.customBadge.trim() : null;
 
+  // Faixa de preço dinâmico por modelagens (exibe do menor ao maior se houver variação de cortes)
+  const priceRange = useMemo(() => {
+    if (product.fitPrices && typeof product.fitPrices === 'object') {
+      const activePrices = Object.values(product.fitPrices)
+        .map(Number)
+        .filter(n => !isNaN(n) && n > 0);
+      if (activePrices.length > 0) {
+        const min = Math.min(...activePrices);
+        const max = Math.max(...activePrices);
+        return { min, max, hasRange: max > min };
+      }
+    }
+    const singlePrice = Number(discountInfo.finalPrice || product.price || product.priceNum || 0);
+    return { min: singlePrice, max: singlePrice, hasRange: false };
+  }, [product.fitPrices, product.price, product.priceNum, discountInfo.finalPrice]);
+
   // Camada 1 (Base - Foto Lifestyle / Modelo preenchendo 100% do quadro)
   const lifestyleImage =
     product.lifestyleImage ||
@@ -65,13 +81,20 @@ export function LookbookItem({
     product.image ||
     lifestyleImage;
 
-  // Tamanhos disponíveis
-  const sizesList =
+  // Tamanhos disponíveis (Grade oficial THR33: P, M, G, GG, EXG - PP descontinuado)
+  const officialOrder = ['P', 'M', 'G', 'GG', 'EXG'];
+  const rawSizes =
     Array.isArray(product.sizes) && product.sizes.length > 0
       ? product.sizes
       : product.stock && typeof product.stock === 'object' && Object.keys(product.stock).length > 0
         ? Object.keys(product.stock)
         : ['P', 'M', 'G', 'GG'];
+
+  const filteredSizes = officialOrder.filter(sz => {
+    return rawSizes.some(s => String(s).toUpperCase().trim() === sz);
+  });
+
+  const sizesList = filteredSizes.length > 0 ? filteredSizes : ['P', 'M', 'G', 'GG'];
 
   const handleProductClick = (e) => {
     e.preventDefault();
@@ -90,7 +113,6 @@ export function LookbookItem({
   };
 
   const categoryLabel = formatCategoryBadgeLabel(product.category);
-  const fitLabel = formatFitBadgeLabel(product.fit);
 
   return (
     <article
@@ -167,7 +189,6 @@ export function LookbookItem({
         <div className={styles.bottomEditorialInfo}>
           <div className={styles.tagsRow}>
             <span className={styles.categoryTag}>{categoryLabel}</span>
-            {fitLabel && <span className={styles.fitTag}>{fitLabel}</span>}
           </div>
 
           <h2 className={styles.pieceTitle}>{product.name}</h2>
@@ -187,6 +208,15 @@ export function LookbookItem({
                   </span>
                 )}
               </>
+            ) : priceRange.hasRange ? (
+              <div className={styles.priceRangeGroup}>
+                <span className={styles.currentPrice}>
+                  {formatCurrency(priceRange.min)}
+                </span>
+                <span className={styles.maxPriceNotice}>
+                  — {formatCurrency(priceRange.max)}
+                </span>
+              </div>
             ) : (
               <span className={styles.currentPrice}>
                 {formatCurrency(discountInfo.finalPrice)}

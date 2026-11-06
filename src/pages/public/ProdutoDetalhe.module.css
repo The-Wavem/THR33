@@ -64,7 +64,7 @@
   position: relative;
   width: 100%;
   aspect-ratio: 3/4;
-  background-color: var(--bg-card);
+  background-color: #000000;
   border: 1px solid var(--border-color);
   overflow: hidden;
   flex-shrink: 0;
@@ -73,13 +73,22 @@
   touch-action: pan-y;
   user-select: none;
   -webkit-user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .mainImage {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: cover !important;
+  object-position: center top;
   transition: transform 0.4s ease;
+}
+
+.mainImage img {
+  object-fit: cover !important;
+  object-position: center top;
 }
 
 .mainImageWrapper:hover .mainImage {
@@ -211,19 +220,23 @@
 .thumbBtn {
   width: 86px;
   aspect-ratio: 3/4;
-  background-color: var(--bg-card);
+  background-color: #000000;
   border: 1px solid var(--border-color);
   overflow: hidden;
   opacity: 0.5;
   cursor: pointer;
   flex-shrink: 0;
   transition: opacity var(--transition-fast), border-color var(--transition-fast);
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .thumbBtn img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: cover !important;
+  object-position: center top;
 }
 
 .activeThumb,
@@ -894,12 +907,20 @@
   line-height: 1.6;
 }
 
+.tableResponsiveWrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin-top: 0.5rem;
+  padding-bottom: 0.25rem;
+}
+
 .measuresTable {
   width: 100%;
   border-collapse: collapse;
   text-align: left;
   font-size: 0.8rem;
-  margin-top: 0.5rem;
+  margin-top: 0.25rem;
 }
 
 .measuresTable th,
@@ -914,6 +935,12 @@
   letter-spacing: 1px;
   text-transform: uppercase;
   background-color: rgba(255, 255, 255, 0.02);
+}
+
+.selectedMeasureRow {
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #FFFFFF !important;
+  font-weight: 700;
 }
 
 .careList {
@@ -1211,6 +1238,11 @@
     gap: 1.5rem;
   }
 
+  .mainImageWrapper {
+    aspect-ratio: 4/5;
+    max-height: 62vh;
+  }
+
   .title {
     font-size: clamp(1.5rem, 5.5vw, 2rem);
   }
@@ -1221,6 +1253,48 @@
 
   .thumbnailsList {
     gap: 0.6rem;
+  }
+
+  /* Seletor de Modelagem (Fit) Responsivo - 2 Colunas Limpas */
+  .fitOptionsRow {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.45rem;
+    width: 100%;
+  }
+
+  .fitOptionBtn {
+    width: 100%;
+    min-height: 46px;
+    padding: 0.6rem 0.35rem;
+    font-size: 0.72rem;
+    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .fitOptionBtn:last-child:nth-child(odd) {
+    grid-column: span 2;
+  }
+
+  /* Seletor de Tamanhos Mobile - 5 Colunas Proporcionais */
+  .sizeOptions {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 0.35rem;
+    width: 100%;
+  }
+
+  .sizeBtn {
+    min-width: 0;
+    width: 100%;
+    height: 46px;
+    padding: 0;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .actionsRow {
@@ -1243,6 +1317,54 @@
   .wishlistButton {
     width: 48px;
     height: 48px;
+  }
+
+  /* Formulário de Frete Mobile */
+  .shippingFormCompact {
+    display: flex;
+    gap: 0.45rem;
+    width: 100%;
+  }
+
+  .shippingInputCompact {
+    height: 44px;
+    font-size: 0.85rem;
+  }
+
+  .shippingBtnCompact {
+    height: 44px;
+    padding: 0 1.15rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+
+  /* Tabela de Medidas Mobile Sem Cortes */
+  .tableResponsiveWrapper {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    margin-top: 0.5rem;
+    padding-bottom: 0.35rem;
+    scrollbar-width: thin;
+    scrollbar-color: #333 transparent;
+  }
+
+  .measuresTable {
+    min-width: 325px;
+    font-size: 0.72rem;
+  }
+
+  .measuresTable th,
+  .measuresTable td {
+    padding: 0.55rem 0.25rem;
+    text-align: center;
+    white-space: nowrap;
+  }
+
+  .measuresTable th:first-child,
+  .measuresTable td:first-child {
+    text-align: left;
+    padding-left: 0.5rem;
   }
 
   .reviewsSection {
@@ -1894,5 +2016,112 @@
   .lightboxThumbBtn {
     width: 42px;
     height: 52px;
+  }
+}
+
+
+/* ============================================================
+   BARRA FIXA FLUTUANTE DE COMPRA NO RODAPÉ MOBILE (STICKY BOTTOM CTA)
+   ============================================================ */
+.mobileStickyBuyBar {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobileStickyBuyBar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.85rem;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background-color: rgba(10, 10, 10, 0.96);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-top: 1px solid var(--border-color);
+    padding: 0.75rem 1rem calc(0.75rem + env(safe-area-inset-bottom, 0px));
+    z-index: 999;
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.6);
+    animation: slideUpSticky 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .stickyBuyInfo {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    min-width: 0;
+    flex: 1;
+  }
+
+  .stickyBuyTitle {
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: #FFFFFF;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    letter-spacing: 0.5px;
+  }
+
+  .stickyBuyMeta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .stickyBuyBadge {
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: #A3A3A3;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  .stickyBuyPrice {
+    font-size: 0.85rem;
+    font-weight: 900;
+    color: #FFFFFF;
+  }
+
+  .stickyBuyBtn {
+    background-color: #FFFFFF;
+    color: #000000;
+    border: none;
+    height: 44px;
+    padding: 0 1.25rem;
+    font-size: 0.78rem;
+    font-weight: 900;
+    letter-spacing: 1px;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    flex-shrink: 0;
+    transition: transform 0.15s ease, opacity 0.15s ease;
+  }
+
+  .stickyBuyBtn:active {
+    transform: scale(0.97);
+  }
+
+  .stickyBuyBtn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+    background-color: #333333;
+    color: #777777;
+  }
+}
+
+@keyframes slideUpSticky {
+  from {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
 }

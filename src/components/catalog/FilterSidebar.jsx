@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { Search, X, SlidersHorizontal } from 'lucide-react';
 import { analyticsService } from '../../services/analyticsService';
-import { extractAvailableFits, normalizeFitSlug, GLOBAL_CATALOG_SIZES } from '../../utils/fitUtils';
+import { extractAvailableFits, normalizeFitSlug } from '../../utils/fitUtils';
 import styles from './FilterSidebar.module.css';
 
 export function FilterSidebar({
@@ -88,25 +88,9 @@ export function FilterSidebar({
     });
   };
 
-  const toggleSize = (size) => {
-    const current = filters.sizes || [];
-    const isSelecting = !current.includes(size);
-    if (isSelecting) analyticsService.trackFilterUse('tamanho', size);
-
-    setFilters((prev) => {
-      const prevSizes = prev.sizes || [];
-      const updated = prevSizes.includes(size)
-        ? prevSizes.filter((s) => s !== size)
-        : [...prevSizes, size];
-      return { ...prev, sizes: updated };
-    });
-  };
-
   const selectedFits = filters.fits || [];
-  const selectedSizes = filters.sizes || [];
   const activeCount =
     selectedFits.length +
-    selectedSizes.length +
     (searchQuery.trim() ? 1 : 0) +
     (sortOrder !== 'newest' ? 1 : 0);
 
@@ -228,28 +212,6 @@ export function FilterSidebar({
                       {isSelected && <span className={styles.checkboxInner} />}
                     </span>
                     <span className={styles.optionLabelText}>{fit.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 4. GRADE DE TAMANHOS DE VESTUÁRIO (P AO EXG) */}
-          <div className={styles.filterGroup}>
-            <span className={styles.groupLabel}>TAMANHO</span>
-            <div className={styles.gridSizes}>
-              {GLOBAL_CATALOG_SIZES.map((size) => {
-                const isSelected = selectedSizes.includes(size);
-                return (
-                  <button
-                    key={size}
-                    type="button"
-                    className={`${styles.sizeBtn} ${
-                      isSelected ? styles.activeSize : ''
-                    }`}
-                    onClick={() => toggleSize(size)}
-                  >
-                    {size}
                   </button>
                 );
               })}

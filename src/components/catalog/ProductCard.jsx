@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
@@ -19,6 +19,22 @@ export function ProductCard({ product }) {
   const discountPriceNum = Number(product.discountPrice || 0);
   const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product.discountActive !== false);
   const hasFreeShipping = Boolean(product.freeShipping || product.hasFreeShipping);
+
+  // Faixa de preço considerando modelagens (fitPrices)
+  const priceRange = useMemo(() => {
+    if (product.fitPrices && typeof product.fitPrices === 'object') {
+      const activePrices = Object.values(product.fitPrices)
+        .map(Number)
+        .filter(n => !isNaN(n) && n > 0);
+      if (activePrices.length > 0) {
+        const min = Math.min(...activePrices);
+        const max = Math.max(...activePrices);
+        return { min, max, hasRange: max > min };
+      }
+    }
+    const singlePrice = Number(product.price || 0);
+    return { min: singlePrice, max: singlePrice, hasRange: false };
+  }, [product.fitPrices, product.price]);
 
   const handleTrackClick = () => {
     analyticsService.trackProductView(product.id || productId, product.name, product.category, product.fit, product.slug);
@@ -133,9 +149,6 @@ export function ProductCard({ product }) {
         <div className={styles.details}>
           <div className={styles.tagsRow}>
             <span className={styles.categoryTag}>{formatCategoryBadgeLabel(product.category)}</span>
-            {formatFitBadgeLabel(product.fit) && (
-              <span className={styles.fitTag}>{formatFitBadgeLabel(product.fit)}</span>
-            )}
           </div>
           
           <h3 className={styles.productName}>{product.name}</h3>
@@ -150,6 +163,15 @@ export function ProductCard({ product }) {
                   R$ {discountPriceNum.toFixed(2).replace('.', ',')}
                 </span>
               </>
+            ) : priceRange.hasRange ? (
+              <div className={styles.priceRangeGroup}>
+                <span className={styles.regularPrice}>
+                  R$ {priceRange.min.toFixed(2).replace('.', ',')}
+                </span>
+                <span className={styles.maxPriceNotice}>
+                  — R$ {priceRange.max.toFixed(2).replace('.', ',')}
+                </span>
+              </div>
             ) : (
               <span className={styles.regularPrice}>
                 R$ {priceNum.toFixed(2).replace('.', ',')}

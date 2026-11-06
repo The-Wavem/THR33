@@ -348,6 +348,19 @@
   letter-spacing: 0.1em;
 }
 
+.priceRangeGroup {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.maxPriceNotice {
+  font-size: clamp(0.78rem, 1.05vw, 0.95rem);
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.06em;
+}
+
 .inlineEditorialTag {
   font-size: 0.82rem;
   font-weight: 700;

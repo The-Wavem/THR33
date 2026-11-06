@@ -323,6 +323,20 @@
   white-space: nowrap;
 }
 
+.priceRangeGroup {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.maxPriceNotice {
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
 /* RESPONSIVIDADE MOBILE STRICT */
 @media (max-width: 768px) {
   .details {

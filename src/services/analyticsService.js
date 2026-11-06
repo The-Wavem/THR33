@@ -1163,7 +1163,7 @@ export function calculateDynamicMetrics(activeProducts = [], completedOrders = [
         if (!sizesMap[sz]) sizesMap[sz] = 0;
       });
     } else {
-      ['PP', 'P', 'M', 'G', 'GG'].forEach(sz => {
+      ['P', 'M', 'G', 'GG', 'EXG'].forEach(sz => {
         if (!sizesMap[sz]) sizesMap[sz] = 0;
       });
     }
@@ -1195,7 +1195,7 @@ export function calculateDynamicMetrics(activeProducts = [], completedOrders = [
   });
 
   if (Object.keys(sizesMap).length === 0) {
-    ['PP', 'P', 'M', 'G', 'GG'].forEach(sz => { sizesMap[sz] = 0; });
+    ['P', 'M', 'G', 'GG', 'EXG'].forEach(sz => { sizesMap[sz] = 0; });
   }
 
   // 2. Itera sobre pedidos e sessões completas
@@ -1256,7 +1256,7 @@ export function calculateDynamicMetrics(activeProducts = [], completedOrders = [
   // 3. Converte em arrays ordenados
   const categoriesList = Object.values(categoriesMap).sort((a, b) => b.revenue - a.revenue || b.units - a.units);
   
-  const standardSizeOrder = ['PP', 'P', 'M', 'G', 'GG'];
+  const standardSizeOrder = ['P', 'M', 'G', 'GG', 'EXG'];
   const sizesList = Object.entries(sizesMap).map(([size, sales]) => ({
     size,
     sales

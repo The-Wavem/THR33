@@ -306,6 +306,7 @@ export function CmsPedidos() {
 
   const [newOrderAlert, setNewOrderAlert] = useState(null);
   const isInitialOrdersLoadRef = useRef(true);
+  const knownOrderIdsRef = useRef(new Set());
 
   useEffect(() => {
     if (newOrderAlert) {
@@ -418,19 +419,28 @@ export function CmsPedidos() {
 
       if (!isInitialOrdersLoadRef.current) {
         snap.docChanges().forEach(change => {
-          if (change.type === 'added' || change.type === 'modified') {
-            const changedData = change.doc.data();
-            const norm = normalizeOrderStatus(changedData.status || changedData.statusCode);
-            const isApproved = norm === ORDER_STATUSES.PAGAMENTO_APROVADO || norm === ORDER_STATUSES.EM_PRODUCAO;
-            if (isApproved && changedData.hasGiftCard && !changedData.giftCardsProcessed) {
-              giftCardService.processOrderGiftCards(change.doc.id, changedData)
-                .catch(err => console.warn("Aviso ao processar vales pendentes no CMS:", err.message));
-            }
+          const changedData = change.doc.data();
+          const orderId = change.doc.id;
 
-            if (change.type === 'added' || isApproved) {
-              newestOrder = { id: change.doc.id, ...changedData };
-              hasNewPaidOrder = true;
-            }
+          // Processamento de vales de presente caso aprovado/pago
+          const norm = normalizeOrderStatus(changedData.status || changedData.statusCode);
+          const isApproved = norm === ORDER_STATUSES.PAGAMENTO_APROVADO || norm === ORDER_STATUSES.EM_PRODUCAO;
+          if (isApproved && changedData.hasGiftCard && !changedData.giftCardsProcessed) {
+            giftCardService.processOrderGiftCards(orderId, changedData)
+              .catch(err => console.warn("Aviso ao processar vales pendentes no CMS:", err.message));
+          }
+
+          if (change.type === 'removed') {
+            knownOrderIdsRef.current.delete(orderId);
+          }
+
+          // ALERTA SONORO & BANNER DE NOVO PEDIDO:
+          // Apenas para pedidos GENUINAMENTE NOVOS que acabaram de ser criados e não existiam previamente na lista.
+          // Mudanças de status ('modified') em pedidos já existentes NUNCA devem bipar como "Novo Pedido".
+          if (change.type === 'added' && !knownOrderIdsRef.current.has(orderId)) {
+            knownOrderIdsRef.current.add(orderId);
+            newestOrder = { id: orderId, ...changedData };
+            hasNewPaidOrder = true;
           }
         });
 
@@ -446,6 +456,8 @@ export function CmsPedidos() {
           });
         }
       } else {
+        // Carga inicial: registra todos os IDs existentes para evitar disparos falsos
+        knownOrderIdsRef.current = new Set(snap.docs.map(d => d.id));
         isInitialOrdersLoadRef.current = false;
       }
 
