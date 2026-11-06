@@ -19,7 +19,8 @@ import {
   getMeasuresForFit,
   OFFICIAL_MEASURES_TABLE,
   normalizeFitSlug,
-  isUnicoFit
+  isUnicoFit,
+  sanitizeFitsList
 } from '../../utils/fitUtils';
 import { SEO } from '../../components/common/SEO';
 import { buildProductSchema, buildBreadcrumbSchema } from '../../utils/seoSchemas';
@@ -214,12 +215,10 @@ export function ProdutoDetalhe({ onAddToCart }) {
     } else if (Array.isArray(product?.availableFits) && product.availableFits.length > 0) {
       list = product.availableFits;
     } else {
-      list = ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
+      list = product?.fit ? [product.fit] : ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
     }
 
-    // Se houver qualquer modelagem real, remove "Único" / "Modelo Único"
-    const real = list.filter(f => !isUnicoFit(f));
-    return real.length > 0 ? real : ['Modelo Único'];
+    return sanitizeFitsList(list);
   }, [product, isGiftCard]);
 
   // Sincroniza a modelagem selecionada com o primeiro fit disponível do produto

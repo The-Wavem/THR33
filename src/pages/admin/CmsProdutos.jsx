@@ -35,7 +35,7 @@ import {
 import { db, storage } from '../../services/firebaseConfig';
 import { catalogService, invalidateCatalogCache } from '../../services/catalogService';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
-import { normalizeFitSlug, formatFitLabel, isUnicoFit } from '../../utils/fitUtils';
+import { normalizeFitSlug, formatFitLabel, isUnicoFit, sanitizeFitsList, getCanonicalFitName } from '../../utils/fitUtils';
 import styles from './CmsProdutos.module.css';
 
 // Constantes e utilitários de Modelagens e Máscaras de Moeda
@@ -363,27 +363,38 @@ export function CmsProdutos() {
     const list = [...OFFICIAL_THR33_FITS];
     (customFits || []).forEach(cf => {
       const label = cf.label || cf.name;
-      if (label && !list.some(item => item.toLowerCase() === label.toLowerCase())) {
+      if (label && !list.some(item => normalizeFitSlug(item) === normalizeFitSlug(label))) {
         list.push(label);
       }
     });
+
+    // Se o produto atual possui alguma modelagem personalizada já cadastrada
+    if (Array.isArray(formData.fits)) {
+      formData.fits.forEach(f => {
+        const canonical = getCanonicalFitName(f);
+        if (canonical && !isUnicoFit(canonical) && !list.some(item => normalizeFitSlug(item) === normalizeFitSlug(canonical))) {
+          list.push(canonical);
+        }
+      });
+    }
+
     return list;
-  }, [customFits]);
+  }, [customFits, formData.fits]);
 
   // Alterna a seleção de uma modelagem (mantém no mínimo 1 ativa)
   const toggleFitSelection = (fitOption) => {
     setFormData(prev => {
-      const current = Array.isArray(prev.fits) && prev.fits.length > 0
-        ? [...prev.fits]
-        : [...OFFICIAL_THR33_FITS];
+      const current = sanitizeFitsList(prev.fits);
+      const targetSlug = normalizeFitSlug(fitOption);
       
       let updated;
-      if (current.includes(fitOption)) {
-        updated = current.filter(f => f !== fitOption);
+      if (current.some(f => normalizeFitSlug(f) === targetSlug)) {
+        updated = current.filter(f => normalizeFitSlug(f) !== targetSlug);
       } else {
         // Ao selecionar uma modelagem específica, remove automaticamente qualquer opção neutra ("Modelo Único")
         const filteredCurrent = current.filter(f => !isUnicoFit(f));
-        updated = [...filteredCurrent, fitOption];
+        const canonical = getCanonicalFitName(fitOption) || fitOption;
+        updated = [...filteredCurrent, canonical];
       }
 
       // Se todas as modelagens forem desmarcadas, assume "Modelo Único"
@@ -660,9 +671,8 @@ export function CmsProdutos() {
         ? product.availableFits
         : (product.fit ? [product.fit] : ['Oversized Heavy', 'Oversized Clássica', 'Boxy']);
 
-    // Se houver qualquer modelagem real, remove "Único" / "Modelo Único"
-    const realFits = rawInitialFits.filter(f => !isUnicoFit(f));
-    const initialFits = realFits.length > 0 ? realFits : ['Modelo Único'];
+    // Higieniza modelagens eliminando legados obsoletos ('oversized' genérico) e garantindo canonical names
+    const initialFits = sanitizeFitsList(rawInitialFits);
 
     const prodPrice = product.price ?? product.priceNum ?? 150;
     const prodOrigPrice = product.originalPrice ?? '';
@@ -1024,9 +1034,7 @@ export function CmsProdutos() {
       ? formData.fits
       : ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
 
-    // Se houver modelagens específicas ativas, remove qualquer "Modelo Único"
-    const realFitsList = rawFits.filter(f => !isUnicoFit(f));
-    const chosenFits = realFitsList.length > 0 ? realFitsList : ['Modelo Único'];
+    const chosenFits = sanitizeFitsList(rawFits);
 
     // Consolidação rigorosa dos preços por modelagem
     const consolidatedFitPrices = {};
@@ -2302,8 +2310,8 @@ export function CmsProdutos() {
 
                   <div className={styles.fitChipsGrid}>
                     {allAvailableFitOptions.map((fitOption) => {
-                      const isSelected = (formData.fits || []).includes(fitOption);
-                      const isOfficial = OFFICIAL_THR33_FITS.includes(fitOption);
+                      const isSelected = (formData.fits || []).some(f => normalizeFitSlug(f) === normalizeFitSlug(fitOption));
+                      const isOfficial = OFFICIAL_THR33_FITS.some(f => normalizeFitSlug(f) === normalizeFitSlug(fitOption));
 
                       return (
                         <button

@@ -86,6 +86,64 @@ export const isUnicoFit = (raw) => {
 };
 
 /**
+ * Converte qualquer variação de modelagem (casing, legacy, slug) para o nome canônico oficial.
+ * Ex: 'oversized_heavy' -> 'Oversized Heavy'
+ *     'boxy' -> 'Boxy'
+ *     'oversized_classica' -> 'Oversized Clássica'
+ *     'oversized' (legado genérico) -> null (obsoleto, substituído por Heavy e Clássica)
+ */
+export const getCanonicalFitName = (rawFit) => {
+  if (!rawFit) return '';
+  const slug = normalizeFitSlug(rawFit);
+  if (slug === 'oversized_heavy') return 'Oversized Heavy';
+  if (slug === 'oversized_classica') return 'Oversized Clássica';
+  if (slug === 'boxy') return 'Boxy';
+  if (isUnicoFit(rawFit)) return 'Modelo Único';
+  if (slug === 'oversized') return null; // Legado descartado
+  return String(rawFit).trim();
+};
+
+/**
+ * Higieniza um array de modelagens (fits), eliminando:
+ * 1. Modelagens legadas obsoletas (como 'oversized' genérico)
+ * 2. Inconsistências de maiúsculas/minúsculas (ex: 'boxy' vira 'Boxy')
+ * 3. 'Modelo Único' se houver qualquer modelagem real selecionada
+ * 4. Duplicatas
+ */
+export const sanitizeFitsList = (rawFitsList) => {
+  if (!Array.isArray(rawFitsList) || rawFitsList.length === 0) {
+    return ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
+  }
+
+  const seenSlugs = new Set();
+  const canonicalList = [];
+
+  rawFitsList.forEach(item => {
+    const canonical = getCanonicalFitName(item);
+    if (!canonical) return; // descarta nulos (como 'oversized' legado)
+    if (isUnicoFit(canonical)) return; // Modelo Único é tratado após checar se há cortes reais
+    const slug = normalizeFitSlug(canonical);
+    if (!seenSlugs.has(slug)) {
+      seenSlugs.add(slug);
+      canonicalList.push(canonical);
+    }
+  });
+
+  if (canonicalList.length > 0) {
+    return canonicalList;
+  }
+
+  // Se o usuário explicitamente marcou apenas Modelo Único
+  const hasUnico = rawFitsList.some(f => isUnicoFit(f));
+  if (hasUnico) {
+    return ['Modelo Único'];
+  }
+
+  // Fallback padrão oficial
+  return ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
+};
+
+/**
  * Formata o rótulo visual da modelagem para exibição no catálogo (filtros, chips e breadcrumbs).
  */
 export const formatFitLabel = (fitKey) => {
