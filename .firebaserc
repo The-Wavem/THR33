@@ -3,6 +3,14 @@
     "default": "thr33-streetwear",
     "thr33": "thr33-streetwear"
   },
-  "targets": {},
+  "targets": {
+    "thr33-streetwear": {
+      "hosting": {
+        "thr33-site": [
+          "thr33-streetwear"
+        ]
+      }
+    }
+  },
   "etags": {}
 }

@@ -1,5 +1,6 @@
 {
   "hosting": {
+    "target": "thr33-site",
     "public": "dist",
     "ignore": [
       "firebase.json",
