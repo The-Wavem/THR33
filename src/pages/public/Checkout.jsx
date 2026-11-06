@@ -2467,25 +2467,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                       >
                         <div className={styles.methodContent}>
                           <CreditCard size={15} />
-                          <span><strong>Cartão de Crédito</strong> (em até 3x)</span>
+                          <span><strong>Cartão de Crédito</strong> (À vista ou até 3x)</span>
                         </div>
                         {paymentMethod === 'Cartão de Crédito' && <CheckCircle2 size={15} className={styles.methodCheck} />}
-                      </button>
-
-                      <button 
-                        type="button" 
-                        onClick={() => {
-                          setPaymentMethod('Cartão de Débito');
-                          setInstallments(1);
-                          if (paymentError) setPaymentError(null);
-                        }}
-                        className={`${styles.methodPillBtn} ${paymentMethod === 'Cartão de Débito' ? styles.activeMethodPill : ''}`}
-                      >
-                        <div className={styles.methodContent}>
-                          <CreditCard size={15} />
-                          <span><strong>Cartão de Débito</strong> (À vista)</span>
-                        </div>
-                        {paymentMethod === 'Cartão de Débito' && <CheckCircle2 size={15} className={styles.methodCheck} />}
                       </button>
                     </div>
 
@@ -2502,7 +2486,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
                         {/* NUMERO DO CARTAO COM DETECCAO DE BANDEIRA */}
                         <div className={styles.fieldGroup}>
-                          <label htmlFor="ccNumber">NÚMERO DO CARTÃO ({paymentMethod === 'Cartão de Débito' ? 'DÉBITO' : 'CRÉDITO'}) *</label>
+                          <label htmlFor="ccNumber">NÚMERO DO CARTÃO *</label>
                           <div className={styles.cardInputWrapper}>
                             <input
                               id="ccNumber"
@@ -2589,34 +2573,20 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                           </div>
                         </div>
 
-                        {/* CONDICAO DE PAGAMENTO: PARCELAMENTO (CREDITO) OU A VISTA (DEBITO) */}
-                        {paymentMethod === 'Cartão de Crédito' ? (
-                          <div className={styles.fieldGroup}>
-                            <label htmlFor="ccInstallments">PARCELAMENTO NO PAGBANK *</label>
-                            <select
-                              id="ccInstallments"
-                              value={installments}
-                              onChange={(e) => setInstallments(Number(e.target.value))}
-                              className={styles.styledSelect}
-                            >
-                              <option value={1}>1x de R$ {finalAmountToPay.toFixed(2)} (à vista sem juros)</option>
-                              <option value={2}>2x de R$ {(finalAmountToPay / 2).toFixed(2)} sem juros</option>
-                              <option value={3}>3x de R$ {(finalAmountToPay / 3).toFixed(2)} sem juros</option>
-                            </select>
-                          </div>
-                        ) : (
-                          <div className={styles.fieldGroup}>
-                            <label htmlFor="ccDebitCondition">MODALIDADE DE PAGAMENTO *</label>
-                            <input
-                              id="ccDebitCondition"
-                              type="text"
-                              readOnly
-                              value={`1x de R$ ${finalAmountToPay.toFixed(2)} (À vista — Débito em conta imediato)`}
-                              className={styles.styledInput}
-                              style={{ opacity: 0.9, cursor: 'default' }}
-                            />
-                          </div>
-                        )}
+                        {/* CONDICAO DE PAGAMENTO: PARCELAMENTO (CREDITO) */}
+                        <div className={styles.fieldGroup}>
+                          <label htmlFor="ccInstallments">PARCELAMENTO NO PAGBANK *</label>
+                          <select
+                            id="ccInstallments"
+                            value={installments}
+                            onChange={(e) => setInstallments(Number(e.target.value))}
+                            className={styles.styledSelect}
+                          >
+                            <option value={1}>1x de R$ {finalAmountToPay.toFixed(2)} (à vista sem juros)</option>
+                            <option value={2}>2x de R$ {(finalAmountToPay / 2).toFixed(2)} sem juros</option>
+                            <option value={3}>3x de R$ {(finalAmountToPay / 3).toFixed(2)} sem juros</option>
+                          </select>
+                        </div>
 
                         <div className={styles.securityFooterNotice}>
                           <ShieldCheck size={14} />
