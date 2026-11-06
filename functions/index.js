@@ -1467,7 +1467,7 @@ exports.createPagBankOrder = onCall(
     const orderPayload = {
       reference_id: referenceId,
       customer: {
-        name: customer.name || "Cliente THR33",
+        name: sanitizePagBankName(customer.name, paymentMethod?.holderName),
         email: customer.email || "cliente@thr33.com",
         tax_id: formattedTaxId,
         phones: [
@@ -1588,11 +1588,38 @@ exports.createPagBankOrder = onCall(
             );
           }
 
-          if (errorString.includes("buyer email must not be equals to merchant email") || errorString.includes("40002")) {
+          if (errorString.includes("buyer email must not be equals to merchant email")) {
             throw new HttpsError(
               "invalid-argument",
               "O PagBank não permite auto-compra com cartão (o comprador/titular do cartão não pode ser o mesmo titular ou dados cadastrados na conta PagBank da loja). Para testar compras com cartão em produção, utilize o cartão de outra pessoa ou realize o pagamento via PIX.",
             );
+          }
+
+          const errorMessages = error.response?.data?.error_messages;
+          if (Array.isArray(errorMessages) && errorMessages.length > 0) {
+            const mappedMessages = errorMessages.map((e) => {
+              const param = String(e.parameter_name || "").toLowerCase();
+              const desc = String(e.description || "").toLowerCase();
+
+              if (param.includes("customer.name") || param.includes("holder.name") || desc.includes("name")) {
+                return "O nome completo informado é inválido para o PagBank (não utilize números no nome e informe nome e sobrenome composto apenas por letras).";
+              }
+              if (param.includes("tax_id") || desc.includes("tax_id") || desc.includes("cpf") || desc.includes("cnpj")) {
+                return "O CPF/CNPJ informado não é válido junto ao PagBank ou à Receita Federal.";
+              }
+              if (param.includes("authentication_method") || desc.includes("authentication_method") || desc.includes("3ds")) {
+                return "O banco emissor exige autenticação de segurança 3DS para Cartão de Débito. Verifique se compras online no débito estão liberadas no app do seu banco ou tente Cartão de Crédito / PIX.";
+              }
+              if (param.includes("billing_address") || param.includes("shipping.address") || desc.includes("address") || desc.includes("complement")) {
+                return "O endereço possui campos inválidos ou em branco. Verifique os dados de entrega.";
+              }
+              if (param.includes("phones") || desc.includes("phone")) {
+                return "O telefone/WhatsApp informado é inválido. Preencha o DDD de 2 dígitos e o número de 8 ou 9 dígitos.";
+              }
+              return e.description || e.parameter_name || "Parâmetro inválido na transação";
+            });
+
+            throw new HttpsError("invalid-argument", mappedMessages.join(" | "));
           }
 
           throw new HttpsError("internal", errorString);
