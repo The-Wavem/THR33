@@ -3323,16 +3323,17 @@ exports.calculateShipping = onRequest(
         let invoiceValue = 0;
         const productsList = [];
 
-        // Base de seguro de carga: 50% do valor de venda da peça (conforme alinhamento de custos e margem)
-        // com piso mínimo de R$ 50,00 por peça para resguardar o custo de produção
-        const MIN_INSURANCE_PER_ITEM = 50;
+        // Opção B: Ajustar Peso Oficial (0.45kg) + Seguro Integral (R$ 150,00)
+        // Seguro de carga: 100% do valor da peça (com piso mínimo de R$ 150,00 por peça)
+        // Peso: 0.45kg por peça (eleva a cotação dos Correios protegendo a margem da loja)
+        const MIN_INSURANCE_PER_ITEM = 150;
 
         if (Array.isArray(items) && items.length > 0) {
           items.forEach((item, idx) => {
             const q = Math.max(1, Number(item.quantity) || 1);
             const itemPrice = Number(item.price || item.unitPrice || 0);
-            const halfPrice = itemPrice > 0 ? Number((itemPrice * 0.5).toFixed(2)) : 0;
-            const itemInsurance = Math.max(MIN_INSURANCE_PER_ITEM, halfPrice);
+            // 100% do valor da peça (com piso de R$ 150,00)
+            const itemInsurance = Math.max(MIN_INSURANCE_PER_ITEM, itemPrice);
 
             totalQty += q;
             invoiceValue += itemInsurance * q;
@@ -3342,7 +3343,7 @@ exports.calculateShipping = onRequest(
               width: 24,
               height: 3,
               length: 34,
-              weight: 0.35,
+              weight: 0.45,
               insurance_value: itemInsurance,
               quantity: q,
             });
@@ -3350,14 +3351,13 @@ exports.calculateShipping = onRequest(
         } else {
           totalQty = 1;
           const subtotalVal = Number(subtotal || 0);
-          const halfSubtotal = subtotalVal > 0 ? Number((subtotalVal * 0.5).toFixed(2)) : 0;
-          invoiceValue = Math.max(MIN_INSURANCE_PER_ITEM, halfSubtotal);
+          invoiceValue = Math.max(MIN_INSURANCE_PER_ITEM, subtotalVal);
           productsList.push({
             id: "default_item",
             width: 24,
             height: 3,
             length: 34,
-            weight: 0.35,
+            weight: 0.45,
             insurance_value: invoiceValue,
             quantity: 1,
           });
@@ -3367,7 +3367,7 @@ exports.calculateShipping = onRequest(
           invoiceValue = MIN_INSURANCE_PER_ITEM * totalQty;
         }
 
-        const totalWeight = Math.max(0.35, Number((0.35 * totalQty).toFixed(2)));
+        const totalWeight = Math.max(0.45, Number((0.45 * totalQty).toFixed(2)));
         const totalHeight = Math.min(100, Math.max(3, 3 * totalQty));
         const width = 24;
         const length = 34;

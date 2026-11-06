@@ -286,13 +286,13 @@ export const shippingService = {
       originAddress: SHIPPING_ORIGIN.address,
       package: {
         quantity: totalQty,
-        weightKg: Math.max(0.3, Number((0.30 * totalQty).toFixed(2))),
+        weightKg: Math.max(0.45, Number((0.45 * totalQty).toFixed(2))),
         dimensions: {
           height: Math.min(100, Math.max(3, 3 * totalQty)),
           width: 24,
           length: 34
         },
-        invoiceValue: Math.max(50 * totalQty, Number(((Number(subtotal) || 0) * 0.5).toFixed(2)))
+        invoiceValue: Math.max(150 * totalQty, Number(subtotal || 150 * totalQty))
       },
       source: 'fallback_matriz_sp',
       options: fallbackOptions
