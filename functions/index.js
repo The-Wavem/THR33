@@ -90,6 +90,39 @@ function getFrenetToken() {
 }
 
 /**
+ * Sanitiza o nome para atender as regras estritas da API PagBank:
+ * - Proibido conter digitos numericos (ex: 'Thr33' e rejeitado com 400)
+ * - Exige nome e sobrenome (minimo 2 palavras)
+ * - Apenas letras e espacos
+ */
+function sanitizePagBankName(rawName, fallbackHolder = "") {
+  const clean = String(rawName || "")
+    .replace(/[0-9]/g, "")
+    .replace(/[^a-zA-Z\u00C0-\u00FF\s]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const parts = clean.split(" ").filter((p) => p.length >= 2);
+  if (parts.length >= 2) {
+    return parts.slice(0, 4).join(" ").toUpperCase();
+  }
+
+  if (fallbackHolder) {
+    const cleanFallback = String(fallbackHolder)
+      .replace(/[0-9]/g, "")
+      .replace(/[^a-zA-Z\u00C0-\u00FF\s]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const fallbackParts = cleanFallback.split(" ").filter((p) => p.length >= 2);
+    if (fallbackParts.length >= 2) {
+      return fallbackParts.slice(0, 4).join(" ").toUpperCase();
+    }
+  }
+
+  return "CLIENTE OFICIAL";
+}
+
+/**
  * 1. Endpoint para gerar/obter a Public Key RSA
  * O front-end precisa dessa chave para criptografar os dados do cartao do cliente antes do envio (PCI-Free).
  */
@@ -1357,11 +1390,10 @@ exports.createPagBankOrder = onCall(
                 store: false,
               },
               holder: {
-                name: (
-                  paymentMethod.holderName ||
-                  customer.name ||
-                  "CLIENTE THR33"
-                ).toUpperCase(),
+                name: sanitizePagBankName(
+                  paymentMethod.holderName || customer.name,
+                  paymentMethod.holderName
+                ),
                 tax_id: formattedTaxId,
               },
               ...(paymentMethod.authenticationId
@@ -1383,11 +1415,10 @@ exports.createPagBankOrder = onCall(
                 store: false,
               },
               holder: {
-                name: (
-                  paymentMethod.holderName ||
-                  customer.name ||
-                  "CLIENTE THR33"
-                ).toUpperCase(),
+                name: sanitizePagBankName(
+                  paymentMethod.holderName || customer.name,
+                  paymentMethod.holderName
+                ),
                 tax_id: formattedTaxId,
               },
             },
@@ -1560,7 +1591,7 @@ exports.createPagBankOrder = onCall(
           if (errorString.includes("buyer email must not be equals to merchant email") || errorString.includes("40002")) {
             throw new HttpsError(
               "invalid-argument",
-              "O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista (contato.thewavem@gmail.com). Para testar compras ou realizar pedidos, informe um e-mail diferente.",
+              "O PagBank não permite auto-compra com cartão (o comprador/titular do cartão não pode ser o mesmo titular ou dados cadastrados na conta PagBank da loja). Para testar compras com cartão em produção, utilize o cartão de outra pessoa ou realize o pagamento via PIX.",
             );
           }
 
