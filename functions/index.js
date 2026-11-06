@@ -3633,6 +3633,124 @@ exports.configureStorageCors = onCall({ region: FUNCTION_REGION }, async (reques
 });
 
 /**
+ * Faxina no Firebase Storage: Remove pastas e arquivos de produtos
+ * que já foram excluídos do Firestore (lixo antigo e arquivos órfãos).
+ */
+exports.cleanupOrphanedStorage = onCall(
+  {
+    region: FUNCTION_REGION,
+    cors: true,
+    timeoutSeconds: 300,
+    memory: "512MiB",
+  },
+  async (request) => {
+    // Permite apenas administradores autenticados
+    if (!request.auth) {
+      throw new HttpsError(
+        "unauthenticated",
+        "Apenas usuários administradores autenticados podem executar a limpeza do Storage."
+      );
+    }
+
+    try {
+      const db = getDb();
+      const bucket = admin.storage().bucket();
+
+      // 1. Coleta todos os slugs e IDs de produtos ativos no Firestore
+      const productsSnap = await db.collection("products").get();
+      const activeSlugs = new Set();
+      const activeIds = new Set();
+      const referencedUrls = new Set();
+
+      productsSnap.forEach((docSnap) => {
+        const data = docSnap.data() || {};
+        activeIds.add(docSnap.id.toLowerCase());
+        if (data.slug) {
+          activeSlugs.add(String(data.slug).toLowerCase().trim());
+        }
+        if (data.id) {
+          activeSlugs.add(String(data.id).toLowerCase().trim());
+        }
+
+        // Imagens do array
+        if (Array.isArray(data.images)) {
+          data.images.forEach((img) => {
+            const u = typeof img === "string" ? img : img?.url;
+            if (u) referencedUrls.add(u);
+          });
+        }
+        if (data.image) referencedUrls.add(data.image);
+        if (Array.isArray(data.colors)) {
+          data.colors.forEach((c) => {
+            if (c.image) referencedUrls.add(c.image);
+          });
+        }
+      });
+
+      logger.info(
+        `[cleanupOrphanedStorage] ${activeSlugs.size} slugs ativos e ${productsSnap.size} docs no Firestore. Escaneando bucket...`
+      );
+
+      // 2. Lista todos os arquivos da pasta products/
+      const [files] = await bucket.getFiles({ prefix: "products/" });
+      const orphanedFolders = new Set();
+      const orphanedFiles = [];
+
+      for (const file of files) {
+        // Exemplo: "products/camisa-1/1793..._foto.jpg"
+        const parts = file.name.split("/").filter(Boolean);
+        if (parts.length >= 2) {
+          const folderName = parts[1].toLowerCase().trim();
+          // Se a pasta não pertence a nenhum produto ativo (nem slug, nem id)
+          if (!activeSlugs.has(folderName) && !activeIds.has(folderName)) {
+            orphanedFolders.add(parts[1]);
+            orphanedFiles.push(file);
+          }
+        }
+      }
+
+      logger.info(
+        `[cleanupOrphanedStorage] Encontrados ${orphanedFiles.length} arquivos em ${orphanedFolders.size} pastas órfãs.`
+      );
+
+      // 3. Deleta os arquivos órfãos em lotes
+      let deletedCount = 0;
+      const CHUNK_SIZE = 40;
+      for (let i = 0; i < orphanedFiles.length; i += CHUNK_SIZE) {
+        const chunk = orphanedFiles.slice(i, i + CHUNK_SIZE);
+        await Promise.all(
+          chunk.map(async (file) => {
+            try {
+              await file.delete();
+              deletedCount++;
+            } catch (delErr) {
+              logger.warn(`Aviso ao excluir arquivo órfão ${file.name}:`, delErr.message);
+            }
+          })
+        );
+      }
+
+      const deletedFoldersList = Array.from(orphanedFolders);
+      const activeFoldersList = Array.from(activeSlugs);
+
+      return {
+        success: true,
+        deletedCount,
+        deletedFolders: deletedFoldersList,
+        activeFoldersCount: activeFoldersList.length,
+        message:
+          deletedCount > 0
+            ? `Faxina concluída com sucesso! ${deletedCount} arquivo(s) em ${deletedFoldersList.length} pasta(s) órfã(s) foram excluídos do Storage.`
+            : "O Storage já está 100% limpo! Não foram encontradas pastas órfãs de produtos excluídos.",
+      };
+    } catch (err) {
+      logger.error("Erro ao executar cleanupOrphanedStorage:", err);
+      throw new HttpsError("internal", `Falha na limpeza do Storage: ${err.message}`);
+    }
+  }
+);
+
+/**
  * Cloud Function HTTP: Gera Sitemap XML Dinâmico da THR33 Streetwear
  * Consulta produtos e páginas públicas do Firestore com tags <image:image>
  */

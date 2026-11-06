@@ -25,6 +25,47 @@
   margin-top: 0.3rem;
 }
 
+.headerActions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.cleanupStorageBtn {
+  background-color: transparent;
+  color: #ff5555;
+  border: 1px solid rgba(255, 85, 85, 0.3);
+  padding: 0.85rem 1.2rem;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  transition: all var(--transition-fast);
+}
+
+.cleanupStorageBtn:hover:not(:disabled) {
+  background-color: rgba(255, 85, 85, 0.1);
+  border-color: #ff5555;
+  color: #ff6666;
+}
+
+.cleanupStorageBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.spinIcon {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .createBtn {
   background-color: var(--text-primary);
   color: var(--bg-primary);

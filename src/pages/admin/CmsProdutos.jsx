@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, getDocs, doc, setDoc, deleteDoc, writeBatch } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL, deleteObject, listAll } from 'firebase/storage';
+import { httpsCallable } from 'firebase/functions';
 import { 
   Plus, 
   Search, 
@@ -30,9 +31,10 @@ import {
   ChevronRight,
   Link as LinkIcon,
   Infinity as InfinityIcon,
-  Gift
+  Gift,
+  Sparkles
 } from 'lucide-react';
-import { db, storage } from '../../services/firebaseConfig';
+import { db, storage, functions } from '../../services/firebaseConfig';
 import { catalogService, invalidateCatalogCache } from '../../services/catalogService';
 import { InfoTooltip } from '../../components/ui/InfoTooltip';
 import { normalizeFitSlug, formatFitLabel, isUnicoFit, sanitizeFitsList, getCanonicalFitName } from '../../utils/fitUtils';
@@ -165,6 +167,8 @@ export function CmsProdutos() {
   const [urlInput, setUrlInput] = useState('');
   const [showUrlInput, setShowUrlInput] = useState(false);
   const [storageWarning, setStorageWarning] = useState('');
+  const [removedImageUrls, setRemovedImageUrls] = useState([]);
+  const [isCleaningStorage, setIsCleaningStorage] = useState(false);
 
   // Gestão de Cores Inline
 
@@ -611,6 +615,7 @@ export function CmsProdutos() {
       }
     });
     setImagesList([]);
+    setRemovedImageUrls([]);
     setNewColorName('');
     setNewColorHex('#000000');
     setActiveColorStockTab('preto');
@@ -722,6 +727,7 @@ export function CmsProdutos() {
     });
 
     setImagesList(initialImages);
+    setRemovedImageUrls([]);
     setNewColorName('');
     setNewColorHex('#000000');
     setActiveColorStockTab(initialColors[0]?.id || 'preto');
@@ -890,6 +896,10 @@ export function CmsProdutos() {
 
   const handleRemoveImage = (index) => {
     setImagesList(prev => {
+      const imgToRemove = prev[index];
+      if (imgToRemove && imgToRemove.url && imgToRemove.url.includes('firebasestorage.googleapis.com')) {
+        setRemovedImageUrls(curr => [...curr, imgToRemove.url]);
+      }
       const updated = prev.filter((_, i) => i !== index);
       if (updated.length > 0 && !updated.some(img => img.isCover)) {
         updated[0].isCover = true;
@@ -1167,6 +1177,20 @@ export function CmsProdutos() {
     try {
       await setDoc(doc(db, 'products', productId), productPayload, { merge: true });
       invalidateCatalogCache('products');
+
+      // Se houver imagens removidas durante a edição, apaga do Storage
+      if (removedImageUrls.length > 0) {
+        for (const url of removedImageUrls) {
+          try {
+            const fileRef = ref(storage, url);
+            await deleteObject(fileRef);
+          } catch (e) {
+            console.warn("Aviso ao apagar imagem removida do Storage:", e.message);
+          }
+        }
+        setRemovedImageUrls([]);
+      }
+
       await fetchProducts(true);
       setIsFormOpen(false);
     } catch (err) {
@@ -1185,13 +1209,56 @@ export function CmsProdutos() {
   };
 
   const handleDeleteProduct = async (productId) => {
-    if (!window.confirm("Deseja realmente remover este produto do catálogo?")) return;
+    const prod = products.find(p => p.id === productId);
+    const prodName = prod?.name || "este produto";
+    if (!window.confirm(`Deseja realmente remover permanentemente "${prodName}"?\n\nTodas as fotos deste produto também serão excluídas do Firebase Storage.`)) return;
+
     try {
+      // 1. Tenta limpar pasta no Storage diretamente no cliente (feedback instantâneo)
+      const folderToDelete = prod?.slug || prod?.id || productId;
+      if (folderToDelete) {
+        try {
+          const folderRef = ref(storage, `products/${folderToDelete}`);
+          const res = await listAll(folderRef);
+          await Promise.all(res.items.map(item => deleteObject(item)));
+        } catch (storageErr) {
+          console.warn("Aviso ao limpar pasta no Storage via cliente:", storageErr);
+        }
+      }
+
+      // 2. Apaga do Firestore (o trigger onProductDeleted no backend também garante a limpeza)
       await deleteDoc(doc(db, 'products', productId));
+      invalidateCatalogCache('products');
       setProducts(prev => prev.filter(p => p.id !== productId));
     } catch (err) {
       console.warn("Erro ao excluir do Firestore, atualizando localmente:", err.message);
       setProducts(prev => prev.filter(p => p.id !== productId));
+    }
+  };
+
+  // Faxina manual no Firebase Storage: Remove pastas órfãs de produtos excluídos
+  const handleCleanupStorage = async () => {
+    if (!window.confirm("Deseja realizar a Faxina no Firebase Storage?\n\nIsso irá escanear o banco de imagens e excluir permanentemente pastas e fotos de produtos que já foram excluídos do catálogo.\n\nTodas as fotos dos produtos ativos serão preservadas.")) return;
+
+    setIsCleaningStorage(true);
+    try {
+      const cleanupFn = httpsCallable(functions, 'cleanupOrphanedStorage');
+      const res = await cleanupFn();
+      const data = res?.data || {};
+
+      if (data.deletedCount > 0) {
+        const foldersList = data.deletedFolders || [];
+        const preview = foldersList.slice(0, 5).join(', ');
+        const extra = foldersList.length > 5 ? ` e mais ${foldersList.length - 5} pasta(s)` : '';
+        alert(`✅ Faxina concluída com sucesso!\n\n${data.deletedCount} arquivo(s) em ${foldersList.length} pasta(s) órfã(s) foram excluídos permanentemente do Storage.\n\nPastas limpas: ${preview}${extra}`);
+      } else {
+        alert("✨ Seu Storage já está 100% limpo! Nenhuma imagem órfã foi encontrada.");
+      }
+    } catch (err) {
+      console.error("Erro na faxina do Storage:", err);
+      alert(`Erro ao executar faxina no Storage: ${err.message || 'Verifique sua conexão ou permissões.'}`);
+    } finally {
+      setIsCleaningStorage(false);
     }
   };
 
@@ -1563,10 +1630,22 @@ export function CmsProdutos() {
           <span className={styles.breadcrumb}>CMS / CATÁLOGO & ESTOQUE</span>
           <h1 className={styles.title}>GESTÃO DE PRODUTOS & SKUS</h1>
         </div>
-        <button onClick={handleOpenCreate} className={styles.createBtn}>
-          <Plus size={16} />
-          <span>ADICIONAR NOVO ITEM</span>
-        </button>
+        <div className={styles.headerActions}>
+          <button 
+            type="button" 
+            onClick={handleCleanupStorage} 
+            disabled={isCleaningStorage}
+            className={styles.cleanupStorageBtn}
+            title="Escanear e remover imagens de produtos excluídos do Firebase Storage"
+          >
+            {isCleaningStorage ? <RotateCw size={14} className={styles.spinIcon} /> : <Trash2 size={14} />}
+            <span>{isCleaningStorage ? 'FAZENDO FAXINA...' : 'FAXINA NO STORAGE'}</span>
+          </button>
+          <button onClick={handleOpenCreate} className={styles.createBtn}>
+            <Plus size={16} />
+            <span>ADICIONAR NOVO ITEM</span>
+          </button>
+        </div>
       </header>
 
       {/* BARRA DE CONTROLE & BUSCA */}
