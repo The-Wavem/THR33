@@ -1537,7 +1537,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       pagbankRes?.qrCode?.text ||
       pagbankRes?.data?.qr_codes?.[0]?.text ||
       pagbankRes?.data?.charges?.[0]?.qr_code?.text ||
-      "00020101021226850014br.gov.bcb.pix2563api-h.pagseguro.com/pix/v2/mock-thr335204899953039865802BR5921Pagseguro Internet SA6009SAO PAULO62070503***63045677"
+      createdOrderData?.pixCopiaECola ||
+      ''
     );
   };
 
