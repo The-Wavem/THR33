@@ -1,8 +1,8 @@
 .newsletterSection {
   width: 100%;
-  background-color: #121110;
-  border-top: 1px solid rgba(255, 255, 255, 0.15);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+  background-color: var(--bg-primary, #0a0a0a);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
   padding: 3.5rem 2rem;
   font-family: 'Space Mono', monospace;
   color: #FFFFFF;
@@ -25,6 +25,34 @@
   gap: 0.35rem;
 }
 
+.vipBadge {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+}
+
+.feedbackSuccess {
+  display: block;
+  margin-top: 0.65rem;
+  padding-left: 0.65rem;
+  border-left: 2px solid #FFFFFF;
+  font-size: 0.75rem;
+  color: #FFFFFF;
+  letter-spacing: 0.02em;
+}
+
+.feedbackError {
+  display: block;
+  margin-top: 0.65rem;
+  padding-left: 0.65rem;
+  border-left: 2px solid #f87171;
+  font-size: 0.75rem;
+  color: #f87171;
+  letter-spacing: 0.02em;
+}
+
 .title {
   font-family: 'Arial Black', sans-serif;
   font-size: 1.75rem;
@@ -35,7 +63,7 @@
 
 .subtitle {
   font-size: 0.875rem;
-  color: #CCCCCC;
+  color: #A3A3A3;
   letter-spacing: 0.02em;
 }
 
@@ -54,23 +82,24 @@
 
 .emailInput {
   flex: 1;
-  background-color: #161514;
-  border: 1px solid rgba(255, 255, 255, 0.4);
+  background-color: #0d0d0d;
+  border: 1px solid rgba(255, 255, 255, 0.25);
   border-right: none;
   color: #FFFFFF;
   padding: 1rem 1.25rem;
   font-family: 'Space Mono', monospace;
   font-size: 0.8125rem;
   outline: none;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 .emailInput::placeholder {
-  color: #888888;
+  color: #737373;
 }
 
 .emailInput:focus {
   border-color: #FFFFFF;
+  background-color: #121212;
 }
 
 .btnSubmit {
@@ -84,13 +113,18 @@
   text-transform: uppercase;
   cursor: pointer;
   white-space: nowrap;
-  transition: all 0.15s ease;
+  transition: all 0.18s ease;
 }
 
-.btnSubmit:hover {
-  background-color: #E2FF00;
-  border-color: #E2FF00;
-  color: #000000;
+.btnSubmit:hover:not(:disabled) {
+  background-color: #000000;
+  border-color: #FFFFFF;
+  color: #FFFFFF;
+}
+
+.btnSubmit:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 @media (max-width: 768px) {
@@ -115,7 +149,7 @@
   }
 
   .emailInput {
-    border-right: 1px solid rgba(255, 255, 255, 0.4);
+    border-right: 1px solid rgba(255, 255, 255, 0.25);
   }
 
   .btnSubmit {

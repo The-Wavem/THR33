@@ -2,6 +2,8 @@
   max-width: 1280px;
   margin: 5rem auto;
   padding: 0 1.5rem;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .header {
@@ -27,8 +29,18 @@
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 1.5rem;
+  grid-auto-flow: dense;
+  width: 100%;
+}
+
+.gridThree {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.gridSingle {
+  grid-template-columns: 1fr;
 }
 
 .card {
@@ -37,10 +49,37 @@
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   overflow: hidden;
+  transform: translateZ(0);
 }
 
 .cardLarge {
   grid-column: span 2;
+}
+
+.skeletonCard {
+  background-color: #0a0a0a;
+}
+
+.shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    110deg,
+    #0a0a0a 25%,
+    #161616 50%,
+    #0a0a0a 75%
+  );
+  background-size: 200% 100%;
+  animation: bentoShimmer 1.6s infinite linear;
+}
+
+@keyframes bentoShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .cardImage {
@@ -73,8 +112,19 @@
   letter-spacing: 1px;
 }
 
+.photoCreditInline {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  margin-top: 0.25rem;
+}
+
 .lowOpacityBtn {
-  background-color: rgba(255, 255, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.18);
   border: 1px solid rgba(255, 255, 255, 0.3);
   color: var(--text-primary);
   padding: 0.5rem 1rem;
@@ -82,7 +132,6 @@
   font-weight: 700;
   letter-spacing: 1.5px;
   text-transform: uppercase;
-  backdrop-filter: blur(6px);
   transition: background-color var(--transition-fast), border-color var(--transition-fast);
 }
 
@@ -92,10 +141,32 @@
 }
 
 @media (max-width: 900px) {
-  .grid {
+  .grid,
+  .gridThree,
+  .gridSingle {
     grid-template-columns: 1fr;
+    gap: 1rem;
   }
   .cardLarge {
     grid-column: span 1;
+  }
+  .card {
+    height: 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .section {
+    margin: 3rem auto;
+    padding: 0 0.85rem;
+  }
+  .header {
+    margin-bottom: 1.5rem;
+  }
+  .card {
+    height: 260px;
+  }
+  .cardCaption {
+    font-size: 0.95rem;
   }
 }

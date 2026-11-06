@@ -1,0 +1,332 @@
+================================================================================
+LOGS DE TESTES REAIS EM SANDBOX - THR33 STREETWEAR
+API DE PEDIDOS E PAGAMENTOS (PAGBANK ORDERS v2 - COMPLIANCE PCI-DSS)
+================================================================================
+Chamado: 1454966682
+Data da Execucao: 02/10/2026 as 15:51 (Horario de Brasilia)
+Titular / Loja: Eduardo Ian Bender Ferreira (67.662.871 EDUARDO IAN) / THR33 Streetwear
+Ambiente: https://sandbox.api.pagseguro.com/orders
+Notificacao Webhook: https://southamerica-east1-thr33-streetwear.cloudfunctions.net/pagbankWebhook
+
+================================================================================
+1. MEIO DE PAGAMENTO: PIX (API ORDERS v2 - QR CODE DINAMICO)
+================================================================================
+
+Request
+
+{
+    "reference_id": "THR-TESTE-PIX-1790957244",
+    "customer": {
+        "name": "Jose da Silva",
+        "email": "jose.silva@teste.com",
+        "tax_id": "12345678909",
+        "phones": [
+            {
+                "country": "55",
+                "area": "11",
+                "number": "999999999",
+                "type": "MOBILE"
+            }
+        ]
+    },
+    "items": [
+        {
+            "reference_id": "camisa-thr33-oversized",
+            "name": "Camiseta THR33 Streetwear Oversized",
+            "quantity": 1,
+            "unit_amount": 18990
+        }
+    ],
+    "shipping": {
+        "address": {
+            "street": "Avenida Brigadeiro Faria Lima",
+            "number": "1384",
+            "complement": "apto 12",
+            "locality": "Pinheiros",
+            "city": "Sao Paulo",
+            "region_code": "SP",
+            "country": "BRA",
+            "postal_code": "01452002"
+        }
+    },
+    "charges": [
+        {
+            "reference_id": "CHAR_PIX_1790957244",
+            "description": "Pedido THR33 Streetwear PIX",
+            "amount": {
+                "value": 18990,
+                "currency": "BRL"
+            },
+            "payment_method": {
+                "type": "PIX",
+                "pix": {
+                    "expiration_date": "2026-10-02T16:37:24Z"
+                }
+            }
+        }
+    ],
+    "notification_urls": [
+        "https://southamerica-east1-thr33-streetwear.cloudfunctions.net/pagbankWebhook"
+    ]
+}
+
+
+Response
+
+{
+    "id": "ORDE_9EA200BA-029C-4CD7-AF92-D03DAB935398",
+    "reference_id": "THR-TESTE-PIX-1790957244",
+    "created_at": "2026-10-02T13:07:25.785-03:00",
+    "customer": {
+        "name": "Jose da Silva",
+        "email": "jose.silva@teste.com",
+        "tax_id": "12345678909",
+        "phones": [
+            {
+                "type": "MOBILE",
+                "country": "55",
+                "area": "11",
+                "number": "999999999"
+            }
+        ]
+    },
+    "items": [
+        {
+            "reference_id": "camisa-thr33-oversized",
+            "name": "Camiseta THR33 Streetwear Oversized",
+            "quantity": 1,
+            "unit_amount": 18990
+        }
+    ],
+    "shipping": {
+        "address": {
+            "street": "Avenida Brigadeiro Faria Lima",
+            "number": "1384",
+            "complement": "apto 12",
+            "locality": "Pinheiros",
+            "city": "Sao Paulo",
+            "region_code": "SP",
+            "country": "BRA",
+            "postal_code": "01452002"
+        }
+    },
+    "charges": [
+        {
+            "id": "CHAR_6E2FAE77-8D61-4C8D-AC35-4400E0465FAB",
+            "reference_id": "CHAR_PIX_1790957244",
+            "status": "WAITING",
+            "created_at": "2026-10-02T13:07:26.887-03:00",
+            "description": "Pedido THR33 Streetwear PIX",
+            "amount": {
+                "value": 18990,
+                "currency": "BRL",
+                "summary": {
+                    "total": 18990,
+                    "paid": 0,
+                    "refunded": 0
+                }
+            },
+            "payment_response": {
+                "code": "20000",
+                "message": "SUCESSO"
+            },
+            "payment_method": {
+                "type": "PIX",
+                "pix": {
+                    "expiration_date": "2026-10-02T16:37:24Z",
+                    "txid": "20261002130728627114948403460652"
+                }
+            },
+            "qr_code": {
+                "id": "QRCO_A20A9F17-20B8-4C1E-A5B8-6B5D75AA85FD",
+                "text": "00020101021226850014br.gov.bcb.pix2563api-h.pagseguro.com/pix/v2/A20A9F17-20B8-4C1E-A5B8-6B5D75AA85FD5204531153039865802BR592267.662.871 EDUARDO IAN6008Curitiba62070503***6304CBEE"
+            }
+        }
+    ],
+    "notification_urls": [
+        "https://southamerica-east1-thr33-streetwear.cloudfunctions.net/pagbankWebhook"
+    ]
+}
+
+
+================================================================================
+2. MEIO DE PAGAMENTO: CARTAO DE CREDITO (API ORDERS v2 - CRIPTOGRAFADO / PCI-DSS)
+================================================================================
+
+Request
+
+{
+    "reference_id": "THR-ENC-CARD-1790967090",
+    "customer": {
+        "name": "Jose da Silva",
+        "email": "jose.silva@teste.com",
+        "tax_id": "12345678909",
+        "phones": [
+            {
+                "country": "55",
+                "area": "11",
+                "number": "999999999",
+                "type": "MOBILE"
+            }
+        ]
+    },
+    "items": [
+        {
+            "reference_id": "moletom-thr33",
+            "name": "Moletom THR33 Heavyweight",
+            "quantity": 1,
+            "unit_amount": 29990
+        }
+    ],
+    "shipping": {
+        "address": {
+            "street": "Avenida Brigadeiro Faria Lima",
+            "number": "1384",
+            "complement": "apto 12",
+            "locality": "Pinheiros",
+            "city": "Sao Paulo",
+            "region_code": "SP",
+            "country": "BRA",
+            "postal_code": "01452002"
+        }
+    },
+    "notification_urls": [
+        "https://southamerica-east1-thr33-streetwear.cloudfunctions.net/pagbankWebhook"
+    ],
+    "charges": [
+        {
+            "reference_id": "CHAR_THR-ENC-CARD-1790967090",
+            "description": "Pedido THR33 Cartao Criptografado",
+            "amount": {
+                "value": 29990,
+                "currency": "BRL"
+            },
+            "payment_method": {
+                "type": "CREDIT_CARD",
+                "installments": 1,
+                "capture": true,
+                "card": {
+                    "encrypted": "jPfQHSIlhTRmQ4vamct4jTPlz3j3mWeYpOYo6srV2K1RSHqBcV0KkRZahWKEYpsiKjwjF0aZr2Ub8VA7guGawACzKgUnkfJPxtF659mSRr9ZkiD987I4wIe32/6X7JCecd9V55BLbYpY8Wja/Wv5IbT75DjACpTS0ZykrxKVgdX9BeQg00OuiBxfhY3RB2zvTjvhUxropi4O6fkX2bSs3gPXE5j+/TDHgOItY8NbcA2iK+bF4S+p2T48VAyITroQ2yyuztFHfO9EPnWVQYk2I4jX87RPHdA2oobgd5VA2Z3CusilJvn33xrolIFrTztVMqSwgdlsgxHV2sWGH5ou9w==",
+                    "store": false
+                },
+                "holder": {
+                    "name": "Jose da Silva",
+                    "tax_id": "12345678909"
+                }
+            }
+        }
+    ]
+}
+
+
+Response
+
+{
+    "id": "ORDE_742B3C9C-8CFB-4965-B11B-D2A8E3AFFAE3",
+    "reference_id": "THR-ENC-CARD-1790967090",
+    "created_at": "2026-10-02T15:51:31.801-03:00",
+    "customer": {
+        "name": "Jose da Silva",
+        "email": "jose.silva@teste.com",
+        "tax_id": "12345678909",
+        "phones": [
+            {
+                "type": "MOBILE",
+                "country": "55",
+                "area": "11",
+                "number": "999999999"
+            }
+        ]
+    },
+    "items": [
+        {
+            "reference_id": "moletom-thr33",
+            "name": "Moletom THR33 Heavyweight",
+            "quantity": 1,
+            "unit_amount": 29990
+        }
+    ],
+    "shipping": {
+        "address": {
+            "street": "Avenida Brigadeiro Faria Lima",
+            "number": "1384",
+            "complement": "apto 12",
+            "locality": "Pinheiros",
+            "city": "Sao Paulo",
+            "region_code": "SP",
+            "country": "BRA",
+            "postal_code": "01452002"
+        }
+    },
+    "charges": [
+        {
+            "id": "CHAR_E649E116-B53B-499F-8F45-9FDE07CFAA1E",
+            "reference_id": "CHAR_THR-ENC-CARD-1790967090",
+            "status": "PAID",
+            "created_at": "2026-10-02T15:51:32.488-03:00",
+            "paid_at": "2026-10-02T15:51:35.000-03:00",
+            "description": "Pedido THR33 Cartao Criptografado",
+            "amount": {
+                "value": 29990,
+                "currency": "BRL",
+                "summary": {
+                    "total": 29990,
+                    "paid": 29990,
+                    "refunded": 0
+                }
+            },
+            "payment_response": {
+                "code": "20000",
+                "message": "SUCESSO",
+                "reference": "032416400102",
+                "raw_data": {
+                    "authorization_code": "145803",
+                    "nsu": "032416400102",
+                    "reason_code": "00"
+                }
+            },
+            "payment_method": {
+                "type": "CREDIT_CARD",
+                "installments": 1,
+                "capture": true,
+                "card": {
+                    "brand": "mastercard",
+                    "first_digits": "524008",
+                    "last_digits": "2454",
+                    "exp_month": "12",
+                    "exp_year": "2028",
+                    "holder": {
+                        "name": "Jose da Silva"
+                    },
+                    "store": false,
+                    "issuer": {
+                        "name": "SYNCHRONY BANK",
+                        "product": "Platinum Mastercard Card"
+                    },
+                    "country": "USA"
+                },
+                "soft_descriptor": "67662871eduardo"
+            },
+            "metadata": {
+                "ps_order_id": "ORDE_742B3C9C-8CFB-4965-B11B-D2A8E3AFFAE3"
+            },
+            "links": [
+                {
+                    "rel": "SELF",
+                    "href": "https://sandbox.api.pagseguro.com/charges/CHAR_E649E116-B53B-499F-8F45-9FDE07CFAA1E",
+                    "media": "application/json",
+                    "type": "GET"
+                },
+                {
+                    "rel": "CHARGE.CANCEL",
+                    "href": "https://sandbox.api.pagseguro.com/charges/CHAR_E649E116-B53B-499F-8F45-9FDE07CFAA1E/cancel",
+                    "media": "application/json",
+                    "type": "POST"
+                }
+            ]
+        }
+    ],
+    "notification_urls": [
+        "https://southamerica-east1-thr33-streetwear.cloudfunctions.net/pagbankWebhook"
+    ]
+}

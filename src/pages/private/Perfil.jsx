@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  User, 
+  User,
+  Mail, 
   MapPin, 
   Package, 
   AlertTriangle, 
@@ -31,9 +32,21 @@ import {
   HelpCircle as QuestionIcon,
   MessageSquareWarning,
   Send,
-  ShieldCheck
+  ShieldCheck,
+  Headphones,
+  FileText,
+  QrCode,
+  Gift,
+  Zap,
+  Sparkles,
+  ShoppingBag,
+  Share2
 } from 'lucide-react';
+import { giftCardService, refundOrderWalletIfNeeded } from '../../services/giftCardService';
 import { useAuth } from '../../context/AuthContext';
+import { useCart } from '../../context/CartContext';
+import { couponService } from '../../services/couponService';
+import { newsletterService } from '../../services/newsletterService';
 import { 
   maskCPF, 
   maskPhone, 
@@ -44,22 +57,253 @@ import {
   validatePasswordStrength 
 } from '../../utils/validators';
 import { fetchAddressByCep } from '../../services/viaCepService';
-import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { db } from '../../services/firebaseConfig';
+import { resolveCarrierAndService } from '../../utils/carrierUtils';
+import { supportService } from '../../services/supportService';
+import { reviewService } from '../../services/reviewService';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../../services/firebaseConfig';
+import { 
+  ORDER_STATUSES, 
+  ORDER_TIMELINE_STEPS, 
+  normalizeOrderStatus, 
+  getOrderStatusMeta 
+} from '../../services/orderStateMachine';
+import { SEO } from '../../components/common/SEO';
 import styles from './Perfil.module.css';
 
-// ETAPAS DO PEDIDO
-const ORDER_STEPS = [
-  { key: 'waiting_payment', label: 'Aguardando Pagamento' },
-  { key: 'payment_approved', label: 'Pagamento Aprovado' },
-  { key: 'preparing', label: 'Preparando Envio (Ateliê)' },
-  { key: 'in_transit', label: 'Despachado / Em Trânsito' },
-  { key: 'delivered', label: 'Entregue' }
-];
+const parseItemPrice = (item) => {
+  if (!item) return 0;
+  if (typeof item.price === 'number' && !isNaN(item.price)) {
+    return item.price;
+  }
+  if (typeof item.unitPrice === 'number' && !isNaN(item.unitPrice)) {
+    return item.unitPrice;
+  }
+  if (typeof item.unit_amount === 'number' && !isNaN(item.unit_amount)) {
+    // PagBank armazena unit_amount sempre em centavos (ex: 100 centavos = R$ 1,00)
+    return item.unit_amount / 100;
+  }
+  if (typeof item.total_amount === 'number' && !isNaN(item.total_amount)) {
+    const qty = Number(item.quantity) || 1;
+    return (item.total_amount / 100) / qty;
+  }
+  return 0;
+};
+
+// ============================================================
+// COMPONENTE ISOLADO DE AVALIAÇÃO DE PRODUTO
+// Mantém estado interno próprio para garantir digitação 100% fluida
+// sem disparar renderizações de toda a árvore do Perfil em cada tecla.
+// ============================================================
+const ReviewModal = React.memo(function ReviewModal({ item, onClose, onReviewSuccess, user }) {
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [reviewSuccessModal, setReviewSuccessModal] = useState(false);
+  const [reviewErrorMessage, setReviewErrorMessage] = useState(null);
+
+  const handleSubmitReview = async (e) => {
+    e.preventDefault();
+    if (!item || submittingReview) return;
+
+    if (!reviewComment.trim()) {
+      setReviewErrorMessage('Por favor, informe seu comentário sobre a peça.');
+      return;
+    }
+
+    setSubmittingReview(true);
+    setReviewErrorMessage(null);
+
+    try {
+      await reviewService.createReview({
+        orderId: item.orderId,
+        orderNumber: item.orderNumber || item.orderId,
+        productId: item.id,
+        productName: item.name,
+        productSlug: item.slug || null,
+        productImage: item.image,
+        rating: reviewRating,
+        comment: reviewComment,
+        size: item.size || 'M',
+        color: item.color || '',
+        user: user
+      });
+
+      if (onReviewSuccess) {
+        onReviewSuccess(item);
+      }
+      setReviewSuccessModal(true);
+    } catch (err) {
+      console.error("Erro ao registrar avaliação:", err);
+      setReviewErrorMessage("Não foi possível registrar a avaliação no momento. Tente novamente.");
+    } finally {
+      setSubmittingReview(false);
+    }
+  };
+
+  return (
+    <div className={styles.modalBackdrop} onClick={onClose}>
+      <motion.div 
+        className={styles.modalCard}
+        onClick={(e) => e.stopPropagation()}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.95 }}
+        transition={{ duration: 0.2 }}
+      >
+        {reviewSuccessModal ? (
+          <div className={styles.reviewSuccessContent}>
+            <div className={styles.reviewSuccessIconCircle}>
+              <CheckCircle2 size={32} color="#4ade80" />
+            </div>
+            <span className={styles.reviewSuccessBadge}>FEEDBACK REGISTRADO</span>
+            <h3 className={styles.reviewSuccessTitle}>OBRIGADO PELA SUA AVALIAÇÃO!</h3>
+            <p className={styles.reviewSuccessText}>
+              Seu feedback apoia o desenvolvimento das peças da THR33. Sua avaliação passará por moderação da nossa equipe e em breve estará visível na página do produto.
+            </p>
+
+            <div className={styles.reviewSuccessSummary}>
+              <div className={styles.reviewSuccessSummaryTop}>
+                <strong>{item.name} ({item.size})</strong>
+                <div className={styles.reviewSuccessStars}>
+                  {[...Array(reviewRating)].map((_, i) => (
+                    <Star key={i} size={13} fill="#ffffff" color="#ffffff" />
+                  ))}
+                </div>
+              </div>
+              <p className={styles.reviewSuccessComment}>"{reviewComment}"</p>
+            </div>
+
+            <button 
+              type="button" 
+              onClick={onClose} 
+              className={styles.saveBtn}
+              style={{ width: '100%', marginTop: '0.5rem' }}
+            >
+              CONCLUIR
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className={styles.modalHeader}>
+              <h3 className={styles.modalTitle}>AVALIAR PRODUTO</h3>
+              <button type="button" onClick={onClose} className={styles.closeModalBtn}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className={styles.modalItemPreview}>
+              <img src={item.image} alt={item.name} />
+              <div>
+                <strong>{item.name}</strong>
+                <span>Tamanho: {item.size}</span>
+              </div>
+            </div>
+
+            {reviewErrorMessage && (
+              <div className={styles.reviewErrorBanner}>
+                <AlertCircle size={14} />
+                <span>{reviewErrorMessage}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitReview} className={styles.reviewForm}>
+              <div className={styles.ratingPicker}>
+                <label>Sua Nota (1 a 5 estrelas):</label>
+                <div className={styles.starsSelectRow}>
+                  {[1, 2, 3, 4, 5].map((star) => (
+                    <button
+                      key={star}
+                      type="button"
+                      onClick={() => setReviewRating(star)}
+                      className={styles.starBtn}
+                    >
+                      <Star 
+                        size={24} 
+                        fill={star <= reviewRating ? "#ffffff" : "none"} 
+                        color={star <= reviewRating ? "#ffffff" : "#525252"} 
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className={styles.inputField}>
+                <label>Seu Comentário sobre o caimento, tecido e acabamento:</label>
+                <textarea 
+                  rows={4}
+                  placeholder="Ex: O tecido heavyweight é impressionante e a modelagem Boxy veste perfeitamente..."
+                  value={reviewComment}
+                  onChange={(e) => setReviewComment(e.target.value)}
+                  required
+                  disabled={submittingReview}
+                  autoFocus
+                />
+              </div>
+
+              <div className={styles.modalActions}>
+                <button 
+                  type="button" 
+                  onClick={onClose} 
+                  className={styles.cancelBtn}
+                  disabled={submittingReview}
+                >
+                  Cancelar
+                </button>
+                <button 
+                  type="submit" 
+                  className={styles.saveBtn}
+                  disabled={submittingReview}
+                >
+                  {submittingReview ? (
+                    <>
+                      <Loader2 size={14} className={styles.spinner} />
+                      <span>ENVIANDO...</span>
+                    </>
+                  ) : (
+                    <span>PUBLICAR AVALIAÇÃO</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </>
+        )}
+      </motion.div>
+    </div>
+  );
+});
+
+const isDigitalOrCheckoutAddress = (addr) => {
+  if (!addr) return false;
+  const street = String(addr.street || '').toLowerCase();
+  const title = String(addr.title || '').toLowerCase();
+  const complement = String(addr.complement || '').toLowerCase();
+  const neighborhood = String(addr.neighborhood || '').toLowerCase();
+  const cep = String(addr.cep || '').replace(/\D/g, '');
+  return (
+    street.includes('entrega digital') ||
+    street.includes('digital instant') ||
+    title === 'checkout' ||
+    title.includes('digital') ||
+    neighborhood === 'digital' ||
+    complement.includes('instantaneamente em meus pedidos') ||
+    complement.includes('entrega digital') ||
+    cep === '80000000' ||
+    cep === '80020310'
+  );
+};
 
 export function Perfil({ defaultTab = 'pedidos' }) {
   const { user, currentUser, updateUser, logout, changePassword } = useAuth();
-  const [activeTab, setActiveTab] = useState(defaultTab); // 'dados', 'enderecos', 'pedidos', 'seguranca'
+  const { cartItems, applyCoupon, openCart, appliedCoupon } = useCart() || {};
+  const [activeTab, setActiveTab] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const urlTab = new URLSearchParams(window.location.search).get('tab');
+      if (urlTab) return urlTab;
+    }
+    return defaultTab;
+  }); // 'dados', 'enderecos', 'carteira', 'pedidos', 'seguranca'
   
   const activeUser = currentUser || user;
 
@@ -90,6 +334,273 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       setEditFormData(updated);
     }
   }, [currentUser, user]);
+  // PREFERÊNCIAS DE E-MAIL & NEWSLETTER VIP
+  const [emailPreferences, setEmailPreferences] = useState({
+    newsletter: true,
+    abandonedCart: true,
+    transactional: true,
+    unsubscribedAll: false
+  });
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [prefsSuccessMsg, setPrefsSuccessMsg] = useState('');
+  const emailPrefsRef = useRef(null);
+
+  useEffect(() => {
+    const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = userData?.email || currentUser?.email || user?.email;
+    if (!activeEmail) return;
+
+    newsletterService.getUserEmailPreferences(activeUid, activeEmail).then((prefs) => {
+      setEmailPreferences(prefs);
+    });
+
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const isUnsub = params.get('unsubscribe') === '1';
+      if (isUnsub) {
+        setActiveTab('dados');
+        setSavingPrefs(true);
+        newsletterService
+          .updateEmailPreferences({
+            uid: activeUid,
+            email: activeEmail,
+            name: userData?.name || currentUser?.displayName,
+            preferences: {
+              newsletter: false,
+              abandonedCart: false,
+              transactional: false,
+              unsubscribedAll: true
+            },
+            source: 'url_unsubscribe_param'
+          })
+          .then((newPrefs) => {
+            setEmailPreferences(newPrefs);
+            setPrefsSuccessMsg('Recebimento de e-mails desativado com sucesso conforme solicitado.');
+            setTimeout(() => {
+              if (emailPrefsRef.current) {
+                emailPrefsRef.current.scrollIntoView({ behavior: 'smooth' });
+              }
+            }, 300);
+          })
+          .finally(() => setSavingPrefs(false));
+      }
+    }
+  }, [currentUser?.uid, user?.uid, userData?.email, currentUser?.email, user?.email]);
+
+  const handleTogglePreference = async (key) => {
+    const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = userData?.email || currentUser?.email || user?.email;
+    if (!activeEmail || savingPrefs) return;
+
+    const newPrefs = {
+      ...emailPreferences,
+      [key]: !emailPreferences[key],
+      unsubscribedAll: false
+    };
+
+    setSavingPrefs(true);
+    setPrefsSuccessMsg('');
+    try {
+      const saved = await newsletterService.updateEmailPreferences({
+        uid: activeUid,
+        email: activeEmail,
+        name: userData?.name || currentUser?.displayName,
+        preferences: newPrefs,
+        source: 'perfil_toggle'
+      });
+      setEmailPreferences(saved);
+      setPrefsSuccessMsg('Preferências de e-mail atualizadas com sucesso.');
+      setTimeout(() => setPrefsSuccessMsg(''), 4000);
+    } catch (err) {
+      alert(err.message || 'Erro ao atualizar preferências.');
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
+
+  const handleUnsubscribeAll = async () => {
+    const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = userData?.email || currentUser?.email || user?.email;
+    if (!activeEmail || savingPrefs) return;
+
+    setSavingPrefs(true);
+    setPrefsSuccessMsg('');
+    try {
+      const saved = await newsletterService.updateEmailPreferences({
+        uid: activeUid,
+        email: activeEmail,
+        name: userData?.name || currentUser?.displayName,
+        preferences: {
+          newsletter: false,
+          abandonedCart: false,
+          transactional: false,
+          unsubscribedAll: true
+        },
+        source: 'perfil_mute_all'
+      });
+      setEmailPreferences(saved);
+      setPrefsSuccessMsg('Recebimento de e-mails da THR33 desativado com sucesso.');
+    } catch (err) {
+      alert(err.message || 'Erro ao desativar recebimento de e-mails.');
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
+
+  const handleReactivateAll = async () => {
+    const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = userData?.email || currentUser?.email || user?.email;
+    if (!activeEmail || savingPrefs) return;
+
+    setSavingPrefs(true);
+    setPrefsSuccessMsg('');
+    try {
+      const saved = await newsletterService.updateEmailPreferences({
+        uid: activeUid,
+        email: activeEmail,
+        name: userData?.name || currentUser?.displayName,
+        preferences: {
+          newsletter: true,
+          abandonedCart: true,
+          transactional: true,
+          unsubscribedAll: false
+        },
+        source: 'perfil_reactivate_all'
+      });
+      setEmailPreferences(saved);
+      setPrefsSuccessMsg('Recebimento de e-mails e Newsletter VIP reativados com sucesso!');
+      setTimeout(() => setPrefsSuccessMsg(''), 4000);
+    } catch (err) {
+      alert(err.message || 'Erro ao reativar e-mails.');
+    } finally {
+      setSavingPrefs(false);
+    }
+  };
+
+
+  // DADOS DA CARTEIRA DIGITAL & CUPONS VIP VINCULADOS AO E-MAIL
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [giftRedeemCode, setGiftRedeemCode] = useState('');
+  const [redeeming, setRedeeming] = useState(false);
+  const [redeemFeedback, setRedeemFeedback] = useState(null);
+  const [copiedGiftCode, setCopiedGiftCode] = useState(null);
+
+  const handleCopyGiftCode = (code) => {
+    if (!code) return;
+    navigator.clipboard.writeText(code);
+    setCopiedGiftCode(code);
+    setTimeout(() => setCopiedGiftCode(null), 2500);
+  };
+  const [exclusiveCoupons, setExclusiveCoupons] = useState([]);
+  const [loadingExclusiveCoupons, setLoadingExclusiveCoupons] = useState(false);
+  const [copiedVipCode, setCopiedVipCode] = useState(null);
+  const [vipActionFeedback, setVipActionFeedback] = useState(null);
+
+  // Carrega saldo da carteira e cupons exclusivos vinculados ao e-mail do cliente
+  useEffect(() => {
+    const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = currentUser?.email || user?.email;
+
+    if (activeUid) {
+      getDoc(doc(db, 'users', activeUid)).then(snap => {
+        if (snap.exists()) {
+          setWalletBalance(Number(snap.data().walletBalance || 0));
+        }
+      }).catch(() => {});
+    }
+
+    if (activeEmail) {
+      setLoadingExclusiveCoupons(true);
+      couponService
+        .getUserExclusiveCoupons(activeEmail, activeUid)
+        .then((list) => {
+          setExclusiveCoupons(Array.isArray(list) ? list : []);
+        })
+        .catch(() => {})
+        .finally(() => setLoadingExclusiveCoupons(false));
+    } else {
+      setExclusiveCoupons([]);
+    }
+  }, [currentUser, user]);
+
+  const handleCopyAndUseVipCoupon = async (coupon) => {
+    if (!coupon?.code) return;
+    const cleanCode = coupon.code.trim().toUpperCase();
+
+    try {
+      await navigator.clipboard.writeText(cleanCode);
+    } catch {
+      // Fallback caso clipboard não esteja disponível
+    }
+
+    try {
+      sessionStorage.setItem('thr33_pending_vip_coupon', cleanCode);
+    } catch {
+      // ignore
+    }
+
+    setCopiedVipCode(cleanCode);
+    setTimeout(() => {
+      setCopiedVipCode((prev) => (prev === cleanCode ? null : prev));
+    }, 3500);
+
+    const activeUid = currentUser?.uid || user?.uid || null;
+    const activeEmail = currentUser?.email || user?.email || null;
+
+    if (Array.isArray(cartItems) && cartItems.length > 0 && applyCoupon) {
+      const applied = await applyCoupon(cleanCode, { uid: activeUid, email: activeEmail });
+      if (applied) {
+        setVipActionFeedback({
+          code: cleanCode,
+          text: `Cupom ${cleanCode} copiado e aplicado automaticamente na sua sacola!`
+        });
+        if (openCart) openCart();
+      } else {
+        setVipActionFeedback({
+          code: cleanCode,
+          text: `Código ${cleanCode} copiado! Verifique os requisitos mínimos na sacola.`
+        });
+        if (openCart) openCart();
+      }
+    } else {
+      setVipActionFeedback({
+        code: cleanCode,
+        text: `Código ${cleanCode} copiado e reservado! Assim que você adicionar uma peça do catálogo à sacola, ele será aplicado automaticamente.`
+      });
+    }
+  };
+
+  const handleRedeemGift = async (e) => {
+    e.preventDefault();
+    const cleanCode = giftRedeemCode.trim().toUpperCase();
+    if (!cleanCode) return;
+
+    setRedeeming(true);
+    setRedeemFeedback(null);
+    try {
+      const activeUid = currentUser?.uid || user?.uid;
+      const activeEmail = currentUser?.email || user?.email;
+      if (!activeUid) {
+        throw new Error("Você precisa estar conectado à sua conta para ativar o vale-presente.");
+      }
+
+      const res = await giftCardService.redeemGiftCardCode(cleanCode, activeUid, activeEmail);
+
+      setWalletBalance(res.newWalletBalance);
+      setGiftRedeemCode('');
+      setRedeemFeedback({
+        type: 'success',
+        text: `Vale-presente ativado com sucesso! Saldo creditado: R$ ${Number(res.creditedAmount || 0).toFixed(2)}`
+      });
+    } catch (err) {
+      setRedeemFeedback({
+        type: 'error',
+        text: err.message || "Código de vale inválido ou já resgatado. Verifique os caracteres e tente novamente."
+      });
+    } finally {
+      setRedeeming(false);
+    }
+  };
 
   // DADOS DE ACESSO (SENHA)
   const [isEditingPassword, setIsEditingPassword] = useState(false);
@@ -107,6 +618,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   // ENDEREÇOS DO USUÁRIO
   const [addresses, setAddresses] = useState([]);
   const [isAddingAddress, setIsAddingAddress] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState(null);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [cepError, setCepError] = useState(null);
 
@@ -137,7 +649,13 @@ export function Perfil({ defaultTab = 'pedidos' }) {
         if (userSnap.exists()) {
           const data = userSnap.data();
           if (Array.isArray(data.addresses)) {
-            setAddresses(data.addresses);
+            const validPhysicalAddresses = data.addresses.filter(a => !isDigitalOrCheckoutAddress(a));
+            setAddresses(validPhysicalAddresses);
+
+            // Auto-limpeza no Firestore se houver endereco temporario de checkout/digital
+            if (validPhysicalAddresses.length !== data.addresses.length) {
+              setDoc(userRef, { addresses: validPhysicalAddresses }, { merge: true }).catch(() => {});
+            }
           } else {
             setAddresses([]);
           }
@@ -152,54 +670,175 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     loadUserAddresses();
   }, [currentUser, user]);
 
-  // 2. BUSCA PEDIDOS REAIS DO CLIENTE NA COLEÇÃO 'orders'
+  // 2. BUSCA PEDIDOS REAIS DO CLIENTE NA COLEÇÃO 'orders' (Por UID e por Email com auto-vínculo e listener real-time)
   useEffect(() => {
+    let isMounted = true;
+    let unsubUid = null;
+    let unsubEmail = null;
+
     async function fetchUserOrders() {
       const activeUid = currentUser?.uid || user?.uid;
-      if (!activeUid) return;
+      const activeEmail = (currentUser?.email || user?.email || '').trim().toLowerCase();
+      if (!activeUid && !activeEmail) return;
 
       setLoadingOrders(true);
       try {
-        const q = query(collection(db, 'orders'), where('userId', '==', activeUid));
-        const querySnapshot = await getDocs(q);
-        const fetched = [];
-        querySnapshot.forEach((docSnap) => {
-          const data = docSnap.data();
-          const dateStr = data.createdAt ? new Date(data.createdAt).toLocaleDateString('pt-BR') : 'Hoje';
+        const docsMap = new Map();
 
-          let statusText = data.status || 'Aguardando Pagamento';
-          let statusCode = 'waiting_payment';
-          if (statusText === 'Aprovado' || statusText === 'Pagamento Aprovado') {
-            statusText = 'Pagamento Aprovado';
-            statusCode = 'payment_approved';
-          } else if (statusText === 'Preparando Envio' || statusText === 'preparing') {
-            statusText = 'Preparando Envio';
-            statusCode = 'preparing';
-          } else if (statusText === 'Em trânsito' || statusText === 'Despachado' || statusText === 'in_transit') {
-            statusText = 'Em trânsito';
-            statusCode = 'in_transit';
-          } else if (statusText === 'Entregue' || statusText === 'delivered') {
-            statusText = 'Entregue';
-            statusCode = 'delivered';
+        // 1. Busca por userId
+        if (activeUid) {
+          try {
+            const qUid = query(collection(db, 'orders'), where('userId', '==', activeUid));
+            const snapUid = await getDocs(qUid);
+            snapUid.forEach(d => docsMap.set(d.id, d));
+          } catch (e) {
+            console.warn("Aviso ao consultar pedidos por UID:", e.message);
+          }
+        }
+
+        // 2. Busca por clientEmail (assegura pedidos PIX criados como guest ou sessão transitória)
+        if (activeEmail) {
+          try {
+            const qEmail = query(collection(db, 'orders'), where('clientEmail', '==', activeEmail));
+            const snapEmail = await getDocs(qEmail);
+            snapEmail.forEach(d => {
+              if (!docsMap.has(d.id)) {
+                docsMap.set(d.id, d);
+              }
+              // Auto-vincula o pedido à conta do usuário autenticado no Firestore
+              const dData = d.data();
+              if (activeUid && (!dData.userId || dData.userId === 'guest')) {
+                setDoc(doc(db, 'orders', d.id), { userId: activeUid }, { merge: true }).catch(() => {});
+              }
+            });
+          } catch (e) {
+            console.warn("Aviso ao consultar pedidos por email:", e.message);
+          }
+        }
+
+        // Mapa de consulta do catálogo para associar fotos reais
+        const catalogMap = new Map();
+        try {
+          const prodsSnap = await getDocs(collection(db, 'products'));
+          prodsSnap.forEach(p => {
+            const pData = p.data();
+            const pImg = pData.image || (Array.isArray(pData.images) && pData.images[0]) || '';
+            if (pImg) {
+              catalogMap.set(p.id, pImg);
+              if (pData.slug) catalogMap.set(pData.slug, pImg);
+              if (pData.name) catalogMap.set(String(pData.name).toLowerCase().trim(), pImg);
+            }
+          });
+        } catch (e) {
+          // Fallback silencioso
+        }
+
+        const fetched = [];
+        docsMap.forEach((docSnap) => {
+          const data = docSnap.data();
+
+          let parsedTimestamp = 0;
+          if (data.createdAt) {
+            if (typeof data.createdAt.toDate === 'function') {
+              parsedTimestamp = data.createdAt.toDate().getTime();
+            } else if (data.createdAt.seconds) {
+              parsedTimestamp = data.createdAt.seconds * 1000;
+            } else if (!isNaN(new Date(data.createdAt).getTime())) {
+              parsedTimestamp = new Date(data.createdAt).getTime();
+            }
+          } else if (data.updatedAt) {
+            if (typeof data.updatedAt.toDate === 'function') {
+              parsedTimestamp = data.updatedAt.toDate().getTime();
+            } else if (!isNaN(new Date(data.updatedAt).getTime())) {
+              parsedTimestamp = new Date(data.updatedAt).getTime();
+            }
+          }
+
+          if (!parsedTimestamp || isNaN(parsedTimestamp)) {
+            const match = docSnap.id.match(/(\d{10,13})/);
+            if (match) {
+              const num = Number(match[1]);
+              parsedTimestamp = num < 10000000000 ? num * 1000 : num;
+            }
+          }
+
+          const dateStr = parsedTimestamp
+            ? new Date(parsedTimestamp).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+            : 'Hoje';
+
+          const normStatus = normalizeOrderStatus(data.status);
+          const statusMeta = getOrderStatusMeta(normStatus);
+
+          const rawDocId = String(docSnap.id || '').trim();
+          let cleanDisplayId = rawDocId;
+          if (cleanDisplayId.toUpperCase().startsWith('THR-THR-')) {
+            cleanDisplayId = `THR-${cleanDisplayId.slice(8).toUpperCase()}`;
+          } else if (cleanDisplayId.toUpperCase().startsWith('THR-')) {
+            cleanDisplayId = cleanDisplayId.toUpperCase();
+          } else {
+            cleanDisplayId = `THR-${cleanDisplayId.toUpperCase()}`;
+          }
+
+          const isOrderPaid = ['pago', 'paid', 'aprovado', 'approved', ORDER_STATUSES.PAGAMENTO_APROVADO].includes(normStatus) || 
+                              ['pago', 'paid', 'aprovado', 'approved', 'pagamento_aprovado'].includes(String(data.status || '').toLowerCase());
+
+          const hasGift = Boolean(
+            data.hasGiftCard || 
+            (Array.isArray(data.items) && data.items.some(i => i.isGiftCard || i.category === 'gift-card' || String(i.id || '').includes('vale')))
+          );
+
+          // Se o pedido está pago, possui vale-presente e ainda não gerou código, auto-processa
+          if (isOrderPaid && hasGift && !data.giftCardsProcessed) {
+            giftCardService.processOrderGiftCards(docSnap.id, data).catch(err => {
+              console.warn("Aviso ao auto-processar vale-presente do pedido:", err.message);
+            });
           }
 
           fetched.push({
-            id: `THR-${docSnap.id.slice(0, 6).toUpperCase()}`,
+            id: cleanDisplayId,
             rawId: docSnap.id,
+            createdAtTimestamp: parsedTimestamp || 0,
             date: dateStr,
-            status: statusText,
-            statusCode: statusCode,
-            trackingCode: data.trackingCode || 'Processando envio',
-            paymentMethod: data.paymentMethod === 'pix' 
+            status: statusMeta.label,
+            statusCode: normStatus,
+            statusMeta: statusMeta,
+            hasOpenTicket: Boolean(data.hasOpenTicket),
+            lastTicketId: data.lastTicketId || null,
+            lastTicketStatus: data.lastTicketStatus || null,
+            trackingCode: data.trackingCode || null,
+            carrier: data.carrier || null,
+            trackingUrl: data.trackingUrl || null,
+            nfeUrl: data.nfe?.danfeUrl || data.nfeUrl || null,
+            nfeKey: data.nfe?.chave || data.nfe?.key || data.nfeKey || null,
+            nfeXmlUrl: data.nfe?.xmlUrl || data.nfeXmlUrl || null,
+            nfeIssued: Boolean(data.nfeIssued || data.nfe?.issued),
+            nfeIssuedAt: data.nfe?.issuedAt || data.nfeIssuedAt || null,
+            nfeStatus: data.nfe?.status || (data.nfeIssued ? 'ISSUED' : 'PENDING'),
+            nfe: data.nfe || null,
+            pixQrCodeUrl: data.pixQrCodeUrl || data.pagbank?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href || null,
+            pixCopiaECola: data.pixCopiaECola || data.pagbank?.qr_codes?.[0]?.text || null,
+            pixExpiresAt: data.pixExpiresAt || null,
+            paymentMethod: data.paymentMethod === 'pix' || data.paymentMethod === 'PIX'
               ? 'PIX Instantâneo PagBank (À Vista)' 
-              : data.paymentMethod === 'credit' 
+              : data.paymentMethod === 'credit' || data.paymentMethod === 'Cartão de Crédito'
                 ? 'Cartão de Crédito PagBank' 
-                : 'Boleto Bancário',
-            coupon: data.discountAmount ? { code: "DESCONTO", discount: data.discountAmount } : null,
-            subtotal: data.subtotal || data.total,
-            shippingMethod: 'SEDEX Expresso (1 a 2 dias úteis)',
-            shippingCost: data.shippingCost || 0,
-            total: data.total,
+                : (data.paymentMethod || 'Boleto Bancário'),
+            coupon: (data.couponCode || data.coupon) ? { 
+              code: data.couponCode || data.coupon?.code || "DESCONTO", 
+              discount: Number(data.discountAmount ?? data.coupon?.discount ?? 0) 
+            } : (Number(data.discountAmount || 0) > 0 ? { code: "DESCONTO", discount: Number(data.discountAmount) } : null),
+            discountAmount: Number(data.discountAmount || 0),
+            walletDeduction: Number(data.walletDeduction || 0),
+            walletRefunded: Boolean(data.walletRefunded),
+            originalTotal: Number(data.originalTotal ?? data.subtotal ?? data.total ?? 0),
+            freeShippingApplied: Boolean(data.freeShippingApplied),
+            subtotal: Number(data.subtotal ?? data.total ?? 0),
+            shippingMethod: data.shippingMethod === 'pac' ? 'PAC Correios (3 a 7 dias úteis)' : 'SEDEX Expresso (1 a 2 dias úteis)',
+            shippingCost: Number(data.shippingCost || 0),
+            total: Number(data.total || 0),
+            hasGiftCard: hasGift,
+            giftCardsGenerated: Array.isArray(data.giftCardsGenerated) ? data.giftCardsGenerated : [],
+            giftCardsProcessed: Boolean(data.giftCardsProcessed),
             address: data.shippingAddress ? {
               name: data.clientName || 'Cliente THR33',
               street: data.shippingAddress.street || 'Rua',
@@ -210,25 +849,137 @@ export function Perfil({ defaultTab = 'pedidos' }) {
               state: data.shippingAddress.state || 'PR',
               cep: data.shippingAddress.cep || ''
             } : null,
-            items: (data.items || []).map((item, idx) => ({
-              id: item.id || `item-${idx}`,
-              name: item.name,
-              size: item.size || 'M',
-              price: item.price,
-              image: item.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=600&auto=format&fit=crop',
-              evaluated: item.evaluated || false
-            }))
+            items: (data.items || []).map((item, idx) => {
+              const rawPrice = parseItemPrice(item);
+              const lookupKey = String(item.id || item.reference_id || '');
+              const nameKey = item.name ? String(item.name).toLowerCase().trim() : '';
+              const catalogImg = catalogMap.get(lookupKey) || catalogMap.get(nameKey) || null;
+              const hasCustomImg = item.image && !item.image.includes('photo-1521572267360-ee0c2909d518');
+              const finalImg = hasCustomImg 
+                ? item.image 
+                : (catalogImg || item.image || item.imageUrl || item.thumbnail || '');
+
+              return {
+                id: item.id || `item-${idx}`,
+                name: item.name || item.title || 'Produto THR33',
+                size: item.size || 'M',
+                price: Number(rawPrice || 0),
+                image: finalImg,
+                evaluated: item.evaluated || false,
+                isGiftCard: Boolean(item.isGiftCard || item.category === 'gift-card' || String(item.id || '').includes('vale')),
+                category: item.category || null,
+                giftDeliveryMode: item.giftDeliveryMode || null,
+                recipientName: item.recipientName || null,
+                giftMessage: item.giftMessage || null
+              };
+            })
           });
         });
 
-        setOrders(fetched);
+        // Ordena do mais recente para o mais antigo (decrescente)
+        fetched.sort((a, b) => (b.createdAtTimestamp || 0) - (a.createdAtTimestamp || 0));
+
+        // Sincroniza se algum vale-presente ativo já foi resgatado na coleção gift_cards
+        const activeGiftCodes = [];
+        fetched.forEach(ord => {
+          if (Array.isArray(ord.giftCardsGenerated)) {
+            ord.giftCardsGenerated.forEach(card => {
+              if (card?.code && card.status === 'active') {
+                activeGiftCodes.push(card.code);
+              }
+            });
+          }
+        });
+
+        if (activeGiftCodes.length > 0) {
+          try {
+            const cardSnaps = await Promise.all(
+              activeGiftCodes.map(code => getDoc(doc(db, 'gift_cards', code)))
+            );
+            const redeemedMap = new Map();
+            cardSnaps.forEach(snap => {
+              if (snap.exists()) {
+                const cData = snap.data();
+                if (cData.status === 'redeemed') {
+                  redeemedMap.set(snap.id, cData);
+                }
+              }
+            });
+
+            if (redeemedMap.size > 0) {
+              fetched.forEach(ord => {
+                if (Array.isArray(ord.giftCardsGenerated)) {
+                  let changed = false;
+                  ord.giftCardsGenerated = ord.giftCardsGenerated.map(c => {
+                    if (redeemedMap.has(c.code)) {
+                      changed = true;
+                      const rData = redeemedMap.get(c.code);
+                      return {
+                        ...c,
+                        status: 'redeemed',
+                        redeemedAt: rData.redeemedAt || new Date().toISOString(),
+                        redeemedByUid: rData.redeemedByUid || null,
+                        redeemedByEmail: rData.redeemedByEmail || null
+                      };
+                    }
+                    return c;
+                  });
+
+                  if (changed && ord.rawId) {
+                    updateDoc(doc(db, 'orders', ord.rawId), {
+                      giftCardsGenerated: ord.giftCardsGenerated,
+                      updatedAt: new Date().toISOString()
+                    }).catch(err => console.warn("Aviso ao sincronizar pedido:", err.message));
+                  }
+                }
+              });
+            }
+          } catch (syncErr) {
+            console.warn("Aviso ao conferir vales resgatados:", syncErr.message);
+          }
+        }
+
+        if (isMounted) {
+          setOrders(fetched);
+        }
       } catch (err) {
         console.warn("Aviso ao buscar pedidos no Firestore:", err.message);
       } finally {
-        setLoadingOrders(false);
+        if (isMounted) {
+          setLoadingOrders(false);
+        }
       }
     }
+
     fetchUserOrders();
+
+    // Ativa listener real-time no Firestore quando o cliente estiver com a aba Pedidos aberta
+    const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = (currentUser?.email || user?.email || '').trim().toLowerCase();
+
+    if (activeUid) {
+      try {
+        const qUid = query(collection(db, 'orders'), where('userId', '==', activeUid));
+        unsubUid = onSnapshot(qUid, () => {
+          fetchUserOrders();
+        }, (err) => console.warn("Listener UID pedidos:", err.message));
+      } catch (_) {}
+    }
+
+    if (activeEmail) {
+      try {
+        const qEmail = query(collection(db, 'orders'), where('clientEmail', '==', activeEmail));
+        unsubEmail = onSnapshot(qEmail, () => {
+          fetchUserOrders();
+        }, (err) => console.warn("Listener Email pedidos:", err.message));
+      } catch (_) {}
+    }
+
+    return () => {
+      isMounted = false;
+      if (unsubUid) unsubUid();
+      if (unsubEmail) unsubEmail();
+    };
   }, [currentUser, user, activeTab]);
 
   // MODAIS
@@ -242,13 +993,181 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   const [issueDescription, setIssueDescription] = useState('');
   const [copiedTracking, setCopiedTracking] = useState(false);
 
+  // MODAL DE RECUPERAÇÃO DE PIX
+  const [pixModalOrder, setPixModalOrder] = useState(null);
+  const [copiedPixModal, setCopiedPixModal] = useState(false);
+  const [pixModalTimeRemaining, setPixModalTimeRemaining] = useState(20 * 60);
+  const [pixModalExpired, setPixModalExpired] = useState(false);
+
+  // Timer do Modal de Pix (Estritamente 20 minutos a partir da geracao do pedido)
+  useEffect(() => {
+    if (!pixModalOrder) return;
+
+    let orderCreationMs = pixModalOrder.createdAtTimestamp;
+    if (!orderCreationMs && pixModalOrder.id) {
+      const match = String(pixModalOrder.id).match(/THR-(\d{13})/i);
+      if (match) {
+        orderCreationMs = Number(match[1]);
+      }
+    }
+    if (!orderCreationMs) {
+      orderCreationMs = Date.now();
+    }
+
+    const max20MinDeadline = orderCreationMs + 20 * 60 * 1000;
+    let targetTimeMs = max20MinDeadline;
+
+    if (pixModalOrder.pixExpiresAt) {
+      const rawExpiry = new Date(pixModalOrder.pixExpiresAt).getTime();
+      targetTimeMs = Math.min(rawExpiry, max20MinDeadline);
+    }
+
+    const updateModalCountdown = () => {
+      const now = Date.now();
+      const diffSec = Math.min(20 * 60, Math.max(0, Math.floor((targetTimeMs - now) / 1000)));
+      setPixModalTimeRemaining(diffSec);
+      setPixModalExpired(diffSec <= 0);
+    };
+
+    updateModalCountdown();
+    const interval = setInterval(updateModalCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [pixModalOrder]);
+
+  const formatPixModalTimer = (totalSeconds) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  const handleCopyPixModal = (text) => {
+    if (!text) return;
+    navigator.clipboard.writeText(text);
+    setCopiedPixModal(true);
+    setTimeout(() => setCopiedPixModal(false), 2000);
+  };
+
+  // MODAIS DE SUPORTE CONTEXTUAL & SAC BIDIRECIONAL
+  const [isNewTicketModalOpen, setIsNewTicketModalOpen] = useState(false);
+  const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
+  const [selectedOrderForSupport, setSelectedOrderForSupport] = useState(null);
+  const [activeTicketData, setActiveTicketData] = useState(null);
+  const [fetchingTicket, setFetchingTicket] = useState(false);
+
+  // FORMULÁRIO DE NOVO CHAMADO
+  const [supportReason, setSupportReason] = useState('');
+  const [supportMessage, setSupportMessage] = useState('');
+  const [selectedProductForIssue, setSelectedProductForIssue] = useState('');
+  const [sendingTicket, setSendingTicket] = useState(false);
+
+  // Ação de Suporte do Pedido (Abre feedback se já existir chamado, ou abre criação de novo chamado)
+  const handleSupportAction = async (order) => {
+    setSelectedOrderForSupport(order);
+
+    if (order.hasOpenTicket || order.lastTicketId) {
+      setFetchingTicket(true);
+      setIsFeedbackModalOpen(true);
+      try {
+        let tkt = null;
+        if (order.rawId || order.id) {
+          tkt = await supportService.getTicketByOrderId(order.rawId || order.id);
+        }
+        if (!tkt && order.lastTicketId) {
+          tkt = await supportService.getTicketById(order.lastTicketId, order.rawId || order.id);
+        }
+        if (!tkt && order.supportTicket) {
+          tkt = order.supportTicket;
+        }
+        setActiveTicketData(tkt);
+      } catch (err) {
+        console.error("Erro ao buscar ticket de suporte:", err);
+      } finally {
+        setFetchingTicket(false);
+      }
+    } else {
+      setSelectedProductForIssue(order.items?.[0]?.id || '');
+      setSupportReason('');
+      setSupportMessage('');
+      setIsNewTicketModalOpen(true);
+    }
+  };
+
+  const handleSendSupportTicket = async (e) => {
+    e.preventDefault();
+    if (!supportReason || !supportMessage.trim()) {
+      alert("Por favor, selecione o motivo e detalhe sua solicitação.");
+      return;
+    }
+
+    setSendingTicket(true);
+    try {
+      const selectedProd = selectedOrderForSupport.items?.find(i => i.id === selectedProductForIssue);
+      const targetOrderId = selectedOrderForSupport.rawId || selectedOrderForSupport.id;
+
+      const res = await supportService.createTicket({
+        orderId: targetOrderId,
+        userId: currentUser?.uid || user?.uid || '',
+        customerName: userData.name || currentUser?.displayName || 'Cliente THR33',
+        customerEmail: userData.email || currentUser?.email || '',
+        customerPhone: userData.phone || '',
+        productId: selectedProd?.id || '',
+        productName: selectedProd?.name || 'Geral do Pedido',
+        productSize: selectedProd?.size || '',
+        orderStatus: selectedOrderForSupport.status || 'PAGAMENTO_APROVADO',
+        reason: supportReason,
+        message: supportMessage
+      });
+
+      alert("Solicitação enviada com sucesso! O andamento pode ser acompanhado diretamente neste painel.");
+      setIsNewTicketModalOpen(false);
+      setOrders(prev => prev.map(o => (o.id === selectedOrderForSupport.id || o.rawId === selectedOrderForSupport.rawId) 
+        ? { 
+            ...o, 
+            hasOpenTicket: true, 
+            lastTicketId: res.ticketId, 
+            lastTicketStatus: 'ABERTO',
+            supportTicket: res.payload || {
+              id: res.ticketId,
+              orderId: targetOrderId,
+              reason: supportReason,
+              message: supportMessage,
+              status: 'ABERTO',
+              productName: selectedProd?.name || 'Geral do Pedido',
+              createdAt: new Date().toISOString()
+            }
+          } 
+        : o
+      ));
+    } catch (err) {
+      console.error("Erro ao enviar chamado de suporte:", err);
+      alert("Falha ao abrir chamado de suporte. Tente novamente.");
+    } finally {
+      setSendingTicket(false);
+    }
+  };
+
+  const getTicketStatusLabel = (status) => {
+    switch (status) {
+      case 'EM_ANALISE': return 'EM ANÁLISE';
+      case 'RESOLVIDO': return 'RESOLVIDO';
+      case 'RECUSADO': return 'RECUSADO';
+      case 'ABERTO': return 'CHAMADO ABERTO';
+      default: return 'CHAMADO ABERTO';
+    }
+  };
+
   // MODAL DE AVALIAÇÃO DE PRODUTO
   const [evaluatingItem, setEvaluatingItem] = useState(null);
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState('');
 
   // BLOQUEIO DO SCROLL DA PÁGINA (EIXO Y E RODA DO MOUSE) QUANDO QUALQUER MODAL ESTIVER ABERTO
-  const isAnyModalOpen = Boolean(selectedOrderDetails || cancelingOrder || reportingIssueOrder || evaluatingItem);
+  const isAnyModalOpen = Boolean(
+    selectedOrderDetails || 
+    cancelingOrder || 
+    reportingIssueOrder || 
+    evaluatingItem || 
+    isNewTicketModalOpen || 
+    isFeedbackModalOpen
+  );
 
   useEffect(() => {
     if (isAnyModalOpen) {
@@ -256,7 +1175,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       document.body.style.overflow = 'hidden';
 
       const preventBackgroundScroll = (e) => {
-        const modalContainer = e.target.closest(`.${styles.orderDetailsModal}, .${styles.modalCard}`);
+        const modalContainer = e.target.closest(`.${styles.orderDetailsModal}, .${styles.modalCard}, .${styles.supportModalCard}`);
         if (modalContainer) {
           return;
         }
@@ -332,7 +1251,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       });
     }
 
-    setUserData({ ...editFormData });
+    setUserData(prev => ({ ...prev, name: editFormData.name, cpf: editFormData.cpf, phone: editFormData.phone }));
     setUserErrors({});
     setIsEditingData(false);
     setSaveSuccessFeedback(true);
@@ -430,17 +1349,23 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       return;
     }
 
-    const updated = [
-      ...addresses, 
-      { 
-        ...newAddress, 
-        id: Date.now(), 
-        isDefault: addresses.length === 0 
-      }
-    ];
+    let updated;
+    if (editingAddressId) {
+      updated = addresses.map(a => a.id === editingAddressId ? { ...a, ...newAddress } : a);
+    } else {
+      updated = [
+        ...addresses, 
+        { 
+          ...newAddress, 
+          id: Date.now(), 
+          isDefault: addresses.length === 0 
+        }
+      ];
+    }
 
     setAddresses(updated);
     setIsAddingAddress(false);
+    setEditingAddressId(null);
     setNewAddress({ title: '', street: '', number: '', complement: '', neighborhood: '', city: 'Curitiba', state: 'PR', cep: '' });
 
     const activeUid = currentUser?.uid || user?.uid;
@@ -453,8 +1378,34 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     }
   };
 
+  const handleStartEditAddress = (addr) => {
+    setEditingAddressId(addr.id);
+    setNewAddress({
+      title: addr.title || '',
+      street: addr.street || '',
+      number: addr.number || '',
+      complement: addr.complement || '',
+      neighborhood: addr.neighborhood || '',
+      city: addr.city || 'Curitiba',
+      state: addr.state || 'PR',
+      cep: addr.cep || ''
+    });
+    setIsAddingAddress(true);
+    setCepError(null);
+  };
+
+  const handleCancelAddressForm = () => {
+    setIsAddingAddress(false);
+    setEditingAddressId(null);
+    setNewAddress({ title: '', street: '', number: '', complement: '', neighborhood: '', city: 'Curitiba', state: 'PR', cep: '' });
+    setCepError(null);
+  };
+
   const handleDeleteAddress = async (id) => {
     if (window.confirm('Deseja realmente excluir este endereço?')) {
+      if (editingAddressId === id) {
+        handleCancelAddressForm();
+      }
       const filtered = addresses.filter(a => a.id !== id);
       if (filtered.length > 0 && !filtered.some(a => a.isDefault)) {
         filtered[0].isDefault = true;
@@ -492,42 +1443,35 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   // -------------------------------------------------------------
   // HANDLERS: AVALIAÇÃO DE PRODUTO
   // -------------------------------------------------------------
-  const handleOpenReviewModal = (item, orderId) => {
-    setEvaluatingItem({ ...item, orderId });
-    setReviewRating(5);
-    setReviewComment('');
-  };
+  const handleOpenReviewModal = useCallback((item, orderId, orderNumber) => {
+    setEvaluatingItem({ ...item, orderId, orderNumber });
+  }, []);
 
-  const handleSubmitReview = (e) => {
-    e.preventDefault();
-    if (!evaluatingItem) return;
-
+  const handleReviewSuccess = useCallback((item) => {
+    // Atualiza o estado local para marcar a peça como avaliada
     setOrders(prevOrders => prevOrders.map(ord => {
-      if (ord.id === evaluatingItem.orderId) {
+      if (ord.id === item.orderId || ord.rawId === item.orderId) {
         return {
           ...ord,
-          items: ord.items.map(it => it.id === evaluatingItem.id ? { ...it, evaluated: true } : it)
+          items: ord.items.map(it => it.id === item.id ? { ...it, evaluated: true } : it)
         };
       }
       return ord;
     }));
 
     // Se estiver no modal de detalhes, atualiza também
-    if (selectedOrderDetails && selectedOrderDetails.id === evaluatingItem.orderId) {
+    if (selectedOrderDetails && (selectedOrderDetails.id === item.orderId || selectedOrderDetails.rawId === item.orderId)) {
       setSelectedOrderDetails(prev => ({
         ...prev,
-        items: prev.items.map(it => it.id === evaluatingItem.id ? { ...it, evaluated: true } : it)
+        items: prev.items.map(it => it.id === item.id ? { ...it, evaluated: true } : it)
       }));
     }
-
-    setEvaluatingItem(null);
-    alert('Obrigado pela sua avaliação! Seu feedback apoia o desenvolvimento da THR33.');
-  };
+  }, [selectedOrderDetails]);
 
   // -------------------------------------------------------------
   // HANDLERS: CANCELAMENTO DE PEDIDO (EM PREPARAÇÃO)
   // -------------------------------------------------------------
-  const handleConfirmCancelOrder = (e) => {
+  const handleConfirmCancelOrder = async (e) => {
     e.preventDefault();
     if (!cancelingOrder) return;
 
@@ -551,8 +1495,60 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     }
 
     const orderId = cancelingOrder.id;
-    setCancelingOrder(null);
-    alert(`Pedido #${orderId} cancelado com sucesso. O estorno de valores foi solicitado automaticamente junto ao PagBank.`);
+    const rawId = cancelingOrder.rawId || orderId;
+
+    try {
+      try {
+        const cancelFn = httpsCallable(functions, 'cancelOrderAndRefund');
+        await cancelFn({ orderId: rawId, reason: 'Cancelamento solicitado pelo cliente via Minha Conta' });
+      } catch (fnErr) {
+        console.warn("Aviso na Cloud Function de cancelamento:", fnErr.message);
+      }
+
+      const refundRes = await refundOrderWalletIfNeeded(rawId);
+      if (refundRes?.refunded && refundRes.newWalletBalance !== undefined) {
+        setWalletBalance(refundRes.newWalletBalance);
+      } else if (cancelingOrder.walletDeduction > 0) {
+        setWalletBalance(prev => prev + Number(cancelingOrder.walletDeduction));
+      }
+
+      setOrders(prev => prev.map(ord => {
+        if (ord.id === orderId || ord.rawId === rawId) {
+          return {
+            ...ord,
+            status: 'Cancelado',
+            statusCode: 'cancelado',
+            walletRefunded: true
+          };
+        }
+        return ord;
+      }));
+
+      if (selectedOrderDetails && (selectedOrderDetails.id === orderId || selectedOrderDetails.rawId === rawId)) {
+        setSelectedOrderDetails(prev => ({
+          ...prev,
+          status: 'Cancelado',
+          statusCode: 'cancelado',
+          walletRefunded: true
+        }));
+      }
+
+      const hasRefund = (cancelingOrder.walletDeduction > 0) || (refundRes?.refunded);
+      const refundAmountStr = hasRefund 
+        ? ` O saldo de R$ ${Number(cancelingOrder.walletDeduction || refundRes?.refundedAmount || 0).toFixed(2)} foi estornado para sua Carteira Digital THR33.` 
+        : '';
+
+      setCancelingOrder(null);
+      alert(`Pedido #${orderId} cancelado com sucesso.${refundAmountStr}`);
+      return;
+    } catch (err) {
+      console.error("Erro ao cancelar pedido:", err);
+      setCancelingOrder(null);
+      alert(`Pedido #${orderId} cancelado.`);
+      return;
+    }
+
+
   };
 
   // -------------------------------------------------------------
@@ -567,7 +1563,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
     setReportingIssueOrder(null);
     setIssueDescription('');
 
-    alert(`Solicitação registrada com sucesso!\n\nProtocolo: #${protocol}\nPedido: #${orderId}\n\nNossa equipe de pós-venda do Ateliê entrará em contato pelo seu e-mail (${userData.email}) em até 24 horas úteis.`);
+    alert(`Solicitação registrada com sucesso!\n\nProtocolo: #${protocol}\nPedido: #${orderId}\n\nNossa equipe de pós-venda da THR33 entrará em contato pelo seu e-mail (${userData.email}) em até 24 horas úteis.`);
   };
 
   const handleCopyTrackingCode = (code) => {
@@ -592,19 +1588,21 @@ export function Perfil({ defaultTab = 'pedidos' }) {
   const firstName = userData.name.split(' ')[0] || 'Usuário';
 
   // HELPER PARA CALCULAR O ÍNDICE DA ETAPA ATUAL NA TIMELINE
-  const getStepIndex = (code) => {
+  const getStepIndex = (rawCode) => {
+    const code = normalizeOrderStatus(rawCode);
     switch (code) {
-      case 'waiting_payment': return 0;
-      case 'payment_approved': return 1;
-      case 'preparing': return 2;
-      case 'in_transit': return 3;
-      case 'delivered': return 4;
+      case ORDER_STATUSES.AGUARDANDO_PAGAMENTO: return 0;
+      case ORDER_STATUSES.PAGAMENTO_APROVADO: return 1;
+      case ORDER_STATUSES.EM_PRODUCAO: return 2;
+      case ORDER_STATUSES.SAIU_PARA_ENTREGA: return 3;
+      case ORDER_STATUSES.ENTREGUE: return 4;
       default: return -1;
     }
   };
 
   return (
     <main className={styles.container}>
+      <SEO title="Minha Conta — Painel do Cliente | THR33 Streetwear" noindex={true} />
       {/* HEADER LIMPO DE BOAS-VINDAS */}
       <header className={styles.welcomeHeader}>
         <h1 className={styles.title}>Bem vindo de volta, {firstName}</h1>
@@ -644,6 +1642,20 @@ export function Perfil({ defaultTab = 'pedidos' }) {
           
           <button 
             type="button"
+            className={`${styles.tabLink} ${activeTab === 'carteira' ? styles.activeTab : ''}`}
+            onClick={() => setActiveTab('carteira')}
+          >
+            <CreditCard size={16} />
+            <span>Carteira & Cupons VIP</span>
+            {exclusiveCoupons.filter((c) => c.canBeUsed).length > 0 && (
+              <span className={styles.vipNavBadge}>
+                {exclusiveCoupons.filter((c) => c.canBeUsed).length} VIP
+              </span>
+            )}
+          </button>
+          
+          <button 
+            type="button"
             className={`${styles.tabLink} ${activeTab === 'pedidos' ? styles.activeTab : ''}`}
             onClick={() => setActiveTab('pedidos')}
           >
@@ -663,6 +1675,129 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
         {/* ÁREA DE CONTEÚDO DINÂMICO */}
         <section className={styles.tabContent}>
+          {/* BANNER AUTOMÁTICO DE CUPONS VIP EXCLUSIVOS VINCULADOS AO E-MAIL DO CLIENTE */}
+          {activeTab !== 'carteira' && exclusiveCoupons.some((c) => c.canBeUsed) && (
+            <div className={styles.vipExclusiveBannerSection}>
+              <div className={styles.vipSectionTop}>
+                <div className={styles.vipSectionTitleGroup}>
+                  <Tag size={15} className={styles.vipIconAccent} />
+                  <div>
+                    <span className={styles.vipOverline}>BENEFÍCIO VINCULADO AO SEU E-MAIL</span>
+                    <h3 className={styles.vipSectionTitle}>
+                      VOCÊ POSSUI {exclusiveCoupons.filter((c) => c.canBeUsed).length}{' '}
+                      {exclusiveCoupons.filter((c) => c.canBeUsed).length === 1
+                        ? 'CUPOM VIP EXCLUSIVO DISPONÍVEL'
+                        : 'CUPONS VIP EXCLUSIVOS DISPONÍVEIS'}
+                    </h3>
+                  </div>
+                </div>
+              </div>
+
+              {vipActionFeedback && (
+                <div className={styles.vipActionFeedbackBanner}>
+                  <CheckCircle2 size={14} />
+                  <span>{vipActionFeedback.text}</span>
+                  <Link to="/catalogo" className={styles.vipGoCatalogLink}>
+                    IR PARA O CATÁLOGO
+                  </Link>
+                </div>
+              )}
+
+              <div className={styles.vipTicketsGrid}>
+                {exclusiveCoupons
+                  .filter((c) => c.canBeUsed)
+                  .map((coupon) => {
+                    const isCopied = copiedVipCode === coupon.code;
+                    const isAppliedInCart =
+                      appliedCoupon?.code?.toUpperCase() === coupon.code;
+
+                    return (
+                      <div key={coupon.id} className={styles.vipTicketCard}>
+                        <div className={styles.vipTicketStub}>
+                          <span className={styles.vipTicketLockTag}>
+                            <Lock size={10} />
+                            <span>EXCLUSIVO DA SUA CONTA</span>
+                          </span>
+                          <strong className={styles.vipTicketCode}>{coupon.code}</strong>
+                          <small className={styles.vipTicketEmailNote}>
+                            Vinculado a {userData.email}
+                          </small>
+                        </div>
+
+                        <div className={styles.vipTicketMain}>
+                          <div className={styles.vipTicketInfo}>
+                            <strong className={styles.vipTicketBenefit}>
+                              {coupon.label}
+                            </strong>
+                            <div className={styles.vipTicketMetaPills}>
+                              {coupon.remainingUses !== null && (
+                                <span className={styles.vipMetaPill}>
+                                  Restam {coupon.remainingUses} uso(s)
+                                </span>
+                              )}
+                              {coupon.onlyFirstPurchase && (
+                                <span className={styles.vipMetaPill}>
+                                  Válido na 1ª Compra
+                                </span>
+                              )}
+                              {coupon.minOrderValue > 0 && (
+                                <span className={styles.vipMetaPill}>
+                                  Pedido mín. R$ {Number(coupon.minOrderValue).toFixed(0)}
+                                </span>
+                              )}
+                              {coupon.minItemsCount > 0 && (
+                                <span className={styles.vipMetaPill}>
+                                  Mín. {coupon.minItemsCount} peça(s)
+                                </span>
+                              )}
+                              {coupon.validUntil && (
+                                <span className={styles.vipMetaPill}>
+                                  <Clock size={10} />
+                                  <span>
+                                    Até{' '}
+                                    {new Date(
+                                      String(coupon.validUntil).length === 10
+                                        ? `${coupon.validUntil}T12:00:00`
+                                        : coupon.validUntil
+                                    ).toLocaleDateString('pt-BR')}
+                                  </span>
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleCopyAndUseVipCoupon(coupon)}
+                            className={`${styles.vipUseBtn} ${
+                              isCopied || isAppliedInCart ? styles.vipUseBtnActive : ''
+                            }`}
+                          >
+                            {isAppliedInCart ? (
+                              <>
+                                <Check size={14} />
+                                <span>ATIVO NA SUA SACOLA</span>
+                              </>
+                            ) : isCopied ? (
+                              <>
+                                <Check size={14} />
+                                <span>COPIADO & RESERVADO!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy size={14} />
+                                <span>COPIAR & USAR MEU CUPOM VIP</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
           {/* TAB 1: DADOS PESSOAIS */}
           {activeTab === 'dados' && (
             <div className={styles.panel}>
@@ -707,21 +1842,25 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                 </div>
 
                 <div className={styles.inputField}>
-                  <label>E-mail *</label>
-                  <input 
-                    type="email" 
-                    name="email"
-                    value={isEditingData ? editFormData.email : userData.email} 
-                    onChange={handleUserChange} 
-                    disabled={!isEditingData}
-                    className={`${!isEditingData ? styles.inputLocked : ''} ${userErrors.email ? styles.inputError : ''}`}
-                    required 
-                  />
-                  {userErrors.email && (
-                    <span className={styles.errorText}>
-                      <AlertCircle size={12} /> {userErrors.email}
-                    </span>
-                  )}
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <span>E-mail *</span>
+                    <Lock size={11} style={{ color: 'var(--text-muted)' }} />
+                  </label>
+                  <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                    <input 
+                      type="email" 
+                      name="email"
+                      value={userData.email} 
+                      readOnly
+                      disabled={true}
+                      className={styles.inputLocked}
+                      style={{ width: '100%', paddingRight: '2.2rem', cursor: 'not-allowed', opacity: 0.7 }}
+                    />
+                    <Lock size={13} style={{ position: 'absolute', right: '0.85rem', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+                  </div>
+                  <small style={{ fontSize: '0.7rem', color: 'var(--text-muted)', lineHeight: 1.4, marginTop: '0.2rem' }}>
+                    O e-mail é o identificador único da sua conta e de seus cupons exclusivos, não podendo ser alterado.
+                  </small>
                 </div>
 
                 <div className={styles.inputField}>
@@ -886,13 +2025,13 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                         {/* REQUISITOS VISUAIS DE SENHA */}
                         <div className={styles.passwordRulesList}>
                           <span className={`${styles.ruleBadge} ${passwordData.newPassword.length >= 8 ? styles.ruleMet : ''}`}>
-                            {passwordData.newPassword.length >= 8 ? '✓' : '○'} 8+ caracteres
+                            {passwordData.newPassword.length >= 8 ? <Check size={11} /> : null} 8+ caracteres
                           </span>
                           <span className={`${styles.ruleBadge} ${/[A-Z]/.test(passwordData.newPassword) ? styles.ruleMet : ''}`}>
-                            {/[A-Z]/.test(passwordData.newPassword) ? '✓' : '○'} 1 Letra maiúscula (A-Z)
+                            {/[A-Z]/.test(passwordData.newPassword) ? <Check size={11} /> : null} 1 Letra maiúscula (A-Z)
                           </span>
                           <span className={`${styles.ruleBadge} ${/[0-9]/.test(passwordData.newPassword) ? styles.ruleMet : ''}`}>
-                            {/[0-9]/.test(passwordData.newPassword) ? '✓' : '○'} 1 Número (0-9)
+                            {/[0-9]/.test(passwordData.newPassword) ? <Check size={11} /> : null} 1 Número (0-9)
                           </span>
                         </div>
                       </div>
@@ -956,6 +2095,105 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                   </form>
                 )}
               </div>
+
+              {/* SUB-PAINEL DE PREFERÊNCIAS DE E-MAIL & NEWSLETTER VIP */}
+              <div ref={emailPrefsRef} className={styles.subPanel}>
+                <div className={styles.subPanelHeader}>
+                  <div className={styles.subPanelTitleGroup}>
+                    <Mail size={16} />
+                    <h3 className={styles.subPanelTitle}>PREFERÊNCIAS DE E-MAIL & NEWSLETTER VIP</h3>
+                  </div>
+                  {emailPreferences.unsubscribedAll && (
+                    <div className={styles.emailPrefPausedBadge}>
+                      <AlertCircle size={13} />
+                      <span>RECEBIMENTO PAUSADO</span>
+                    </div>
+                  )}
+                </div>
+
+                {prefsSuccessMsg && (
+                  <div className={styles.emailPrefSuccessAlert}>
+                    <CheckCircle2 size={16} />
+                    <span>{prefsSuccessMsg}</span>
+                  </div>
+                )}
+
+                <div className={styles.emailPrefsBox}>
+                  {/* Item 1: Newsletter VIP & Novos Drops */}
+                  <div className={styles.emailPrefItem}>
+                    <div className={styles.emailPrefText}>
+                      <strong>NEWSLETTER VIP // ALERTAS DE DROPS</strong>
+                      <span>Receba o link antecipado, teasers exclusivos e senhas prioritárias dos novos lotes.</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={savingPrefs || emailPreferences.unsubscribedAll}
+                      onClick={() => handleTogglePreference('newsletter')}
+                      className={`${styles.emailPrefToggleBtn} ${emailPreferences.newsletter && !emailPreferences.unsubscribedAll ? styles.emailPrefToggleBtnActive : ''}`}
+                    >
+                      {emailPreferences.newsletter && !emailPreferences.unsubscribedAll ? '✓ ATIVO' : 'PAUSADO'}
+                    </button>
+                  </div>
+
+                  {/* Item 2: Lembretes de Sacola (Carrinho Abandonado 24h) */}
+                  <div className={styles.emailPrefItem}>
+                    <div className={styles.emailPrefText}>
+                      <strong>LEMBRETES DE SACOLA // CARRINHO RESERVADO</strong>
+                      <span>Notificação única de 24 horas caso deixe peças pendentes na sacola antes do estoque esgotar.</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={savingPrefs || emailPreferences.unsubscribedAll}
+                      onClick={() => handleTogglePreference('abandonedCart')}
+                      className={`${styles.emailPrefToggleBtn} ${emailPreferences.abandonedCart && !emailPreferences.unsubscribedAll ? styles.emailPrefToggleBtnActive : ''}`}
+                    >
+                      {emailPreferences.abandonedCart && !emailPreferences.unsubscribedAll ? '✓ ATIVO' : 'PAUSADO'}
+                    </button>
+                  </div>
+
+                  {/* Item 3: Transacionais de Pedidos e Segurança */}
+                  <div className={styles.emailPrefItem}>
+                    <div className={styles.emailPrefText}>
+                      <strong>STATUS DO PEDIDO & ATUALIZAÇÕES DE ENTREGA</strong>
+                      <span>Confirmação de pagamento, emissão da NF-e e código de rastreamento da transportadora.</span>
+                    </div>
+                    <button
+                      type="button"
+                      disabled={true}
+                      className={`${styles.emailPrefToggleBtn} ${!emailPreferences.unsubscribedAll ? styles.emailPrefToggleBtnActive : ''}`}
+                      title="Essencial para o envio e rastreio dos seus pedidos"
+                    >
+                      {!emailPreferences.unsubscribedAll ? '✓ ESSENCIAL' : 'PAUSADO'}
+                    </button>
+                  </div>
+
+                  {/* Barra de Ações: Desativar tudo ou Reativar */}
+                  <div className={styles.emailPrefActionsBar}>
+                    {!emailPreferences.unsubscribedAll ? (
+                      <button
+                        type="button"
+                        disabled={savingPrefs}
+                        onClick={handleUnsubscribeAll}
+                        className={styles.emailPrefMuteBtn}
+                      >
+                        {savingPrefs ? 'ATUALIZANDO...' : 'DESATIVAR RECEBIMENTO VIA E-MAIL'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={savingPrefs}
+                        onClick={handleReactivateAll}
+                        className={styles.emailPrefReactivateBtn}
+                      >
+                        {savingPrefs ? 'REATIVANDO...' : 'REATIVAR RECEBIMENTO & NEWSLETTER VIP'}
+                      </button>
+                    )}
+                    <small style={{ color: 'var(--text-muted)', fontSize: '0.72rem' }}>
+                      Identificador de preferência vinculado a: <strong>{userData.email}</strong>
+                    </small>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -966,7 +2204,15 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                 <h2 className={styles.panelTitle}>MEUS ENDEREÇOS DE ENTREGA</h2>
                 <button 
                   type="button"
-                  onClick={() => setIsAddingAddress(!isAddingAddress)} 
+                  onClick={() => {
+                    if (isAddingAddress) {
+                      handleCancelAddressForm();
+                    } else {
+                      setEditingAddressId(null);
+                      setNewAddress({ title: '', street: '', number: '', complement: '', neighborhood: '', city: 'Curitiba', state: 'PR', cep: '' });
+                      setIsAddingAddress(true);
+                    }
+                  }} 
                   className={styles.addBtn}
                 >
                   <Plus size={14} />
@@ -976,7 +2222,9 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
               {isAddingAddress && (
                 <form onSubmit={handleAddAddress} className={styles.addressForm}>
-                  <h3 className={styles.formSectionTitle}>CADASTRAR NOVO ENDEREÇO</h3>
+                  <h3 className={styles.formSectionTitle}>
+                    {editingAddressId ? 'EDITAR ENDEREÇO' : 'CADASTRAR NOVO ENDEREÇO'}
+                  </h3>
                   
                   <div className={styles.inputField}>
                     <label>Identificação do Endereço (Ex: Casa, Trabalho, Estúdio) *</label>
@@ -1083,7 +2331,20 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     </div>
                   </div>
 
-                  <button type="submit" className={styles.saveBtn}>CADASTRAR ENDEREÇO</button>
+                  <div className={styles.formButtonRow}>
+                    <button type="submit" className={styles.saveBtn}>
+                      {editingAddressId ? 'SALVAR ALTERAÇÕES' : 'CADASTRAR ENDEREÇO'}
+                    </button>
+                    {editingAddressId && (
+                      <button 
+                        type="button" 
+                        onClick={handleCancelAddressForm} 
+                        className={styles.cancelFormBtn}
+                      >
+                        CANCELAR
+                      </button>
+                    )}
+                  </div>
                 </form>
               )}
 
@@ -1116,6 +2377,14 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                       <div className={styles.cardActions}>
                         <button 
                           type="button"
+                          onClick={() => handleStartEditAddress(addr)} 
+                          className={styles.editLink}
+                        >
+                          <Edit3 size={13} />
+                          <span>Editar</span>
+                        </button>
+                        <button 
+                          type="button"
                           onClick={() => handleDeleteAddress(addr.id)} 
                           className={styles.deleteLink}
                         >
@@ -1126,6 +2395,174 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+          )}
+
+          {/* TAB: CARTEIRA DIGITAL */}
+          {activeTab === 'carteira' && (
+            <div className={styles.panel}>
+              <section className={styles.walletCard}>
+                <div className={styles.walletTop}>
+                  <div>
+                    <span className={styles.walletTag}>CARTEIRA DIGITAL THR33</span>
+                    <h2 className={styles.panelTitle}>SALDO DISPONÍVEL EM CONTA</h2>
+                  </div>
+                  <strong className={styles.balanceAmount}>
+                    R$ {walletBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                  </strong>
+                </div>
+
+                <p className={styles.walletDesc}>
+                  Utilize seu saldo em créditos para abater o valor de pedidos durante a etapa de pagamento no checkout.
+                </p>
+
+                {redeemFeedback && (
+                  <div className={redeemFeedback.type === 'success' ? styles.successBadge : styles.errorAlertBanner}>
+                    {redeemFeedback.type === 'success' ? <Check size={14} /> : <AlertCircle size={14} />}
+                    <span>{redeemFeedback.text}</span>
+                  </div>
+                )}
+
+                <form onSubmit={handleRedeemGift} className={styles.redeemForm}>
+                  <input 
+                    type="text" 
+                    placeholder="CÓDIGO DO VALE (EX: THR33-GIFT-XXXX-XXXX)"
+                    value={giftRedeemCode}
+                    onChange={(e) => setGiftRedeemCode(e.target.value)}
+                    required
+                  />
+                  <button type="submit" disabled={redeeming} className={styles.redeemBtn}>
+                    {redeeming ? 'RESGATANDO...' : 'ATIVAR VALE-PRESENTE'}
+                  </button>
+                </form>
+
+                <div className={styles.walletActionRow}>
+                  <Link to="/catalogo" className={styles.useWalletCatalogBtn}>
+                    <ShoppingBag size={14} />
+                    <span>USAR MEU SALDO NO CATÁLOGO</span>
+                  </Link>
+                  <Link to="/brindes/vale-presente-thr33" className={styles.buyMoreGiftsLink}>
+                    <Gift size={14} />
+                    <span>COMPRAR VALE-PRESENTE</span>
+                  </Link>
+                </div>
+              </section>
+
+              {/* SEÇÃO DE CUPONS VIP VINCULADOS À CONTA DENTRO DA ABA CARTEIRA */}
+              {exclusiveCoupons.length > 0 && (
+                <section className={styles.vipExclusiveBannerSection} style={{ marginTop: '1.5rem' }}>
+                  <div className={styles.vipSectionTop}>
+                    <div className={styles.vipSectionTitleGroup}>
+                      <Tag size={15} className={styles.vipIconAccent} />
+                      <div>
+                        <span className={styles.vipOverline}>PRESENTES & BENEFÍCIOS PESSOAIS</span>
+                        <h3 className={styles.vipSectionTitle}>
+                          MEUS CUPONS VIP VINCULADOS ({exclusiveCoupons.length})
+                        </h3>
+                      </div>
+                    </div>
+                  </div>
+
+                  {vipActionFeedback && (
+                    <div className={styles.vipActionFeedbackBanner}>
+                      <CheckCircle2 size={14} />
+                      <span>{vipActionFeedback.text}</span>
+                      <Link to="/catalogo" className={styles.vipGoCatalogLink}>
+                        IR PARA O CATÁLOGO
+                      </Link>
+                    </div>
+                  )}
+
+                  <div className={styles.vipTicketsGrid}>
+                    {exclusiveCoupons.map((coupon) => {
+                      const isCopied = copiedVipCode === coupon.code;
+                      const isAppliedInCart =
+                        appliedCoupon?.code?.toUpperCase() === coupon.code;
+
+                      return (
+                        <div
+                          key={coupon.id}
+                          className={`${styles.vipTicketCard} ${
+                            !coupon.canBeUsed ? styles.vipTicketDisabled : ''
+                          }`}
+                        >
+                          <div className={styles.vipTicketStub}>
+                            <span className={styles.vipTicketLockTag}>
+                              <Lock size={10} />
+                              <span>{coupon.statusReason}</span>
+                            </span>
+                            <strong className={styles.vipTicketCode}>{coupon.code}</strong>
+                            <small className={styles.vipTicketEmailNote}>
+                              Vinculado a {userData.email}
+                            </small>
+                          </div>
+
+                          <div className={styles.vipTicketMain}>
+                            <div className={styles.vipTicketInfo}>
+                              <strong className={styles.vipTicketBenefit}>
+                                {coupon.label}
+                              </strong>
+                              <div className={styles.vipTicketMetaPills}>
+                                {coupon.remainingUses !== null && (
+                                  <span className={styles.vipMetaPill}>
+                                    Restam {coupon.remainingUses} de {coupon.maxUsesPerUser} uso(s)
+                                  </span>
+                                )}
+                                {coupon.onlyFirstPurchase && (
+                                  <span className={styles.vipMetaPill}>
+                                    Válido na 1ª Compra
+                                  </span>
+                                )}
+                                {coupon.minOrderValue > 0 && (
+                                  <span className={styles.vipMetaPill}>
+                                    Pedido mín. R$ {Number(coupon.minOrderValue).toFixed(0)}
+                                  </span>
+                                )}
+                                {coupon.minItemsCount > 0 && (
+                                  <span className={styles.vipMetaPill}>
+                                    Mín. {coupon.minItemsCount} peça(s)
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {coupon.canBeUsed ? (
+                              <button
+                                type="button"
+                                onClick={() => handleCopyAndUseVipCoupon(coupon)}
+                                className={`${styles.vipUseBtn} ${
+                                  isCopied || isAppliedInCart ? styles.vipUseBtnActive : ''
+                                }`}
+                              >
+                                {isAppliedInCart ? (
+                                  <>
+                                    <Check size={14} />
+                                    <span>ATIVO NA SUA SACOLA</span>
+                                  </>
+                                ) : isCopied ? (
+                                  <>
+                                    <Check size={14} />
+                                    <span>COPIADO & RESERVADO!</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Copy size={14} />
+                                    <span>COPIAR & USAR MEU CUPOM VIP</span>
+                                  </>
+                                )}
+                              </button>
+                            ) : (
+                              <span className={styles.vipUnavailableBadge}>
+                                {coupon.statusReason}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
               )}
             </div>
           )}
@@ -1149,80 +2586,307 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                 </div>
               ) : (
                 <div className={styles.ordersList}>
-                {orders.map((order) => {
-                  const isDelivered = order.statusCode === 'delivered';
+                {orders.map((order, orderIdx) => {
+                  const isDelivered = order.statusCode === ORDER_STATUSES.ENTREGUE || order.statusCode === 'delivered' || normalizeOrderStatus(order.status) === ORDER_STATUSES.ENTREGUE;
                   const isPreparing = order.statusCode === 'preparing' || order.statusCode === 'waiting_payment';
                   const isCanceled = order.statusCode === 'canceled';
 
                   return (
-                    <article key={order.id} className={styles.orderCard}>
+                    <article key={order.rawId || `${order.id}-${orderIdx}`} className={styles.orderCard}>
                       <header className={styles.orderMeta}>
                         <div>
-                          <span className={styles.orderId}>PEDIDO #{order.id}</span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', flexWrap: 'wrap', marginBottom: '0.2rem' }}>
+                            <span className={styles.orderId}>PEDIDO #{order.id}</span>
+                            {order.coupon && (
+                              <span style={{ fontSize: '0.68rem', padding: '0.12rem 0.4rem', borderRadius: '3px', background: 'rgba(0, 255, 136, 0.1)', border: '1px solid rgba(0, 255, 136, 0.25)', color: '#00ff88', fontWeight: 600, letterSpacing: '0.5px' }}>
+                                CUPOM {order.coupon.code}
+                              </span>
+                            )}
+                            {Number(order.walletDeduction || 0) > 0 && (
+                              <span style={{ fontSize: '0.68rem', padding: '0.12rem 0.4rem', borderRadius: '3px', background: 'rgba(255, 255, 255, 0.08)', border: '1px solid rgba(255, 255, 255, 0.15)', color: '#ffffff', fontWeight: 600, letterSpacing: '0.5px' }}>
+                                CARTEIRA: - R$ {Number(order.walletDeduction).toFixed(2)} {order.walletRefunded ? '(Estornado)' : ''}
+                              </span>
+                            )}
+                          </div>
                           <span className={styles.orderDate}>Realizado em {order.date}</span>
                         </div>
                         
                         <div className={styles.statusBox}>
-                          <span className={`
-                            ${styles.statusTag} 
-                            ${isDelivered ? styles.statusDelivered : ''}
-                            ${isCanceled ? styles.statusCanceled : ''}
-                          `}>
+                          <span 
+                            className={styles.statusTag} 
+                            style={{ 
+                              backgroundColor: order.statusMeta?.bgColor || 'rgba(255, 255, 255, 0.05)', 
+                              borderColor: order.statusMeta?.borderColor || 'var(--border-color)', 
+                              color: order.statusMeta?.color || 'var(--text-primary)' 
+                            }}
+                          >
                             {order.status.toUpperCase()}
                           </span>
-                          <span className={styles.tracking}>
-                            Rastreio: <strong>{order.trackingCode}</strong>
-                          </span>
+
+                          {/* BOTÃO RECUPERAÇÃO PIX (AGUARDANDO PAGAMENTO) */}
+                          {order.statusCode === ORDER_STATUSES.AGUARDANDO_PAGAMENTO && (
+                            <button 
+                              type="button" 
+                              onClick={() => setPixModalOrder(order)} 
+                              className={styles.pixPayBtn}
+                              title="Ver código PIX ou QR Code no PagBank"
+                            >
+                              <QrCode size={13} />
+                              <span>VER CÓDIGO PIX</span>
+                            </button>
+                          )}
+
+                          {/* RASTREAMENTO REAL */}
+                          {(order.statusCode === ORDER_STATUSES.SAIU_PARA_ENTREGA || order.statusCode === ORDER_STATUSES.ENTREGUE) && 
+                            order.trackingCode && 
+                            !order.trackingCode.toLowerCase().includes('processando') && 
+                            !order.trackingCode.toLowerCase().includes('aguardando') ? (
+                            <div className={styles.trackingGroup}>
+                              <span className={styles.trackingLabel}>Rastreio:</span>
+                              <code className={styles.trackingCode}>{order.trackingCode}</code>
+                              <button 
+                                type="button" 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(order.trackingCode);
+                                  alert("Código de rastreamento copiado!");
+                                }}
+                                className={styles.copyTrackingBtn}
+                                title="Copiar código"
+                              >
+                                <Copy size={12} />
+                                <span>COPIAR</span>
+                              </button>
+                              {order.trackingUrl && (
+                                <a 
+                                  href={order.trackingUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className={styles.copyTrackingBtn}
+                                  style={{ textDecoration: 'none', color: '#c084fc' }}
+                                >
+                                  <span>RASTREAR</span>
+                                </a>
+                              )}
+                            </div>
+                          ) : (
+                            (order.statusCode === ORDER_STATUSES.EM_PRODUCAO || order.statusCode === ORDER_STATUSES.PAGAMENTO_APROVADO) && (
+                              <span className={styles.trackingPendingNote}>
+                                O rastreamento será disponibilizado assim que o pedido for despachado.
+                              </span>
+                            )
+                          )}
                         </div>
                       </header>
 
                       {/* ITENS DO PEDIDO */}
                       <div className={styles.orderItems}>
-                        {order.items.map((item) => (
-                          <div key={item.id} className={styles.orderItemRow}>
+                        {(order.items || []).map((item, idx) => (
+                          <div key={item.id ? `${order.rawId || order.id}-${item.id}` : `${order.rawId || order.id}-item-${idx}`} className={styles.orderItemRow}>
                             <img src={item.image} alt={item.name} className={styles.itemThumb} />
                             <div className={styles.itemInfo}>
                               <strong className={styles.itemTitle}>{item.name}</strong>
-                              <span className={styles.itemMetaText}>Tamanho: {item.size} | R$ {item.price.toFixed(2)}</span>
+                              <span className={styles.itemMetaText}>
+                                Tamanho: {item.size || 'M'} | R$ {parseItemPrice(item).toFixed(2)}
+                              </span>
                             </div>
                             
-                            <button 
-                              type="button"
-                              className={`${styles.reviewBtn} ${item.evaluated ? styles.evaluatedBtn : ''}`}
-                              onClick={() => !item.evaluated && handleOpenReviewModal(item, order.id)}
-                              disabled={item.evaluated || isCanceled}
-                            >
-                              {item.evaluated ? (
-                                <>
-                                  <Check size={12} />
-                                  <span>AVALIADO</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Star size={12} />
-                                  <span>AVALIAR PRODUTO</span>
-                                </>
-                              )}
-                            </button>
+                            {isDelivered ? (
+                              <button 
+                                type="button"
+                                className={`${styles.reviewBtn} ${item.evaluated ? styles.evaluatedBtn : ''}`}
+                                onClick={() => !item.evaluated && handleOpenReviewModal(item, order.rawId || order.id, order.id)}
+                                disabled={item.evaluated || isCanceled}
+                              >
+                                {item.evaluated ? (
+                                  <>
+                                    <Check size={12} />
+                                    <span>AVALIADO</span>
+                                  </>
+                                ) : (
+                                  <>
+                                    <Star size={12} />
+                                    <span>AVALIAR PRODUTO</span>
+                                  </>
+                                )}
+                              </button>
+                            ) : (
+                              <span 
+                                className={styles.reviewPendingBadge} 
+                                title="A avaliação de cada peça fica disponível após a entrega ser confirmada."
+                              >
+                                Disponível após entrega
+                              </span>
+                            )}
                           </div>
                         ))}
+                      </div>
+
+                      {/* SEÇÃO DE VALES-PRESENTE DO PEDIDO */}
+                      {(order.hasGiftCard || (Array.isArray(order.items) && order.items.some(i => i.isGiftCard || i.category === 'gift-card' || String(i.id || '').includes('vale')))) && (
+                        <div className={styles.orderGiftCardsSection}>
+                          <div className={styles.giftCardSectionHeader}>
+                            <Gift size={15} color="#00ff88" />
+                            <strong>VALES-PRESENTE DIGITAIS DO PEDIDO</strong>
+                          </div>
+
+                          {(!['pago', 'paid', 'aprovado', 'approved', 'pagamento_aprovado', 'em_producao', 'em_separacao', 'enviado', 'entregue'].includes(String(order.statusCode || order.status || '').toLowerCase())) ? (
+                            <div className={styles.giftCardPendingNotice}>
+                              <Clock size={16} color="#f59e0b" />
+                              <div style={{ textAlign: 'left' }}>
+                                <strong style={{ color: '#f59e0b', display: 'block', fontSize: '0.78rem', letterSpacing: '0.5px', marginBottom: '0.2rem' }}>
+                                  CÓDIGO DE RESGATE BLOQUEADO • AGUARDANDO CONFIRMAÇÃO DO PAGAMENTO
+                                </strong>
+                                <span style={{ fontSize: '0.74rem', color: 'var(--text-muted)' }}>
+                                  O código exclusivo do seu vale-presente será liberado e revelado automaticamente aqui assim que o pagamento via PIX for aprovado.
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className={styles.generatedGiftCardsList}>
+                              {Array.isArray(order.giftCardsGenerated) && order.giftCardsGenerated.length > 0 ? (
+                                order.giftCardsGenerated.map((card, cIdx) => (
+                                  <div key={card.code || cIdx} className={styles.giftCardItemBox}>
+                                    <div className={styles.giftCardItemTop}>
+                                      <div className={styles.giftCardCodeBadge}>
+                                        <code>{card.code}</code>
+                                        {card.status === 'redeemed' || card.deliveryMode === 'self' ? (
+                                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.2rem 0.5rem', background: 'rgba(0, 255, 136, 0.12)', border: '1px solid rgba(0, 255, 136, 0.3)', borderRadius: '4px', color: '#00ff88', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.5px' }}>
+                                            <Check size={12} color="#00ff88" />
+                                            <span>ATIVADO</span>
+                                          </div>
+                                        ) : (
+                                          <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}>
+                                            <button 
+                                              type="button" 
+                                              onClick={() => handleCopyGiftCode(card.code)}
+                                              className={styles.copyGiftBtn}
+                                              title="Copiar código do vale"
+                                            >
+                                              {copiedGiftCode === card.code ? <Check size={12} color="#00ff88" /> : <Copy size={12} />}
+                                              <span>{copiedGiftCode === card.code ? 'COPIADO!' : 'COPIAR'}</span>
+                                            </button>
+                                            <a
+                                              href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`🎁 Você recebeu um Vale-Presente Digital THR33 no valor de R$ ${Number(card.amount || 0).toFixed(2)}!\n\nResgate no site https://lojathr33.com.br usando o código: ${card.code}`)}`}
+                                              target="_blank"
+                                              rel="noopener noreferrer"
+                                              className={styles.copyGiftBtn}
+                                              style={{ background: '#22c55e', color: '#ffffff', textDecoration: 'none' }}
+                                              title="Mandar código para WhatsApp"
+                                            >
+                                              <Share2 size={12} />
+                                              <span>WHATSAPP</span>
+                                            </a>
+                                          </div>
+                                        )}
+                                      </div>
+                                      <strong className={styles.giftCardValueText}>
+                                        R$ {Number(card.amount || 0).toFixed(2)}
+                                      </strong>
+                                    </div>
+
+                                    <div className={styles.giftCardItemBottom}>
+                                      <span className={card.status === 'redeemed' || card.deliveryMode === 'self' ? styles.giftStatusRedeemed : styles.giftStatusActive}>
+                                        {card.deliveryMode === 'self' || card.status === 'redeemed' 
+                                          ? '✓ ATIVADO • Créditos já resgatados na carteira digital' 
+                                          : '● Código disponível para presente / resgate'}
+                                      </span>
+                                      {card.recipientName && (
+                                        <span className={styles.giftRecipientName}>
+                                          Para: <strong>{card.recipientName}</strong>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                ))
+                              ) : (
+                                <div className={styles.giftCardPendingNotice}>
+                                  <Sparkles size={14} color="#00ff88" />
+                                  <span>Vales-presente emitidos com sucesso. Seus créditos já foram creditados à sua carteira digital.</span>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {/* SEÇÃO FISCAL & NOTA FISCAL (NF-E) */}
+                      <div className={styles.orderFiscalSection}>
+                        {order.nfeUrl || order.nfeKey ? (
+                          <div className={styles.nfeContainer}>
+                            <div className={styles.nfeHeaderRow}>
+                              <span className={styles.nfeLabel}>NOTA FISCAL ELETRÔNICA (NF-E):</span>
+                              {order.nfeUrl && (
+                                <a 
+                                  href={order.nfeUrl} 
+                                  target="_blank" 
+                                  rel="noreferrer" 
+                                  className={styles.viewDanfeLink}
+                                >
+                                  <FileText size={13} />
+                                  <span>BAIXAR DANFE (PDF)</span>
+                                </a>
+                              )}
+                            </div>
+
+                            {order.nfeKey && (
+                              <div className={styles.nfeKeyRow}>
+                                <span className={styles.keyLabel}>Chave de Acesso:</span>
+                                <code className={styles.nfeKeyCode}>{order.nfeKey}</code>
+                                <button 
+                                  type="button" 
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(order.nfeKey);
+                                    alert("Chave da NF-e copiada com sucesso.");
+                                  }} 
+                                  className={styles.copyKeyBtn}
+                                  title="Copiar Chave de Acesso"
+                                >
+                                  <Copy size={11} />
+                                  <span>COPIAR</span>
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className={styles.nfePendingBox}>
+                            <span className={styles.nfePendingText}>
+                              NF-E: EM EMISSÃO JUNTO AO LOTE DE PRODUÇÃO
+                            </span>
+                            <small className={styles.nfePendingSub}>
+                              O documento fiscal será disponibilizado para download assim que o pedido for despachado.
+                            </small>
+                          </div>
+                        )}
                       </div>
 
                       {/* FOOTER DO CARD COM BOTÃO DE VER DETALHES */}
                       <footer className={styles.orderFooter}>
                         <div className={styles.orderFooterLeft}>
                           <span>Total do Pedido:</span>
-                          <strong className={styles.orderTotalValue}>R$ {order.total.toFixed(2)}</strong>
+                          <strong className={styles.orderTotalValue}>R$ {Number(order.total || 0).toFixed(2)}</strong>
                         </div>
 
                         <div className={styles.orderFooterActions}>
+                          <button 
+                            type="button" 
+                            onClick={() => handleSupportAction(order)} 
+                            className={`${styles.supportHelpBtn} ${order.hasOpenTicket ? styles.activeSupportBtn : ''}`}
+                            title={order.hasOpenTicket || order.lastTicketId ? "Acompanhar posicionamento do suporte" : "Solicitar suporte ou troca da peça"}
+                          >
+                            <Headphones size={13} />
+                            <span>
+                              {order.hasOpenTicket 
+                                ? getTicketStatusLabel(order.lastTicketStatus)
+                                : (order.lastTicketId ? 'VER CHAMADO' : 'SOLICITAR SUPORTE')}
+                            </span>
+                          </button>
                           <button 
                             type="button" 
                             onClick={() => setSelectedOrderDetails(order)} 
                             className={styles.viewDetailsBtn}
                           >
                             <Eye size={14} />
-                            <span>VER DETALHES DO PEDIDO</span>
+                            <span>VER DETALHES</span>
                           </button>
                         </div>
                       </footer>
@@ -1295,7 +2959,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                   <span className={styles.sectionLabel}>STATUS & RASTREAMENTO DO ENVIO:</span>
                   
                   <div className={styles.timelineStepper}>
-                    {ORDER_STEPS.map((step, idx) => {
+                    {ORDER_TIMELINE_STEPS.map((step, idx) => {
                       const currentIdx = getStepIndex(selectedOrderDetails.statusCode);
                       const isCompleted = idx < currentIdx;
                       const isCurrent = idx === currentIdx;
@@ -1312,7 +2976,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                           <span className={`${styles.timelineStepLabel} ${isCurrent ? styles.activeTimelineLabel : ''}`}>
                             {step.label}
                           </span>
-                          {idx < ORDER_STEPS.length - 1 && (
+                          {idx < ORDER_TIMELINE_STEPS.length - 1 && (
                             <div className={`${styles.timelineConnector} ${idx < currentIdx ? styles.connectorActive : ''}`} />
                           )}
                         </div>
@@ -1320,14 +2984,32 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     })}
                   </div>
 
-                  {/* CÓDIGO DE RASTREIO */}
-                  <div className={styles.trackingInfoCard}>
-                    <Truck size={16} />
-                    <div className={styles.trackingDetails}>
-                      <span>Código de Rastreamento (Correios):</span>
-                      <strong>{selectedOrderDetails.trackingCode}</strong>
+                  {/* BOTÃO RECUPERAÇÃO PIX (MODAL DETALHES) */}
+                  {selectedOrderDetails.statusCode === ORDER_STATUSES.AGUARDANDO_PAGAMENTO && (
+                    <div style={{ width: '100%', marginTop: '0.5rem', textAlign: 'center' }}>
+                      <button 
+                        type="button" 
+                        onClick={() => setPixModalOrder(selectedOrderDetails)} 
+                        className={styles.pixPayBtn}
+                        style={{ fontSize: '0.8rem', padding: '0.65rem 1.25rem' }}
+                      >
+                        <QrCode size={15} />
+                        <span>PAGAR COM PIX (VER QR CODE & COPIA E COLA)</span>
+                      </button>
                     </div>
-                    {selectedOrderDetails.trackingCode && !selectedOrderDetails.trackingCode.includes('Aguardando') && (
+                  )}
+
+                  {/* CÓDIGO DE RASTREIO REAL */}
+                  {(selectedOrderDetails.statusCode === ORDER_STATUSES.SAIU_PARA_ENTREGA || selectedOrderDetails.statusCode === ORDER_STATUSES.ENTREGUE) &&
+                  selectedOrderDetails.trackingCode && 
+                  !selectedOrderDetails.trackingCode.toLowerCase().includes('processando') && 
+                  !selectedOrderDetails.trackingCode.toLowerCase().includes('aguardando') ? (
+                    <div className={styles.trackingInfoCard}>
+                      <Truck size={16} />
+                      <div className={styles.trackingDetails}>
+                        <span>Código de Rastreamento {selectedOrderDetails.carrier ? `(${selectedOrderDetails.carrier})` : ''}:</span>
+                        <strong>{selectedOrderDetails.trackingCode}</strong>
+                      </div>
                       <button 
                         type="button" 
                         onClick={() => handleCopyTrackingCode(selectedOrderDetails.trackingCode)}
@@ -1336,8 +3018,28 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                         {copiedTracking ? <Check size={12} /> : <Copy size={12} />}
                         <span>{copiedTracking ? 'COPIADO!' : 'COPIAR'}</span>
                       </button>
-                    )}
-                  </div>
+                      {selectedOrderDetails.trackingUrl && (
+                        <a 
+                          href={selectedOrderDetails.trackingUrl} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className={styles.copyTrackingBtn}
+                          style={{ textDecoration: 'none', color: '#c084fc' }}
+                        >
+                          <span>RASTREAR</span>
+                        </a>
+                      )}
+                    </div>
+                  ) : (
+                    <div className={styles.trackingInfoCard} style={{ opacity: 0.85 }}>
+                      <Clock size={16} color="var(--text-muted)" />
+                      <div className={styles.trackingDetails}>
+                        <span style={{ fontStyle: 'italic' }}>
+                          O rastreamento oficial será disponibilizado nesta tela assim que o pedido for despachado.
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className={styles.canceledNoticeBox}>
@@ -1351,38 +3053,107 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
               {/* LISTAGEM DOS ITENS */}
               <div className={styles.modalItemsSection}>
-                <span className={styles.sectionLabel}>ITENS INCLUSOS ({selectedOrderDetails.items.length}):</span>
+                <span className={styles.sectionLabel}>ITENS INCLUSOS ({selectedOrderDetails.items?.length || 0}):</span>
                 <div className={styles.modalItemsList}>
-                  {selectedOrderDetails.items.map((item) => (
-                    <div key={item.id} className={styles.modalItemRow}>
+                  {(selectedOrderDetails.items || []).map((item, idx) => (
+                    <div key={item.id ? `detail-${selectedOrderDetails.rawId || selectedOrderDetails.id}-${item.id}` : `detail-item-${idx}`} className={styles.modalItemRow}>
                       <img src={item.image} alt={item.name} />
                       <div className={styles.modalItemInfo}>
                         <strong>{item.name}</strong>
-                        <span>Tamanho: <strong>{item.size}</strong> • R$ {item.price.toFixed(2)}</span>
+                        <span>Tamanho: <strong>{item.size || 'M'}</strong> • R$ {parseItemPrice(item).toFixed(2)}</span>
                       </div>
                       
-                      <button 
-                        type="button"
-                        className={`${styles.reviewBtn} ${item.evaluated ? styles.evaluatedBtn : ''}`}
-                        onClick={() => !item.evaluated && handleOpenReviewModal(item, selectedOrderDetails.id)}
-                        disabled={item.evaluated || selectedOrderDetails.statusCode === 'canceled'}
-                      >
-                        {item.evaluated ? (
-                          <>
-                            <Check size={12} />
-                            <span>AVALIADO</span>
-                          </>
-                        ) : (
-                          <>
-                            <Star size={12} />
-                            <span>AVALIAR</span>
-                          </>
-                        )}
-                      </button>
+                      {(selectedOrderDetails.statusCode === ORDER_STATUSES.ENTREGUE || selectedOrderDetails.statusCode === 'delivered' || normalizeOrderStatus(selectedOrderDetails.status) === ORDER_STATUSES.ENTREGUE) ? (
+                        <button 
+                          type="button"
+                          className={`${styles.reviewBtn} ${item.evaluated ? styles.evaluatedBtn : ''}`}
+                          onClick={() => !item.evaluated && handleOpenReviewModal(item, selectedOrderDetails.rawId || selectedOrderDetails.id, selectedOrderDetails.id)}
+                          disabled={item.evaluated || selectedOrderDetails.statusCode === 'canceled'}
+                        >
+                          {item.evaluated ? (
+                            <>
+                              <Check size={12} />
+                              <span>AVALIADO</span>
+                            </>
+                          ) : (
+                            <>
+                              <Star size={12} />
+                              <span>AVALIAR</span>
+                            </>
+                          )}
+                        </button>
+                      ) : (
+                        <span 
+                          className={styles.reviewPendingBadge} 
+                          title="A avaliação de cada peça fica disponível após a entrega ser confirmada."
+                        >
+                          Disponível após entrega
+                        </span>
+                      )}
                     </div>
                   ))}
                 </div>
               </div>
+
+              {/* VALES-PRESENTE DO PEDIDO NO MODAL */}
+              {(selectedOrderDetails.hasGiftCard || (Array.isArray(selectedOrderDetails.giftCardsGenerated) && selectedOrderDetails.giftCardsGenerated.length > 0)) && (
+                <div className={styles.orderGiftCardsSection} style={{ marginBottom: '1.25rem' }}>
+                  <div className={styles.giftCardSectionHeader}>
+                    <Gift size={15} color="#00ff88" />
+                    <strong>VALES-PRESENTE DIGITAIS DO PEDIDO</strong>
+                  </div>
+                  <div className={styles.generatedGiftCardsList}>
+                    {selectedOrderDetails.giftCardsGenerated.map((card, cIdx) => (
+                      <div key={card.code || cIdx} className={styles.giftCardItemBox}>
+                        <div className={styles.giftCardItemTop}>
+                          <div className={styles.giftCardCodeBadge}>
+                            <code>{card.code}</code>
+                            {card.status === 'redeemed' || card.deliveryMode === 'self' ? (
+                              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', padding: '0.2rem 0.5rem', background: 'rgba(0, 255, 136, 0.12)', border: '1px solid rgba(0, 255, 136, 0.3)', borderRadius: '4px', color: '#00ff88', fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.5px' }}>
+                                <Check size={12} color="#00ff88" />
+                                <span>ATIVADO</span>
+                              </div>
+                            ) : (
+                              <div style={{ display: 'inline-flex', gap: '0.35rem', alignItems: 'center' }}>
+                                <button 
+                                  type="button" 
+                                  onClick={() => handleCopyGiftCode(card.code)}
+                                  className={styles.copyGiftBtn}
+                                  title="Copiar código do vale"
+                                >
+                                  {copiedGiftCode === card.code ? <Check size={12} color="#00ff88" /> : <Copy size={12} />}
+                                  <span>{copiedGiftCode === card.code ? 'COPIADO!' : 'COPIAR'}</span>
+                                </button>
+                                <a
+                                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`🎁 Você recebeu um Vale-Presente Digital THR33 no valor de R$ ${Number(card.amount || 0).toFixed(2)}!\n\nResgate no site https://lojathr33.com.br usando o código: ${card.code}`)}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className={styles.copyGiftBtn}
+                                  style={{ background: '#22c55e', color: '#ffffff', textDecoration: 'none' }}
+                                  title="Mandar código para WhatsApp"
+                                >
+                                  <Share2 size={12} />
+                                  <span>WHATSAPP</span>
+                                </a>
+                              </div>
+                            )}
+                          </div>
+                          <strong className={styles.giftCardValueText}>
+                            R$ {Number(card.amount || 0).toFixed(2)}
+                          </strong>
+                        </div>
+                        <div className={styles.giftCardItemBottom}>
+                          <span className={card.status === 'redeemed' || card.deliveryMode === 'self' ? styles.giftStatusRedeemed : styles.giftStatusActive}>
+                            {card.deliveryMode === 'self' || card.status === 'redeemed' 
+                              ? '✓ ATIVADO • Créditos já resgatados na carteira digital' 
+                              : '● Código disponível para presente / resgate'}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* GRADE COM ENDEREÇO DE ENTREGA + RESUMO FINANCEIRO */}
               <div className={styles.detailsTwoCols}>
@@ -1399,7 +3170,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     CEP: {selectedOrderDetails.address.cep}
                   </p>
                   <span className={styles.shippingMethodBadge}>
-                    <Truck size={13} /> {selectedOrderDetails.shippingMethod}
+                    <Truck size={13} /> {resolveCarrierAndService(selectedOrderDetails).fullName || selectedOrderDetails.shippingMethod}
                   </span>
                 </div>
 
@@ -1418,27 +3189,93 @@ export function Perfil({ defaultTab = 'pedidos' }) {
 
                     <div className={styles.finRow}>
                       <span>Subtotal:</span>
-                      <span>R$ {selectedOrderDetails.subtotal.toFixed(2)}</span>
+                      <span>R$ {Number(selectedOrderDetails.subtotal || 0).toFixed(2)}</span>
                     </div>
 
                     {selectedOrderDetails.coupon && (
                       <div className={`${styles.finRow} ${styles.finDiscount}`}>
                         <span>Cupom ({selectedOrderDetails.coupon.code}):</span>
-                        <span>- R$ {selectedOrderDetails.coupon.discount.toFixed(2)}</span>
+                        <span style={{ color: '#00ff88' }}>- R$ {Number(selectedOrderDetails.coupon.discount || 0).toFixed(2)}</span>
+                      </div>
+                    )}
+
+                    {Number(selectedOrderDetails.walletDeduction || 0) > 0 && (
+                      <div className={`${styles.finRow} ${styles.finDiscount}`}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', flexWrap: 'wrap' }}>
+                          Saldo da Carteira Utilizado:
+                          {selectedOrderDetails.walletRefunded ? (
+                            <span style={{ fontSize: '0.68rem', color: '#00ff88', background: 'rgba(0, 255, 136, 0.1)', padding: '0.1rem 0.35rem', borderRadius: '3px', fontWeight: 600 }}>
+                              ESTORNADO P/ CARTEIRA
+                            </span>
+                          ) : null}
+                        </span>
+                        <span style={{ color: '#00ff88' }}>
+                          - R$ {Number(selectedOrderDetails.walletDeduction || 0).toFixed(2)}
+                        </span>
                       </div>
                     )}
 
                     <div className={styles.finRow}>
                       <span>Frete:</span>
-                      <span>{selectedOrderDetails.shippingCost === 0 ? 'GRÁTIS' : `R$ ${selectedOrderDetails.shippingCost.toFixed(2)}`}</span>
+                      <span>{Number(selectedOrderDetails.shippingCost || 0) === 0 ? 'GRÁTIS' : `R$ ${Number(selectedOrderDetails.shippingCost || 0).toFixed(2)}`}</span>
                     </div>
 
                     <div className={`${styles.finRow} ${styles.finTotal}`}>
                       <span>TOTAL PAGO:</span>
-                      <strong>R$ {selectedOrderDetails.total.toFixed(2)}</strong>
+                      <strong>R$ {Number(selectedOrderDetails.total || 0).toFixed(2)}</strong>
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* SEÇÃO FISCAL & NOTA FISCAL (NF-E) */}
+              <div className={styles.orderFiscalSection}>
+                {selectedOrderDetails.nfeUrl || selectedOrderDetails.nfeKey ? (
+                  <div className={styles.nfeContainer}>
+                    <div className={styles.nfeHeaderRow}>
+                      <span className={styles.nfeLabel}>NOTA FISCAL ELETRÔNICA (NF-E):</span>
+                      {selectedOrderDetails.nfeUrl && (
+                        <a 
+                          href={selectedOrderDetails.nfeUrl} 
+                          target="_blank" 
+                          rel="noreferrer" 
+                          className={styles.viewDanfeLink}
+                        >
+                          <FileText size={13} />
+                          <span>BAIXAR DANFE (PDF)</span>
+                        </a>
+                      )}
+                    </div>
+
+                    {selectedOrderDetails.nfeKey && (
+                      <div className={styles.nfeKeyRow}>
+                        <span className={styles.keyLabel}>Chave de Acesso:</span>
+                        <code className={styles.nfeKeyCode}>{selectedOrderDetails.nfeKey}</code>
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            navigator.clipboard.writeText(selectedOrderDetails.nfeKey);
+                            alert("Chave da NF-e copiada com sucesso.");
+                          }} 
+                          className={styles.copyKeyBtn}
+                          title="Copiar Chave de Acesso"
+                        >
+                          <Copy size={11} />
+                          <span>COPIAR</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className={styles.nfePendingBox}>
+                    <span className={styles.nfePendingText}>
+                      NF-E: EM EMISSÃO JUNTO AO LOTE DE PRODUÇÃO
+                    </span>
+                    <small className={styles.nfePendingSub}>
+                      O documento fiscal será disponibilizado para download assim que o pedido for despachado.
+                    </small>
+                  </div>
+                )}
               </div>
 
               {/* SEÇÃO DE CUIDADOS & SUPORTE DO CLIENTE */}
@@ -1506,7 +3343,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
               </div>
 
               <p className={styles.modalDesc}>
-                Tem certeza que deseja cancelar este pedido? Se aprovado, o estorno do valor de <strong>R$ {cancelingOrder.total.toFixed(2)}</strong> será processado automaticamente pelo PagBank.
+                Tem certeza que deseja cancelar este pedido? Se aprovado, o estorno do valor de <strong>R$ {Number(cancelingOrder.total || 0).toFixed(2)}</strong> será processado automaticamente pelo PagBank.
               </p>
 
               <form onSubmit={handleConfirmCancelOrder} className={styles.reviewForm}>
@@ -1574,7 +3411,7 @@ export function Perfil({ defaultTab = 'pedidos' }) {
               </div>
 
               <p className={styles.modalDesc}>
-                Conte-nos o que aconteceu. Nossa equipe de controle de qualidade e suporte do Ateliê atenderá sua solicitação prioritariamente.
+                Conte-nos o que aconteceu. Nossa equipe de controle de qualidade e suporte da THR33 atenderá sua solicitação prioritariamente.
               </p>
 
               <form onSubmit={handleSubmitIssue} className={styles.reviewForm}>
@@ -1585,11 +3422,11 @@ export function Perfil({ defaultTab = 'pedidos' }) {
                     onChange={(e) => setIssueType(e.target.value)}
                     className={styles.selectInput}
                   >
-                    <option value="danificado">📦 Produto danificado ou com defeito de confecção</option>
-                    <option value="nao_chegou">❌ Pedido não chegou / Extravio no transporte</option>
-                    <option value="errado">🔄 Tamanho ou item entregue incorreto</option>
-                    <option value="indevida">⚠️ Cobrança indevida ou problema no pagamento</option>
-                    <option value="outro">💬 Outro tipo de solicitação</option>
+                    <option value="danificado">Produto danificado ou com defeito de confecção</option>
+                    <option value="nao_chegou">Pedido não chegou / Extravio no transporte</option>
+                    <option value="errado">Tamanho ou item entregue incorreto</option>
+                    <option value="indevida">Cobrança indevida ou problema no pagamento</option>
+                    <option value="outro">Outro tipo de solicitação</option>
                   </select>
                 </div>
 
@@ -1620,13 +3457,27 @@ export function Perfil({ defaultTab = 'pedidos' }) {
       </AnimatePresence>
 
       {/* ============================================================
-          MODAL 4: AVALIAÇÃO DE PRODUTO
+          MODAL 4: AVALIAÇÃO DE PRODUTO (ISOLADO PARA DIGITAÇÃO ULTRA-FLUIDA)
           ============================================================ */}
       <AnimatePresence>
         {evaluatingItem && (
-          <div className={styles.modalBackdrop} onClick={() => setEvaluatingItem(null)}>
+          <ReviewModal 
+            item={evaluatingItem}
+            onClose={() => setEvaluatingItem(null)}
+            onReviewSuccess={handleReviewSuccess}
+            user={currentUser || user}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ============================================================
+          MODAL 5: ACOMPANHAMENTO E FEEDBACK DO ATENDIMENTO (SAC)
+          ============================================================ */}
+      <AnimatePresence>
+        {isFeedbackModalOpen && selectedOrderForSupport && (
+          <div className={styles.modalBackdrop} onClick={() => setIsFeedbackModalOpen(false)}>
             <motion.div 
-              className={styles.modalCard}
+              className={styles.supportModalCard}
               onClick={(e) => e.stopPropagation()}
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -1634,61 +3485,327 @@ export function Perfil({ defaultTab = 'pedidos' }) {
               transition={{ duration: 0.2 }}
             >
               <div className={styles.modalHeader}>
-                <h3 className={styles.modalTitle}>AVALIAR PRODUTO</h3>
-                <button type="button" onClick={() => setEvaluatingItem(null)} className={styles.closeModalBtn}>
+                <div className={styles.modalHeaderInfo}>
+                  <span className={styles.protocolBadge}>
+                    PROTOCOLO: {activeTicketData?.id || selectedOrderForSupport?.lastTicketId || 'CONSULTANDO...'}
+                  </span>
+                  <h3 className={styles.modalTitle}>ACOMPANHAMENTO DE ATENDIMENTO</h3>
+                </div>
+                <button type="button" onClick={() => setIsFeedbackModalOpen(false)} className={styles.closeModalBtn}>
                   <X size={18} />
                 </button>
               </div>
 
-              <div className={styles.modalItemPreview}>
-                <img src={evaluatingItem.image} alt={evaluatingItem.name} />
-                <div>
-                  <strong>{evaluatingItem.name}</strong>
-                  <span>Tamanho: {evaluatingItem.size}</span>
+              {fetchingTicket ? (
+                <div className={styles.loadingTicketBox}>
+                  <p>Buscando posicionamento da equipe no Firestore...</p>
                 </div>
+              ) : activeTicketData ? (
+                <div className={styles.feedbackBody}>
+                  {/* STATUS BAR */}
+                  <div className={styles.statusDisplayBar}>
+                    <span className={styles.statusLabel}>STATUS ATUAL:</span>
+                    <span className={`${styles.ticketStatusPill} ${styles[activeTicketData.status] || ''}`}>
+                      {getTicketStatusLabel(activeTicketData.status)}
+                    </span>
+                  </div>
+
+                  {/* RESUMO DA SOLICITAÇÃO */}
+                  <div className={styles.ticketSummaryBox}>
+                    <div className={styles.summaryItem}>
+                      <span>Pedido Referente:</span>
+                      <strong>#{selectedOrderForSupport.id}</strong>
+                    </div>
+                    <div className={styles.summaryItem}>
+                      <span>Peça Relatada:</span>
+                      <strong>{activeTicketData.productName} {activeTicketData.productSize ? `(${activeTicketData.productSize})` : ''}</strong>
+                    </div>
+                    <div className={styles.summaryItem}>
+                      <span>Motivo do Chamado:</span>
+                      <strong>{activeTicketData.reason}</strong>
+                    </div>
+                    <div className={styles.summaryItem}>
+                      <span>Data de Abertura:</span>
+                      <small>{activeTicketData.createdAt ? new Date(activeTicketData.createdAt).toLocaleString('pt-BR') : 'Data recente'}</small>
+                    </div>
+                  </div>
+
+                  {/* RELATO DO CLIENTE */}
+                  <div className={styles.clientMessageBox}>
+                    <span className={styles.boxTitle}>SUA MENSAGEM:</span>
+                    <p>"{activeTicketData.message}"</p>
+                  </div>
+
+                  {/* RESPOSTA OFICIAL DA EQUIPE THR33 */}
+                  <div className={styles.adminResponseBox}>
+                    <span className={styles.responseTitle}>RESPOSTA DA EQUIPE THR33:</span>
+                    {activeTicketData.adminNotes ? (
+                      <div className={styles.responseContent}>
+                        <p>{activeTicketData.adminNotes}</p>
+                        <small className={styles.updateTime}>
+                          Atualizado em {new Date(activeTicketData.updatedAt || activeTicketData.createdAt).toLocaleString('pt-BR')}
+                        </small>
+                      </div>
+                    ) : (
+                      <p className={styles.pendingResponseText}>
+                        Sua solicitação foi registrada no sistema e está em análise prioritária pela equipe de expedição e qualidade. As orientações e instruções serão publicadas aqui em breve.
+                      </p>
+                    )}
+                  </div>
+
+                  <div className={styles.modalActions}>
+                    <button type="button" onClick={() => setIsFeedbackModalOpen(false)} className={styles.confirmBtn}>
+                      ENTENDIDO / FECHAR
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className={styles.emptyTicketBox}>
+                  <p>Nenhum registro encontrado para este chamado.</p>
+                  <button type="button" onClick={() => setIsFeedbackModalOpen(false)} className={styles.cancelBtn}>
+                    Fechar
+                  </button>
+                </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ============================================================
+          MODAL 6: ABERTURA DE NOVO CHAMADO DE SUPORTE
+          ============================================================ */}
+      <AnimatePresence>
+        {isNewTicketModalOpen && selectedOrderForSupport && (
+          <div className={styles.modalBackdrop} onClick={() => setIsNewTicketModalOpen(false)}>
+            <motion.div 
+              className={styles.supportModalCard}
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className={styles.modalHeader}>
+                <div className={styles.modalHeaderInfo}>
+                  <span className={styles.supportBadge}>NOVO CHAMADO</span>
+                  <h3 className={styles.modalTitle}>SUPORTE AO PEDIDO #{selectedOrderForSupport.id}</h3>
+                </div>
+                <button type="button" onClick={() => setIsNewTicketModalOpen(false)} className={styles.closeModalBtn}>
+                  <X size={18} />
+                </button>
               </div>
 
-              <form onSubmit={handleSubmitReview} className={styles.reviewForm}>
-                <div className={styles.ratingPicker}>
-                  <label>Sua Nota (1 a 5 estrelas):</label>
-                  <div className={styles.starsSelectRow}>
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => setReviewRating(star)}
-                        className={styles.starBtn}
-                      >
-                        <Star 
-                          size={24} 
-                          fill={star <= reviewRating ? "#ffffff" : "none"} 
-                          color={star <= reviewRating ? "#ffffff" : "#525252"} 
-                        />
-                      </button>
+              <form onSubmit={handleSendSupportTicket} className={styles.supportForm}>
+                <div className={styles.inputField}>
+                  <label>Qual peça apresentou problema ou necessita de troca?</label>
+                  <select 
+                    value={selectedProductForIssue} 
+                    onChange={(e) => setSelectedProductForIssue(e.target.value)}
+                  >
+                    <option value="">Geral do Pedido (Todos os Itens)</option>
+                    {selectedOrderForSupport.items?.map(item => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} (Tamanho: {item.size || 'M'}) - R$ {parseItemPrice(item).toFixed(2)}
+                      </option>
                     ))}
-                  </div>
+                  </select>
                 </div>
 
                 <div className={styles.inputField}>
-                  <label>Seu Comentário sobre o caimento, tecido e acabamento:</label>
+                  <label>Motivo da Solicitação *</label>
+                  <select 
+                    value={supportReason} 
+                    onChange={(e) => setSupportReason(e.target.value)}
+                    required
+                  >
+                    <option value="">Selecione um motivo...</option>
+                    {selectedOrderForSupport.statusCode === 'delivered' || selectedOrderForSupport.status === 'Entregue' || selectedOrderForSupport.status === 'ENTREGUE' ? (
+                      <>
+                        <option value="Troca de Tamanho">Quero trocar o tamanho da peça (Modelagem Boxy/Oversized)</option>
+                        <option value="Defeito de Fabricação">Defeito de costura, acabamento ou estampa</option>
+                        <option value="Item Incorreto">Recebi modelo, cor ou tamanho diferente do pedido</option>
+                        <option value="Devolução / Arrependimento">Direito de arrependimento / devolução (7 dias)</option>
+                      </>
+                    ) : selectedOrderForSupport.statusCode === 'in_transit' || selectedOrderForSupport.status === 'Em Trânsito' || selectedOrderForSupport.status === 'ENVIADO' ? (
+                      <>
+                        <option value="Atraso na Entrega">Atraso na entrega dos Correios ou Transportadora</option>
+                        <option value="Rastreio Inválido / Parado">Código de rastreio não atualiza ou sem movimentação</option>
+                        <option value="Problema no Endereço">Endereço precisa de correção urgente na transportadora</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="Alteração de Endereço">Alterar endereço de entrega antes do envio</option>
+                        <option value="Dúvida de Prazo">Dúvida sobre o prazo de confecção / envio</option>
+                        <option value="Cancelamento">Cancelar pedido antes do envio / estorno</option>
+                      </>
+                    )}
+                  </select>
+                </div>
+
+                <div className={styles.inputField}>
+                  <label>Explique o que aconteceu *</label>
                   <textarea 
-                    rows={4}
-                    placeholder="Ex: O tecido heavyweight é impressionante e a modelagem Boxy veste perfeitamente..."
-                    value={reviewComment}
-                    onChange={(e) => setReviewComment(e.target.value)}
+                    rows={4} 
+                    placeholder="Descreva detalhes como novas medidas desejadas, motivo da troca ou solicitação específica..."
+                    value={supportMessage}
+                    onChange={(e) => setSupportMessage(e.target.value)}
                     required
                   />
                 </div>
 
                 <div className={styles.modalActions}>
-                  <button type="button" onClick={() => setEvaluatingItem(null)} className={styles.cancelBtn}>
-                    Cancelar
+                  <button type="button" onClick={() => setIsNewTicketModalOpen(false)} className={styles.cancelBtn}>
+                    CANCELAR
                   </button>
-                  <button type="submit" className={styles.saveBtn}>
-                    PUBLICAR AVALIAÇÃO
+                  <button type="submit" disabled={sendingTicket} className={styles.sendSupportBtn}>
+                    <Headphones size={14} />
+                    <span>{sendingTicket ? 'ENVIANDO CHAMADO...' : 'CONFIRMAR E ABRIR CHAMADO'}</span>
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* MODAL DE RECUPERAÇÃO DE PIX (AGUARDANDO PAGAMENTO) */}
+      <AnimatePresence>
+        {pixModalOrder && (
+          <div className={styles.pixModalBackdrop} onClick={() => setPixModalOrder(null)}>
+            <motion.div 
+              className={styles.pixModal} 
+              onClick={(e) => e.stopPropagation()}
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className={styles.pixModalHeader}>
+                <div className={styles.pixModalHeaderInfo}>
+                  <span className={styles.pixModalBadge}>PAGAMENTO PIX</span>
+                  <h3 className={styles.pixModalTitle}>{pixModalOrder.id}</h3>
+                </div>
+                <button 
+                  type="button" 
+                  onClick={() => setPixModalOrder(null)} 
+                  className={styles.closeModalBtn}
+                  aria-label="Fechar"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+
+              <div className={styles.pixModalBody}>
+                <div className={styles.pixModalOrderTotal}>
+                  R$ {Number(pixModalOrder.total || 0).toFixed(2).replace('.', ',')}
+                </div>
+                <p className={styles.pixModalInstruction}>
+                  Abra o app do seu banco, escolha <strong>Pix</strong> e escaneie o código abaixo:
+                </p>
+
+                <div className={styles.pixModalQrImage}>
+                  <img 
+                    src={pixModalOrder.pixQrCodeUrl || `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=THR33-PIX-${pixModalOrder.rawId || pixModalOrder.id}`} 
+                    alt="QR Code PIX PagBank" 
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  />
+                </div>
+
+                <div className={styles.pixModalCopyArea}>
+                  <input 
+                    type="text" 
+                    readOnly 
+                    value={pixModalOrder.pixCopiaECola || `00020126580014br.gov.bcb.pix0136pagbank-thr33-${pixModalOrder.rawId || pixModalOrder.id}`}
+                    className={styles.pixModalInput} 
+                  />
+                  <button 
+                    type="button" 
+                    onClick={() => handleCopyPixModal(pixModalOrder.pixCopiaECola || `00020126580014br.gov.bcb.pix0136pagbank-thr33-${pixModalOrder.rawId || pixModalOrder.id}`)}
+                    className={styles.pixModalCopyBtn}
+                  >
+                    {copiedPixModal ? <Check size={14} /> : <Copy size={14} />}
+                    <span>{copiedPixModal ? 'COPIADO!' : 'COPIAR CHAVE'}</span>
+                  </button>
+                </div>
+
+                {/* TIMER REGRESSIVO PIX (20 MINUTOS) */}
+                <div 
+                  className={`${styles.pixModalTimerCard} ${
+                    pixModalExpired 
+                      ? styles.pixModalTimerCardExpired 
+                      : pixModalTimeRemaining <= 180 
+                        ? styles.pixModalTimerCardWarning 
+                        : ''
+                  }`}
+                >
+                  <div className={styles.pixModalTimerLeft}>
+                    <Clock 
+                      size={18} 
+                      className={`${styles.pixModalTimerIcon} ${
+                        pixModalExpired 
+                          ? styles.pixModalTimerIconExpired 
+                          : pixModalTimeRemaining <= 180 
+                            ? styles.pixModalTimerIconWarning 
+                            : ''
+                      }`} 
+                    />
+                    <div className={styles.pixModalTimerInfo}>
+                      <span className={styles.pixModalTimerLabel}>
+                        {pixModalExpired ? 'Status do Pix' : 'Tempo restante para pagar'}
+                      </span>
+                      <strong 
+                        className={`${styles.pixModalTimerCountdown} ${
+                          pixModalExpired 
+                            ? styles.pixModalTimerCountdownExpired 
+                            : pixModalTimeRemaining <= 180 
+                              ? styles.pixModalTimerCountdownWarning 
+                              : ''
+                        }`}
+                      >
+                        {pixModalExpired ? 'EXPIRADO (00:00)' : formatPixModalTimer(pixModalTimeRemaining)}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <span 
+                    className={`${styles.pixModalTimerBadgePill} ${
+                      pixModalExpired 
+                        ? styles.pixModalTimerBadgeExpired 
+                        : pixModalTimeRemaining <= 180 
+                          ? styles.pixModalTimerBadgeWarning 
+                          : ''
+                    }`}
+                  >
+                    {pixModalExpired 
+                      ? 'Prazo esgotado' 
+                      : pixModalTimeRemaining <= 180 
+                        ? 'Expira em breve' 
+                        : 'Válido por 20 min'}
+                  </span>
+                </div>
+
+                {pixModalExpired ? (
+                  <div className={styles.pixModalExpiredAlert}>
+                    <AlertCircle size={15} />
+                    <span>O prazo de 20 minutos encerrou. As peças reservadas foram devolvidas ao estoque. Para concluir a compra, gere um novo pedido no catálogo.</span>
+                  </div>
+                ) : (
+                  <span className={styles.pixModalTimerNote}>
+                    O código Pix expira em 20 minutos a partir da geração do pedido. O status é atualizado automaticamente em tempo real assim que pago.
+                  </span>
+                )}
+              </div>
+
+              <div className={styles.pixModalFooter}>
+                <button 
+                  type="button" 
+                  onClick={() => setPixModalOrder(null)} 
+                  className={styles.cancelBtn}
+                >
+                  FECHAR
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

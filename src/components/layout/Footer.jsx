@@ -1,18 +1,70 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { ArrowRight, MapPin, Check } from 'lucide-react';
-import { preloadRoute } from '../../utils/preloader';
-import styles from './Footer.module.css';
+import React, { useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  ArrowRight,
+  MapPin,
+  Check,
+  ChevronDown,
+  Camera,
+  ArrowUpRight,
+  Lock,
+  ShieldCheck,
+  CheckCircle2,
+  Truck,
+} from "lucide-react";
+import { motion } from "framer-motion";
+import { preloadRoute } from "../../utils/preloader";
+import { useAuth } from "../../context/AuthContext";
+import { currentDropConfig } from "../../data/dropConfig";
+import { dropSubscriberService } from "../../services/dropSubscriberService";
+import styles from "./Footer.module.css";
+
+const MotionAnchor = motion.a;
+const wavemText = "DESENVOLVIDO POR WAVEM";
+const wavemLetterVariants = {
+  rest: { y: 0 },
+  hover: (index) => ({
+    y: [0, -3, 0],
+    transition: {
+      duration: 0.32,
+      delay: index * 0.025,
+      ease: "easeOut",
+    },
+  }),
+};
+const wavemArrowVariants = {
+  rest: { x: 0, y: 0 },
+  hover: { x: 2, y: -2, transition: { duration: 0.25, ease: "easeOut" } },
+};
 
 export function Footer() {
-  const [email, setEmail] = useState('');
+  const { currentUser } = useAuth() || {};
+  const [email, setEmail] = useState("");
   const [subscribed, setSubscribed] = useState(false);
+  const [openSections, setOpenSections] = useState({
+    explorar: false,
+    suporte: false,
+  });
 
-  const handleSubscribe = (e) => {
+  const toggleSection = (sec) => {
+    setOpenSections((prev) => ({ ...prev, [sec]: !prev[sec] }));
+  };
+
+  const handleSubscribe = async (e) => {
     e.preventDefault();
-    if (email) {
+    if (email && email.trim()) {
+      const cleanEmail = email.trim().toLowerCase();
       setSubscribed(true);
-      setEmail('');
+      setEmail("");
+      dropSubscriberService
+        .subscribeToDropWaitlist({
+          email: cleanEmail,
+          name: currentUser?.displayName || currentUser?.name || "",
+          dropId: currentDropConfig?.id || "drop-thr33",
+          dropName: currentDropConfig?.title || "PRÓXIMO DROP THR33",
+          source: "footer_newsletter",
+        })
+        .catch(() => {});
     }
   };
 
@@ -21,110 +73,204 @@ export function Footer() {
       <div className={styles.container}>
         {/* GRID PRINCIPAL DO FOOTER */}
         <div className={styles.topGrid}>
-          {/* COLUNA 1: MARCA & MANIFESTO */}
+          {/* COLUNA 1: MARCA, MANIFESTO, PAGAMENTOS E SEGURANÇA */}
           <div className={styles.brandCol}>
-            <Link 
-              className={styles.logo} 
+            <Link
+              className={styles.logo}
               to="/"
-              onMouseEnter={() => preloadRoute('/')}
+              onMouseEnter={() => preloadRoute("/")}
             >
               <span className={styles.logoText}>THR33</span>
-              <span className={styles.logoSub}>FOR THE FEW</span>
             </Link>
             <p className={styles.brandDesc}>
-              Streetwear autoral e independente nascido no frio de Curitiba. A rua como nosso ateliê e a música como inspiração.
+              Streetwear autoral e independente nascido no concreto de Curitiba.
+              Confecção sob demanda, modelagens pesadas e edições limitadas.
             </p>
-            <span className={styles.locationBadge}>
-              <MapPin size={12} />
-              <span>CURITIBA - PR</span>
-            </span>
+
+            {/* BLOCO DE SEGURANÇA E PAGAMENTOS (OPÇÃO 1) */}
+            <div className={styles.trustPaymentWrapper}>
+              {/* MÉTODOS DE PAGAMENTO */}
+              <div className={styles.trustSection}>
+                <span className={styles.trustSubTitle}>MÉTODOS DE PAGAMENTO</span>
+                <div className={styles.cardsRow}>
+                  <img
+                    src="/cards/pix.svg"
+                    alt="Pix"
+                    className={styles.cardIcon}
+                    title="Pix - Confirmação Instantânea"
+                    loading="lazy"
+                  />
+                  <img
+                    src="/cards/mastercard.svg"
+                    alt="Mastercard"
+                    className={styles.cardIcon}
+                    title="Mastercard"
+                    loading="lazy"
+                  />
+                  <img
+                    src="/cards/visa.svg"
+                    alt="Visa"
+                    className={styles.cardIcon}
+                    title="Visa"
+                    loading="lazy"
+                  />
+                  <img
+                    src="/cards/elo.svg"
+                    alt="Elo"
+                    className={styles.cardIcon}
+                    title="Elo"
+                    loading="lazy"
+                  />
+                  <img
+                    src="/cards/hipercard.svg"
+                    alt="Hipercard"
+                    className={styles.cardIcon}
+                    title="Hipercard"
+                    loading="lazy"
+                  />
+                  <img
+                    src="/cards/amex.svg"
+                    alt="American Express"
+                    className={styles.cardIcon}
+                    title="American Express"
+                    loading="lazy"
+                  />
+                </div>
+                <span className={styles.trustCaption}>
+                  Em até 12x no cartão ou à vista no PIX com aprovação imediata
+                </span>
+              </div>
+            </div>
           </div>
 
-          {/* COLUNA 2: NAVEGAÇÃO */}
+          {/* COLUNA 2: NAVEGAÇÃO / ACORDEÃO MOBILE */}
           <div className={styles.linksCol}>
-            <h4 className={styles.colTitle}>EXPLORAR</h4>
-            <ul className={styles.linksList}>
+            <button
+              type="button"
+              className={styles.accordionHeaderBtn}
+              onClick={() => toggleSection("explorar")}
+              aria-expanded={openSections.explorar}
+            >
+              <h4 className={styles.colTitle}>EXPLORAR</h4>
+              <ChevronDown
+                size={16}
+                className={`${styles.accordionChevron} ${openSections.explorar ? styles.accordionChevronOpen : ""}`}
+              />
+            </button>
+            <ul
+              className={`${styles.linksList} ${openSections.explorar ? styles.linksListExpanded : styles.linksListCollapsed}`}
+            >
               <li>
-                <Link to="/" onMouseEnter={() => preloadRoute('/')}>
+                <Link to="/" onMouseEnter={() => preloadRoute("/")}>
                   Início
                 </Link>
               </li>
               <li>
-                <Link to="/catalogo" onMouseEnter={() => preloadRoute('/catalogo')}>
-                  Catálogo Completo
+                <Link
+                  to="/catalogo"
+                  onMouseEnter={() => preloadRoute("/catalogo")}
+                >
+                  Catálogo de Camisetas
                 </Link>
               </li>
               <li>
-                <Link to="/catalogo?drop=leak-two" onMouseEnter={() => preloadRoute('/catalogo')}>
-                  Novo Drop (Leak Two)
+                <Link
+                  to="/como-funciona-a-entrega"
+                  onMouseEnter={() => preloadRoute("/como-funciona-a-entrega")}
+                >
+                  Como Funciona a Entrega
                 </Link>
               </li>
               <li>
-                <Link to="/drops-passados" onMouseEnter={() => preloadRoute('/drops-passados')}>
-                  Drops Passados
+                <Link
+                  to="/brindes"
+                  onMouseEnter={() => preloadRoute("/brindes")}
+                >
+                  Vales & Brindes
                 </Link>
               </li>
               <li>
-                <Link to="/sobre" onMouseEnter={() => preloadRoute('/sobre')}>
-                  Sobre a THR33
+                <Link to="/sobre" onMouseEnter={() => preloadRoute("/sobre")}>
+                  Sobre a Marca
                 </Link>
               </li>
             </ul>
           </div>
 
-          {/* COLUNA 3: ATENDIMENTO & AJUDA */}
+          {/* COLUNA 3: ATENDIMENTO & AJUDA / ACORDEÃO MOBILE */}
           <div className={styles.linksCol}>
-            <h4 className={styles.colTitle}>SUPORTE</h4>
-            <ul className={styles.linksList}>
+            <button
+              type="button"
+              className={styles.accordionHeaderBtn}
+              onClick={() => toggleSection("suporte")}
+              aria-expanded={openSections.suporte}
+            >
+              <h4 className={styles.colTitle}>ATENDIMENTO</h4>
+              <ChevronDown
+                size={16}
+                className={`${styles.accordionChevron} ${openSections.suporte ? styles.accordionChevronOpen : ""}`}
+              />
+            </button>
+            <ul
+              className={`${styles.linksList} ${openSections.suporte ? styles.linksListExpanded : styles.linksListCollapsed}`}
+            >
               <li>
-                <Link to="/suporte" onMouseEnter={() => preloadRoute('/suporte')}>
-                  Central de Atendimento
+                <Link
+                  to="/suporte"
+                  onMouseEnter={() => preloadRoute("/suporte")}
+                >
+                  Central de Suporte
                 </Link>
               </li>
               <li>
-                <Link to="/suporte" onMouseEnter={() => preloadRoute('/suporte')}>
-                  Perguntas Frequentes (FAQ)
+                <Link
+                  to="/suporte"
+                  onMouseEnter={() => preloadRoute("/suporte")}
+                >
+                  Dúvidas Frequentes
                 </Link>
               </li>
               <li>
-                <Link to="/politicas" onMouseEnter={() => preloadRoute('/politicas')}>
-                  Trocas e Devoluções
+                <Link
+                  to="/politicas"
+                  onMouseEnter={() => preloadRoute("/politicas")}
+                >
+                  Trocas e Garantia
                 </Link>
               </li>
               <li>
-                <Link to="/politicas" onMouseEnter={() => preloadRoute('/politicas')}>
-                  Prazos e Entregas
-                </Link>
-              </li>
-              <li>
-                <Link to="/perfil" onMouseEnter={() => preloadRoute('/perfil')}>
-                  Minha Conta
+                <Link to="/perfil" onMouseEnter={() => preloadRoute("/perfil")}>
+                  Minha Conta & Carteira
                 </Link>
               </li>
             </ul>
           </div>
 
-          {/* COLUNA 4: NEWSLETTER PRÉ-DROPS 24H */}
+          {/* COLUNA 4: NEWSLETTER & CRÉDITO DE FOTOGRAFIA */}
           <div className={styles.newsletterCol}>
-            <h4 className={styles.colTitle}>PRE-DROP ACCESS</h4>
+            <h4 className={styles.colTitle}>AVISOS DE DROPS</h4>
             <p className={styles.newsletterText}>
-              Receba o link de compra 24h antes de cada drop ser liberado no site oficial.
+              Receba links antecipados e informativos de fechamento de lote
+              semanal.
             </p>
 
             {subscribed ? (
               <div className={styles.successMsg}>
                 <Check size={14} />
-                <span>E-mail cadastrado. Fique atento à sua caixa de entrada!</span>
+                <span>E-mail cadastrado com sucesso!</span>
               </div>
             ) : (
-              <form onSubmit={handleSubscribe} className={styles.newsletterForm}>
-                <input 
-                  type="email" 
-                  placeholder="seu.email@exemplo.com" 
+              <form
+                onSubmit={handleSubscribe}
+                className={styles.newsletterForm}
+              >
+                <input
+                  type="email"
+                  placeholder="seu.email@exemplo.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  required 
-                  aria-label="Informe seu e-mail para receber avisos de pré-drops"
+                  required
+                  aria-label="Informe seu e-mail"
                 />
                 <button type="submit" aria-label="Cadastrar e-mail">
                   <ArrowRight size={16} />
@@ -132,30 +278,76 @@ export function Footer() {
               </form>
             )}
 
-            {/* SOCIAIS */}
-            <div className={styles.socialRow}>
-              <a href="https://instagram.com" target="_blank" rel="noreferrer" aria-label="Instagram da THR33">
-                INSTAGRAM
-              </a>
-              <span>/</span>
-              <a href="https://wa.me/5541999999999" target="_blank" rel="noreferrer" aria-label="WhatsApp da THR33">
-                WHATSAPP
+            {/* BOTÃO DE CRÉDITO DE FOTOGRAFIA EDU */}
+            <div className={styles.photoCreditBox}>
+              <a
+                href="https://instagram.com/eduian.foto"
+                target="_blank"
+                rel="noreferrer"
+                className={styles.photoCreditBtn}
+                title="Conheça o trabalho de fotografia de Edu Ian"
+              >
+                <Camera size={13} />
+                <span>FOTOGRAFIA: @eduian.foto</span>
               </a>
             </div>
           </div>
         </div>
 
-        {/* LINHA INFERIOR (COPYRIGHT E PAGAMENTOS) */}
+        {/* BLOCO LEGAL OBRIGATÓRIO (DECRETO FEDERAL Nº 7.962/2013) */}
+        <div className={styles.legalInfoSection}>
+          <div className={styles.legalTextBlock}>
+            <strong>
+              THR33 STREETWEAR
+            </strong>
+            <span>CNPJ: 67.662.871/0001-41 • INSCRIÇÃO ESTADUAL: ISENTO</span>
+            <span>
+              ENDEREÇO: RUA VALDECI DOS SANTOS, 114 - PINHEIRINHO, CURITIBA - PR, CEP:
+              81150-370
+            </span>
+            <span>
+              ATENDIMENTO AO CONSUMIDOR: CONTATO.THR33@GMAIL.COM • WHATSAPP: +55 41
+              8841-0374 • INSTAGRAM: @MADEBYTHR33
+            </span>
+          </div>
+        </div>
+
         <div className={styles.bottomBar}>
           <div className={styles.copyright}>
-            © {new Date().getFullYear()} THR33 STREETWEAR. TODOS OS DIREITOS RESERVADOS.
-          </div>
-
-          <div className={styles.paymentMethods}>
-            <span className={styles.paymentBadge}>PIX</span>
-            <span className={styles.paymentBadge}>CARTÃO</span>
-            <span className={styles.paymentBadge}>BOLETO</span>
-            <span className={styles.paymentBadge}>PAGBANK</span>
+            <span>
+              © {new Date().getFullYear()} THR33 STREETWEAR. TODOS OS DIREITOS
+              RESERVADOS.
+            </span>
+            <MotionAnchor
+              href="https://wavem.com.br"
+              target="_blank"
+              rel="noreferrer"
+              className={styles.wavemSignature}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              whileHover="hover"
+              whileTap={{ scale: 0.98 }}
+              transition={{ duration: 0.35, ease: "easeOut" }}
+              aria-label="Acessar o site da Wavem"
+            >
+              <span aria-hidden="true">
+                {Array.from(wavemText).map((character, index) => (
+                  <motion.span
+                    key={`${character}-${index}`}
+                    className={
+                      character === " " ? styles.wavemSpace : styles.wavemLetter
+                    }
+                    variants={wavemLetterVariants}
+                    custom={index}
+                  >
+                    {character === " " ? null : character}
+                  </motion.span>
+                ))}
+              </span>
+              <motion.span variants={wavemArrowVariants} aria-hidden="true">
+                <ArrowUpRight size={12} />
+              </motion.span>
+            </MotionAnchor>
           </div>
         </div>
       </div>

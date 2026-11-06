@@ -5,6 +5,9 @@ import { fileURLToPath, URL } from 'node:url'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  esbuild: {
+    drop: ['console', 'debugger'],
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
@@ -14,6 +17,21 @@ export default defineConfig({
       '@services': fileURLToPath(new URL('./src/services', import.meta.url)),
       '@hooks': fileURLToPath(new URL('./src/hooks', import.meta.url)),
       '@theme': fileURLToPath(new URL('./src/theme', import.meta.url)),
+      '@assets': fileURLToPath(new URL('./src/assets', import.meta.url)),
+    },
+  },
+  server: {
+    proxy: {
+      '/api/calculateShipping': {
+        target: 'https://southamerica-east1-thr33-streetwear.cloudfunctions.net',
+        changeOrigin: true,
+        rewrite: () => '/calculateShipping',
+      },
+      '/api/pagbank': {
+        target: 'https://sandbox.api.pagseguro.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/api\/pagbank/, ''),
+      },
     },
   },
 })

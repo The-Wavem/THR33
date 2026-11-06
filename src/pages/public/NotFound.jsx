@@ -23,7 +23,7 @@ export function NotFound() {
         <h2 className={styles.title}>ROTA OU PEÇA INEXISTENTE</h2>
         
         <p className={styles.description}>
-          A rota que você tentou acessar não foi localizada no catálogo do Ateliê THR33.
+          A rota que você tentou acessar não foi localizada no catálogo da THR33.
         </p>
 
         {/* BOTÕES DE NAVEGAÇÃO E RECUPERAÇÃO */}

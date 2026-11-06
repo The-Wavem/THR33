@@ -1,14 +1,54 @@
+.heroWrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+}
+
 .heroSection {
   position: relative;
   width: 100%;
-  height: calc(100vh - var(--header-height));
-  min-height: 600px;
+  aspect-ratio: 1440 / 730;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   user-select: none;
   background-color: var(--bg-primary);
+}
+
+/* Skeleton Shimmer Brutalista durante carregamento do banner real */
+.heroSkeletonLayer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #0b0b0b;
+  z-index: 4;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.heroSkeletonShimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.045) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  background-size: 200% 100%;
+  animation: heroShimmerMove 1.6s infinite linear;
+}
+
+@keyframes heroShimmerMove {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 .dragWrapper {
@@ -20,10 +60,22 @@
   align-items: center;
   justify-content: center;
   cursor: grab;
+  z-index: 3;
 }
 
 .dragWrapper:active {
   cursor: grabbing;
+}
+
+.backgroundLayer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  pointer-events: none;
+  background-color: #0a0a0a;
+  z-index: 1;
 }
 
 .slideMotionContainer {
@@ -43,11 +95,93 @@
   background-position: center;
   width: 100%;
   height: 100%;
+  will-change: opacity, transform;
+}
+
+.heroPicture {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.heroPreloadedImage {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center center;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* Fallback 3D / Modelo Circular Brutalista */
+.modelWrapper {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modelFallbackPulse {
+  width: 220px;
+  height: 220px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.06) 0%, rgba(8, 8, 8, 0.2) 70%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  animation: heroModelPulse 2s infinite ease-in-out;
+}
+
+.modelFallbackRing {
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  animation: heroRingSpin 12s linear infinite;
+}
+
+.modelFallbackCode {
+  font-family: var(--font-mono, 'Space Grotesk', monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  color: rgba(255, 255, 255, 0.55);
+  text-transform: uppercase;
+}
+
+@keyframes heroModelPulse {
+  0%, 100% {
+    opacity: 0.45;
+    transform: scale(0.98);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.02);
+  }
+}
+
+@keyframes heroRingSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .overlay {
   position: absolute;
   inset: 0;
+  z-index: 2;
+  pointer-events: none;
   background: linear-gradient(
     180deg, 
     rgba(10, 10, 10, 0.45) 0%, 
@@ -191,35 +325,148 @@
   right: 1.5rem;
 }
 
-/* Indicadores / Traços Inferiores */
+/* Indicadores / Traços Inferiores com Timer Progress Bar */
 .dotsContainer {
   position: absolute;
-  bottom: 2rem;
+  bottom: 1.25rem;
   z-index: 5;
   display: flex;
-  gap: 0.75rem;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.4rem 0.85rem;
+  background-color: rgba(10, 10, 10, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.slideCounter {
+  font-family: var(--font-heading);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-primary);
+  user-select: none;
+  line-height: 1;
+}
+
+.slideCounterTotal {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.dotsTrack {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .dot {
+  position: relative;
   width: 28px;
   height: 3px;
   border-radius: 0px;
-  background-color: rgba(255, 255, 255, 0.25);
+  background-color: rgba(255, 255, 255, 0.2);
   cursor: pointer;
-  transition: background-color var(--transition-fast), width var(--transition-fast);
+  overflow: hidden;
+  border: none;
+  padding: 0;
+  transition: width 0.3s ease, background-color 0.3s ease;
 }
 
 .dot:hover {
-  background-color: rgba(255, 255, 255, 0.5);
+  background-color: rgba(255, 255, 255, 0.45);
 }
 
 .activeDot {
-  background-color: var(--text-primary);
-  width: 44px;
+  width: 48px;
+  background-color: rgba(255, 255, 255, 0.25);
+}
+
+.dotProgressBar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: #ffffff;
+  display: block;
+}
+
+/* FAIXA MARQUEE STREETWEAR CONTÍNUA — POSICIONADA FORA DA IMAGEM DE BANNER */
+.marqueeStrip {
+  position: relative;
+  width: 100%;
+  background-color: #000000;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  overflow: hidden;
+  white-space: nowrap;
+  padding: 0.75rem 0;
+  z-index: 2;
+}
+
+.marqueeTrack {
+  display: inline-block;
+  white-space: nowrap;
+  animation: marqueeScroll 22s linear infinite;
+}
+
+.marqueeTrack span {
+  font-family: var(--font-heading);
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--text-secondary);
+  display: inline-block;
+}
+
+@keyframes marqueeScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
 
 @media (max-width: 768px) {
+  .heroSection {
+    width: 100%;
+    min-height: unset;
+  }
+
+  /* Quando o slide possui arte Mobile dedicada (Vertical 4:5 - 1080x1350) */
+  .heroHasMobileArt {
+    aspect-ratio: 4 / 5;
+  }
+
+  /* Quando o slide só possui arte Desktop (Horizontal 1440x730), preserva a proporção para não cortar informações */
+  .heroDesktopOnlyArt {
+    aspect-ratio: 1440 / 730;
+  }
+
   .navArrow {
     display: none;
+  }
+
+  .dotsContainer {
+    bottom: 1rem;
+  }
+
+  .contentContainer {
+    padding: 0 1rem;
+    gap: 0.85rem;
+  }
+
+  .primaryCta, .secondaryCta {
+    padding: 0.85rem 1.6rem;
+    font-size: 0.78rem;
+    min-width: 180px;
+  }
+
+  .marqueeStrip {
+    padding: 0.65rem 0;
+  }
+
+  .marqueeTrack span {
+    font-size: 0.68rem;
+    letter-spacing: 1.5px;
   }
 }

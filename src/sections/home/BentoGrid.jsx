@@ -1,72 +1,94 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Camera } from 'lucide-react';
+import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
 import styles from './BentoGrid.module.css';
 
-const DEFAULT_BENTO_CARDS = [
-  {
-    id: "bento_1",
-    title: "OVERSIZED FIT",
-    buttonText: "VER MAIS",
-    link: "/catalogo?modelagem=oversized",
-    image: "https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=800&auto=format&fit=crop",
-    size: "large",
-    active: true
-  },
-  {
-    id: "bento_2",
-    title: "BOXY TEES",
-    buttonText: "VER MAIS",
-    link: "/catalogo?modelagem=boxy",
-    image: "https://images.unsplash.com/photo-1552374196-1ab2a1c593e8?q=80&w=600&auto=format&fit=crop",
-    size: "normal",
-    active: true
-  },
-  {
-    id: "bento_3",
-    title: "EDITION FOR THE FEW",
-    buttonText: "VER MAIS",
-    link: "/catalogo?drop=leak-two",
-    image: "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?q=80&w=600&auto=format&fit=crop",
-    size: "normal",
-    active: true
-  }
-];
+export function BentoGrid({ gridItems = [], sectionTag, sectionTitle, isLoading = false }) {
+  const cleanSectionTag = String(sectionTag || '').trim();
+  const cleanSectionTitle = String(sectionTitle || '').trim();
 
-export function BentoGrid({ gridItems = [], sectionTag, sectionTitle }) {
-  const items = Array.isArray(gridItems) && gridItems.length > 0
-    ? gridItems.filter(c => c.active !== false)
-    : DEFAULT_BENTO_CARDS;
+  if (isLoading) {
+    return (
+      <section className={styles.section} aria-busy="true" aria-label="Carregando destaques">
+        <div className={styles.grid}>
+          <div className={`${styles.card} ${styles.cardLarge} ${styles.skeletonCard}`}>
+            <div className={styles.shimmer} />
+          </div>
+          <div className={`${styles.card} ${styles.skeletonCard}`}>
+            <div className={styles.shimmer} />
+          </div>
+          <div className={`${styles.card} ${styles.skeletonCard}`}>
+            <div className={styles.shimmer} />
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const items = Array.isArray(gridItems)
+    ? gridItems.filter((c) => c && c.active !== false && Boolean(c.imageUrl || c.image))
+    : [];
 
   if (!items || items.length === 0) return null;
 
+  const hasLargeCard = items.some((c) => c.size === 'large');
+  const isThreeNormalCards = items.length === 3 && !hasLargeCard;
+  const isSingleCard = items.length === 1;
+
+  const gridClass = [
+    styles.grid,
+    isSingleCard ? styles.gridSingle : isThreeNormalCards ? styles.gridThree : ''
+  ].filter(Boolean).join(' ');
+
   return (
     <section className={styles.section}>
-      <div className={styles.header}>
-        <span className={styles.tag}>{sectionTag || 'ENSAIO DE CAMPANHA'}</span>
-        <h2 className={styles.title}>{sectionTitle || 'A RUA COMO NOSSO ATELIÊ'}</h2>
-      </div>
+      {(cleanSectionTag || cleanSectionTitle) && (
+        <div className={styles.header}>
+          {cleanSectionTag && <span className={styles.tag}>{cleanSectionTag}</span>}
+          {cleanSectionTitle && <h2 className={styles.title}>{cleanSectionTitle}</h2>}
+        </div>
+      )}
 
-      <div className={styles.grid}>
+      <div className={gridClass}>
         {items.map((item, index) => {
-          const imgSrc = item.imageUrl || item.image || '';
+          const imgSrc = item.imageUrl || item.image;
           const isLarge = item.size === 'large';
+          const isFullWidth = isLarge || (items.length === 2 && hasLargeCard);
+          const cleanItemTitle = String(item.title || '').trim();
+          const cleanBtnText = String(item.buttonText || '').trim();
+          const hasCardOverlayContent = Boolean(cleanItemTitle || cleanBtnText);
 
           return (
-            <div 
-              key={item.id || index} 
-              className={`${styles.card} ${isLarge ? styles.cardLarge : ''}`}
+            <div
+              key={item.id || index}
+              className={`${styles.card} ${isFullWidth ? styles.cardLarge : ''}`}
             >
-              <img 
-                src={imgSrc} 
-                alt={item.title || 'Destaque THR33'} 
+              <ImageWithSkeleton
+                src={imgSrc}
+                alt={cleanItemTitle || 'Destaque THR33'}
+                aspectRatio={isFullWidth ? '16/10' : '4/5'}
                 className={styles.cardImage}
+                style={{ width: '100%', height: '100%' }}
               />
-              <div className={styles.cardOverlay}>
-                <span className={styles.cardCaption}>{item.title}</span>
-                <Link className={styles.lowOpacityBtn} to={item.link || '/catalogo'}>
-                  {item.buttonText || 'VER MAIS'}
-                </Link>
-              </div>
+              {hasCardOverlayContent && (
+                <div className={styles.cardOverlay}>
+                  <div>
+                    {cleanItemTitle && <span className={styles.cardCaption}>{cleanItemTitle}</span>}
+                    {isLarge && cleanItemTitle && (
+                      <span className={styles.photoCreditInline}>
+                        <Camera size={11} />
+                        <span>FOTOS: @eduian.foto</span>
+                      </span>
+                    )}
+                  </div>
+                  {cleanBtnText && (
+                    <Link className={styles.lowOpacityBtn} to={item.link || '/catalogo'}>
+                      {cleanBtnText}
+                    </Link>
+                  )}
+                </div>
+              )}
             </div>
           );
         })}

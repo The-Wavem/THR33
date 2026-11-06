@@ -1,0 +1,285 @@
+.skeletonSection {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4.5rem;
+}
+
+.rowBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  width: 100%;
+}
+
+.rowEditorialHeader {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0 0.15rem;
+}
+
+.seriesLabel,
+.seriesRange {
+  font-family: var(--font-mono, 'Space Grotesk', monospace);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: rgba(255, 255, 255, 0.28);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.seriesLine {
+  flex: 1;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.12) 0%,
+    rgba(255, 255, 255, 0.03) 50%,
+    rgba(255, 255, 255, 0.12) 100%
+  );
+}
+
+/* Mesmas dimensões exatas da .splitRow do LookbookSplitSection */
+.splitRow {
+  position: relative;
+  height: calc(100vh - 150px);
+  min-height: 550px;
+  max-height: 820px;
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  align-items: stretch;
+  width: 100%;
+}
+
+.halfPane {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background-color: #080808;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 1.35rem 1.6rem 1.75rem;
+  box-sizing: border-box;
+}
+
+.rightPaneOffset {
+  margin-top: 3rem;
+  border-left: none;
+}
+
+/* Shimmer escuro oficial da THR33 */
+.shimmerBackdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(
+    110deg,
+    #080808 25%,
+    #141414 50%,
+    #080808 75%
+  );
+  background-size: 200% 100%;
+  animation: thr33SplitShimmer 1.7s infinite linear;
+}
+
+@keyframes thr33SplitShimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+/* Placeholders retangulares pulsantes */
+.pulseBar {
+  position: relative;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  animation: thr33Pulse 1.6s infinite ease-in-out;
+}
+
+@keyframes thr33Pulse {
+  0%, 100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+.topRow {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.topMetaPlaceholder {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.metaIndexBar {
+  width: 34px;
+  height: 22px;
+  border-radius: 2px;
+}
+
+.metaStatusBar {
+  width: 96px;
+  height: 22px;
+  border-radius: 2px;
+}
+
+.favCircle {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+}
+
+.bottomOverlay {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+  padding-top: 2rem;
+}
+
+.categoryBar {
+  width: 130px;
+  height: 12px;
+  border-radius: 2px;
+}
+
+.titleBarLarge {
+  width: 74%;
+  height: 30px;
+  border-radius: 2px;
+}
+
+.titleBarSub {
+  width: 48%;
+  height: 24px;
+  border-radius: 2px;
+}
+
+.priceAndSizesRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.35rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.priceBar {
+  width: 120px;
+  height: 24px;
+  border-radius: 2px;
+}
+
+.sizesGroup {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.sizePill {
+  width: 28px;
+  height: 22px;
+  border-radius: 2px;
+}
+
+/* Linha divisória central e badge ◄ 01 | 02 ► */
+.centerCorridor {
+  position: relative;
+  width: 1px;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.dividerTrack {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 1px;
+  background-color: rgba(255, 255, 255, 0.16);
+}
+
+.centerAxisIndicator {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.7rem;
+  background-color: rgba(8, 8, 8, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-family: var(--font-mono, 'Space Grotesk', monospace);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: rgba(255, 255, 255, 0.45);
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.9);
+}
+
+.arrowGlyph {
+  font-size: 0.6rem;
+  color: rgba(255, 255, 255, 0.25);
+}
+
+.pairCounter {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.counterPipe {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+@media (max-width: 768px) {
+  .skeletonSection {
+    gap: 2.25rem;
+  }
+
+  .splitRow {
+    display: flex;
+    flex-direction: column;
+    height: auto;
+    min-height: auto;
+    max-height: none;
+    gap: 1.5rem;
+  }
+
+  .halfPane {
+    aspect-ratio: 4 / 4.6;
+    min-height: 420px;
+  }
+
+  .rightPaneOffset {
+    margin-top: 0;
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
+  }
+
+  .centerCorridor {
+    display: none;
+  }
+}

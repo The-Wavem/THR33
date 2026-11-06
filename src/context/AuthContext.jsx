@@ -7,10 +7,18 @@ import {
   updateProfile,
   updatePassword as fbUpdatePassword,
   GoogleAuthProvider,
-  signInWithPopup
+  signInWithPopup,
+  sendPasswordResetEmail,
+  verifyPasswordResetCode,
+  confirmPasswordReset
 } from 'firebase/auth';
-import { doc, setDoc, getDoc, updateDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, onSnapshot } from 'firebase/firestore';
 import { auth, db } from '../services/firebaseConfig';
+import { emailService } from '../services/emailService';
+import { dropSubscriberService } from '../services/dropSubscriberService';
+
+// Configura o idioma do Firebase Auth para português para disparo de e-mails nativos em pt-BR
+auth.languageCode = 'pt-BR';
 
 const AuthContext = createContext();
 
@@ -26,19 +34,47 @@ export const getAdminEmailsFromEnv = () => {
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [dynamicAdminEmails, setDynamicAdminEmails] = useState([]);
 
   // Modal and Navigation State (Compatibilidade com Checkout e Navbar)
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authOriginPath, setAuthOriginPath] = useState(null);
   const [initialAuthTab, setInitialAuthTab] = useState('login');
 
+  // Listener em tempo real da lista dinâmica de administradores em settings/admins
+  useEffect(() => {
+    try {
+      const unsub = onSnapshot(
+        doc(db, 'settings', 'admins'),
+        (snap) => {
+          if (snap.exists()) {
+            const data = snap.data();
+            if (Array.isArray(data?.adminEmails)) {
+              const list = data.adminEmails
+                .map((e) => String(e || '').trim().toLowerCase())
+                .filter(Boolean);
+              setDynamicAdminEmails(list);
+            }
+          }
+        },
+        (err) => {
+          console.warn('Aviso ao sincronizar admins dinâmicos do Firestore:', err.message);
+        }
+      );
+      return () => unsub();
+    } catch (err) {
+      console.warn('Erro ao configurar listener de admins:', err.message);
+    }
+  }, []);
+
   const checkIsAdmin = (email, dataRole, dataIsAdmin) => {
     // 1. Prioridade máxima: Definição gravada no banco de dados Firestore
     if (dataRole === 'admin' || dataIsAdmin === true) return true;
     
-    // 2. Verificação via variáveis de ambiente seguras (.env)
-    const adminEmails = getAdminEmailsFromEnv();
-    if (email && adminEmails.length > 0 && adminEmails.includes(email.trim().toLowerCase())) {
+    // 2. Verificação via variáveis de ambiente seguras (.env) + lista dinâmica no Firestore (settings/admins)
+    const envEmails = getAdminEmailsFromEnv();
+    const allEmails = [...new Set([...envEmails, ...dynamicAdminEmails])];
+    if (email && allEmails.includes(email.trim().toLowerCase())) {
       return true;
     }
     return false;
@@ -103,6 +139,9 @@ export function AuthProvider({ children }) {
               isAdmin: isAdminFinal,
               addresses: [],
               wishlist: [],
+              acceptedTerms: true,
+              acceptedTermsAt: new Date().toISOString(),
+              termsVersion: '1.0',
               createdAt: new Date().toISOString(),
               provider: user.providerData?.[0]?.providerId || 'firebase'
             }, { merge: true });
@@ -148,9 +187,28 @@ export function AuthProvider({ children }) {
         isAdmin: isAdminUser,
         addresses: [], // Começa zerado
         wishlist: [],  // Começa zerado
+        acceptedTerms: true,
+        acceptedTermsAt: new Date().toISOString(),
+        termsVersion: '1.0',
         createdAt: new Date().toISOString(),
-        provider: 'password'
-      });
+        provider: 'password',
+        emailMarketing: true,
+        emailNotifications: true
+      }, { merge: true });
+
+      // Inscreve automaticamente na Lista VIP e Base de Campanhas de E-mail
+      dropSubscriberService.subscribeToDropWaitlist({
+        email: email.trim(),
+        name: name ? name.trim() : 'Cliente THR33',
+        source: 'cadastro',
+        sendConfirmationEmail: false
+      }).catch(() => {});
+
+      emailService.triggerWelcomeEmail({
+        uid: user.uid,
+        email: email.trim(),
+        name: name ? name.trim() : 'Cliente THR33'
+      }).catch(() => {});
     } catch (err) {
       console.warn("Não foi possível gravar perfil estendido no Firestore:", err.message);
     }
@@ -184,9 +242,27 @@ export function AuthProvider({ children }) {
           isAdmin: isAdminUser,
           addresses: [], // Começa zerado
           wishlist: [],  // Começa zerado
+          acceptedTerms: true,
+          acceptedTermsAt: new Date().toISOString(),
+          termsVersion: '1.0',
           createdAt: new Date().toISOString(),
-          provider: 'google'
+          provider: 'google',
+          emailMarketing: true,
+          emailNotifications: true
         });
+
+        dropSubscriberService.subscribeToDropWaitlist({
+          email: user.email,
+          name: user.displayName || 'Cliente THR33',
+          source: 'cadastro_google',
+          sendConfirmationEmail: false
+        }).catch(() => {});
+
+        emailService.triggerWelcomeEmail({
+          uid: user.uid,
+          email: user.email,
+          name: user.displayName || 'Cliente THR33'
+        }).catch(() => {});
       } else {
         const docData = userDoc.data();
         const isAdminFinal = checkIsAdmin(user.email, docData.role, docData.isAdmin);
@@ -221,15 +297,15 @@ export function AuthProvider({ children }) {
       updatedData.name = name.trim();
       try {
         await updateProfile(auth.currentUser, { displayName: name.trim() });
-      } catch (err) {
-        console.warn("Erro ao atualizar displayName:", err);
+      } catch {
+        // Ignora falha silenciosa de displayName
       }
     }
 
     try {
       await setDoc(userDocRef, updatedData, { merge: true });
-    } catch (err) {
-      console.warn("Aviso ao salvar completeProfile no Firestore:", err.message);
+    } catch {
+      // Mantém dados em memória se Firestore oscilar
     }
 
     setCurrentUser(prev => ({
@@ -247,15 +323,14 @@ export function AuthProvider({ children }) {
       if (auth.currentUser && updatedFields.name) {
         try {
           await updateProfile(auth.currentUser, { displayName: updatedFields.name.trim() });
-        } catch (nameErr) {
-          console.warn("Aviso ao atualizar displayName:", nameErr.message);
+        } catch {
+          // Ignora falha silenciosa de displayName
         }
       }
       const userDocRef = doc(db, 'users', currentUser.uid);
       await setDoc(userDocRef, updatedFields, { merge: true });
       setCurrentUser(prev => ({ ...prev, ...updatedFields }));
-    } catch (err) {
-      console.warn("Aviso ao atualizar perfil no Firestore:", err.message);
+    } catch {
       setCurrentUser(prev => ({ ...prev, ...updatedFields }));
     }
   };
@@ -267,12 +342,49 @@ export function AuthProvider({ children }) {
       await fbUpdatePassword(auth.currentUser, newPassword);
       return { success: true };
     } catch (err) {
-      console.error("Erro ao alterar senha no Firebase:", err);
       if (err.code === 'auth/requires-recent-login') {
         return { success: false, error: 'Por segurança, faça login novamente antes de alterar sua senha.' };
       }
       return { success: false, error: err.message || 'Erro ao alterar senha.' };
     }
+  };
+
+  // Recuperação de Senha ("Esqueci minha senha") via Firebase Auth
+  const resetPassword = async (email) => {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    auth.languageCode = 'pt-BR';
+    try {
+      await sendPasswordResetEmail(auth, cleanEmail, {
+        url: `${window.location.origin}/login`,
+        handleCodeInApp: false
+      });
+    } catch (err) {
+      // Fallback simples caso a URL ainda não esteja autorizada no console do Firebase
+      if (
+        err.code === 'auth/unauthorized-continue-uri' ||
+        err.code === 'auth/invalid-continue-uri' ||
+        err.code === 'auth/missing-continue-uri'
+      ) {
+        await sendPasswordResetEmail(auth, cleanEmail);
+      } else {
+        throw err;
+      }
+    }
+    return true;
+  };
+
+  // Verifica código oobCode de recuperação de senha e retorna o e-mail da conta
+  const verifyResetCode = async (oobCode) => {
+    auth.languageCode = 'pt-BR';
+    const accountEmail = await verifyPasswordResetCode(auth, oobCode);
+    return accountEmail;
+  };
+
+  // Confirma e salva a nova senha usando o oobCode diretamente na UI da THR33
+  const confirmNewPassword = async (oobCode, newPassword) => {
+    auth.languageCode = 'pt-BR';
+    await confirmPasswordReset(auth, oobCode, newPassword);
+    return true;
   };
 
   // Função de Logout Real
@@ -306,14 +418,26 @@ export function AuthProvider({ children }) {
   const isUserAdmin = Boolean(
     currentUser?.isAdmin || 
     currentUser?.role === 'admin' || 
-    (currentUser?.email && getAdminEmailsFromEnv().includes(currentUser.email.trim().toLowerCase()))
+    (currentUser?.email && [...getAdminEmailsFromEnv(), ...dynamicAdminEmails].includes(currentUser.email.trim().toLowerCase()))
   );
+
+  // Sincroniza em tempo real a elevação de permissão do usuário logado se for adicionado à lista de administradores
+  useEffect(() => {
+    if (!currentUser?.uid || !currentUser?.email) return;
+    const cleanEmail = currentUser.email.trim().toLowerCase();
+    const isDynamicAdmin = dynamicAdminEmails.includes(cleanEmail) || getAdminEmailsFromEnv().includes(cleanEmail);
+    if (isDynamicAdmin && (!currentUser.isAdmin || currentUser.role !== 'admin')) {
+      setCurrentUser((prev) => ({ ...prev, role: 'admin', isAdmin: true }));
+      setDoc(doc(db, 'users', currentUser.uid), { role: 'admin', isAdmin: true }, { merge: true }).catch(() => {});
+    }
+  }, [dynamicAdminEmails, currentUser?.uid, currentUser?.email, currentUser?.isAdmin, currentUser?.role]);
 
   const value = {
     currentUser,
     user: currentUser,
     isAuthenticated: !!currentUser,
     isAdmin: isUserAdmin,
+    dynamicAdminEmails,
     role: isUserAdmin ? 'admin' : (currentUser?.role || 'customer'),
     login,
     register,
@@ -321,6 +445,9 @@ export function AuthProvider({ children }) {
     completeProfile,
     updateUser,
     changePassword,
+    resetPassword,
+    verifyResetCode,
+    confirmNewPassword,
     logout,
     deleteAccount,
     loading,

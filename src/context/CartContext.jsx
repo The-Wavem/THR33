@@ -1,6 +1,9 @@
-import React, { createContext, useContext, useState, useMemo, useEffect } from 'react';
+import React, { createContext, useContext, useState, useMemo, useEffect, useRef } from 'react';
+import { doc, setDoc } from 'firebase/firestore';
+import { db } from '../services/firebaseConfig';
 import { couponService } from '../services/couponService';
 import { analyticsService } from '../services/analyticsService';
+import { useAuth } from './AuthContext';
 
 const CartContext = createContext();
 
@@ -22,6 +25,7 @@ const sanitizeItem = (item) => ({
 });
 
 export function CartProvider({ children }) {
+  const { currentUser, user } = useAuth() || {};
   const [cartItems, setCartItems] = useState(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
@@ -58,6 +62,43 @@ export function CartProvider({ children }) {
   const openCart = () => setIsCartOpen(true);
   const closeCart = () => setIsCartOpen(false);
 
+  // Detecção de Frete Grátis (Acumulativo via Peça ou Cupom)
+  // Observação crítica: Itens digitais / Vales-presentes NÃO concedem frete grátis aos itens físicos do carrinho.
+  const physicalItems = useMemo(() => {
+    return cartItems.filter(i => 
+      !i.isGiftCard && 
+      !i.isDigital && 
+      i.category !== 'gift-card' && 
+      !String(i.id || '').includes('vale-presente')
+    );
+  }, [cartItems]);
+
+  const hasPhysicalItems = physicalItems.length > 0;
+  const isOnlyDigitalCart = cartItems.length > 0 && !hasPhysicalItems;
+
+  // Apenas peças físicas com a flag de frete grátis ativam frete grátis no pedido
+  const hasFreeShippingItem = useMemo(() => {
+    return physicalItems.some(i => i.freeShipping || i.hasFreeShipping);
+  }, [physicalItems]);
+
+  const hasFreeShippingCoupon = useMemo(() => {
+    return Boolean(
+      appliedCoupon &&
+      (appliedCoupon.freeShipping === true ||
+        appliedCoupon.type === 'free_shipping' ||
+        appliedCoupon.discountMode === 'free_shipping_only')
+    );
+  }, [appliedCoupon]);
+
+  const isFreeShippingActive = hasFreeShippingItem || hasFreeShippingCoupon;
+
+  const effectiveShippingCost = useMemo(() => {
+    if (cartItems.length === 0) return 0;
+    if (isOnlyDigitalCart) return 0;
+    if (isFreeShippingActive) return 0;
+    return Number(shippingCost || 0);
+  }, [cartItems.length, isOnlyDigitalCart, isFreeShippingActive, shippingCost]);
+
   // Cálculos financeiros
   const subtotal = useMemo(() => {
     return cartItems.reduce((acc, item) => {
@@ -69,20 +110,78 @@ export function CartProvider({ children }) {
 
   const discountAmount = useMemo(() => {
     if (!appliedCoupon || subtotal <= 0) return 0;
+    if (appliedCoupon.discountMode === 'free_shipping_only') return 0;
+    if (appliedCoupon.discountMode === 'fixed') {
+      return Math.min(subtotal, Math.max(0, Number(appliedCoupon.fixedDiscountValue || 0)));
+    }
     const pct = Number(appliedCoupon.discountPercent || (appliedCoupon.discountPercentage ? appliedCoupon.discountPercentage * 100 : 0)) || 0;
     return (subtotal * pct) / 100;
   }, [subtotal, appliedCoupon]);
 
   const total = useMemo(() => {
-    return Math.max(0, subtotal - discountAmount + (cartItems.length > 0 ? Number(shippingCost || 0) : 0));
-  }, [subtotal, discountAmount, cartItems.length, shippingCost]);
+    return Math.max(0, subtotal - discountAmount + effectiveShippingCost);
+  }, [subtotal, discountAmount, effectiveShippingCost]);
 
   const totalItemsCount = useMemo(() => {
     return cartItems.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
   }, [cartItems]);
 
+  // Sincronização silenciosa do carrinho no Firestore (com debounce de 2s) para recuperação de Carrinho Abandonado (24h)
+  const hasRenderedCartSync = useRef(false);
+  useEffect(() => {
+    const activeUid = currentUser?.uid || user?.uid;
+    const activeEmail = currentUser?.email || user?.email;
+    if (!activeUid || !activeEmail) return;
+
+    // Evita sobrescrever com vazio na montagem inicial caso o carrinho já esteja vazio
+    if (!hasRenderedCartSync.current && cartItems.length === 0) {
+      hasRenderedCartSync.current = true;
+      return;
+    }
+    hasRenderedCartSync.current = true;
+
+    const timer = setTimeout(async () => {
+      try {
+        const userRef = doc(db, 'users', activeUid);
+        if (cartItems.length > 0) {
+          await setDoc(userRef, {
+            abandonedCart: {
+              items: cartItems.map(item => ({
+                id: item.id,
+                name: item.name,
+                size: item.size || 'U',
+                fit: item.fit || 'Boxy',
+                quantity: Number(item.quantity || 1),
+                price: Number(item.price || 0),
+                image: item.image || ''
+              })),
+              subtotal: Number(subtotal || 0),
+              updatedAt: new Date().toISOString(),
+              UpdatedAtMs: Date.now(),
+              abandonedEmailSent: false
+            }
+          }, { merge: true });
+        } else {
+          await setDoc(userRef, {
+            abandonedCart: {
+              items: [],
+              subtotal: 0,
+              updatedAt: new Date().toISOString(),
+              UpdatedAtMs: Date.now(),
+              abandonedEmailSent: true
+            }
+          }, { merge: true });
+        }
+      } catch (err) {
+        // Falha silenciosa para não impactar a UX
+      }
+    }, 2000);
+
+    return () => clearTimeout(timer);
+  }, [cartItems, subtotal, currentUser?.uid, currentUser?.email, user?.uid, user?.email]);
+
   // Ações de Cupom com validação no Firestore
-  const applyCoupon = async (code) => {
+  const applyCoupon = async (code, userContextOverride = null) => {
     if (!code || !code.trim()) {
       setCouponFeedback({ message: 'Digite um código de cupom.', isError: true });
       return false;
@@ -91,16 +190,30 @@ export function CartProvider({ children }) {
     setValidatingCoupon(true);
     setCouponFeedback({ message: '', isError: false });
 
-    try {
-      const result = await couponService.validateCoupon(code, subtotal);
+    const activeUserContext = userContextOverride || {
+      uid: currentUser?.uid || user?.uid || null,
+      email: currentUser?.email || user?.email || null
+    };
 
-      if (result.isValid) {
+    try {
+      const result = await couponService.validateCoupon(
+        code,
+        subtotal,
+        activeUserContext,
+        totalItemsCount
+      );
+
+      if (result.valid || result.isValid) {
         setAppliedCoupon({
+          ...result.coupon,
           id: result.coupon.id,
           code: result.coupon.code,
           type: result.coupon.type || 'affiliate',
-          discountPercent: result.discountPercent,
-          label: `${result.discountPercent}% OFF`,
+          discountMode: result.coupon.discountMode || 'percentage',
+          discountPercent: Number(result.coupon.discountPercent || 0),
+          fixedDiscountValue: Number(result.coupon.fixedDiscountValue || 0),
+          freeShipping: Boolean(result.coupon.freeShipping),
+          label: result.coupon.label,
           partnerName: result.coupon.partnerName
         });
         setCouponFeedback({ message: result.message, isError: false });
@@ -121,32 +234,74 @@ export function CartProvider({ children }) {
   };
 
   const removeCoupon = () => {
+    try {
+      sessionStorage.removeItem('thr33_pending_vip_coupon');
+    } catch {
+      // ignore
+    }
     setAppliedCoupon(null);
     setCouponFeedback({ message: 'Cupom removido com sucesso.', isError: false });
   };
 
+  // Aplica automaticamente o cupom VIP reservado pelo cliente no Perfil assim que adicionar peças à sacola
+  useEffect(() => {
+    if (cartItems.length > 0 && !appliedCoupon && !validatingCoupon) {
+      try {
+        const pendingVip = sessionStorage.getItem('thr33_pending_vip_coupon');
+        if (pendingVip) {
+          sessionStorage.removeItem('thr33_pending_vip_coupon');
+          applyCoupon(pendingVip);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [cartItems.length, appliedCoupon, validatingCoupon]);
+
   // Adicionar item ao carrinho
-  const addToCart = (product, size = 'M', quantity = 1, color = null) => {
+  const addToCart = (product, size = 'M', quantity = 1, color = null, selectedFit = null) => {
     const qty = typeof quantity === 'number' && quantity > 0 ? quantity : 1;
-    const colorObj = color || (product.colors && product.colors[0]) || { id: 'preto', name: 'Preto' };
+    let colorObj = color || (product.colors && product.colors[0]) || product.color || { id: 'preto', name: 'Preto', hex: '#000000' };
+    if (!colorObj || typeof colorObj !== 'object' || !colorObj.name || colorObj.name.toLowerCase() === 'padrão' || colorObj.name.toLowerCase() === 'padrao') {
+      colorObj = { id: 'preto', name: 'Preto', hex: '#000000' };
+    }
     const sizeStr = size || (product.sizes && product.sizes[0]) || 'M';
     const cleanPrice = parsePriceNumber(product.price || product.priceNum);
+
+    const isGift = Boolean(
+      product.isGiftCard || 
+      product.category === 'gift-card' || 
+      String(product.id || '').includes('vale-presente')
+    );
+
+    const fitVal = selectedFit || product.selectedFit || product.fit || (isGift ? "Vale-Presente Digital" : "Boxy");
 
     const itemToAdd = {
       id: product.id,
       name: product.name || product.title,
       size: sizeStr,
       color: colorObj,
-      category: product.category || 'camisa',
-      fit: product.fit || "Boxy Fit",
+      category: isGift ? 'gift-card' : (product.category || 'camisa'),
+      fit: fitVal,
       price: cleanPrice,
       quantity: qty,
-      image: product.image || (product.images && product.images[0])
+      image: product.image || (product.images && product.images[0]),
+      freeShipping: isGift ? false : Boolean(product.freeShipping || product.hasFreeShipping),
+      isGiftCard: isGift,
+      isDigital: isGift,
+      giftDeliveryMode: product.giftDeliveryMode || (isGift ? 'code' : null),
+      recipientName: product.recipientName || null,
+      giftMessage: product.giftMessage || null
     };
 
     setCartItems((prevItems) => {
       const existingIndex = prevItems.findIndex(
-        (item) => item.id === product.id && item.size === sizeStr && item.color?.id === colorObj?.id
+        (item) => item.id === product.id && 
+                  item.size === sizeStr && 
+                  item.color?.id === colorObj?.id &&
+                  (item.fit || '') === (itemToAdd.fit || '') &&
+                  item.giftDeliveryMode === itemToAdd.giftDeliveryMode &&
+                  item.recipientName === itemToAdd.recipientName
       );
 
       if (existingIndex > -1) {
@@ -164,42 +319,56 @@ export function CartProvider({ children }) {
   };
 
   // Remover item
-  const removeFromCart = (id, size, colorId = null) => {
+  const removeFromCart = (id, size, colorId = null, fit = null) => {
     const itemToRemove = cartItems.find((item) => {
-      if (colorId && item.color) {
-        return item.id === id && item.size === size && item.color.id === colorId;
-      }
-      return item.id === id && item.size === size;
+      const matchColor = colorId && item.color ? item.color.id === colorId : true;
+      const matchFit = fit ? (item.fit || '') === fit : true;
+      return item.id === id && item.size === size && matchColor && matchFit;
     });
 
     if (itemToRemove) {
-      analyticsService.trackRemoveFromCart(itemToRemove);
+      analyticsService.trackRemoveFromCart(itemToRemove, itemToRemove.quantity || 1);
     }
 
     setCartItems((prev) => 
       prev.filter((item) => {
-        if (colorId && item.color) {
-          return !(item.id === id && item.size === size && item.color.id === colorId);
-        }
-        return !(item.id === id && item.size === size);
+        const matchColor = colorId && item.color ? item.color.id === colorId : true;
+        const matchFit = fit ? (item.fit || '') === fit : true;
+        return !(item.id === id && item.size === size && matchColor && matchFit);
       })
     );
   };
 
   // Alterar quantidade
-  const updateQuantity = (id, size, delta, colorId = null) => {
+  const updateQuantity = (id, size, delta, colorId = null, fit = null) => {
+    const currentItem = cartItems.find((item) => {
+      const matchColor = colorId && item.color ? item.color.id === colorId : true;
+      const matchFit = fit ? (item.fit || '') === fit : true;
+      return item.id === id && item.size === size && matchColor && matchFit;
+    });
+
+    if (!currentItem) return;
+
+    if (delta > 0) {
+      analyticsService.trackAddToCart({ ...currentItem, quantity: delta });
+    } else if (delta < 0) {
+      const removeQty = Math.min(currentItem.quantity, Math.abs(delta));
+      analyticsService.trackRemoveFromCart(currentItem, removeQty);
+    }
+
     setCartItems((prev) =>
       prev
         .map((item) => {
           const matchColor = colorId && item.color ? item.color.id === colorId : true;
-          if (item.id === id && item.size === size && matchColor) {
+          const matchFit = fit ? (item.fit || '') === fit : true;
+          if (item.id === id && item.size === size && matchColor && matchFit) {
             const newQty = item.quantity + delta;
             return newQty > 0 ? { ...item, quantity: newQty } : null;
           }
           return item;
         })
         .filter(Boolean)
-      );
+    );
   };
 
   // Limpar carrinho
@@ -234,6 +403,13 @@ export function CartProvider({ children }) {
         setShippingCost,
         shippingDetails,
         setShippingDetails,
+        hasFreeShippingItem,
+        hasFreeShippingCoupon,
+        isFreeShippingActive,
+        effectiveShippingCost,
+        physicalItems,
+        hasPhysicalItems,
+        isOnlyDigitalCart,
         total,
         totalItemsCount
       }}

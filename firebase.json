@@ -8,17 +8,74 @@
     ],
     "rewrites": [
       {
+        "source": "/api/webhook/pagbank",
+        "function": {
+          "functionId": "pagbankWebhook",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/api/getPublicKey",
+        "function": {
+          "functionId": "getPublicKey",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/api/createOrder",
+        "function": {
+          "functionId": "createOrder",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/api/createSecureOrder",
+        "function": {
+          "functionId": "createSecureOrder",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/api/cleanupExpiredPixOrders",
+        "function": {
+          "functionId": "cleanupExpiredPixOrdersManual",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/api/calculateShipping",
+        "function": {
+          "functionId": "calculateShipping",
+          "region": "southamerica-east1"
+        }
+      },
+      {
+        "source": "/sitemap.xml",
+        "function": {
+          "functionId": "sitemap",
+          "region": "southamerica-east1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }
     ],
     "headers": [
       {
-        "source": "/index.html",
+        "source": "**",
         "headers": [
           {
             "key": "Cache-Control",
-            "value": "no-cache, no-store, must-revalidate"
+            "value": "no-cache, no-store, must-revalidate, max-age=0"
+          },
+          {
+            "key": "Pragma",
+            "value": "no-cache"
+          },
+          {
+            "key": "Expires",
+            "value": "0"
           }
         ]
       },
@@ -32,5 +89,38 @@
         ]
       }
     ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "storage": {
+    "rules": "storage.rules"
+  },
+  "functions": [
+    {
+      "source": "functions",
+      "codebase": "default",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firebase-debug.*.log"
+      ]
+    }
+  ],
+  "emulators": {
+    "functions": {
+      "port": 5001
+    },
+    "firestore": {
+      "port": 8080
+    },
+    "hosting": {
+      "port": 5000
+    },
+    "ui": {
+      "enabled": true
+    },
+    "singleProjectMode": true
   }
 }

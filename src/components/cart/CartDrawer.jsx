@@ -31,6 +31,9 @@ export function CartDrawer() {
     removeCoupon,
     couponFeedback,
     validatingCoupon,
+    isFreeShippingActive,
+    hasFreeShippingItem,
+    hasFreeShippingCoupon,
     total,
     totalItemsCount
   } = useCart();
@@ -38,42 +41,20 @@ export function CartDrawer() {
   const [couponInput, setCouponInput] = useState('');
   const itemsListRef = useRef(null);
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, currentUser } = useAuth();
 
-  // BLOQUEIO TOTAL E INFALÍVEL DO EIXO Y (RODAGEM DO MOUSE / TOUCH / TECLADO)
+  // Trava a rolagem de fundo ao abrir o carrinho
   useEffect(() => {
     if (isCartOpen) {
       const originalBodyOverflow = document.body.style.overflow;
       const originalHtmlOverflow = document.documentElement.style.overflow;
-      const originalTouchAction = document.body.style.touchAction;
 
-      // Trava os containers raiz
       document.body.style.overflow = 'hidden';
       document.documentElement.style.overflow = 'hidden';
-      document.body.style.touchAction = 'none';
-
-      // Intercepta e bloqueia a rolagem da bolinha do mouse na página de fundo
-      const preventBackgroundScroll = (e) => {
-        if (!itemsListRef.current) {
-          e.preventDefault();
-          return;
-        }
-
-        const isInsideList = itemsListRef.current.contains(e.target);
-        if (!isInsideList) {
-          e.preventDefault();
-        }
-      };
-
-      window.addEventListener('wheel', preventBackgroundScroll, { passive: false });
-      window.addEventListener('touchmove', preventBackgroundScroll, { passive: false });
 
       return () => {
         document.body.style.overflow = originalBodyOverflow;
         document.documentElement.style.overflow = originalHtmlOverflow;
-        document.body.style.touchAction = originalTouchAction;
-        window.removeEventListener('wheel', preventBackgroundScroll);
-        window.removeEventListener('touchmove', preventBackgroundScroll);
       };
     }
   }, [isCartOpen]);
@@ -81,7 +62,11 @@ export function CartDrawer() {
   const handleApplyCoupon = async (e) => {
     e.preventDefault();
     if (couponInput.trim()) {
-      const success = await applyCoupon(couponInput.trim());
+      const activeUser = currentUser || user;
+      const success = await applyCoupon(couponInput.trim(), {
+        uid: activeUser?.uid || null,
+        email: activeUser?.email || null
+      });
       if (success) {
         setCouponInput('');
       }
@@ -151,7 +136,7 @@ export function CartDrawer() {
                     <ShoppingBag size={32} />
                   </div>
                   <h3 className={styles.emptyTitle}>SUA SACOLA ESTÁ VAZIA</h3>
-                  <p className={styles.emptyText}>Você ainda não adicionou nenhuma peça do ateliê à sua sacola.</p>
+                  <p className={styles.emptyText}>Você ainda não adicionou nenhuma peça à sua sacola.</p>
                   <Link to="/catalogo" onClick={closeCart} className={styles.shopBtn}>
                     <span>EXPLORAR CATÁLOGO</span>
                     <ArrowRight size={14} />
@@ -159,12 +144,15 @@ export function CartDrawer() {
                 </div>
               ) : (
                 cartItems.map((item) => (
-                  <article key={`${item.id}-${item.size}-${item.color?.id || 'default'}`} className={styles.itemCard}>
+                  <article key={`${item.id}-${item.size}-${item.color?.id || 'default'}-${item.fit || 'default'}`} className={styles.itemCard}>
                     <img src={item.image} alt={item.name} className={styles.itemImage} />
                     <div className={styles.itemDetails}>
                       <div className={styles.itemMeta}>
                         <strong className={styles.itemName}>{item.name}</strong>
                         <span className={styles.itemFit}>
+                          {item.fit && item.fit !== 'Vale-Presente Digital' && (
+                            <><strong>{item.fit}</strong> • </>
+                          )}
                           Tam: <strong>{item.size}</strong> {item.color?.name && `• Cor: ${item.color.name}`}
                         </span>
                       </div>
@@ -177,7 +165,7 @@ export function CartDrawer() {
                         <div className={styles.qtyPicker}>
                           <button 
                             type="button"
-                            onClick={() => updateQuantity(item.id, item.size, -1, item.color?.id)}
+                            onClick={() => updateQuantity(item.id, item.size, -1, item.color?.id, item.fit)}
                             aria-label="Diminuir quantidade"
                           >
                             <Minus size={12} />
@@ -185,7 +173,7 @@ export function CartDrawer() {
                           <span>{item.quantity}</span>
                           <button 
                             type="button"
-                            onClick={() => updateQuantity(item.id, item.size, 1, item.color?.id)}
+                            onClick={() => updateQuantity(item.id, item.size, 1, item.color?.id, item.fit)}
                             aria-label="Aumentar quantidade"
                           >
                             <Plus size={12} />
@@ -194,7 +182,7 @@ export function CartDrawer() {
 
                         <button 
                           type="button"
-                          onClick={() => removeFromCart(item.id, item.size, item.color?.id)} 
+                          onClick={() => removeFromCart(item.id, item.size, item.color?.id, item.fit)} 
                           className={styles.removeBtn}
                           aria-label="Remover item"
                         >
@@ -210,7 +198,7 @@ export function CartDrawer() {
 
             {/* Rodapé e Sumário de Valores Limpo e Focado */}
             {cartItems.length > 0 && (
-              <footer className={styles.footer} onWheel={(e) => e.preventDefault()}>
+              <footer className={styles.footer}>
                 {/* Cupom de Desconto */}
                 <div className={styles.toolRow}>
                   {!appliedCoupon ? (
@@ -237,7 +225,15 @@ export function CartDrawer() {
                     <div className={styles.appliedCouponBadge}>
                       <div className={styles.couponTagInfo}>
                         <Tag size={13} />
-                        <span>CUPOM <strong>{appliedCoupon.code}</strong> (-{appliedCoupon.discountPercent}%)</span>
+                        <span>
+                          CUPOM <strong>{appliedCoupon.code}</strong>{' '}
+                          {appliedCoupon.discountMode === 'fixed' && Number(appliedCoupon.fixedDiscountValue) > 0
+                            ? `(-R$ ${Number(appliedCoupon.fixedDiscountValue).toFixed(2).replace('.', ',')})`
+                            : appliedCoupon.discountPercent > 0
+                            ? `(-${appliedCoupon.discountPercent}%)`
+                            : ''}{' '}
+                          {appliedCoupon.freeShipping ? '+ FRETE GRÁTIS' : ''}
+                        </span>
                       </div>
                       <button type="button" onClick={removeCoupon} className={styles.removeCouponBtn} aria-label="Remover cupom">
                         <X size={14} />
@@ -253,6 +249,29 @@ export function CartDrawer() {
                   )}
                 </div>
 
+                {isFreeShippingActive && (
+                  <div style={{
+                    borderRadius: '4px',
+                    padding: '0.45rem 0.65rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    color: '#10b981',
+                    fontSize: '0.74rem',
+                    fontWeight: 600,
+                    marginBottom: '0.65rem'
+                  }}>
+                    <CheckCircle2 size={13} />
+                    <span>
+                      {hasFreeShippingItem && hasFreeShippingCoupon
+                        ? 'FRETE GRÁTIS ATIVO (PEÇA + CUPOM)'
+                        : hasFreeShippingCoupon
+                        ? `FRETE GRÁTIS ATIVO PELO CUPOM (${appliedCoupon?.code})`
+                        : 'FRETE GRÁTIS ATIVO NESTE PEDIDO'}
+                    </span>
+                  </div>
+                )}
+
                 {/* Linhas de Valores */}
                 <div className={styles.summaryList}>
                   <div className={styles.summaryRow}>
@@ -266,6 +285,13 @@ export function CartDrawer() {
                       <span>- R$ {Number(discountAmount || 0).toFixed(2)}</span>
                     </div>
                   )}
+
+                  <div className={styles.summaryRow}>
+                    <span>Frete</span>
+                    <span style={isFreeShippingActive ? { color: '#10b981', fontWeight: 600 } : undefined}>
+                      {isFreeShippingActive ? 'GRÁTIS' : 'Calculado no checkout'}
+                    </span>
+                  </div>
 
                   <div className={`${styles.summaryRow} ${styles.totalRow}`}>
                     <span>TOTAL ESTIMADO</span>

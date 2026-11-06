@@ -1062,7 +1062,7 @@
   color: #000000;
 }
 
-.btnManifestoAtelier {
+.btnManifestoBrand {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
@@ -1078,7 +1078,7 @@
   transition: all 0.15s ease;
 }
 
-.btnManifestoAtelier:hover {
+.btnManifestoBrand:hover {
   background-color: #FFFFFF;
   color: #000000;
 }

@@ -61,6 +61,177 @@
   max-width: 320px;
 }
 
+/* BLOCO DE CONFIANÇA & PAGAMENTOS (COLUNA 1) */
+.trustPaymentWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+  margin-top: 0.5rem;
+}
+
+.trustSection {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.trustSubTitle {
+  font-family: var(--font-heading);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 1.5px;
+  color: #e5e5e5;
+  text-transform: uppercase;
+}
+
+.cardsRow {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.cardIcon {
+  width: 42px;
+  height: 28px;
+  object-fit: contain;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background-color: #0d0d0d;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+}
+
+.cardIcon:hover {
+  transform: translateY(-3px) scale(1.06);
+  border-color: rgba(255, 255, 255, 0.6);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.6);
+}
+
+.trustCaption {
+  font-size: 0.7rem;
+  color: #a3a3a3;
+  letter-spacing: 0.2px;
+  line-height: 1.35;
+}
+
+.badgesGrid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0.55rem;
+  width: 100%;
+  max-width: 340px;
+}
+
+.trustBadgeItem {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  background-color: #121212;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.5rem 0.65rem;
+  border-radius: 4px;
+  transition: all var(--transition-fast);
+  cursor: default;
+}
+
+.trustBadgeItem:hover {
+  transform: translateY(-2px);
+  background-color: #181818;
+}
+
+.badgeIconWrapper {
+  width: 26px;
+  height: 26px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* CORES VIBRANTES PARA CADA SELO */
+.badgeSsl {
+  border-color: rgba(16, 185, 129, 0.3);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), #121212);
+}
+.badgeSsl .badgeIconWrapper {
+  background: rgba(16, 185, 129, 0.15);
+  color: #10b981;
+}
+.badgeSsl:hover {
+  border-color: #10b981;
+  box-shadow: 0 0 12px rgba(16, 185, 129, 0.25);
+}
+
+.badgeShield {
+  border-color: rgba(59, 130, 246, 0.3);
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), #121212);
+}
+.badgeShield .badgeIconWrapper {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+.badgeShield:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.25);
+}
+
+.badgeGoogle {
+  border-color: rgba(34, 197, 94, 0.3);
+  background: linear-gradient(135deg, rgba(34, 197, 94, 0.05), #121212);
+}
+.badgeGoogle .badgeIconWrapper {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+.badgeGoogle:hover {
+  border-color: #22c55e;
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.25);
+}
+
+.badgeShipping {
+  border-color: rgba(245, 158, 11, 0.3);
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.05), #121212);
+}
+.badgeShipping .badgeIconWrapper {
+  background: rgba(245, 158, 11, 0.15);
+  color: #f59e0b;
+}
+.badgeShipping:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 0 12px rgba(245, 158, 11, 0.25);
+}
+
+.badgeTextCol {
+  display: flex;
+  flex-direction: column;
+  gap: 0.12rem;
+  min-width: 0;
+}
+
+.badgeTextCol strong {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.badgeTextCol span {
+  font-size: 0.54rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  color: #a3a3a3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .locationBadge {
   display: inline-flex;
   align-items: center;
@@ -79,6 +250,22 @@
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
+}
+
+.accordionHeaderBtn {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: default;
+  text-align: left;
+}
+
+.accordionChevron {
+  display: none;
 }
 
 .colTitle {
@@ -105,6 +292,10 @@
   transition: color var(--transition-fast), transform var(--transition-fast);
   display: inline-block;
   text-decoration: none;
+  padding: 0.25rem 0;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
 }
 
 .linksList a:hover {
@@ -197,14 +388,55 @@
 .socialRow span {
   color: var(--border-color);
 }
+/* BLOCO LEGAL OBRIGATÓRIO (DECRETO FEDERAL Nº 7.962/2013) */
+.legalInfoSection {
+  margin-top: 3rem;
+  padding: 1.5rem 0;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.legalTextBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.legalTextBlock strong {
+  color: var(--text-secondary);
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.legalBadgesBlock {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.legalBadge {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 0.25rem 0.6rem;
+}
 
 /* BOTTOM BAR */
 .bottomBar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-top: 1px solid var(--border-color);
-  padding-top: 1.75rem;
   font-size: 0.7rem;
   color: var(--text-muted);
   letter-spacing: 1px;
@@ -229,7 +461,7 @@
   letter-spacing: 1px;
 }
 
-/* RESPONSIVO */
+/* RESPONSIVO MOBILE */
 @media (max-width: 960px) {
   .topGrid {
     grid-template-columns: 1fr 1fr;
@@ -237,15 +469,132 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 768px) {
+  .footer {
+    padding-top: 3rem;
+    padding-bottom: calc(2rem + env(safe-area-inset-bottom, 0px));
+  }
+
   .topGrid {
     grid-template-columns: 1fr;
-    gap: 2rem;
+    gap: 1.5rem;
+  }
+
+  .brandCol {
+    padding-bottom: 1rem;
+    border-bottom: 1px solid var(--border-color);
+  }
+
+  .linksCol {
+    gap: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    padding-bottom: 0.25rem;
+  }
+
+  .accordionHeaderBtn {
+    cursor: pointer;
+    justify-content: space-between;
+    padding: 0.85rem 0;
+    min-height: 44px;
+  }
+
+  .accordionChevron {
+    display: block;
+    color: var(--text-muted);
+    transition: transform var(--transition-fast);
+  }
+
+  .accordionChevronOpen {
+    transform: rotate(180deg);
+    color: var(--text-primary);
+  }
+
+  .linksListCollapsed {
+    display: none;
+  }
+
+  .linksListExpanded {
+    display: flex;
+    padding: 0.5rem 0 1rem;
+    gap: 0.75rem;
+  }
+
+  .newsletterCol {
+    padding-top: 1rem;
+  }
+
+  .socialRow {
+    justify-content: flex-start;
+  }
+
+  .socialRow a {
+    min-height: 44px;
+    display: inline-flex;
+    align-items: center;
   }
 
   .bottomBar {
     flex-direction: column;
-    align-items: flex-start;
-    gap: 1rem;
+    align-items: center;
+    text-align: center;
+    gap: 1.25rem;
+  }
+
+  .paymentMethods {
+    flex-wrap: wrap;
+    justify-content: center;
   }
 }
+
+.photoCreditBox {
+  margin-top: 1rem;
+}
+
+.photoCreditBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--text-secondary);
+  padding: 0.25rem 0.85rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-decoration: none;
+  transition: all var(--transition-fast);
+}
+
+.photoCreditBtn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+}
+
+.wavemSignature {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin-left: 0.75rem;
+  padding-left: 0.75rem;
+  border-left: 1px solid var(--border-color);
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-decoration: none;
+}
+
+.wavemLetter,
+.wavemSpace {
+  display: inline-block;
+}
+
+.wavemSpace {
+  width: 0.3em;
+}
+
+@media (max-width: 800px) {
+  .legalInfoSection {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+

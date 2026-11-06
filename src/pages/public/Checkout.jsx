@@ -22,26 +22,74 @@ import {
   Edit3,
   UserCheck,
   ExternalLink,
-  Zap
+  Zap,
+  SlidersHorizontal,
+  ChevronDown,
+  ChevronUp,
+  Shield,
+  Clock,
+  Gift
 } from 'lucide-react';
 import { useCart } from '../../context/CartContext';
+import { SEO } from '../../components/common/SEO';
 import { 
   validateCPF, 
+  validateCNPJ,
+  validateCPForCNPJ,
+  validateAddressNumber,
+  normalizeAddressNumber,
+  validateStateRegistration,
   validateEmail, 
   validatePhone, 
   validateCEP,
+  validateCardNumber,
+  validateCardExpiry,
   maskCPF, 
+  maskCNPJ,
+  maskCPForCNPJ,
   maskPhone, 
   maskCEP
 } from '../../utils/validators';
 import { fetchAddressByCep } from '../../services/viaCepService';
+import { shippingService } from '../../services/shippingService';
 import { useAuth } from '../../context/AuthContext';
-import { doc, getDoc, setDoc, collection, addDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, collection, addDoc, onSnapshot, runTransaction } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
 import { couponService } from '../../services/couponService';
-import { analyticsService } from '../../services/analyticsService';
+import { analyticsService, resolveOrderDestinationUF } from '../../services/analyticsService';
 import { catalogService } from '../../services/catalogService';
+import { pagbankService, PAGBANK_TEST_CARDS, detectCardBrand, encryptCardData } from '../../services/pagbankService';
+import { CardBrandIcon } from '../../components/ui/CardBrandIcon';
+import { ORDER_STATUSES, normalizeOrderStatus } from '../../services/orderStateMachine';
+import { webhookService } from '../../services/webhookService';
+import { giftCardService, refundOrderWalletIfNeeded } from '../../services/giftCardService';
+import { emailService } from '../../services/emailService';
+import { currentDropConfig } from '../../data/dropConfig';
+import { dropSubscriberService } from '../../services/dropSubscriberService';
 import styles from './Checkout.module.css';
+
+/**
+ * Identifica enderecos virtuais/temporarios de compras digitais que nao devem ser salvos no perfil
+ */
+export const isDigitalOrCheckoutAddress = (addr) => {
+  if (!addr) return false;
+  const street = String(addr.street || '').toLowerCase();
+  const title = String(addr.title || '').toLowerCase();
+  const complement = String(addr.complement || '').toLowerCase();
+  const neighborhood = String(addr.neighborhood || '').toLowerCase();
+  const cep = String(addr.cep || '').replace(/\D/g, '');
+  return (
+    street.includes('entrega digital') ||
+    street.includes('digital instant') ||
+    title === 'checkout' ||
+    title.includes('digital') ||
+    neighborhood === 'digital' ||
+    complement.includes('instantaneamente em meus pedidos') ||
+    complement.includes('entrega digital') ||
+    cep === '80000000' ||
+    cep === '80020310'
+  );
+};
 
 export function Checkout({ user: propUser, onOpenAuthModal }) {
   const navigate = useNavigate();
@@ -54,6 +102,13 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     discountAmount, 
     shippingCost, 
     setShippingCost, 
+    shippingDetails,
+    setShippingDetails,
+    isFreeShippingActive,
+    hasFreeShippingItem,
+    hasFreeShippingCoupon,
+    hasPhysicalItems,
+    isOnlyDigitalCart,
     total, 
     appliedCoupon, 
     applyCoupon, 
@@ -62,6 +117,53 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     validatingCoupon,
     clearCart 
   } = useCart();
+
+  // CARTEIRA DIGITAL & SALDO DA CONTA
+  const [useWalletBalance, setUseWalletBalance] = useState(false);
+  const [userWalletAmount, setUserWalletAmount] = useState(0);
+
+  const hasGiftCardInCart = useMemo(() => {
+    return cartItems.some(i => i.isGiftCard || i.category === 'gift-card' || String(i.id || '').includes('vale'));
+  }, [cartItems]);
+
+  const isOnlyGiftCardsInCart = useMemo(() => {
+    return cartItems.length > 0 && cartItems.every(i => 
+      i.isGiftCard || 
+      i.isDigital || 
+      i.category === 'gift-card' || 
+      String(i.id || '').includes('vale')
+    );
+  }, [cartItems]);
+
+  useEffect(() => {
+    const activeUid = user?.uid || authUser?.uid || currentUser?.uid;
+    if (activeUid) {
+      getDoc(doc(db, 'users', activeUid)).then(snap => {
+        if (snap.exists()) {
+          setUserWalletAmount(Number(snap.data().walletBalance || 0));
+        }
+      }).catch(err => console.warn("Aviso ao carregar saldo da carteira:", err));
+    }
+  }, [user, authUser, currentUser]);
+
+  // Se o carrinho contiver Vale-Presente, o saldo da carteira não pode ser utilizado (anti-loop)
+  const walletDeduction = (useWalletBalance && !hasGiftCardInCart) ? Math.min(userWalletAmount, total) : 0;
+  const finalAmountToPay = Math.max(0, total - walletDeduction);
+
+  // Se todos os itens forem digitais, zera o frete automaticamente
+  useEffect(() => {
+    if (isOnlyGiftCardsInCart) {
+      setShippingCost(0);
+      setShippingDetails({
+        id: 'digital_delivery',
+        name: 'Entrega Digital Instantânea',
+        carrier: 'THR33 Digital',
+        serviceName: 'Meus Pedidos',
+        price: 0,
+        deadline: 'Instantâneo após aprovação'
+      });
+    }
+  }, [isOnlyGiftCardsInCart, setShippingCost, setShippingDetails]);
 
   // CONTROLE DE ETAPAS: 1 = Identificação, 2 = Entrega & Frete, 3 = Pagamento, 4 = Sucesso
   const [currentStep, setCurrentStep] = useState(1);
@@ -93,7 +195,10 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     name: user?.name || user?.displayName || '',
     email: user?.email || '',
     cpf: user?.cpf || '',
-    phone: user?.phone || ''
+    phone: user?.phone || '',
+    isPj: false,
+    ie: '',
+    isentoIE: true
   });
   const [isEditingAccountData, setIsEditingAccountData] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
@@ -104,6 +209,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   const [savedAddresses, setSavedAddresses] = useState([]);
   const [selectedAddressId, setSelectedAddressId] = useState('');
   const [isAddingNewAddress, setIsAddingNewAddress] = useState(false);
+  const [editingAddressId, setEditingAddressId] = useState(null);
   const [isSearchingCep, setIsSearchingCep] = useState(false);
   const [cepApiMessage, setCepApiMessage] = useState(null);
 
@@ -111,12 +217,36 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     cep: '',
     street: '',
     number: '',
+    noNumber: false,
     neighborhood: '',
     complement: '',
     city: 'Curitiba',
-    state: 'PR'
+    state: 'PR',
+    ibge: '4106902'
   });
   const [addressErrors, setAddressErrors] = useState({});
+
+  // Validações em tempo real com indicador visual (Etapa 1 & 2)
+  const isNameValid = useMemo(() => {
+    const trimmed = (clientData.name || '').trim();
+    return trimmed.length >= 3 && trimmed.includes(' ');
+  }, [clientData.name]);
+
+  const isEmailValid = useMemo(() => {
+    return validateEmail(clientData.email);
+  }, [clientData.email]);
+
+  const isCpfValid = useMemo(() => {
+    return validateCPForCNPJ(clientData.cpf);
+  }, [clientData.cpf]);
+
+  const isPhoneValid = useMemo(() => {
+    return validatePhone(clientData.phone);
+  }, [clientData.phone]);
+
+  const isCepValid = useMemo(() => {
+    return validateCEP(addressForm.cep);
+  }, [addressForm.cep]);
 
   // Sincroniza e pré-preenche dados pessoais e endereços do Firestore
   useEffect(() => {
@@ -129,7 +259,8 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         phone: active.phone || prev.phone || ''
       }));
 
-      const userAddresses = active.addresses || [];
+      const rawAddresses = active.addresses || [];
+      const userAddresses = rawAddresses.filter(a => !isDigitalOrCheckoutAddress(a));
       if (userAddresses.length > 0) {
         setSavedAddresses(userAddresses);
         const defaultAddr = userAddresses.find(a => a.isDefault) || userAddresses[0];
@@ -153,7 +284,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         items: cartItems.map(i => ({ 
           id: i.id || i.slug, 
           name: i.name, 
-          size: i.size || 'M', 
+          size: i.size || 'M',
+          color: i.color || null,
+          fit: i.fit || 'Boxy',
           qty: i.quantity || 1, 
           price: i.price 
         })),
@@ -167,28 +300,227 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     }
   }, [sessionId, cartItems, subtotal, discountAmount, shippingCost, total, clientData.email, clientData.name, currentStep, user]);
 
-  // OPÇÕES DE FRETE
+  // OPÇÕES DE FRETE SOB DEMANDA // ENVIO DIRETO
   const [shippingOptions, setShippingOptions] = useState([
-    { id: 'sedex', name: 'SEDEX Expresso', deadline: '1 a 2 dias úteis', price: 14.90 },
-    { id: 'pac', name: 'PAC Standard', deadline: '3 a 5 dias úteis', price: 9.90 },
-    { id: 'retirada', name: 'Retirada no Ateliê (Curitiba)', deadline: 'Disponível em 24h', price: 0 }
+    { 
+      id: 'padrao', 
+      name: 'Envio Direto da Fábrica', 
+      deadline: 'Produção sob demanda + 5 a 9 dias úteis', 
+      price: 24.90 
+    },
+    { 
+      id: 'expresso', 
+      name: 'Envio Prioritário', 
+      deadline: 'Produção sob demanda + 2 a 4 dias úteis', 
+      price: 38.50 
+    }
   ]);
-  const [selectedShippingMethod, setSelectedShippingMethod] = useState('sedex');
+  const [selectedShippingMethod, setSelectedShippingMethod] = useState('padrao');
 
   // PROCESSAMENTO FINAL E SUCESSO
   const [paymentMethod, setPaymentMethod] = useState('PIX');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paidTotalAmount, setPaidTotalAmount] = useState(0);
   const [copiedPix, setCopiedPix] = useState(false);
   const [couponInput, setCouponInput] = useState('');
   const [orderNumber, setOrderNumber] = useState('');
+  const [createdOrderId, setCreatedOrderId] = useState(null);
+  const [createdOrderStatus, setCreatedOrderStatus] = useState(null);
+  const [createdOrderDate, setCreatedOrderDate] = useState(null);
+  const [pixExpiresAt, setPixExpiresAt] = useState(null);
+  const [pixTimeRemaining, setPixTimeRemaining] = useState(20 * 60);
+  const [pixExpired, setPixExpired] = useState(false);
 
-  // Atualiza o valor do frete no contexto quando a opção muda
+  // Escuta em tempo real do status do pedido (Firestore onSnapshot)
   useEffect(() => {
-    const opt = shippingOptions.find(o => o.id === selectedShippingMethod);
-    if (opt) {
-      setShippingCost(opt.price);
+    if (!createdOrderId) return;
+    const unsub = onSnapshot(doc(db, 'orders', createdOrderId), (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        const norm = normalizeOrderStatus(data.status);
+        setCreatedOrderStatus(norm);
+        if (['pagamento_aprovado', 'pago'].includes(norm)) {
+          if (data.hasGiftCard && !data.giftCardsProcessed) {
+            giftCardService.processOrderGiftCards(createdOrderId, data)
+              .catch(err => console.warn("Aviso ao processar vales em tempo real:", err.message));
+          }
+        } else if (norm === 'cancelado') {
+          // Estorno automático do saldo da carteira se o pedido for cancelado
+          refundOrderWalletIfNeeded(createdOrderId).catch(err => 
+            console.warn("Aviso ao estornar carteira no checkout cancelado:", err.message)
+          );
+        }
+        if (data.createdAt) {
+          const ms = data.createdAt.toDate ? data.createdAt.toDate().getTime() : new Date(data.createdAt).getTime();
+          setCreatedOrderDate(ms);
+        }
+        if (data.pixExpiresAt) {
+          setPixExpiresAt(data.pixExpiresAt);
+        }
+      }
+    }, (err) => {
+      console.warn("Aviso ao escutar status do pedido:", err.message);
+    });
+    return () => unsub();
+  }, [createdOrderId]);
+
+  // Timer Regressivo Oficial do Pix (Estritamente 20 minutos com persistencia e conferencia delta)
+  useEffect(() => {
+    if (currentStep !== 4 || paymentMethod !== 'PIX') return;
+
+    // 1. Extrai o momento real de criacao do pedido (via timestamp do ID ex: THR-1792152469015-... ou estado)
+    let orderCreationMs = createdOrderDate;
+    if (!orderCreationMs && orderNumber) {
+      const match = String(orderNumber).match(/THR-(\d{13})/i);
+      if (match) {
+        orderCreationMs = Number(match[1]);
+      }
     }
-  }, [selectedShippingMethod, shippingOptions]);
+    if (!orderCreationMs) {
+      orderCreationMs = Date.now();
+    }
+
+    // 2. O prazo limite maximo estrito e de EXATAMENTE 20 minutos a partir da geracao do pedido
+    const max20MinDeadline = orderCreationMs + 20 * 60 * 1000;
+    const sessionKey = orderNumber ? `thr33_pix_exp_${orderNumber}` : 'thr33_pix_exp_current';
+    let targetTimeMs = null;
+
+    if (pixExpiresAt) {
+      const rawExpiry = new Date(pixExpiresAt).getTime();
+      // Se a data registrada for superior a 20 minutos (pedidos antigos ou retornos de 30min), crava em 20 min
+      targetTimeMs = Math.min(rawExpiry, max20MinDeadline);
+      sessionStorage.setItem(sessionKey, String(targetTimeMs));
+    } else {
+      const savedExp = sessionStorage.getItem(sessionKey);
+      if (savedExp) {
+        targetTimeMs = Math.min(Number(savedExp), max20MinDeadline);
+      } else {
+        targetTimeMs = max20MinDeadline;
+        sessionStorage.setItem(sessionKey, String(targetTimeMs));
+      }
+    }
+
+    const updateCountdown = () => {
+      const now = Date.now();
+      // Limita estritamente ao teto de 20 minutos (1200s), impedindo qualquer exibicao de 30 minutos
+      const diffSec = Math.min(20 * 60, Math.max(0, Math.floor((targetTimeMs - now) / 1000)));
+      setPixTimeRemaining(diffSec);
+      if (diffSec <= 0) {
+        setPixExpired(true);
+        if (createdOrderId) {
+          // Devolve saldo da carteira imediatamente se PIX expirou
+          refundOrderWalletIfNeeded(createdOrderId).catch(err => 
+            console.warn("Aviso ao estornar carteira no checkout expirado:", err.message)
+          );
+        }
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+
+    return () => clearInterval(interval);
+  }, [currentStep, paymentMethod, pixExpiresAt, orderNumber, createdOrderDate, createdOrderId]);
+
+  const formatPixTimer = (totalSeconds) => {
+    const mins = Math.floor(totalSeconds / 60);
+    const secs = totalSeconds % 60;
+    return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  };
+
+  // DADOS DE PAGAMENTO PAGBANK (CHECKOUT TRANSPARENTE)
+  const [cardData, setCardData] = useState({
+    number: '',
+    holder: '',
+    expMonth: '',
+    expYear: '',
+    cvv: ''
+  });
+  const [installments, setInstallments] = useState(1);
+  const [cardErrors, setCardErrors] = useState({});
+  const [paymentError, setPaymentError] = useState(null);
+  const [pagbankResult, setPagbankResult] = useState(null);
+  const [cardBrand, setCardBrand] = useState('generic');
+
+  // Validações em tempo real com indicador visual (Etapa 3 - Cartão)
+  const isCardNumberValid = useMemo(() => {
+    const clean = (cardData.number || '').replace(/\D/g, '');
+    return (clean.length === 15 || clean.length === 16) && validateCardNumber(clean);
+  }, [cardData.number]);
+
+  const isCardHolderValid = useMemo(() => {
+    const trimmed = (cardData.holder || '').trim();
+    return trimmed.length >= 4 && trimmed.includes(' ');
+  }, [cardData.holder]);
+
+  const isCardExpiryValid = useMemo(() => {
+    return validateCardExpiry(cardData.expMonth, cardData.expYear);
+  }, [cardData.expMonth, cardData.expYear]);
+
+  const isCardCvvValid = useMemo(() => {
+    const clean = (cardData.cvv || '').replace(/\D/g, '');
+    return clean.length >= 3 && clean.length <= 4;
+  }, [cardData.cvv]);
+
+  // Handlers de máscara de cartão
+  const handleCardNumberChange = (e) => {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 16);
+    setCardBrand(detectCardBrand(v));
+    v = v.replace(/(\d{4})(?=\d)/g, '$1 ');
+    setCardData(prev => ({ ...prev, number: v }));
+    if (paymentError) setPaymentError(null);
+  };
+
+  const handleExpChange = (e) => {
+    let v = e.target.value.replace(/\D/g, '').slice(0, 4);
+    if (v.length >= 3) {
+      v = `${v.slice(0, 2)}/${v.slice(2)}`;
+    }
+    setCardData(prev => ({
+      ...prev,
+      expMonth: v.slice(0, 2),
+      expYear: v.length >= 5 ? v.slice(3, 5) : v.slice(3)
+    }));
+    if (paymentError) setPaymentError(null);
+  };
+
+  const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
+  const [shippingError, setShippingError] = useState(null);
+
+  const selectedShippingOption = useMemo(() => {
+    return shippingOptions.find(o => o.id === selectedShippingMethod) || shippingOptions[0] || null;
+  }, [shippingOptions, selectedShippingMethod]);
+
+  const updateShippingQuotes = async (targetCep) => {
+    const clean = String(targetCep || '').replace(/\D/g, '');
+    if (clean.length !== 8) return;
+
+    setIsCalculatingShipping(true);
+    setShippingError(null);
+    try {
+      const result = await shippingService.calculateShipping(clean, cartItems, subtotal);
+      if (result.options && Array.isArray(result.options) && result.options.length > 0) {
+        setShippingOptions(result.options);
+        const exists = result.options.some(o => o.id === selectedShippingMethod);
+        if (exists) {
+          const currentOpt = result.options.find(o => o.id === selectedShippingMethod);
+          if (currentOpt) {
+            setShippingCost(currentOpt.price);
+            setShippingDetails(currentOpt);
+          }
+        } else {
+          setSelectedShippingMethod(result.options[0].id);
+          setShippingCost(result.options[0].price);
+          setShippingDetails(result.options[0]);
+        }
+      }
+    } catch (err) {
+      console.warn("Aviso na cotação de frete do checkout:", err.message);
+      setShippingError(err.message);
+    } finally {
+      setIsCalculatingShipping(false);
+    }
+  };
 
   // Endereço ativo para envio
   const activeAddress = useMemo(() => {
@@ -205,6 +537,25 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       complement: addressForm.complement || ''
     };
   }, [isAddingNewAddress, selectedAddressId, savedAddresses, addressForm]);
+
+  // Atualiza o valor e detalhes do frete no contexto quando a opção muda
+  useEffect(() => {
+    const opt = shippingOptions.find(o => o.id === selectedShippingMethod);
+    if (opt) {
+      setShippingCost(isFreeShippingActive ? 0 : opt.price);
+      setShippingDetails(opt);
+    }
+  }, [selectedShippingMethod, shippingOptions, isFreeShippingActive]);
+
+  // Recalcula frete automaticamente quando o endereço ativo mudar
+  useEffect(() => {
+    if (activeAddress?.cep && cartItems.length > 0) {
+      const clean = String(activeAddress.cep).replace(/\D/g, '');
+      if (clean.length === 8) {
+        updateShippingQuotes(clean);
+      }
+    }
+  }, [activeAddress?.cep, cartItems.length, subtotal]);
 
   // Se o carrinho estiver vazio e não foi para a tela de sucesso
   if (cartItems.length === 0 && currentStep !== 4) {
@@ -227,10 +578,25 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   // HANDLERS ETAPA 1: DADOS PESSOAIS
   // -------------------------------------------------------------
   const handleClientChange = (e) => {
-    const { name, value } = e.target;
-    let formatted = value;
-    if (name === 'cpf') formatted = maskCPF(value);
+    const { name, value, type, checked } = e.target;
+    let formatted = type === 'checkbox' ? checked : value;
+
+    if (name === 'cpf') {
+      formatted = maskCPForCNPJ(value);
+      const clean = formatted.replace(/\D/g, '');
+      setClientData(prev => ({
+        ...prev,
+        isPj: clean.length > 11,
+        [name]: formatted
+      }));
+      if (clientErrors[name]) {
+        setClientErrors(prev => ({ ...prev, [name]: null }));
+      }
+      return;
+    }
+
     if (name === 'phone') formatted = maskPhone(value);
+    if (name === 'ie') formatted = value.toUpperCase().replace(/[^0-9A-Z]/g, '').slice(0, 16);
 
     setClientData(prev => ({ ...prev, [name]: formatted }));
     if (clientErrors[name]) {
@@ -240,17 +606,34 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
   const validateStep1 = () => {
     const errors = {};
-    if (!clientData.name.trim() || clientData.name.trim().split(' ').length < 2) {
-      errors.name = 'Informe seu nome completo (nome e sobrenome).';
+    const cleanDoc = (clientData.cpf || '').replace(/\D/g, '');
+    const isPj = clientData.isPj || cleanDoc.length === 14;
+
+    if (!clientData.name || !clientData.name.trim() || clientData.name.trim().split(' ').length < 2) {
+      errors.name = isPj 
+        ? 'Informe a Razão Social completa da empresa.' 
+        : 'Informe seu nome completo (nome e sobrenome).';
     }
-    if (!validateEmail(clientData.email)) {
-      errors.email = 'Informe um e-mail válido.';
+    if (!clientData.email || !validateEmail(clientData.email)) {
+      errors.email = 'Informe um e-mail válido para envio da NF-e.';
     }
-    if (!validateCPF(clientData.cpf)) {
-      errors.cpf = 'CPF inválido.';
+    if (!clientData.cpf || !clientData.cpf.trim()) {
+      errors.cpf = 'Informe seu CPF ou CNPJ para emissão da NF-e.';
+    } else if (!validateCPForCNPJ(clientData.cpf)) {
+      errors.cpf = cleanDoc.length > 11 
+        ? 'CNPJ inválido (dígitos verificadores incorretos).' 
+        : 'CPF inválido (dígitos verificadores incorretos).';
     }
-    if (!validatePhone(clientData.phone)) {
+    if (!clientData.phone || !clientData.phone.trim()) {
+      errors.phone = 'Informe seu celular com DDD para rastreio.';
+    } else if (!validatePhone(clientData.phone)) {
       errors.phone = 'Telefone celular com DDD inválido.';
+    }
+
+    if (isPj && !clientData.isentoIE) {
+      if (!validateStateRegistration(clientData.ie, false)) {
+        errors.ie = 'Informe uma Inscrição Estadual válida ou selecione "Isento".';
+      }
     }
 
     setClientErrors(errors);
@@ -258,22 +641,54 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   };
 
   const handleToggleEditAccountData = async () => {
-    if (isEditingAccountData) {
-      if (!validateStep1()) return;
+    if (!validateStep1()) return;
 
-      setSavingProfile(true);
+    setSavingProfile(true);
+    try {
+      const userPayload = {
+        name: clientData.name.trim(),
+        displayName: clientData.name.trim(),
+        cpf: clientData.cpf.trim(),
+        phone: clientData.phone.trim(),
+        updatedAt: new Date().toISOString()
+      };
+
+      const activeUid = user?.uid || authUser?.uid || currentUser?.uid;
+
+      if (activeUid) {
+        const userRef = doc(db, 'users', activeUid);
+        await setDoc(userRef, userPayload, { merge: true });
+      }
+
+      if (updateUser) {
+        await updateUser(userPayload);
+      }
+
+      setSaveProfileSuccess(true);
+      setTimeout(() => setSaveProfileSuccess(false), 3000);
+    } catch {
+      // Ignora erro silencioso de sincronização de perfil
+    } finally {
+      setSavingProfile(false);
+    }
+  };
+
+  const handleNextToStep2 = async (e) => {
+    if (e) e.preventDefault();
+    if (!validateStep1()) return;
+
+    // Sincroniza dados no perfil do Firestore de forma transparente se o usuário estiver autenticado
+    if (user) {
       try {
         const userPayload = {
           name: clientData.name.trim(),
           displayName: clientData.name.trim(),
-          email: clientData.email.trim(),
           cpf: clientData.cpf.trim(),
           phone: clientData.phone.trim(),
           updatedAt: new Date().toISOString()
         };
 
         const activeUid = user?.uid || authUser?.uid || currentUser?.uid;
-
         if (activeUid) {
           const userRef = doc(db, 'users', activeUid);
           await setDoc(userRef, userPayload, { merge: true });
@@ -282,37 +697,26 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         if (updateUser) {
           await updateUser(userPayload);
         }
-
-        setIsEditingAccountData(false);
-        setSaveProfileSuccess(true);
-        setTimeout(() => setSaveProfileSuccess(false), 4000);
-      } catch (err) {
-        console.error("Erro ao salvar dados do perfil no Firestore:", err);
-        alert("Erro ao salvar dados cadastrais: " + (err.message || 'Tente novamente.'));
-      } finally {
-        setSavingProfile(false);
+      } catch {
+        // Sincronização silenciosa
       }
-    } else {
-      setIsEditingAccountData(true);
-      setSaveProfileSuccess(false);
     }
-  };
 
-  const handleNextToStep2 = (e) => {
-    e.preventDefault();
-    if (isEditingAccountData) return;
-    if (validateStep1()) {
+    if (isOnlyGiftCardsInCart) {
+      setCurrentStep(3);
+    } else {
       setCurrentStep(2);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   // -------------------------------------------------------------
   // HANDLERS ETAPA 2: ENDEREÇO & FRETE
   // -------------------------------------------------------------
   const handleAddressChange = (e) => {
-    const { name, value } = e.target;
-    let formatted = value;
+    const { name, value, type, checked } = e.target;
+    let formatted = type === 'checkbox' ? checked : value;
+
     if (name === 'cep') {
       formatted = maskCEP(value);
       const clean = formatted.replace(/\D/g, '');
@@ -321,7 +725,14 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       }
     }
     if (name === 'state') formatted = value.toUpperCase().slice(0, 2);
-    if (name === 'number') formatted = value.slice(0, 10);
+    if (name === 'number') {
+      formatted = value.slice(0, 15);
+      if (formatted.toUpperCase() === 'S/N' || formatted.toUpperCase() === 'SN') {
+        setAddressForm(prev => ({ ...prev, number: 'S/N', noNumber: true }));
+        if (addressErrors.number) setAddressErrors(errs => ({ ...errs, number: null }));
+        return;
+      }
+    }
 
     setAddressForm(prev => ({ ...prev, [name]: formatted }));
     if (addressErrors[name]) {
@@ -343,16 +754,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         neighborhood: res.data.neighborhood || prev.neighborhood,
         city: res.data.city || prev.city,
         state: res.data.state || prev.state,
+        ibge: res.data.ibge || prev.ibge || '',
         complement: res.data.complement || prev.complement
       }));
-      setCepApiMessage({ type: 'success', text: 'Endereço localizado com sucesso via Correios.' });
-
-      const isCuritiba = cleanCep.startsWith('80') || cleanCep.startsWith('81') || cleanCep.startsWith('82') || cleanCep.startsWith('83');
-      setShippingOptions([
-        { id: 'sedex', name: 'SEDEX Expresso', deadline: isCuritiba ? 'Chega amanhã' : '1 a 3 dias úteis', price: isCuritiba ? 14.90 : 28.50 },
-        { id: 'pac', name: 'PAC Standard', deadline: isCuritiba ? '2 a 3 dias úteis' : '5 a 8 dias úteis', price: isCuritiba ? 9.90 : 18.90 },
-        { id: 'retirada', name: 'Retirada no Ateliê (Curitiba)', deadline: 'Disponível em 24h', price: 0 }
-      ]);
+      setCepApiMessage({ type: 'success', text: `Endereço localizado: ${res.data.city}/${res.data.state} (IBGE: ${res.data.ibge || 'OK'})` });
+      updateShippingQuotes(cleanCep);
     } else {
       setCepApiMessage({ type: 'error', text: res.error });
     }
@@ -362,7 +768,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     const errors = {};
     if (!validateCEP(addressForm.cep)) errors.cep = 'CEP deve ter 8 dígitos.';
     if (!addressForm.street.trim()) errors.street = 'Informe a rua / logradouro.';
-    if (!addressForm.number.trim()) errors.number = 'Informe o número.';
+
+    const rawNumber = addressForm.noNumber ? 'S/N' : addressForm.number.trim();
+    if (!validateAddressNumber(rawNumber)) {
+      errors.number = 'Informe o número ou marque "Sem número (S/N)".';
+    }
+
     if (!addressForm.neighborhood.trim()) errors.neighborhood = 'Informe o bairro.';
     if (!addressForm.city.trim()) errors.city = 'Informe a cidade.';
     if (!addressForm.state.trim() || addressForm.state.trim().length !== 2) errors.state = 'Informe o estado (UF).';
@@ -375,26 +786,54 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     if (e) e.preventDefault();
     if (!validateNewAddress()) return;
 
-    const newId = `addr_${Date.now()}`;
-    const newAddrObj = {
-      id: newId,
-      title: addressForm.complement ? `Apto ${addressForm.complement}` : `Endereço ${addressForm.neighborhood || 'Entrega'}`,
-      label: `Endereço (${addressForm.neighborhood || 'Entrega'})`,
-      cep: addressForm.cep,
-      street: addressForm.street,
-      number: addressForm.number,
-      complement: addressForm.complement || '',
-      neighborhood: addressForm.neighborhood,
-      city: addressForm.city,
-      state: addressForm.state,
-      isDefault: savedAddresses.length === 0
-    };
+    const normalizedNum = addressForm.noNumber ? 'S/N' : normalizeAddressNumber(addressForm.number);
+    let updatedList;
+    let targetId;
 
-    const updatedList = [...savedAddresses, newAddrObj];
+    if (editingAddressId) {
+      targetId = editingAddressId;
+      updatedList = savedAddresses.map(a => {
+        if (a.id === editingAddressId) {
+          return {
+            ...a,
+            title: addressForm.title || a.title || (addressForm.complement ? `Apto ${addressForm.complement}` : `Endereço ${addressForm.neighborhood || 'Entrega'}`),
+            label: `Endereço (${addressForm.neighborhood || 'Entrega'})`,
+            cep: addressForm.cep,
+            street: addressForm.street,
+            number: normalizedNum,
+            complement: addressForm.complement || '',
+            neighborhood: addressForm.neighborhood,
+            city: addressForm.city,
+            state: addressForm.state,
+            ibge: addressForm.ibge || a.ibge || ''
+          };
+        }
+        return a;
+      });
+    } else {
+      targetId = `addr_${Date.now()}`;
+      const newAddrObj = {
+        id: targetId,
+        title: addressForm.complement ? `Apto ${addressForm.complement}` : `Endereço ${addressForm.neighborhood || 'Entrega'}`,
+        label: `Endereço (${addressForm.neighborhood || 'Entrega'})`,
+        cep: addressForm.cep,
+        street: addressForm.street,
+        number: normalizedNum,
+        complement: addressForm.complement || '',
+        neighborhood: addressForm.neighborhood,
+        city: addressForm.city,
+        state: addressForm.state,
+        ibge: addressForm.ibge || '',
+        isDefault: savedAddresses.length === 0
+      };
+      updatedList = [...savedAddresses, newAddrObj];
+    }
+
     setSavedAddresses(updatedList);
-    setSelectedAddressId(newId);
+    setSelectedAddressId(targetId);
     setIsAddingNewAddress(false);
-    setAddressForm({ cep: '', street: '', number: '', neighborhood: '', complement: '', city: 'Curitiba', state: 'PR' });
+    setEditingAddressId(null);
+    setAddressForm({ cep: '', street: '', number: '', noNumber: false, neighborhood: '', complement: '', city: 'Curitiba', state: 'PR', ibge: '4106902' });
     setCepApiMessage(null);
 
     if (user?.uid) {
@@ -409,6 +848,33 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         console.warn("Erro ao salvar endereço no perfil:", err);
       }
     }
+  };
+
+  const handleStartEditAddress = (addr) => {
+    setEditingAddressId(addr.id);
+    setAddressForm({
+      cep: addr.cep || '',
+      street: addr.street || '',
+      number: addr.number === 'S/N' ? '' : (addr.number || ''),
+      noNumber: addr.number === 'S/N',
+      neighborhood: addr.neighborhood || '',
+      complement: addr.complement || '',
+      city: addr.city || 'Curitiba',
+      state: addr.state || 'PR',
+      ibge: addr.ibge || '4106902',
+      title: addr.title || ''
+    });
+    setAddressErrors({});
+    setCepApiMessage(null);
+    setIsAddingNewAddress(true);
+  };
+
+  const handleCancelAddressForm = () => {
+    setIsAddingNewAddress(false);
+    setEditingAddressId(null);
+    setAddressForm({ cep: '', street: '', number: '', noNumber: false, neighborhood: '', complement: '', city: 'Curitiba', state: 'PR', ibge: '4106902' });
+    setAddressErrors({});
+    setCepApiMessage(null);
   };
 
   const handleNextToStep3 = (e) => {
@@ -430,67 +896,387 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   // -------------------------------------------------------------
   const handleProceedToPagBank = async (e) => {
     e.preventDefault();
+    setPaymentError(null);
+    setPaidTotalAmount(finalAmountToPay);
+
+    // Validação preventiva contra erro 40002 da PagBank (buyer email must not be equals to merchant email)
+    const buyerEmail = (clientData.email || user?.email || '').trim().toLowerCase();
+    if (buyerEmail === 'contato.thewavem@gmail.com') {
+      setPaymentError('O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista (contato.thewavem@gmail.com). Para testar compras ou realizar pedidos, retorne à Etapa 1 e informe outro e-mail (por exemplo, um e-mail pessoal).');
+      return;
+    }
+
+    // Validação de cartão (Crédito ou Débito) quando houver cobrança financeira
+    const isCardPayment = paymentMethod === 'Cartão de Crédito' || paymentMethod === 'Cartão de Débito';
+    if (finalAmountToPay > 0 && isCardPayment) {
+      const errors = {};
+      if (!isCardNumberValid) {
+        errors.number = 'Número de cartão inválido ou incompleto.';
+      }
+      if (!isCardHolderValid) {
+        errors.holder = 'Informe o nome completo impresso no cartão.';
+      }
+      if (!isCardExpiryValid) {
+        errors.expiry = 'Validade do cartão inválida ou expirada.';
+      }
+      if (!isCardCvvValid) {
+        errors.cvv = 'CVV inválido (3 ou 4 dígitos).';
+      }
+
+      if (Object.keys(errors).length > 0) {
+        setCardErrors(errors);
+        setPaymentError(errors.number || errors.holder || errors.expiry || errors.cvv);
+        return;
+      }
+    }
+
+    const totalItemsCount = cartItems.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
+
+    // Revalidação de segurança do cupom vinculado à conta / limites de uso antes de enviar ao gateway
+    if (appliedCoupon?.code) {
+      const couponCheck = await couponService.validateCoupon(
+        appliedCoupon.code,
+        subtotal,
+        {
+          uid: user?.uid || currentUser?.uid || authUser?.uid || null,
+          email: user?.email || currentUser?.email || authUser?.email || clientData.email || null
+        },
+        totalItemsCount
+      );
+      if (!couponCheck.valid) {
+        removeCoupon();
+        setPaymentError(couponCheck.message || 'O cupom aplicado não é válido para esta conta ou pedido.');
+        return;
+      }
+    }
+
     setIsProcessing(true);
 
-    const addressToSave = activeAddress || {
+    const addressToSave = isOnlyGiftCardsInCart ? {
+      cep: '80020-310',
+      street: 'Entrega Digital Instantânea',
+      number: '1',
+      neighborhood: 'Digital',
+      city: clientData.city || user?.city || 'Curitiba',
+      state: clientData.state || user?.state || 'PR',
+      complement: 'Liberado instantaneamente em Meus Pedidos'
+    } : (activeAddress || {
       cep: addressForm.cep || '80420-000',
       street: addressForm.street || 'Rua Comendador Araújo',
       number: addressForm.number || '333',
       neighborhood: addressForm.neighborhood || 'Batel',
       city: addressForm.city || 'Curitiba',
       state: addressForm.state || 'PR',
-      complement: addressForm.complement || ''
-    };
+      complement: addressForm.complement ? addressForm.complement.trim() : ''
+    });
 
-    const trackingCode = `BR${Math.floor(100000000 + Math.random() * 900000000)}PR`;
-    const totalItemsCount = cartItems.reduce((acc, item) => acc + (Number(item.quantity) || 1), 0);
+    const orderRefId = `THR-${Date.now()}`;
 
-    // Captura UTMs da sessão ou URL
+    // Captura UTMs congeladas da sessão/campanha ou URL
     const urlParams = new URLSearchParams(window.location.search);
-    const utmSource = urlParams.get('utm_source') || sessionStorage.getItem('thr33_utm_source') || 'Direto / Orgânico';
-    const utmMedium = urlParams.get('utm_medium') || sessionStorage.getItem('thr33_utm_medium') || 'web';
-    const utmCampaign = urlParams.get('utm_campaign') || sessionStorage.getItem('thr33_utm_campaign') || 'Nenhuma';
+    const activeUtm = analyticsService.getActiveUtm();
+    const utmSource = urlParams.get('utm_source') || activeUtm?.utm_source || sessionStorage.getItem('thr33_utm_source') || 'Direto / Orgânico';
+    const utmMedium = urlParams.get('utm_medium') || activeUtm?.utm_medium || sessionStorage.getItem('thr33_utm_medium') || 'web';
+    const utmCampaign = urlParams.get('utm_campaign') || activeUtm?.utm_campaign || sessionStorage.getItem('thr33_utm_campaign') || null;
 
-    const orderData = {
-      userId: user?.uid || 'guest',
+    let pagbankData = null;
+    let pagbankRes = null;
+
+    const cleanCardNumber = (cardData.number || '').replace(/\D/g, '');
+    const lastDigits = cleanCardNumber ? `•••• ${cleanCardNumber.slice(-4)}` : null;
+
+    const isClientPj = Boolean(clientData.isPj || (clientData.cpf && clientData.cpf.replace(/\D/g, '').length === 14));
+
+    const resolvedUid = user?.uid || authUser?.uid || currentUser?.uid || 'guest';
+    const resolvedEmail = (clientData.email || user?.email || '').trim().toLowerCase();
+
+    const baseOrderData = {
+      userId: resolvedUid,
       clientName: clientData.name || user?.displayName || user?.name || 'Cliente THR33',
-      clientEmail: clientData.email || user?.email || '',
+      clientEmail: resolvedEmail,
       clientCpf: clientData.cpf || user?.cpf || '',
       clientPhone: clientData.phone || user?.phone || '',
+      isPj: isClientPj,
+      ie: isClientPj ? (clientData.isentoIE ? 'ISENTO' : (clientData.ie || '')) : null,
+      isentoIE: Boolean(clientData.isentoIE),
       items: cartItems.map(item => ({
         id: String(item.id || item.slug || `item_${Date.now()}`),
         name: item.name || 'Produto THR33',
         size: item.size || 'M',
+        color: item.color || null,
         fit: item.fit || 'boxy',
         price: Number(item.price) || 0,
         quantity: Number(item.quantity) || 1,
         image: item.image || '',
+        category: item.category || (item.isGiftCard ? 'gift-card' : 'camisa'),
+        isGiftCard: Boolean(item.isGiftCard || item.category === 'gift-card' || String(item.id || '').includes('vale')),
+        giftDeliveryMode: item.giftDeliveryMode || null,
+        recipientName: item.recipientName || null,
+        giftMessage: item.giftMessage || null,
         evaluated: false
       })),
+      hasGiftCard: hasGiftCardInCart,
       itemsCount: totalItemsCount,
       subtotal: Number(subtotal) || 0,
       discountAmount: Number(discountAmount) || 0,
       couponCode: appliedCoupon?.code || null,
       couponId: appliedCoupon?.id || null,
-      shippingCost: Number(shippingCost) || 0,
-      shippingMethod: selectedShippingMethod || 'sedex',
-      total: Number(total) || 0,
-      paymentMethod: paymentMethod || 'PIX',
+      shippingCost: isOnlyGiftCardsInCart ? 0 : (isFreeShippingActive ? 0 : (Number(shippingCost) || 0)),
+      freeShippingApplied: isOnlyGiftCardsInCart ? false : Boolean(isFreeShippingActive),
+      freeShippingReason: isOnlyGiftCardsInCart ? null : (hasFreeShippingItem && hasFreeShippingCoupon
+        ? 'item_and_coupon'
+        : hasFreeShippingCoupon
+        ? 'coupon'
+        : hasFreeShippingItem
+        ? 'item'
+        : null),
+      shippingMethod: isOnlyGiftCardsInCart ? 'digital' : (selectedShippingMethod || 'padrao'),
+      carrier: isOnlyGiftCardsInCart ? 'THR33 Digital' : (selectedShippingOption?.carrier || selectedShippingOption?.name || 'Transportadora'),
+      serviceName: isOnlyGiftCardsInCart ? 'Instantâneo via Meus Pedidos' : (selectedShippingOption?.serviceName || selectedShippingOption?.name || ''),
+      shippingDeadline: isOnlyGiftCardsInCart ? 'Instantâneo após aprovação' : (selectedShippingOption?.deadline || null),
+      total: Number(finalAmountToPay) || 0,
+      originalTotal: Number(total) || 0,
+      walletDeduction: Number(walletDeduction) || 0,
+      walletRefunded: false,
+      paymentMethod: finalAmountToPay === 0 ? 'Carteira Digital THR33' : (paymentMethod || 'PIX'),
+      paymentDetails: isCardPayment ? {
+        brand: cardBrand,
+        lastDigits,
+        installments: paymentMethod === 'Cartão de Débito' ? 1 : (Number(installments) || 1),
+        cardType: paymentMethod === 'Cartão de Débito' ? 'DEBIT_CARD' : 'CREDIT_CARD'
+      } : null,
+      shipping: {
+        ...addressToSave,
+        state: addressToSave.state || resolveOrderDestinationUF({ shippingAddress: addressToSave }) || '',
+        cep: addressToSave.cep || ''
+      },
       shippingAddress: {
         cep: addressToSave.cep || '',
+        postal_code: String(addressToSave.cep || '').replace(/\D/g, ''),
         street: addressToSave.street || '',
         number: addressToSave.number || '',
         neighborhood: addressToSave.neighborhood || '',
-        city: addressToSave.city || 'Curitiba',
-        state: addressToSave.state || 'PR',
+        locality: addressToSave.neighborhood || '',
+        city: addressToSave.city || '',
+        state: addressToSave.state || resolveOrderDestinationUF({ shippingAddress: addressToSave }) || '',
+        region_code: addressToSave.state || resolveOrderDestinationUF({ shippingAddress: addressToSave }) || '',
+        ibge: addressToSave.ibge || '',
         complement: addressToSave.complement || ''
       },
-      status: 'Aprovado',
-      trackingCode,
+      clientState: addressToSave.state || resolveOrderDestinationUF({ shippingAddress: addressToSave }) || '',
+      clientCity: addressToSave.city || '',
+      trackingCode: null,
+      trackingUrl: null,
       utm_source: utmSource,
       utm_medium: utmMedium,
       utm_campaign: utmCampaign,
       createdAt: new Date().toISOString()
+    };
+
+    // Se houver valor financeiro a ser cobrado no gateway PagBank
+    if (finalAmountToPay > 0) {
+      try {
+        let cardEncrypted = null;
+        if (isCardPayment) {
+          const expYearClean = String(cardData.expYear || '').length === 2 
+            ? `20${cardData.expYear}` 
+            : String(cardData.expYear || '');
+
+          const encResult = await encryptCardData({
+            number: cardData.number,
+            holder: cardData.holder || clientData.name,
+            expMonth: cardData.expMonth,
+            expYear: expYearClean,
+            securityCode: cardData.cvv
+          });
+
+          if (!encResult?.success || !encResult?.encryptedCard) {
+            setPaymentError('Não foi possível criptografar os dados do cartão com segurança. Verifique os dados e tente novamente.');
+            setIsProcessing(false);
+            return;
+          }
+
+          cardEncrypted = encResult.encryptedCard;
+        }
+
+        const effectiveShipping = isFreeShippingActive ? 0 : (Number(shippingCost) || 0);
+
+        const reqStartTime = performance.now();
+        pagbankRes = await pagbankService.createOrder({
+          orderReference: orderRefId,
+          customer: {
+            uid: user?.uid || authUser?.uid || currentUser?.uid || null,
+            name: clientData.name || user?.displayName || user?.name || 'Cliente THR33',
+            email: clientData.email || user?.email || 'cliente@thr33.com',
+            cpf: clientData.cpf || '',
+            phone: clientData.phone || '',
+            isPj: isClientPj,
+            ie: isClientPj ? (clientData.isentoIE ? 'ISENTO' : (clientData.ie || '')) : null,
+            isentoIE: Boolean(clientData.isentoIE)
+          },
+          items: cartItems.map(item => ({
+            id: String(item.id || item.slug || `item_${Date.now()}`),
+            name: item.name || 'Produto THR33',
+            size: item.size || 'M',
+            color: item.color || null,
+            fit: item.fit || 'boxy',
+            price: Number(item.price) || 0,
+            quantity: Number(item.quantity) || 1,
+            image: item.image || '',
+            freeShipping: Boolean(item.freeShipping || item.hasFreeShipping),
+            isGiftCard: Boolean(item.isGiftCard || item.category === 'gift-card' || String(item.id || '').includes('vale')),
+            category: item.category || (item.isGiftCard ? 'gift-card' : 'camisa'),
+            giftDeliveryMode: item.giftDeliveryMode || null,
+            recipientName: item.recipientName || null,
+            giftMessage: item.giftMessage || null
+          })),
+          shippingAddress: addressToSave,
+          shippingCost: effectiveShipping,
+          isFreeShippingActive: Boolean(isFreeShippingActive),
+          hasFreeShippingItem: Boolean(hasFreeShippingItem),
+          hasFreeShippingCoupon: Boolean(hasFreeShippingCoupon),
+          paymentMethod,
+          cardData: {
+            holder: cardData.holder,
+            lastDigits: cleanCardNumber ? cleanCardNumber.slice(-4) : '1111'
+          },
+          cardEncrypted,
+          installments: paymentMethod === 'Cartão de Débito' ? 1 : installments,
+          totalAmount: finalAmountToPay,
+          couponCode: appliedCoupon?.code || null,
+          discountAmount: Number(discountAmount) || 0,
+          walletDeduction: Number(walletDeduction) || 0,
+          rawOrderData: baseOrderData
+        });
+
+        const latencyMs = Math.round(performance.now() - reqStartTime);
+
+        // Verifica recusa na cobrança do PagBank
+        const charge = pagbankRes.data?.charges?.[0];
+        if (charge && charge.status === 'DECLINED') {
+          analyticsService.trackPaymentTelemetry({
+            success: false,
+            latencyMs,
+            paymentMethod,
+            reasonCategory: 'CARTAO_RECUSADO',
+            errorCode: charge.payment_response?.code || 'DECLINED',
+            errorMessage: charge.payment_response?.message || 'Transação negada pelo banco emissor',
+            orderId: orderRefId
+          });
+          setPaymentError(charge.payment_response?.message || 'Transação negada pelo banco emissor. Verifique os dados ou utilize outro cartão.');
+          setIsProcessing(false);
+          return;
+        }
+
+        if (!pagbankRes.success) {
+          analyticsService.trackPaymentTelemetry({
+            success: false,
+            latencyMs,
+            paymentMethod,
+            reasonCategory: 'DADOS_INVALIDOS',
+            errorCode: 'UNAUTHORIZED',
+            errorMessage: 'Transação não autorizada',
+            orderId: orderRefId
+          });
+          setPaymentError('Transação não autorizada. Verifique os dados do cartão ou escolha outro método de pagamento.');
+          setIsProcessing(false);
+          return;
+        }
+
+        // Sucesso na autorização da cobrança
+        analyticsService.trackPaymentTelemetry({
+          success: true,
+          latencyMs,
+          paymentMethod,
+          reasonCategory: 'SUCESSO',
+          orderId: orderRefId
+        });
+
+        pagbankData = pagbankRes.data;
+        setPagbankResult(pagbankRes.data);
+      } catch (gatewayErr) {
+        console.warn("Aviso ao processar gateway PagBank:", gatewayErr.message);
+        let userMessage = gatewayErr.message || 'Erro temporário de conexão com o PagBank. Tente novamente em instantes.';
+        if (userMessage.includes("40002") || userMessage.includes("buyer email must not be equals to merchant email")) {
+          userMessage = "O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista (contato.thewavem@gmail.com). Por favor, retorne à Etapa 1 e utilize outro e-mail (por exemplo, seu e-mail pessoal).";
+        }
+
+        let cat = 'ERRO_GATEWAY';
+        if (userMessage.includes("40002") || userMessage.includes("buyer email")) {
+          cat = 'ERRO_VALIDACAO';
+        } else if (gatewayErr.message?.toLowerCase().includes("timeout") || gatewayErr.message?.toLowerCase().includes("network")) {
+          cat = 'ERRO_GATEWAY';
+        } else if (gatewayErr.message?.toLowerCase().includes("cvv") || gatewayErr.message?.toLowerCase().includes("cartão")) {
+          cat = 'DADOS_INVALIDOS';
+        }
+
+        analyticsService.trackPaymentTelemetry({
+          success: false,
+          latencyMs: 1200,
+          paymentMethod,
+          reasonCategory: cat,
+          errorCode: gatewayErr.code || 'GATEWAY_ERROR',
+          errorMessage: gatewayErr.message,
+          orderId: orderRefId
+        });
+
+        setPaymentError(userMessage);
+        setIsProcessing(false);
+        return;
+      }
+    }
+
+    // Determina o status canônico inicial segundo a máquina de estados
+    let initialStatus = ORDER_STATUSES.AGUARDANDO_PAGAMENTO;
+    let paidAt = null;
+
+    if (finalAmountToPay === 0) {
+      initialStatus = ORDER_STATUSES.PAGAMENTO_APROVADO;
+      paidAt = new Date().toISOString();
+    } else if (isCardPayment) {
+      const charge = pagbankData?.charges?.[0];
+      if (charge?.status === 'PAID' || charge?.status === 'AUTHORIZED') {
+        initialStatus = ORDER_STATUSES.PAGAMENTO_APROVADO;
+        paidAt = new Date().toISOString();
+      } else {
+        initialStatus = ORDER_STATUSES.AGUARDANDO_PAGAMENTO;
+      }
+    } else {
+      initialStatus = ORDER_STATUSES.AGUARDANDO_PAGAMENTO;
+    }
+
+    let finalDocId = pagbankRes?.orderId || null;
+
+    const chargeObj = pagbankData?.charges?.[0];
+    const pbQrObj = pagbankData?.qr_codes?.[0] || chargeObj?.qr_code || pagbankRes?.qrCode || null;
+
+    const pixQrCodeUrl =
+      pbQrObj?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      chargeObj?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      (paymentMethod === 'PIX' ? `https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=THR33-PIX-${orderRefId}` : null);
+
+    const pixCopiaECola =
+      pbQrObj?.text ||
+      chargeObj?.qr_code?.text ||
+      (paymentMethod === 'PIX' ? `00020126580014br.gov.bcb.pix0136pagbank-thr33-${orderRefId}` : null);
+
+    const orderData = {
+      ...baseOrderData,
+      status: initialStatus,
+      paidAt,
+      pixQrCodeUrl,
+      pixCopiaECola,
+      pixExpiresAt: paymentMethod === 'PIX' ? (pagbankRes?.pixExpiresAt || pagbankData?.pixExpiresAt || new Date(Date.now() + 20 * 60 * 1000).toISOString()) : null,
+      pagbank: pagbankData ? {
+        orderId: pagbankData.id || null,
+        referenceId: pagbankData.reference_id || orderRefId,
+        status: pagbankData.charges?.[0]?.status || (initialStatus === ORDER_STATUSES.PAGAMENTO_APROVADO ? 'PAID' : 'WAITING_PAYMENT'),
+        chargeId: pagbankData.charges?.[0]?.id || null,
+        charges: pagbankData.charges || null,
+        qr_codes: pagbankData.qr_codes || null,
+        boleto: pagbankData.boleto || null,
+        isSandbox: Boolean(pagbankData.isSandbox || pagbankData.isFallback)
+      } : null
     };
 
     // Sanitizador recursivo para remover qualquer resquício de undefined
@@ -499,10 +1285,114 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
     }));
 
     try {
-      // 1. Grava o pedido completo no Firestore na coleção global 'orders'
-      const orderRef = await addDoc(collection(db, 'orders'), cleanPayload);
-      const generatedOrder = `THR-${orderRef.id.slice(0, 6).toUpperCase()}`;
+      // 1. Gravação / enriquecimento do pedido na coleção 'orders'
+      const targetOrderId = finalDocId || orderRefId;
+      const orderDocRef = doc(db, 'orders', targetOrderId);
+      const finalUserId = user?.uid || authUser?.uid || currentUser?.uid || cleanPayload.userId || 'guest';
+
+      try {
+        await setDoc(orderDocRef, {
+          ...cleanPayload,
+          orderId: targetOrderId,
+          id: targetOrderId,
+          userId: finalUserId,
+          clientEmail: cleanPayload.clientEmail || resolvedEmail,
+          clientName: cleanPayload.clientName || clientData.name || user?.displayName || user?.name || 'Cliente THR33',
+          clientCpf: cleanPayload.clientCpf || clientData.cpf || '',
+          clientPhone: cleanPayload.clientPhone || clientData.phone || '',
+          subtotal: Number(cleanPayload.subtotal ?? subtotal ?? 0),
+          discountAmount: Number(cleanPayload.discountAmount ?? discountAmount ?? 0),
+          couponCode: cleanPayload.couponCode || appliedCoupon?.code || null,
+          couponId: cleanPayload.couponId || appliedCoupon?.id || null,
+          walletDeduction: Number(cleanPayload.walletDeduction ?? walletDeduction ?? 0),
+          walletRefunded: Boolean(cleanPayload.walletRefunded || false),
+          originalTotal: Number(cleanPayload.originalTotal ?? total ?? 0),
+          freeShippingApplied: Boolean(cleanPayload.freeShippingApplied || isFreeShippingActive),
+          freeShippingReason: cleanPayload.freeShippingReason || null,
+          hasGiftCard: Boolean(cleanPayload.hasGiftCard),
+          carrier: cleanPayload.carrier || selectedShippingOption?.carrier || selectedShippingOption?.name || '',
+          serviceName: cleanPayload.serviceName || selectedShippingOption?.serviceName || '',
+          shippingDeadline: cleanPayload.shippingDeadline || selectedShippingOption?.deadline || '',
+          paymentMethod: cleanPayload.paymentMethod,
+          utm_source: utmSource,
+          utm_medium: utmMedium,
+          utm_campaign: utmCampaign,
+          paymentDetails: cleanPayload.paymentDetails,
+          items: cleanPayload.items,
+          shippingAddress: cleanPayload.shippingAddress,
+          clientState: cleanPayload.clientState || cleanPayload.shippingAddress?.state || resolveOrderDestinationUF(cleanPayload) || '',
+          clientCity: cleanPayload.clientCity || cleanPayload.shippingAddress?.city || '',
+          stockReserved: true,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (orderWriteErr) {
+        if (pagbankRes?.success || pagbankRes?.orderId) {
+          console.warn("Aviso ao sincronizar metadados do pedido no client (pedido ja salvo pelo backend):", orderWriteErr.message);
+        } else {
+          throw orderWriteErr;
+        }
+      }
+
+      finalDocId = targetOrderId;
+
+      // 2. Baixa de estoque físico para itens não digitais (executa sem travar o pedido)
+      try {
+        const physicalItems = (cleanPayload.items || []).filter(item => {
+          const isDigital = Boolean(
+            item.isGiftCard ||
+            item.category === 'gift-card' ||
+            item.type === 'gift-card' ||
+            String(item.id || item.slug || '').includes('vale')
+          );
+          return !isDigital;
+        });
+
+        if (physicalItems.length > 0) {
+          await catalogService.decrementProductStock(physicalItems);
+        }
+      } catch (stockErr) {
+        console.warn("Aviso ao atualizar estoque físico no checkout:", stockErr.message);
+      }
+      const rawFinalId = String(finalDocId || '').trim();
+      let generatedOrder = rawFinalId;
+      if (generatedOrder.toUpperCase().startsWith('THR-THR-')) {
+        generatedOrder = `THR-${generatedOrder.slice(8).toUpperCase()}`;
+      } else if (generatedOrder.toUpperCase().startsWith('THR-')) {
+        generatedOrder = generatedOrder.toUpperCase();
+      } else {
+        generatedOrder = `THR-${generatedOrder.toUpperCase()}`;
+      }
       setOrderNumber(generatedOrder);
+      setCreatedOrderId(finalDocId);
+      setCreatedOrderStatus(initialStatus);
+      setCreatedOrderDate(Date.now());
+      if (orderData.pixExpiresAt) {
+        setPixExpiresAt(orderData.pixExpiresAt);
+      }
+
+      // Processa vales-presente se o pedido já iniciou aprovado (ex: pago 100% com carteira ou cartão instantâneo)
+      if (initialStatus === ORDER_STATUSES.PAGAMENTO_APROVADO || initialStatus === 'pago') {
+        if (cleanPayload.hasGiftCard) {
+          await giftCardService.processOrderGiftCards(finalDocId, cleanPayload)
+            .catch(err => console.warn("Aviso ao processar vales do pedido:", err.message));
+        }
+        emailService.triggerOrderPaidEmail(finalDocId).catch(() => {});
+      }
+
+      // Notifica time operacional se já iniciou aprovado
+      if (initialStatus === ORDER_STATUSES.PAGAMENTO_APROVADO) {
+        try {
+          webhookService.notifyInternalTeam({
+            orderId: finalDocId,
+            clientName: cleanPayload.clientName,
+            total: cleanPayload.total,
+            items: cleanPayload.items,
+            paymentMethod: cleanPayload.paymentMethod
+          });
+        } catch (whErr) {
+          console.warn("Aviso ao notificar equipe interna:", whErr.message);
+        }
+      }
 
       // 2. Se um cupom foi utilizado, atualiza métricas e saldo de comissões do parceiro
       if (appliedCoupon?.id || appliedCoupon?.code) {
@@ -526,32 +1416,45 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           const userSnap = await getDoc(userRef);
           const currentAddresses = userSnap.exists() ? (userSnap.data().addresses || []) : [];
 
-          const newAddressFromCheckout = {
-            id: `addr_${Date.now()}`,
-            title: 'Checkout',
-            cep: addressToSave.cep || '',
-            street: addressToSave.street || '',
-            number: addressToSave.number || '',
-            complement: addressToSave.complement || '',
-            neighborhood: addressToSave.neighborhood || '',
-            city: addressToSave.city || 'Curitiba',
-            state: addressToSave.state || 'PR',
-            isDefault: currentAddresses.length === 0
-          };
+          // Remove qualquer endereço virtual/checkout do perfil
+          let updatedAddresses = currentAddresses.filter(a => !isDigitalOrCheckoutAddress(a));
 
-          const addressExists = currentAddresses.some(
-            a => a.cep === addressToSave.cep && a.number === addressToSave.number
-          );
+          // Apenas adiciona novo endereço ao perfil se a compra for de produto físico real!
+          if (!isOnlyGiftCardsInCart) {
+            const addressExists = updatedAddresses.some(
+              a => a.cep === addressToSave.cep && a.number === addressToSave.number
+            );
 
-          const updatedAddresses = addressExists 
-            ? currentAddresses 
-            : [...currentAddresses, newAddressFromCheckout];
+            if (!addressExists) {
+              const newAddressFromCheckout = {
+                id: `addr_${Date.now()}`,
+                title: addressToSave.complement ? `Apto ${addressToSave.complement}` : `Endereço ${addressToSave.neighborhood || 'Entrega'}`,
+                label: `Endereço (${addressToSave.neighborhood || 'Entrega'})`,
+                cep: addressToSave.cep || '',
+                street: addressToSave.street || '',
+                number: addressToSave.number || '',
+                complement: addressToSave.complement || '',
+                neighborhood: addressToSave.neighborhood || '',
+                city: addressToSave.city || 'Curitiba',
+                state: addressToSave.state || 'PR',
+                isDefault: updatedAddresses.length === 0
+              };
+              updatedAddresses = [...updatedAddresses, newAddressFromCheckout];
+            }
+          }
 
           const userPayload = JSON.parse(JSON.stringify({
             name: clientData.name || user?.displayName || user?.name || '',
             cpf: clientData.cpf || user?.cpf || '',
             phone: clientData.phone || user?.phone || '',
-            addresses: updatedAddresses
+            addresses: updatedAddresses,
+            abandonedCart: {
+              items: [],
+              subtotal: 0,
+              updatedAt: new Date().toISOString(),
+              UpdatedAtMs: Date.now(),
+              abandonedEmailSent: true
+            }
           }, (k, v) => v === undefined ? null : v));
 
           await setDoc(userRef, userPayload, { merge: true });
@@ -559,38 +1462,112 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
           if (updateUser) {
             updateUser(userPayload);
           }
+
+          // Abate o saldo da carteira digital se utilizado
+          if (walletDeduction > 0) {
+            const newWalletBal = Math.max(0, userWalletAmount - walletDeduction);
+            await setDoc(userRef, { 
+              walletBalance: newWalletBal,
+              lastWalletUseAt: new Date().toISOString()
+            }, { merge: true });
+            setUserWalletAmount(newWalletBal);
+          }
         } catch (syncErr) {
           console.warn("Aviso ao atualizar perfil no Checkout:", syncErr.message);
         }
       }
 
       // 4. Marca a sessão de checkout como concluída na telemetria
-      await analyticsService.trackCheckoutSession(sessionId, {
-        completed: true,
-        orderId: orderRef.id,
-        status: 'concluido'
-      });
+      try {
+        await analyticsService.trackCheckoutSession(sessionId, {
+          completed: true,
+          orderId: finalDocId,
+          status: 'concluido'
+        });
+      } catch (analyticsErr) {
+        console.warn("Aviso na telemetria de sessão:", analyticsErr.message);
+      }
 
-      // 5. Registra a conversão de compra por produto e distribuição de tamanhos no analytics
-      await analyticsService.trackPurchase(cartItems);
+      // 5. Registra a conversão de compra por produto, atribuição UTM e telemetria logística/pagamento
+      try {
+        await analyticsService.trackPurchase(cartItems, total, {
+          paymentMethod: finalAmountToPay === 0 ? 'Carteira Digital THR33' : (paymentMethod || 'PIX'),
+          shippingState: addressToSave?.state || resolveOrderDestinationUF({ shippingAddress: addressToSave }) || '',
+          shippingCity: addressToSave?.city || '',
+          shippingMethod: selectedShippingMethod || 'padrao',
+          carrier: selectedShippingOption?.carrier || selectedShippingOption?.name || (isFreeShippingActive ? 'Frete Grátis' : 'Transportadora')
+        });
+      } catch (purchaseErr) {
+        console.warn("Aviso na telemetria de compra:", purchaseErr.message);
+      }
 
-      // 6. Decrementa o estoque físico por tamanho no Firestore de forma automatizada
-      await catalogService.decrementProductStock(cartItems);
+      // 6. Registra o comprador na Lista VIP de Drops (checkout_opt_in) sem bloquear
+      if (clientData.email || user?.email) {
+        try {
+          dropSubscriberService.subscribeToDropWaitlist({
+            email: clientData.email || user?.email,
+            name: clientData.name || user?.displayName || user?.name || '',
+            dropId: currentDropConfig?.id || 'drop-thr33',
+            dropName: currentDropConfig?.title || 'PRÓXIMO DROP THR33',
+            source: 'checkout_opt_in'
+          }).catch(() => {});
+        } catch (dropErr) {
+          console.warn("Aviso ao registrar na Lista VIP:", dropErr.message);
+        }
+      }
 
     } catch (err) {
-      console.warn("Aviso ao salvar pedido no Firestore:", err.message);
-      const fallbackOrder = `THR-${Math.floor(1000 + Math.random() * 9000)}`;
-      setOrderNumber(fallbackOrder);
-    } finally {
+      console.error("Erro crítico ao finalizar e persistir pedido:", err);
+      setPaymentError(err.message || "Erro ao processar e salvar seu pedido. Por favor, tente novamente.");
       setIsProcessing(false);
-      setCurrentStep(4);
-      clearCart();
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
     }
+
+    setIsProcessing(false);
+    setCurrentStep(4);
+    clearCart();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const getLivePixCopiaECola = () => {
+    return (
+      pagbankResult?.qr_codes?.[0]?.text ||
+      pagbankResult?.charges?.[0]?.qr_code?.text ||
+      pagbankResult?.pix?.text ||
+      pagbankRes?.qrCode?.text ||
+      pagbankRes?.data?.qr_codes?.[0]?.text ||
+      pagbankRes?.data?.charges?.[0]?.qr_code?.text ||
+      createdOrderData?.pixCopiaECola ||
+      ''
+    );
+  };
+
+  const getLivePixQrCodeUrl = () => {
+    const rawUrl =
+      pagbankResult?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      pagbankResult?.charges?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      pagbankResult?.pix?.qrCodeUrl ||
+      pagbankRes?.qrCode?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      pagbankRes?.data?.qr_codes?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      pagbankRes?.data?.charges?.[0]?.links?.find(l => l.rel === 'QRCODE.PNG' || l.media === 'image/png')?.href ||
+      null;
+
+    const pixCode = getLivePixCopiaECola();
+
+    // Se o gateway devolver a URL de imagem direta que requer autenticacao no PagBank ou se rawUrl estiver ausente,
+    // renderiza o QR code diretamente a partir do payload oficial Copia e Cola EMV para leitura 100% confiavel em qualquer banco
+    if (pixCode) {
+      if (!rawUrl || rawUrl.includes('api.pagseguro.com/qrcode') || rawUrl.includes('api-h.pagseguro.com')) {
+        return `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(pixCode)}`;
+      }
+    }
+
+    return rawUrl;
   };
 
   const handleCopyPix = () => {
-    navigator.clipboard.writeText("00020126580014br.gov.bcb.pix0136thr33-atelie-pagbank-curitiba@thr33.com5204000053039865405189.905802BR5915THR33 ATELIE STREETWEAR6008CURITIBA62070503***6304E2CA");
+    const pixCode = getLivePixCopiaECola();
+    navigator.clipboard.writeText(pixCode);
     setCopiedPix(true);
     setTimeout(() => setCopiedPix(false), 2500);
   };
@@ -598,12 +1575,21 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   const handleApplyCouponInline = async (e) => {
     e.preventDefault();
     if (couponInput.trim()) {
-      const ok = await applyCoupon(couponInput.trim());
+      const ok = await applyCoupon(couponInput.trim(), {
+        uid: user?.uid || currentUser?.uid || authUser?.uid || null,
+        email: user?.email || currentUser?.email || authUser?.email || clientData.email || null
+      });
       if (ok) {
         setCouponInput('');
       }
     }
   };
+
+  const displayPaidAmount = paidTotalAmount > 0 
+    ? paidTotalAmount 
+    : (pagbankResult?.charges?.[0]?.amount?.value 
+        ? pagbankResult.charges[0].amount.value / 100 
+        : finalAmountToPay);
 
   // -------------------------------------------------------------
   // ETAPA 4: SUCESSO / PEDIDO CONFIRMADO VIA PAGBANK
@@ -611,6 +1597,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   if (currentStep === 4) {
     return (
       <main className={styles.successContainer}>
+        <SEO title="Pedido Confirmado | THR33 Streetwear" noindex={true} />
         <motion.div 
           className={styles.successCard}
           initial={{ opacity: 0, scale: 0.95 }}
@@ -628,90 +1615,173 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
           {/* CONFIRMAÇÃO DINÂMICA DO PAGAMENTO */}
           {paymentMethod === 'PIX' && (
-            <div className={styles.pixBox}>
-              <div className={styles.pixHeader}>
-                <QrCode size={18} />
-                <strong>PAGUE COM PIX NO PAGBANK</strong>
-              </div>
-              <p className={styles.pixInstruction}>
-                Escaneie o QR Code abaixo no app do seu banco ou use o código Pix Copia e Cola:
-              </p>
-              
-              <div className={styles.qrCodeContainer}>
-                <div className={styles.qrCodeGraphic}>
-                  <div className={styles.qrCornerTopLeft} />
-                  <div className={styles.qrCornerTopRight} />
-                  <div className={styles.qrCornerBottomLeft} />
-                  <span className={styles.qrCodeText}>[ QR CODE PAGBANK ]</span>
-                  <span className={styles.qrCodeValue}>R$ {total.toFixed(2)}</span>
+            createdOrderStatus === ORDER_STATUSES.PAGAMENTO_APROVADO ? (
+              <div className={styles.pixConfirmedBox}>
+                <div className={styles.pixConfirmedHeader}>
+                  <CheckCircle2 size={28} color="#4ade80" />
+                  <div>
+                    <strong>PAGAMENTO PIX CONFIRMADO</strong>
+                    <small>Seu pagamento foi compensado em tempo real pelo PagBank.</small>
+                  </div>
                 </div>
               </div>
+            ) : (
+              <div className={styles.pixBox}>
+                <div className={styles.pixHeader}>
+                  <QrCode size={18} />
+                  <strong>PAGUE COM PIX NO PAGBANK</strong>
+                </div>
 
-              <div className={styles.pixCopyArea}>
-                <input 
-                  type="text" 
-                  readOnly 
-                  value="00020126580014br.gov.bcb.pix0136thr33-atelie-pagbank-curitiba@thr33.com..." 
-                  className={styles.pixInput} 
-                />
-                <button type="button" onClick={handleCopyPix} className={styles.copyBtn}>
-                  {copiedPix ? <Check size={14} /> : <Copy size={14} />}
-                  <span>{copiedPix ? 'COPIADO!' : 'COPIAR CHAVE'}</span>
-                </button>
+                <div className={styles.pixAwaitingNotice}>
+                  <Loader2 size={13} className={styles.pulsingLoader} />
+                  <span>Aguardando compensação do banco... A tela confirmará automaticamente assim que pago.</span>
+                </div>
+
+                <p className={styles.pixInstruction}>
+                  Escaneie o QR Code abaixo no app do seu banco ou use o código Pix Copia e Cola:
+                </p>
+                
+                <div className={styles.qrCodeContainer}>
+                  {Boolean(getLivePixQrCodeUrl()) ? (
+                    <img 
+                      src={getLivePixQrCodeUrl()} 
+                      alt="QR Code Pix PagBank" 
+                      className={styles.qrCodeLiveImage} 
+                    />
+                  ) : (
+                    <div className={styles.qrCodeGraphic}>
+                      <div className={styles.qrCornerTopLeft} />
+                      <div className={styles.qrCornerTopRight} />
+                      <div className={styles.qrCornerBottomLeft} />
+                      <span className={styles.qrCodeText}>[ QR CODE PAGBANK ]</span>
+                      <span className={styles.qrCodeValue}>R$ {displayPaidAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className={styles.pixCopyArea}>
+                  <input 
+                    type="text" 
+                    readOnly 
+                    value={getLivePixCopiaECola()} 
+                    className={styles.pixInput} 
+                  />
+                  <button type="button" onClick={handleCopyPix} className={styles.copyBtn}>
+                    {copiedPix ? <Check size={14} /> : <Copy size={14} />}
+                    <span>{copiedPix ? 'COPIADO!' : 'COPIAR CHAVE'}</span>
+                  </button>
+                </div>
+
+                {/* TIMER REGRESSIVO DE 20 MINUTOS */}
+                <div 
+                  className={`${styles.pixTimerCard} ${
+                    pixExpired 
+                      ? styles.pixTimerCardExpired 
+                      : pixTimeRemaining <= 180 
+                        ? styles.pixTimerCardWarning 
+                        : ''
+                  }`}
+                >
+                  <div className={styles.pixTimerLeft}>
+                    <Clock 
+                      size={20} 
+                      className={`${styles.pixTimerIcon} ${
+                        pixExpired 
+                          ? styles.pixTimerIconExpired 
+                          : pixTimeRemaining <= 180 
+                            ? styles.pixTimerIconWarning 
+                            : ''
+                      }`} 
+                    />
+                    <div className={styles.pixTimerInfo}>
+                      <span className={styles.pixTimerLabel}>
+                        {pixExpired ? 'Status do Pix' : 'Tempo para pagamento'}
+                      </span>
+                      <strong 
+                        className={`${styles.pixTimerCountdown} ${
+                          pixExpired 
+                            ? styles.pixTimerCountdownExpired 
+                            : pixTimeRemaining <= 180 
+                              ? styles.pixTimerCountdownWarning 
+                              : ''
+                        }`}
+                      >
+                        {pixExpired ? 'EXPIRADO (00:00)' : formatPixTimer(pixTimeRemaining)}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <span 
+                    className={`${styles.pixTimerBadgePill} ${
+                      pixExpired 
+                        ? styles.pixTimerBadgeExpired 
+                        : pixTimeRemaining <= 180 
+                          ? styles.pixTimerBadgeWarning 
+                          : ''
+                    }`}
+                  >
+                    {pixExpired 
+                      ? 'Prazo esgotado' 
+                      : pixTimeRemaining <= 180 
+                        ? 'Expira em breve' 
+                        : 'Válido por 20 min'}
+                  </span>
+                </div>
+
+                {pixExpired ? (
+                  <div className={styles.pixExpiredNotice}>
+                    <AlertCircle size={16} />
+                    <span>O prazo de 20 minutos encerrou. As peças reservadas foram liberadas no estoque. Para concluir a compra, por favor gere um novo pedido.</span>
+                  </div>
+                ) : (
+                  <span className={styles.pixTimerSubtext}>
+                    Você tem até 20 minutos para abrir o app do seu banco e pagar via Pix.
+                  </span>
+                )}
               </div>
-              <span className={styles.pixTimerText}>O código Pix expira em 15 minutos.</span>
-            </div>
+            )
           )}
 
-          {paymentMethod === 'Cartão de Crédito' && (
+          {(paymentMethod === 'Cartão de Crédito' || paymentMethod === 'Cartão de Débito') && (
             <div className={styles.cardSuccessBox}>
               <div className={styles.cardSuccessHeader}>
                 <CreditCard size={20} color="#4ade80" />
                 <div>
                   <strong>PAGAMENTO PROCESSADO COM SUCESSO</strong>
-                  <small>Gateway Seguro PagBank 256-Bit</small>
+                  <small>Gateway Seguro PagBank • {paymentMethod}</small>
                 </div>
               </div>
               <div className={styles.cardSuccessBody}>
                 <div className={styles.cardSuccessRow}>
                   <span>Total Cobrado:</span>
-                  <strong>R$ {total.toFixed(2)}</strong>
+                  <strong>R$ {displayPaidAmount.toFixed(2)}</strong>
+                </div>
+                <div className={styles.cardSuccessRow}>
+                  <span>Cartão Utilizado:</span>
+                  <span>
+                    {(pagbankResult?.charges?.[0]?.payment_method?.card?.brand || pagbankResult?.creditCard?.brand || detectCardBrand(cardData.number)).toUpperCase()} •••• {pagbankResult?.charges?.[0]?.payment_method?.card?.last_digits || pagbankResult?.creditCard?.lastDigits || cardData.number.replace(/\D/g, '').slice(-4) || '1111'}
+                  </span>
                 </div>
                 <div className={styles.cardSuccessRow}>
                   <span>Condição:</span>
-                  <span>Até 3x de R$ {(total / 3).toFixed(2)} sem juros</span>
+                  <span>
+                    {paymentMethod === 'Cartão de Débito'
+                      ? `1x de R$ ${displayPaidAmount.toFixed(2)} (À vista no Débito)`
+                      : `${(pagbankResult?.charges?.[0]?.payment_method?.installments || pagbankResult?.creditCard?.installments || installments)}x de R$ ${(displayPaidAmount / (pagbankResult?.charges?.[0]?.payment_method?.installments || pagbankResult?.creditCard?.installments || installments)).toFixed(2)} sem juros`}
+                  </span>
                 </div>
                 <div className={styles.cardSuccessRow}>
                   <span>Status:</span>
                   <strong style={{ color: '#4ade80' }}>Transação Aprovada</strong>
                 </div>
-              </div>
-            </div>
-          )}
-
-          {paymentMethod === 'Boleto Bancário' && (
-            <div className={styles.boletoSuccessBox}>
-              <div className={styles.boletoHeader}>
-                <FileText size={20} />
-                <div>
-                  <strong>BOLETO BANCÁRIO GERADO</strong>
-                  <small>Vencimento em 3 dias úteis</small>
-                </div>
-              </div>
-              <p className={styles.pixInstruction}>
-                Utilize a linha digitável abaixo no aplicativo do seu banco para pagar:
-              </p>
-              <div className={styles.pixCopyArea}>
-                <input 
-                  type="text" 
-                  readOnly 
-                  value="23793.38128 60000.123456 78900.123456 1 98760000035591" 
-                  className={styles.pixInput} 
-                />
-                <button type="button" onClick={handleCopyPix} className={styles.copyBtn}>
-                  {copiedPix ? <Check size={14} /> : <Copy size={14} />}
-                  <span>{copiedPix ? 'COPIADO!' : 'COPIAR CÓDIGO'}</span>
-                </button>
+                {(pagbankResult?.charges?.[0]?.id || pagbankResult?.chargeId || pagbankResult?.id) && (
+                  <div className={styles.cardSuccessRow}>
+                    <span>ID da Transação:</span>
+                    <small style={{ color: 'var(--text-muted)' }}>
+                      {pagbankResult?.charges?.[0]?.id || pagbankResult?.chargeId || pagbankResult?.id}
+                    </small>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -734,11 +1804,12 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
   // -------------------------------------------------------------
   return (
     <main className={styles.container}>
+      <SEO title="Finalizar Pedido — Checkout Seguro | THR33 Streetwear" noindex={true} />
       {/* HEADER & STEPPER PROGRESSIVO */}
       <header className={styles.header}>
         <div className={styles.tagGroup}>
           <Lock size={12} />
-          <span className={styles.tag}>CHECKOUT SEGURO // PAGBANK</span>
+          <span className={styles.tag}>CHECKOUT</span>
         </div>
         <h1 className={styles.title}>FINALIZAR PEDIDO</h1>
 
@@ -753,27 +1824,40 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             <span className={styles.stepName}>IDENTIFICAÇÃO</span>
           </button>
           
-          <div className={`${styles.stepLine} ${currentStep >= 2 ? styles.stepLineActive : ''}`} />
+          <div className={`${styles.stepLine} ${currentStep >= (isOnlyGiftCardsInCart ? 3 : 2) ? styles.stepLineActive : ''}`} />
 
-          <button 
-            type="button"
-            className={`${styles.stepItem} ${currentStep === 2 ? styles.stepActive : ''} ${currentStep > 2 ? styles.stepCompleted : ''}`}
-            onClick={() => { if (validateStep1()) setCurrentStep(2); }}
-          >
-            <span className={styles.stepNum}>{currentStep > 2 ? <Check size={12} /> : '2'}</span>
-            <span className={styles.stepName}>ENTREGA & FRETE</span>
-          </button>
+          {!isOnlyGiftCardsInCart ? (
+            <>
+              <button 
+                type="button"
+                className={`${styles.stepItem} ${currentStep === 2 ? styles.stepActive : ''} ${currentStep > 2 ? styles.stepCompleted : ''}`}
+                onClick={() => { if (validateStep1()) setCurrentStep(2); }}
+              >
+                <span className={styles.stepNum}>{currentStep > 2 ? <Check size={12} /> : '2'}</span>
+                <span className={styles.stepName}>ENTREGA & FRETE</span>
+              </button>
 
-          <div className={`${styles.stepLine} ${currentStep >= 3 ? styles.stepLineActive : ''}`} />
+              <div className={`${styles.stepLine} ${currentStep >= 3 ? styles.stepLineActive : ''}`} />
 
-          <button 
-            type="button"
-            className={`${styles.stepItem} ${currentStep === 3 ? styles.stepActive : ''}`}
-            onClick={() => { if (validateStep1()) setCurrentStep(3); }}
-          >
-            <span className={styles.stepNum}>3</span>
-            <span className={styles.stepName}>PAGAMENTO PAGBANK</span>
-          </button>
+              <button 
+                type="button"
+                className={`${styles.stepItem} ${currentStep === 3 ? styles.stepActive : ''}`}
+                onClick={() => { if (validateStep1()) setCurrentStep(3); }}
+              >
+                <span className={styles.stepNum}>3</span>
+                <span className={styles.stepName}>PAGAMENTO PAGBANK</span>
+              </button>
+            </>
+          ) : (
+            <button 
+              type="button"
+              className={`${styles.stepItem} ${currentStep === 3 ? styles.stepActive : ''}`}
+              onClick={() => { if (validateStep1()) setCurrentStep(3); }}
+            >
+              <span className={styles.stepNum}>2</span>
+              <span className={styles.stepName}>PAGAMENTO PAGBANK</span>
+            </button>
+          )}
         </div>
       </header>
 
@@ -799,92 +1883,87 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 </div>
 
                 {user && (
-                  <div className={`${styles.prefilledUserBanner} ${isEditingAccountData ? styles.editingBanner : ''}`}>
+                  <div className={styles.prefilledUserBanner}>
                     <div className={styles.prefilledUserInfo}>
-                      <UserCheck size={18} color={isEditingAccountData ? "#facc15" : "#4ade80"} />
+                      <UserCheck size={18} color="#4ade80" />
                       <div>
-                        <strong>
-                          {isEditingAccountData 
-                            ? 'Modo de Edição Ativo' 
-                            : `Conectado como ${clientData.name || user.email}`}
-                        </strong>
-                        <small>
-                          {isEditingAccountData 
-                            ? 'Altere os campos abaixo e clique em Salvar Dados para bloquear novamente.' 
-                            : `E-mail: ${clientData.email} • CPF: ${clientData.cpf || 'Não informado'}`}
-                        </small>
+                        <strong>Conectado como {user.email}</strong>
+                        <small>Confirme ou complete seus dados cadastrais abaixo para emissão da NF-e.</small>
                       </div>
                     </div>
-                    <button 
-                      type="button" 
-                      onClick={handleToggleEditAccountData} 
-                      disabled={savingProfile}
-                      className={`${styles.editDataBtn} ${isEditingAccountData ? styles.saveDataBtn : ''}`}
-                    >
-                      {savingProfile ? (
-                        <Loader2 size={13} className={styles.spinning} />
-                      ) : isEditingAccountData ? (
-                        <Check size={13} />
-                      ) : (
-                        <Edit3 size={13} />
-                      )}
-                      <span>{savingProfile ? 'Salvando...' : isEditingAccountData ? 'Salvar Dados' : 'Editar'}</span>
-                    </button>
                   </div>
                 )}
 
                 {saveProfileSuccess && (
                   <div className={styles.saveSuccessNotice}>
                     <Check size={14} color="#4ade80" />
-                    <span>Dados cadastrais atualizados e bloqueados com sucesso!</span>
+                    <span>Dados cadastrais sincronizados com sua conta!</span>
                   </div>
                 )}
 
                 <div className={styles.fieldsGrid}>
                   <div className={styles.fieldWrapper}>
                     <label className={styles.fieldLabel}>NOME COMPLETO *</label>
-                    <input 
-                      type="text" 
-                      name="name" 
-                      placeholder="Ex: Matheus Rocha" 
-                      value={clientData.name} 
-                      onChange={handleClientChange} 
-                      disabled={Boolean(user && !isEditingAccountData)}
-                      className={`${clientErrors.name ? styles.inputError : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
-                    />
+                    <div className={styles.inputWithCheckWrapper}>
+                      <input 
+                        type="text" 
+                        name="name" 
+                        placeholder="Ex: Matheus Rocha" 
+                        value={clientData.name} 
+                        onChange={handleClientChange} 
+                        className={`${clientErrors.name ? styles.inputError : ''} ${isNameValid && !clientErrors.name ? styles.inputSuccess : ''}`}
+                      />
+                      {isNameValid && !clientErrors.name && (
+                        <div className={styles.inputCheckPosition}>
+                          <Check size={16} className={styles.validCheckIcon} />
+                        </div>
+                      )}
+                    </div>
                     {clientErrors.name && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.name}</span>}
                   </div>
 
                   <div className={styles.fieldWrapper}>
                     <label className={styles.fieldLabel}>E-MAIL PARA ENVIO DA NOTA FISCAL *</label>
-                    <input 
-                      type="email" 
-                      name="email" 
-                      placeholder="seu@email.com" 
-                      value={clientData.email} 
-                      onChange={handleClientChange} 
-                      disabled={Boolean(user && !isEditingAccountData)}
-                      className={`${clientErrors.email ? styles.inputError : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
-                    />
+                    <div className={styles.inputWithCheckWrapper}>
+                      <input 
+                        type="email" 
+                        name="email" 
+                        placeholder="seu@email.com" 
+                        value={clientData.email} 
+                        onChange={handleClientChange} 
+                        className={`${clientErrors.email ? styles.inputError : ''} ${isEmailValid && !clientErrors.email ? styles.inputSuccess : ''}`}
+                      />
+                      {isEmailValid && !clientErrors.email && (
+                        <div className={styles.inputCheckPosition}>
+                          <Check size={16} className={styles.validCheckIcon} />
+                        </div>
+                      )}
+                    </div>
                     {clientErrors.email && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.email}</span>}
                   </div>
 
                   <div className={styles.fieldsRow}>
                     <div className={styles.fieldWrapper}>
                       <div className={styles.labelWithBadge}>
-                        <label className={styles.fieldLabel}>CPF DO TITULAR DA COMPRA *</label>
-                        <span className={styles.requiredBadge}>NF / PagBank</span>
+                        <label className={styles.fieldLabel}>{clientData.isPj ? 'CNPJ DA EMPRESA *' : 'CPF OU CNPJ DO TITULAR *'}</label>
+                        <span className={styles.requiredBadge}>NF / SEFAZ</span>
                       </div>
-                      <input 
-                        type="text" 
-                        name="cpf" 
-                        placeholder="000.000.000-00"
-                        maxLength={14}
-                        value={clientData.cpf} 
-                        onChange={handleClientChange} 
-                        disabled={Boolean(user && !isEditingAccountData)}
-                        className={`${clientErrors.cpf ? styles.inputError : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
-                      />
+                      <div className={styles.inputWithCheckWrapper}>
+                        <input 
+                          type="text" 
+                          name="cpf" 
+                          placeholder="000.000.000-00 ou CNPJ" 
+                          maxLength={18}
+                          value={clientData.cpf} 
+                          onChange={handleClientChange} 
+                          className={`${clientErrors.cpf ? styles.inputError : ''} ${isCpfValid && !clientErrors.cpf ? styles.inputSuccess : ''}`}
+                        />
+                        {isCpfValid && !clientErrors.cpf && (
+                          <div className={styles.inputCheckPosition}>
+                            <Check size={16} className={styles.validCheckIcon} />
+                          </div>
+                        )}
+                      </div>
                       {clientErrors.cpf && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.cpf}</span>}
                     </div>
 
@@ -893,38 +1972,65 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                         <label className={styles.fieldLabel}>TELEFONE / WHATSAPP *</label>
                         <span className={styles.requiredBadge}>Rastreio de Envio</span>
                       </div>
-                      <input 
-                        type="text" 
-                        name="phone" 
-                        placeholder="(41) 99999-9999"
-                        maxLength={15}
-                        value={clientData.phone} 
-                        onChange={handleClientChange} 
-                        disabled={Boolean(user && !isEditingAccountData)}
-                        className={`${clientErrors.phone ? styles.inputError : ''} ${user && !isEditingAccountData ? styles.lockedInput : ''}`}
-                      />
+                      <div className={styles.inputWithCheckWrapper}>
+                        <input 
+                          type="text" 
+                          name="phone" 
+                          placeholder="(41) 99999-9999" 
+                          maxLength={15}
+                          value={clientData.phone} 
+                          onChange={handleClientChange} 
+                          className={`${clientErrors.phone ? styles.inputError : ''} ${isPhoneValid && !clientErrors.phone ? styles.inputSuccess : ''}`}
+                        />
+                        {isPhoneValid && !clientErrors.phone && (
+                          <div className={styles.inputCheckPosition}>
+                            <Check size={16} className={styles.validCheckIcon} />
+                          </div>
+                        )}
+                      </div>
                       {clientErrors.phone && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.phone}</span>}
                     </div>
                   </div>
+
+                  {/* CAMPO DE INSCRIÇÃO ESTADUAL SE PESSOA JURÍDICA (CNPJ) */}
+                  {(clientData.isPj || (clientData.cpf && clientData.cpf.replace(/\D/g, '').length === 14)) && (
+                    <div className={styles.fieldWrapper} style={{ marginTop: '0.5rem', padding: '0.75rem', background: 'rgba(255,255,255,0.02)', border: '1px solid #262626', borderRadius: '4px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <label className={styles.fieldLabel} style={{ margin: 0 }}>INSCRIÇÃO ESTADUAL (IE)</label>
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', color: '#a3a3a3', cursor: 'pointer' }}>
+                          <input 
+                            type="checkbox"
+                            checked={clientData.isentoIE}
+                            onChange={(e) => setClientData(prev => ({ ...prev, isentoIE: e.target.checked, ie: e.target.checked ? '' : prev.ie }))}
+                          />
+                          Isento de Inscrição Estadual (Não Contribuinte)
+                        </label>
+                      </div>
+                      {!clientData.isentoIE && (
+                        <input 
+                          type="text"
+                          name="ie"
+                          placeholder="Número da IE (ex: 90812345-67)"
+                          maxLength={16}
+                          value={clientData.ie}
+                          onChange={handleClientChange}
+                          className={clientErrors.ie ? styles.inputError : ''}
+                        />
+                      )}
+                      {clientErrors.ie && <span className={styles.errorText}><AlertCircle size={12} /> {clientErrors.ie}</span>}
+                    </div>
+                  )}
                 </div>
 
                 <div className={styles.stepActions}>
                   <button 
                     type="button" 
                     onClick={handleNextToStep2} 
-                    disabled={isEditingAccountData || savingProfile}
-                    className={`${styles.primaryBtn} ${isEditingAccountData ? styles.disabledStepBtn : ''}`}
-                    title={isEditingAccountData ? "Salve as alterações no botão 'Salvar Dados' acima antes de prosseguir." : ""}
+                    className={styles.primaryBtn}
                   >
-                    <span>CONTINUAR PARA ENTREGA</span>
+                    <span>{isOnlyGiftCardsInCart ? 'CONTINUAR PARA PAGAMENTO' : 'CONTINUAR PARA ENTREGA'}</span>
                     <ArrowRight size={15} />
                   </button>
-                  {isEditingAccountData && (
-                    <small className={styles.editingModeWarning}>
-                      <AlertCircle size={13} color="#facc15" />
-                      <span>Salve os dados no botão "Salvar Dados" acima para liberar o avanço.</span>
-                    </small>
-                  )}
                 </div>
               </motion.section>
             )}
@@ -953,7 +2059,13 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                       <span className={styles.subSectionTitle}>SELECIONE UM ENDEREÇO DE ENTREGA:</span>
                       <button 
                         type="button" 
-                        onClick={() => setIsAddingNewAddress(true)} 
+                        onClick={() => {
+                          setEditingAddressId(null);
+                          setAddressForm({ cep: '', street: '', number: '', noNumber: false, neighborhood: '', complement: '', city: 'Curitiba', state: 'PR', ibge: '4106902' });
+                          setAddressErrors({});
+                          setCepApiMessage(null);
+                          setIsAddingNewAddress(true);
+                        }} 
                         className={styles.toggleAddressBtn}
                       >
                         <Plus size={13} />
@@ -972,7 +2084,21 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                           >
                             <div className={styles.addressCardHeader}>
                               <strong>{(addr.title || addr.label || 'ENDEREÇO').toUpperCase()}</strong>
-                              {addr.isDefault && <span className={styles.defaultBadge}>PADRÃO</span>}
+                              <div className={styles.cardHeaderRight}>
+                                {addr.isDefault && <span className={styles.defaultBadge}>PADRÃO</span>}
+                                <button
+                                  type="button"
+                                  className={styles.editAddressCardBtn}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleStartEditAddress(addr);
+                                  }}
+                                  title="Editar este endereço"
+                                >
+                                  <Edit3 size={11} />
+                                  <span>Editar</span>
+                                </button>
+                              </div>
                             </div>
                             <p className={styles.addrLine1}>
                               {addr.street}, {addr.number} {addr.complement ? `• ${addr.complement}` : ''}
@@ -997,14 +2123,16 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 {isAddingNewAddress && (
                   <div className={styles.newAddressBox}>
                     <div className={styles.newAddressHeader}>
-                      <span className={styles.subSectionTitle}>CADASTRAR NOVO ENDEREÇO</span>
+                      <span className={styles.subSectionTitle}>
+                        {editingAddressId ? 'EDITAR ENDEREÇO DE ENTREGA' : 'CADASTRAR NOVO ENDEREÇO'}
+                      </span>
                       {savedAddresses.length > 0 && (
                         <button 
                           type="button" 
-                          onClick={() => setIsAddingNewAddress(false)} 
+                          onClick={handleCancelAddressForm} 
                           className={styles.cancelLink}
                         >
-                          ← Cancelar e escolher dos salvos
+                          ← Cancelar e voltar aos salvos
                         </button>
                       )}
                     </div>
@@ -1020,9 +2148,15 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                             maxLength={9}
                             value={addressForm.cep} 
                             onChange={handleAddressChange} 
-                            className={addressErrors.cep ? styles.inputError : ''}
+                            className={`${addressErrors.cep ? styles.inputError : ''} ${isCepValid && !addressErrors.cep ? styles.inputSuccess : ''}`}
                           />
-                          {isSearchingCep && <Loader2 size={16} className={styles.spinner} />}
+                          {isSearchingCep ? (
+                            <Loader2 size={16} className={styles.spinner} />
+                          ) : isCepValid && !addressErrors.cep ? (
+                            <div className={styles.inputCheckPosition}>
+                              <Check size={16} className={styles.validCheckIcon} />
+                            </div>
+                          ) : null}
                         </div>
                         {cepApiMessage && (
                           <span className={cepApiMessage.type === 'success' ? styles.successApiText : styles.errorText}>
@@ -1047,12 +2181,31 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
                       <div className={styles.fieldsRow}>
                         <div className={styles.fieldWrapper}>
-                          <label className={styles.fieldLabel}>Número *</label>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                            <label className={styles.fieldLabel} style={{ margin: 0 }}>Número *</label>
+                            <label style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', fontSize: '0.72rem', color: '#a3a3a3', cursor: 'pointer' }}>
+                              <input 
+                                type="checkbox" 
+                                checked={addressForm.noNumber || addressForm.number === 'S/N'} 
+                                onChange={(e) => {
+                                  const isChecked = e.target.checked;
+                                  setAddressForm(prev => ({
+                                    ...prev,
+                                    noNumber: isChecked,
+                                    number: isChecked ? 'S/N' : ''
+                                  }));
+                                  if (addressErrors.number) setAddressErrors(errs => ({ ...errs, number: null }));
+                                }}
+                              />
+                              Sem número (S/N)
+                            </label>
+                          </div>
                           <input 
                             type="text" 
                             name="number" 
-                            placeholder="123"
+                            placeholder={addressForm.noNumber ? "S/N" : "123"}
                             value={addressForm.number} 
+                            disabled={addressForm.noNumber}
                             onChange={handleAddressChange} 
                             className={addressErrors.number ? styles.inputError : ''}
                           />
@@ -1120,14 +2273,46 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                       className={styles.saveAddressBtn}
                     >
                       <Check size={14} />
-                      <span>CONFIRMAR E USAR ESTE ENDEREÇO</span>
+                      <span>{editingAddressId ? 'SALVAR ALTERAÇÕES E USAR ESTE ENDEREÇO' : 'CONFIRMAR E USAR ESTE ENDEREÇO'}</span>
                     </button>
                   </div>
                 )}
 
                 {/* SELEÇÃO DO MÉTODO DE FRETE */}
                 <div className={styles.shippingSelectionBlock}>
-                  <span className={styles.subSectionTitle}>SELECIONE A FORMA DE ENVIO:</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span className={styles.subSectionTitle}>SELECIONE A FORMA DE ENVIO:</span>
+                    {isCalculatingShipping && (
+                      <span style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+                        Cotando frete em tempo real...
+                      </span>
+                    )}
+                  </div>
+
+                  {isFreeShippingActive && (
+                    <div style={{
+                      borderRadius: '6px',
+                      padding: '0.55rem 0.85rem',
+                      marginBottom: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      color: '#10b981',
+                      fontSize: '0.78rem',
+                      fontWeight: 600,
+                      letterSpacing: '0.5px'
+                    }}>
+                      <Check size={14} />
+                      <span>
+                        {hasFreeShippingItem && hasFreeShippingCoupon
+                          ? 'FRETE GRÁTIS APLICADO POR PEÇA E CUPOM NO PEDIDO'
+                          : hasFreeShippingCoupon
+                          ? `FRETE GRÁTIS APLICADO PELO CUPOM (${appliedCoupon?.code})`
+                          : 'FRETE GRÁTIS APLICADO PARA PEÇA ELEGÍVEL DO CATÁLOGO'}
+                      </span>
+                    </div>
+                  )}
+
                   <div className={styles.shippingOptionsGrid}>
                     {shippingOptions.map((opt) => {
                       const isSelected = selectedShippingMethod === opt.id;
@@ -1146,8 +2331,11 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                               <small>{opt.deadline}</small>
                             </div>
                           </div>
-                          <span className={styles.shippingPrice}>
-                            {opt.price === 0 ? 'GRÁTIS' : `R$ ${opt.price.toFixed(2)}`}
+                          <span 
+                            className={styles.shippingPrice}
+                            style={isFreeShippingActive || opt.price === 0 ? { color: '#10b981', fontWeight: 700 } : undefined}
+                          >
+                            {isFreeShippingActive || opt.price === 0 ? 'GRÁTIS' : `R$ ${opt.price.toFixed(2)}`}
                           </span>
                         </div>
                       );
@@ -1181,77 +2369,274 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                 className={styles.stepCard}
               >
                 <div className={styles.stepCardHeader}>
-                  <span className={styles.stepCardBadge}>ETAPA 03</span>
-                  <h2 className={styles.stepCardTitle}>PAGAMENTO SEGURO (PAGBANK)</h2>
+                  <span className={styles.stepCardBadge}>{isOnlyGiftCardsInCart ? 'ETAPA 02 (FINAL)' : 'ETAPA 03'}</span>
+                  <h2 className={styles.stepCardTitle}>PAGAMENTO</h2>
                 </div>
 
                 {/* Resumo do Destino */}
-                <div className={styles.shippingReviewBadge}>
-                  <MapPin size={15} />
-                  <span>
-                    Entrega para: <strong>{clientData.name}</strong> • {activeAddress?.street || 'Rua Comendador Araújo'}, {activeAddress?.number || '333'} ({activeAddress?.city || 'Curitiba'}/{activeAddress?.state || 'PR'})
-                  </span>
-                  <button type="button" onClick={() => setCurrentStep(2)} className={styles.changeLink}>Alterar</button>
-                </div>
+                {isOnlyGiftCardsInCart ? (
+                  <div className={styles.shippingReviewBadge} style={{ borderColor: 'rgba(0, 255, 136, 0.25)', background: 'rgba(0, 255, 136, 0.04)' }}>
+                    <Gift size={15} color="#00ff88" />
+                    <span>
+                      Entrega Digital para: <strong>{clientData.name || 'Comprador'}</strong> • Códigos disponíveis instantaneamente na área <strong>Meus Pedidos</strong> após a aprovação
+                    </span>
+                  </div>
+                ) : (
+                  <div className={styles.shippingReviewBadge}>
+                    <MapPin size={15} />
+                    <span>
+                      Entrega para: <strong>{clientData.name}</strong> • {activeAddress?.street || 'Rua Comendador Araújo'}, {activeAddress?.number || '333'} ({activeAddress?.city || 'Curitiba'}/{activeAddress?.state || 'PR'})
+                    </span>
+                    <button type="button" onClick={() => setCurrentStep(2)} className={styles.changeLink}>Alterar</button>
+                  </div>
+                )}
 
-                {/* CARD PRINCIPAL DO GATEWAY PAGBANK */}
-                <div className={styles.pagBankGatewayCard}>
-                  <div className={styles.pagBankHeader}>
-                    <div className={styles.pagBankBrandGroup}>
-                      <span className={styles.pagBankLogo}>PAGBANK</span>
-                      <span className={styles.pagBankBadge}>GATEWAY OFICIAL</span>
-                    </div>
-                    <div className={styles.pagBankSecureTag}>
-                      <ShieldCheck size={14} color="#4ade80" />
-                      <span>CRIPTOGRAFIA 256-BIT</span>
+                {/* BLOCO DE ABATIMENTO COM SALDO EM CARTEIRA */}
+                {userWalletAmount > 0 && (
+                  <div className={styles.walletPaymentBlock}>
+                    <label className={styles.walletCheckLabel} style={hasGiftCardInCart ? { opacity: 0.6, cursor: 'not-allowed' } : {}}>
+                      <input 
+                        type="checkbox" 
+                        checked={useWalletBalance && !hasGiftCardInCart}
+                        disabled={hasGiftCardInCart}
+                        onChange={(e) => setUseWalletBalance(e.target.checked)}
+                      />
+                      <div>
+                        <span>UTILIZAR SALDO EM CARTEIRA</span>
+                        {hasGiftCardInCart ? (
+                          <small style={{ color: '#f59e0b', fontWeight: 600 }}>
+                            O saldo da carteira não pode ser utilizado para comprar outro vale-presente.
+                          </small>
+                        ) : (
+                          <small>Você possui R$ {userWalletAmount.toFixed(2)} disponíveis para abater nesta compra.</small>
+                        )}
+                      </div>
+                    </label>
+                    {useWalletBalance && !hasGiftCardInCart && (
+                      <span className={styles.deductionNotice}>
+                        Desconto aplicado da carteira: -R$ {walletDeduction.toFixed(2)}
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {finalAmountToPay === 0 ? (
+                  <div className={styles.walletFullCoverCard}>
+                    <ShieldCheck size={24} color="#4ade80" />
+                    <div>
+                      <strong>COMPRA 100% COBERTA PELO SALDO DA CARTEIRA</strong>
+                      <p>O valor total de R$ {total.toFixed(2)} foi integralmente abatido com seus créditos. Nenhum pagamento adicional é necessário.</p>
                     </div>
                   </div>
-
-                  <p className={styles.pagBankDesc}>
-                    Ao clicar no botão de confirmação, você será conectado ao ambiente seguro do <strong>PagBank</strong> para concluir seu pagamento com total proteção.
-                  </p>
-
-                  <div className={styles.pagBankMethodsList}>
-                    <button 
-                      type="button" 
-                      onClick={() => setPaymentMethod('PIX')}
-                      className={`${styles.methodPillBtn} ${paymentMethod === 'PIX' ? styles.activeMethodPill : ''}`}
-                    >
-                      <div className={styles.methodContent}>
-                        <Zap size={15} />
-                        <span><strong>PIX</strong> (Aprovação imediata)</span>
+                ) : (
+                  /* CARD PRINCIPAL DO GATEWAY PAGBANK */
+                  <div className={styles.pagBankGatewayCard}>
+                    <div className={styles.pagBankHeader}>
+                      <div className={styles.pagBankBrandGroup}>
+                        <span className={styles.pagBankLogo}>VIA PAGBANK</span>
                       </div>
-                      {paymentMethod === 'PIX' && <CheckCircle2 size={15} className={styles.methodCheck} />}
-                    </button>
+                    </div>
 
-                    <button 
-                      type="button" 
-                      onClick={() => setPaymentMethod('Cartão de Crédito')}
-                      className={`${styles.methodPillBtn} ${paymentMethod === 'Cartão de Crédito' ? styles.activeMethodPill : ''}`}
-                    >
-                      <div className={styles.methodContent}>
-                        <CreditCard size={15} />
-                        <span><strong>Cartão de Crédito</strong> (em até 3x)</span>
-                      </div>
-                      {paymentMethod === 'Cartão de Crédito' && <CheckCircle2 size={15} className={styles.methodCheck} />}
-                    </button>
+                    <p className={styles.pagBankDesc}>
+                      Ao clicar no botão de confirmação, você será conectado ao ambiente seguro do <strong>PagBank</strong> para concluir seu pagamento com total proteção.
+                    </p>
 
-                    <button 
-                      type="button" 
-                      onClick={() => setPaymentMethod('Boleto Bancário')}
-                      className={`${styles.methodPillBtn} ${paymentMethod === 'Boleto Bancário' ? styles.activeMethodPill : ''}`}
-                    >
-                      <div className={styles.methodContent}>
-                        <FileText size={15} />
-                        <span><strong>Boleto Bancário</strong></span>
+                    <div className={styles.pagBankMethodsList}>
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setPaymentMethod('PIX');
+                          if (paymentError) setPaymentError(null);
+                        }}
+                        className={`${styles.methodPillBtn} ${paymentMethod === 'PIX' ? styles.activeMethodPill : ''}`}
+                      >
+                        <div className={styles.methodContent}>
+                          <Zap size={15} />
+                          <span><strong>PIX</strong> (Aprovação imediata)</span>
+                        </div>
+                        {paymentMethod === 'PIX' && <CheckCircle2 size={15} className={styles.methodCheck} />}
+                      </button>
+
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setPaymentMethod('Cartão de Crédito');
+                          if (paymentError) setPaymentError(null);
+                        }}
+                        className={`${styles.methodPillBtn} ${paymentMethod === 'Cartão de Crédito' ? styles.activeMethodPill : ''}`}
+                      >
+                        <div className={styles.methodContent}>
+                          <CreditCard size={15} />
+                          <span><strong>Cartão de Crédito</strong> (em até 3x)</span>
+                        </div>
+                        {paymentMethod === 'Cartão de Crédito' && <CheckCircle2 size={15} className={styles.methodCheck} />}
+                      </button>
+
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setPaymentMethod('Cartão de Débito');
+                          setInstallments(1);
+                          if (paymentError) setPaymentError(null);
+                        }}
+                        className={`${styles.methodPillBtn} ${paymentMethod === 'Cartão de Débito' ? styles.activeMethodPill : ''}`}
+                      >
+                        <div className={styles.methodContent}>
+                          <CreditCard size={15} />
+                          <span><strong>Cartão de Débito</strong> (À vista)</span>
+                        </div>
+                        {paymentMethod === 'Cartão de Débito' && <CheckCircle2 size={15} className={styles.methodCheck} />}
+                      </button>
+                    </div>
+
+                    {/* FORMULÁRIO DE CARTÃO TRANSPARENTE LIMPO (CRÉDITO OU DÉBITO - PADRÃO PRODUÇÃO) */}
+                    {(paymentMethod === 'Cartão de Crédito' || paymentMethod === 'Cartão de Débito') && (
+                      <div className={styles.cardPaymentContainer}>
+                        {/* CABECALHO DE SEGURANCA LIMPO */}
+                        <div className={styles.securityHeader}>
+                          <div className={styles.securitySeal}>
+                            <Lock size={13} />
+                            <span>PAGAMENTO • {paymentMethod.toUpperCase()}</span>
+                          </div>
+                        </div>
+
+                        {/* NUMERO DO CARTAO COM DETECCAO DE BANDEIRA */}
+                        <div className={styles.fieldGroup}>
+                          <label htmlFor="ccNumber">NÚMERO DO CARTÃO ({paymentMethod === 'Cartão de Débito' ? 'DÉBITO' : 'CRÉDITO'}) *</label>
+                          <div className={styles.cardInputWrapper}>
+                            <input
+                              id="ccNumber"
+                              type="text"
+                              inputMode="numeric"
+                              placeholder="0000 0000 0000 0000"
+                              value={cardData.number}
+                              onChange={handleCardNumberChange}
+                              required
+                              className={`${styles.styledInput} ${styles.cardInputWithAdornment} ${isCardNumberValid ? styles.inputSuccess : ''}`}
+                            />
+                            <div className={styles.brandIconPosition}>
+                              {isCardNumberValid && <Check size={16} className={styles.validCheckIcon} />}
+                              <CardBrandIcon brand={cardBrand} />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* TITULAR DO CARTAO */}
+                        <div className={styles.fieldGroup}>
+                          <label htmlFor="ccHolder">TITULAR DO CARTÃO (NOME IMPRESSO) *</label>
+                          <div className={styles.cardInputWrapper}>
+                            <input
+                              id="ccHolder"
+                              type="text"
+                              placeholder="NOME COMO NO CARTÃO"
+                              value={cardData.holder}
+                              onChange={(e) => setCardData(prev => ({ ...prev, holder: e.target.value.toUpperCase() }))}
+                              required
+                              className={`${styles.styledInput} ${styles.cardInputWithCheck} ${isCardHolderValid ? styles.inputSuccess : ''}`}
+                            />
+                            {isCardHolderValid && (
+                              <div className={styles.inputCheckPosition}>
+                                <Check size={16} className={styles.validCheckIcon} />
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* VALIDADE E CVV */}
+                        <div className={styles.cardDualRow}>
+                          <div className={styles.fieldGroup}>
+                            <label htmlFor="ccExp">VALIDADE (MM/AA) *</label>
+                            <div className={styles.cardInputWrapper}>
+                              <input
+                                id="ccExp"
+                                type="text"
+                                inputMode="numeric"
+                                placeholder="MM/AA"
+                                maxLength={5}
+                                value={cardData.expMonth ? `${cardData.expMonth}${cardData.expYear ? `/${cardData.expYear}` : ''}` : ''}
+                                onChange={handleExpChange}
+                                required
+                                className={`${styles.styledInput} ${styles.cardInputWithCheck} ${isCardExpiryValid ? styles.inputSuccess : ''}`}
+                              />
+                              {isCardExpiryValid && (
+                                <div className={styles.inputCheckPosition}>
+                                  <Check size={16} className={styles.validCheckIcon} />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className={styles.fieldGroup}>
+                            <label htmlFor="ccCvv">CÓDIGO DE SEGURANÇA (CVV) *</label>
+                            <div className={styles.cardInputWrapper}>
+                              <input
+                                id="ccCvv"
+                                type="password"
+                                inputMode="numeric"
+                                maxLength={4}
+                                placeholder="123"
+                                value={cardData.cvv}
+                                onChange={(e) => setCardData(prev => ({ ...prev, cvv: e.target.value.replace(/\D/g, '') }))}
+                                required
+                                className={`${styles.styledInput} ${styles.cardInputWithCheck} ${isCardCvvValid ? styles.inputSuccess : ''}`}
+                              />
+                              {isCardCvvValid && (
+                                <div className={styles.inputCheckPosition}>
+                                  <Check size={16} className={styles.validCheckIcon} />
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* CONDICAO DE PAGAMENTO: PARCELAMENTO (CREDITO) OU A VISTA (DEBITO) */}
+                        {paymentMethod === 'Cartão de Crédito' ? (
+                          <div className={styles.fieldGroup}>
+                            <label htmlFor="ccInstallments">PARCELAMENTO NO PAGBANK *</label>
+                            <select
+                              id="ccInstallments"
+                              value={installments}
+                              onChange={(e) => setInstallments(Number(e.target.value))}
+                              className={styles.styledSelect}
+                            >
+                              <option value={1}>1x de R$ {finalAmountToPay.toFixed(2)} (à vista sem juros)</option>
+                              <option value={2}>2x de R$ {(finalAmountToPay / 2).toFixed(2)} sem juros</option>
+                              <option value={3}>3x de R$ {(finalAmountToPay / 3).toFixed(2)} sem juros</option>
+                            </select>
+                          </div>
+                        ) : (
+                          <div className={styles.fieldGroup}>
+                            <label htmlFor="ccDebitCondition">MODALIDADE DE PAGAMENTO *</label>
+                            <input
+                              id="ccDebitCondition"
+                              type="text"
+                              readOnly
+                              value={`1x de R$ ${finalAmountToPay.toFixed(2)} (À vista — Débito em conta imediato)`}
+                              className={styles.styledInput}
+                              style={{ opacity: 0.9, cursor: 'default' }}
+                            />
+                          </div>
+                        )}
+
+                        <div className={styles.securityFooterNotice}>
+                          <ShieldCheck size={14} />
+                          <span>Seus dados são protegidos e tokenizados diretamente pelo gateway PagBank. A THR33 não armazena números de cartão.</span>
+                        </div>
                       </div>
-                      {paymentMethod === 'Boleto Bancário' && <CheckCircle2 size={15} className={styles.methodCheck} />}
-                    </button>
+                    )}
+
+                    {/* ALERTA DE ERRO OU RECUSA DO GATEWAY */}
+                    {paymentError && (
+                      <div className={styles.paymentErrorNotice}>
+                        <AlertCircle size={16} color="#f87171" />
+                        <span>{paymentError}</span>
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
 
                 <div className={styles.stepActionsBetween}>
-                  <button type="button" onClick={() => setCurrentStep(2)} className={styles.secondaryBtn}>
+                  <button type="button" onClick={() => setCurrentStep(isOnlyGiftCardsInCart ? 1 : 2)} className={styles.secondaryBtn}>
                     <ArrowLeft size={14} />
                     <span>VOLTAR</span>
                   </button>
@@ -1264,11 +2649,16 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                     {isProcessing ? (
                       <>
                         <Loader2 size={16} className={styles.spinner} />
-                        <span>PROCESSANDO COM {paymentMethod.toUpperCase()}...</span>
+                        <span>PROCESSANDO...</span>
+                      </>
+                    ) : finalAmountToPay === 0 ? (
+                      <>
+                        <span>CONCLUIR PEDIDO COM SALDO DA CARTEIRA</span>
+                        <ArrowRight size={15} />
                       </>
                     ) : (
                       <>
-                        <span>PAGAR COM {paymentMethod.toUpperCase()} (R$ {total.toFixed(2)})</span>
+                        <span>PAGAR COM {paymentMethod.toUpperCase()} (R$ {finalAmountToPay.toFixed(2)})</span>
                         <ArrowRight size={15} />
                       </>
                     )}
@@ -1290,11 +2680,14 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
           <div className={styles.orderItemsList}>
             {cartItems.map((item) => (
-              <div key={`${item.id}-${item.size}`} className={styles.orderCard}>
+              <div key={`${item.id}-${item.size}-${item.color?.id || 'default'}-${item.fit || 'default'}`} className={styles.orderCard}>
                 <img src={item.image} alt={item.name} />
                 <div className={styles.orderCardInfo}>
                   <strong className={styles.orderCardName}>{item.name}</strong>
                   <span className={styles.orderCardMeta}>
+                    {item.fit && item.fit !== 'Vale-Presente Digital' && (
+                      <><strong>{item.fit}</strong> • </>
+                    )}
                     Tam: <strong>{item.size}</strong> {item.color?.name && `• ${item.color.name}`}
                   </span>
                   <span className={styles.orderCardQty}>Qtd: {item.quantity}</span>
@@ -1339,7 +2732,9 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
               <div className={styles.appliedCouponTag}>
                 <div className={styles.couponTagText}>
                   <Tag size={13} />
-                  <span>CUPOM <strong>{appliedCoupon.code}</strong> ({appliedCoupon.label})</span>
+                  <span>
+                    CUPOM <strong>{appliedCoupon.code}</strong> ({appliedCoupon.label || (appliedCoupon.freeShipping ? 'Frete Grátis' : '')})
+                  </span>
                 </div>
                 <button type="button" onClick={removeCoupon} className={styles.removeCouponBtn}>
                   REMOVER
@@ -1361,14 +2756,37 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
               </div>
             )}
 
+            {useWalletBalance && walletDeduction > 0 && (
+              <div className={`${styles.summaryRow} ${styles.discountRow}`}>
+                <span>Saldo da Carteira</span>
+                <span>- R$ {walletDeduction.toFixed(2)}</span>
+              </div>
+            )}
+
             <div className={styles.summaryRow}>
               <span>Frete</span>
-              <span>{shippingCost === 0 ? 'GRÁTIS' : `R$ ${shippingCost.toFixed(2)}`}</span>
+              <span style={isOnlyGiftCardsInCart || isFreeShippingActive || shippingCost === 0 ? { color: '#10b981', fontWeight: 600 } : undefined}>
+                {isOnlyGiftCardsInCart || isFreeShippingActive || shippingCost === 0 ? 'GRÁTIS' : `R$ ${shippingCost.toFixed(2)}`}
+              </span>
             </div>
 
+            {isOnlyGiftCardsInCart ? (
+              <div style={{ fontSize: '0.72rem', color: '#10b981', marginTop: '-0.35rem', textAlign: 'right', fontWeight: 500 }}>
+                Entrega Digital Instantânea
+              </div>
+            ) : isFreeShippingActive && (
+              <div style={{ fontSize: '0.72rem', color: '#10b981', marginTop: '-0.35rem', textAlign: 'right', fontWeight: 500 }}>
+                {hasFreeShippingItem && hasFreeShippingCoupon
+                  ? 'Acumulado: Peça + Cupom'
+                  : hasFreeShippingCoupon
+                  ? `Cupom ${appliedCoupon?.code} com Frete Grátis`
+                  : 'Peça elegível com Frete Grátis'}
+              </div>
+            )}
+
             <div className={`${styles.summaryRow} ${styles.totalRow}`}>
-              <strong>TOTAL</strong>
-              <strong>R$ {total.toFixed(2)}</strong>
+              <strong>TOTAL A PAGAR</strong>
+              <strong>R$ {finalAmountToPay.toFixed(2)}</strong>
             </div>
           </div>
 

@@ -1,0 +1,212 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Funcoes auxiliares de autenticacao e autorizacao
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.admin == true ||
+        request.auth.token.email in [
+          'contato.thewavem@gmail.com',
+          'thewavem@gmail.com',
+          'admin@thr33.com',
+          'sac@thr33.com',
+          'contato@thr33.com',
+          'kampaweslley@gmail.com',
+          'suzanakampa.sk@gmail.com'
+        ] ||
+        (exists(/databases/$(database)/documents/settings/admins) &&
+         ('adminEmails' in get(/databases/$(database)/documents/settings/admins).data) &&
+         request.auth.token.email in get(/databases/$(database)/documents/settings/admins).data.adminEmails) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+         (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin' ||
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true))
+      );
+    }
+
+    // Colecao principal de pedidos da THR33 ('orders')
+    match /orders/{orderId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if isAdmin() || (
+        // Permite que o Checkout sincronize os dados do pedido recem-criado sem bloquear clientes comuns ou guests
+        (!('status' in request.resource.data) ||
+         request.resource.data.status == resource.data.status ||
+         request.resource.data.status in ['aguardando_pagamento', 'cancelado'])
+      );
+      allow delete: if isAdmin();
+
+      // Historico de eventos PagBank com gravacao restrita exclusivamente ao backend
+      match /historico_pagamento/{histId} {
+        allow read: if true;
+        allow write: if false;
+      }
+    }
+
+    // Colecao de fallback de pedidos ('pedidos')
+    match /pedidos/{orderId} {
+      allow read: if (isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin())) || resource.data.userId == 'guest';
+      allow create: if true;
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+
+      match /historico_pagamento/{histId} {
+        allow read: if isAuthenticated() && (get(/databases/$(database)/documents/pedidos/$(orderId)).data.userId == request.auth.uid || isAdmin());
+        allow write: if false;
+      }
+    }
+
+    // Catalogo de produtos: leitura publica; criacao e remocao restrita a admin;
+    // atualizacao permitida para admin OU baixa de estoque no checkout e metricas de telemetria
+    match /products/{productId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'views', 'lastViewedAt', 'addedToCart', 'lastAddedToCartAt', 
+          'removedFromCart', 'lastRemovedFromCartAt', 'purchases', 'lastSoldAt',
+          'stock', 'totalStock', 'sizes', 'updatedAt'
+        ])
+      );
+    }
+
+    // Campanhas de marketing e UTMs
+    match /campaigns/{campaignId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'cartAdds', 'purchases', 'revenue', 'lastCartAddAt', 'lastPurchaseAt'
+        ])
+      );
+    }
+
+    // Cupons de desconto: leitura publica, gerenciamento por admin e incremento de metricas de uso no checkout
+    match /coupons/{couponId} {
+      allow read: if true;
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'usageCount', 'itemsSold', 'grossRevenue', 'discountGiven', 'commissionRate', 'commissionPending'
+        ])
+      );
+    }
+
+    // Configuracoes da vitrine e da loja (Bento Grid, Carrossel Hero)
+    match /settings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /storefront/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Sessoes ativas do checkout (recuperacao de carrinho e telemetria)
+    match /checkout_sessions/{sessionId} {
+      allow read, write: if true;
+    }
+
+    // Perfis de usuarios: leitura e escrita apenas pelo titular da conta ou admin
+    match /users/{userId} {
+      allow read, create, delete: if isOwner(userId) || isAdmin();
+      allow update: if (isOwner(userId) && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'isAdmin']))) || isAdmin();
+    }
+
+    // Sessoes de telemetria anonima e analitica
+    match /analytics/{docId} {
+      allow read, write: if true;
+    }
+    match /analytics/{docId=**} {
+      allow read, write: if true;
+    }
+
+    // Telemetria diaria e estatisticas de trafego
+    match /analytics_daily/{docId} {
+      allow read, write: if true;
+    }
+    match /analytics_daily/{docId=**} {
+      allow read, write: if true;
+    }
+
+    // Telemetria de integridade e latencia de pagamento
+    match /payment_telemetry/{docId} {
+      allow read, write: if true;
+    }
+
+    // Chamados e tickets de suporte da loja ('support_tickets')
+    match /support_tickets/{ticketId} {
+      allow read: if isAuthenticated() && (
+        resource.data.userId == request.auth.uid || 
+        resource.data.customerEmail == request.auth.token.email ||
+        isAdmin()
+      );
+      allow create: if isAuthenticated();
+      allow update: if isAdmin() || (
+        isAuthenticated() && 
+        (resource.data.userId == request.auth.uid || resource.data.customerEmail == request.auth.token.email)
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Avaliações de produtos da loja ('reviews')
+    match /reviews/{reviewId} {
+      allow read: if resource.data.status == 'aprovada' || 
+                  (isAuthenticated() && resource.data.userId == request.auth.uid) || 
+                  isAdmin();
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+
+    // Catálogo de brindes e gifts promocionais da loja ('gifts')
+    match /gifts/{giftId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // Vales-presente digitais da THR33 ('gift_cards')
+    match /gift_cards/{codeId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() || isAdmin();
+      allow update: if isAdmin() || (
+        isAuthenticated() &&
+        resource.data.status == 'active' &&
+        request.resource.data.status == 'redeemed' &&
+        request.resource.data.redeemedByUid == request.auth.uid
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Assinantes VIP de Drops e Newsletter da THR33 ('drop_subscribers')
+    match /drop_subscribers/{subscriberId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.email == request.auth.token.email);
+      allow create, update: if isAdmin() || (
+        request.resource.data.email is string &&
+        request.resource.data.email.size() >= 5 &&
+        request.resource.data.email.size() <= 160 &&
+        request.resource.data.status in ['active', 'unsubscribed']
+      );
+      allow delete: if isAdmin();
+    }
+
+    // Assinantes e preferências da Newsletter da THR33 ('newsletter_subscribers')
+    match /newsletter_subscribers/{subscriberId} {
+      allow read: if isAdmin() || (isAuthenticated() && resource.data.email == request.auth.token.email) || true;
+      allow create, update: if isAdmin() || (
+        request.resource.data.email is string &&
+        request.resource.data.email.size() >= 5 &&
+        request.resource.data.email.size() <= 160
+      );
+      allow delete: if isAdmin();
+    }
+  }
+}

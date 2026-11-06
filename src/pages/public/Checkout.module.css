@@ -153,9 +153,7 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: rgba(74, 222, 128, 0.06);
-  border: 1px solid rgba(74, 222, 128, 0.2);
-  padding: 0.85rem 1.1rem;
+  padding: 0.55rem 1.1rem;
   transition: all var(--transition-fast);
 }
 
@@ -406,6 +404,34 @@
   letter-spacing: 0.5px;
 }
 
+.cardHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.editAddressCardBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: transparent;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 0.2rem 0.5rem;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.editAddressCardBtn:hover {
+  color: var(--text-primary);
+  border-color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.05);
+}
+
 .defaultBadge {
   background-color: var(--text-primary);
   color: var(--bg-primary);
@@ -517,6 +543,29 @@
   padding-top: 1.5rem;
 }
 
+.onDemandNoticeCard {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  padding: 1rem 1.25rem;
+  display: flex;
+  gap: 0.85rem;
+  align-items: center;
+  margin-bottom: 1.25rem;
+}
+
+.onDemandNoticeCard strong {
+  font-size: 0.75rem;
+  letter-spacing: 1px;
+  display: block;
+  margin-bottom: 0.2rem;
+}
+
+.onDemandNoticeCard p {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
 .shippingOptionsGrid {
   display: flex;
   flex-direction: column;
@@ -596,8 +645,6 @@
 }
 
 .pagBankGatewayCard {
-  background-color: var(--bg-card);
-  border: 1px solid var(--border-color);
   padding: 1.75rem;
   display: flex;
   flex-direction: column;
@@ -702,6 +749,170 @@
 .methodCheck {
   color: #60a5fa;
   flex-shrink: 0;
+}
+
+/* FORMULÁRIO DE CARTÃO DE CRÉDITO LIMPO (PADRÃO PRODUÇÃO) */
+.cardPaymentContainer {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.securityHeader {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.securitySeal {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #4ade80;
+}
+
+.fieldGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fieldGroup label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-secondary);
+}
+
+.cardInputWrapper {
+  position: relative;
+  width: 100%;
+}
+
+.brandIconPosition {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.cardInputWithAdornment {
+  padding-right: 5rem !important;
+}
+
+.cardInputWithCheck {
+  padding-right: 2.75rem !important;
+}
+
+.inputCheckPosition {
+  position: absolute;
+  right: 1rem;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+}
+
+.validCheckIcon {
+  color: #4ade80;
+  animation: fadeInCheck 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeInCheck {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.inputSuccess {
+  border-color: rgba(74, 222, 128, 0.5) !important;
+}
+
+.inputSuccess:focus {
+  border-color: #4ade80 !important;
+  box-shadow: 0 0 0 1px rgba(74, 222, 128, 0.25) !important;
+}
+
+.inputWithCheckWrapper {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+}
+
+.inputWithCheckWrapper input {
+  width: 100%;
+  padding-right: 2.75rem !important;
+}
+
+.cardDualRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.25rem;
+}
+
+.styledInput,
+.styledSelect {
+  width: 100%;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 0.85rem 1rem;
+  font-size: 0.85rem;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.styledInput:focus,
+.styledSelect:focus {
+  border-color: var(--border-active);
+}
+
+.securityFooterNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+@media (max-width: 600px) {
+  .cardDualRow {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.paymentErrorNotice {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  background-color: rgba(248, 113, 113, 0.1);
+  border: 1px solid rgba(248, 113, 113, 0.3);
+  color: #fca5a5;
+  padding: 0.85rem 1rem;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  margin-top: 0.5rem;
 }
 
 /* NAVEGAÇÃO ENTRE ETAPAS */
@@ -1061,6 +1272,57 @@
   line-height: 1.6;
 }
 
+.pixConfirmedBox {
+  background-color: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  padding: 1.5rem;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.pixConfirmedHeader {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  text-align: left;
+}
+
+.pixConfirmedHeader strong {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 800;
+  color: #4ade80;
+  letter-spacing: 0.5px;
+}
+
+.pixConfirmedHeader small {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.2rem;
+}
+
+.pixAwaitingNotice {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  color: #facc15;
+  background-color: rgba(250, 204, 21, 0.08);
+  border: 1px solid rgba(250, 204, 21, 0.25);
+  padding: 0.45rem 0.85rem;
+  margin-bottom: 0.75rem;
+  border-radius: 2px;
+}
+
+.pulsingLoader {
+  animation: spin 1s linear infinite;
+  flex-shrink: 0;
+}
+
 .pixBox {
   border: 1px dashed var(--border-color);
   background-color: rgba(255, 255, 255, 0.02);
@@ -1090,6 +1352,17 @@
   display: flex;
   justify-content: center;
   margin: 0.5rem 0;
+}
+
+.qrCodeLiveImage {
+  width: 190px;
+  height: 190px;
+  object-fit: contain;
+  background-color: #ffffff;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  margin: 0 auto;
+  display: block;
 }
 
 .qrCodeGraphic {
@@ -1166,9 +1439,144 @@
   opacity: 0.9;
 }
 
-.pixTimerText {
-  font-size: 0.7rem;
+/* Timer Regressivo Pix (20 minutos) */
+.pixTimerCard {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  /* background: rgba(255, 255, 255, 0.03); */
+  /* border: 1px solid var(--border-color); */
+  padding: 0.85rem 1.1rem;
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 0.5rem;
+  transition: all 0.3s ease;
+}
+
+.pixTimerCardWarning {
+  background: rgba(234, 179, 8, 0.07);
+  border-color: rgba(234, 179, 8, 0.4);
+}
+
+.pixTimerCardExpired {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.pixTimerLeft {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.pixTimerIcon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.pixTimerIconWarning {
+  color: #eab308;
+  animation: pulseTimerIcon 1.5s infinite ease-in-out;
+}
+
+.pixTimerIconExpired {
+  color: #ef4444;
+}
+
+.pixTimerInfo {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.pixTimerLabel {
+  padding-bottom: 0.15rem;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
+  font-weight: 700;
+}
+
+.pixTimerCountdown {
+  font-family: monospace, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 1.25rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+.pixTimerCountdownWarning {
+  color: #facc15;
+  text-shadow: 0 0 10px rgba(250, 204, 21, 0.35);
+}
+
+.pixTimerCountdownExpired {
+  color: #ef4444;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.pixTimerBadgePill {
+  font-size: 0.65rem;
+  padding: 0.25rem 0.6rem;
+  color: var(--text-secondary);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.pixTimerBadgeWarning {
+  background: rgba(234, 179, 8, 0.15);
+  border-color: rgba(234, 179, 8, 0.4);
+  color: #facc15;
+}
+
+.pixTimerBadgeExpired {
+  background: rgba(239, 68, 68, 0.15);
+  border-color: rgba(239, 68, 68, 0.4);
+  color: #f87171;
+}
+
+.pixTimerSubtext {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-align: center;
+  margin-top: -0.25rem;
+}
+
+.pixExpiredNotice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  padding: 0.75rem 1rem;
+  font-size: 0.72rem;
+  color: #fca5a5;
+  line-height: 1.4;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.pixExpiredNotice svg {
+  flex-shrink: 0;
+  color: #ef4444;
+  margin-top: 1px;
+}
+
+@keyframes pulseTimerIcon {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.5;
+    transform: scale(0.92);
+  }
 }
 
 .cardSuccessBox, .boletoSuccessBox {
@@ -1265,6 +1673,82 @@
   line-height: 1.5;
 }
 
+/* CARTEIRA DIGITAL NO CHECKOUT */
+.walletPaymentBlock {
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-color);
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.walletCheckLabel {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  cursor: pointer;
+}
+
+.walletCheckLabel input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  margin-top: 0.15rem;
+  accent-color: var(--text-primary);
+  cursor: pointer;
+}
+
+.walletCheckLabel span {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--text-primary);
+}
+
+.walletCheckLabel small {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 0.15rem;
+}
+
+.deductionNotice {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #4ade80;
+  letter-spacing: 0.5px;
+  padding-left: 2rem;
+}
+
+.walletFullCoverCard {
+  background-color: rgba(74, 222, 128, 0.08);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  padding: 1.75rem;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+}
+
+.walletFullCoverCard strong {
+  display: block;
+  font-size: 0.88rem;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: #4ade80;
+  margin-bottom: 0.25rem;
+}
+
+.walletFullCoverCard p {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: 1.5;
+}
+
 /* RESPONSIVIDADE */
 @media (max-width: 950px) {
   .checkoutGrid {
@@ -1276,8 +1760,53 @@
 }
 
 @media (max-width: 600px) {
+  .container {
+    padding: 1.25rem 0.85rem calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+  .header {
+    margin-bottom: 1.25rem;
+    padding-bottom: 0.85rem;
+  }
+  .stepCard {
+    padding: 1.25rem 1rem;
+    gap: 1.25rem;
+  }
+  .stepCardTitle {
+    font-size: 1.05rem;
+    line-height: 1.3;
+    word-break: break-word;
+  }
+  .fieldWrapper input,
+  .cardInputWrapper input,
+  .styledInput,
+  .styledSelect {
+    font-size: 16px !important;
+  }
   .fieldsRow {
     grid-template-columns: 1fr;
+    gap: 0.85rem;
+  }
+  .cardDualRow {
+    gap: 0.75rem;
+  }
+  .stepActions {
+    width: 100%;
+  }
+  .stepActions .primaryBtn {
+    width: 100%;
+    justify-content: center;
+    padding: 0.95rem 1rem;
+  }
+  .stepActionsBetween {
+    flex-direction: column-reverse;
+    gap: 0.75rem;
+    width: 100%;
+  }
+  .stepActionsBetween .primaryBtn,
+  .stepActionsBetween .secondaryBtn {
+    width: 100%;
+    justify-content: center;
+    padding: 0.95rem 1rem;
   }
   .pagBankMethodsList {
     grid-template-columns: 1fr;
@@ -1287,5 +1816,36 @@
   }
   .stepName {
     display: none;
+  }
+  .orderSummarySection {
+    padding: 1.25rem 1rem;
+    gap: 1rem;
+  }
+  .saveAddressBtn {
+    width: 100%;
+    justify-content: center;
+  }
+  .prefilledUserBanner {
+    padding: 0.75rem 0.85rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .container {
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+  .stepCard {
+    padding: 1rem 0.75rem;
+    gap: 1rem;
+  }
+  .stepCardTitle {
+    font-size: 0.95rem;
+  }
+  .fieldLabel {
+    font-size: 0.68rem;
+  }
+  .orderSummarySection {
+    padding: 1rem 0.75rem;
   }
 }

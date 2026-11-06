@@ -1,49 +1,25 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Link, useSearchParams, useParams } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { X, ChevronLeft, ChevronRight, SlidersHorizontal } from 'lucide-react';
 import FilterSidebar from '../../components/catalog/FilterSidebar';
-import ProductCard from '../../components/catalog/ProductCard';
-import ProductCardSkeleton from '../../components/catalog/ProductCardSkeleton';
-import { catalogService } from '../../services/catalogService';
-import { seedService } from '../../services/seedService';
-import { analyticsService } from '../../services/analyticsService';
+import LookbookSplitSkeleton from '../../components/catalog/LookbookSplitSkeleton';
+import LookbookSplitSection from '../../sections/catalogo/LookbookSplitSection';
+import { catalogService, fetchProducts } from '../../services/catalogService';
+import { fetchActiveDiscounts } from '../../services/campaignService';
+import { logPageView } from '../../services/analyticsService';
+import { normalizeFitSlug, formatFitLabel } from '../../utils/fitUtils';
+import { SEO } from '../../components/common/SEO';
+import { buildBreadcrumbSchema } from '../../utils/seoSchemas';
 import styles from './Catalogo.module.css';
-
-// Variantes de animação staggered para a grade de cards
-const gridVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.05,
-      delayChildren: 0.02
-    }
-  },
-  exit: { opacity: 0, transition: { duration: 0.15 } }
-};
-
-const cardItemVariants = {
-  hidden: { opacity: 0, y: 18, scale: 0.98 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    scale: 1,
-    transition: {
-      type: 'spring',
-      stiffness: 280,
-      damping: 24
-    }
-  }
-};
 
 export function Catalogo() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { categorySlug } = useParams();
   const topRef = useRef(null);
 
-  // Produtos carregados do Firestore
+  // Produtos e Campanhas carregados do Firestore
   const [products, setProducts] = useState([]);
+  const [activeDiscounts, setActiveDiscounts] = useState([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
 
   // Estados de Filtros Multi-Seleção e Busca
@@ -51,32 +27,36 @@ export function Catalogo() {
   const [filters, setFilters] = useState({
     categories: [],
     fits: [],
-    drops: [],
-    sizes: []
+    drops: []
   });
+  const [priceRange, setPriceRange] = useState([0, 10000]);
+  const [onlyInStock, setOnlyInStock] = useState(false);
 
   const [sortOrder, setSortOrder] = useState('newest');
   const [itemsPerPage, setItemsPerPage] = useState(6);
   const [currentPage, setCurrentPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
-  const [isMobileFilterOpen, setIsMobileFilterOpen] = useState(false);
+  const [isFilterDrawerOpen, setIsFilterDrawerOpen] = useState(false);
 
-  // 0. Telemetria e Busca de Produtos no Firestore
+  // 0. Telemetria e Busca de Produtos e Descontos Ativos no Firestore
   useEffect(() => {
-    analyticsService.trackPageView('catalogo');
-    async function loadCatalog() {
+    logPageView('/catalogo');
+    async function loadCatalogData() {
       setLoadingProducts(true);
       try {
-        await seedService.seedCatalogIfEmpty();
-        const data = await catalogService.getAllProducts();
-        setProducts(data);
+        const [productsData, discountsData] = await Promise.all([
+          fetchProducts ? fetchProducts() : catalogService.getAllProducts(),
+          fetchActiveDiscounts()
+        ]);
+        setProducts(productsData || []);
+        setActiveDiscounts(discountsData || []);
       } catch (err) {
-        console.error("Erro ao carregar catálogo:", err);
+        console.error('Erro ao carregar catálogo:', err);
       } finally {
         setLoadingProducts(false);
       }
     }
-    loadCatalog();
+    loadCatalogData();
   }, []);
 
   // 1. SINCRONIZAÇÃO: Ler parâmetros da URL e atualizar estados internos
@@ -84,7 +64,6 @@ export function Catalogo() {
     const catParam = categorySlug || searchParams.get('categoria') || '';
     const fitParam = searchParams.get('fit') || searchParams.get('modelagem') || '';
     const dropParam = searchParams.get('drop') || '';
-    const sizeParam = searchParams.get('tamanho') || searchParams.get('size') || '';
     const searchParam = searchParams.get('search') || '';
     const sortParam = searchParams.get('ordenar') || 'newest';
     const pageParam = parseInt(searchParams.get('pagina'), 10) || 1;
@@ -93,13 +72,11 @@ export function Catalogo() {
     const newCategories = catParam ? catParam.split(',').filter(Boolean) : [];
     const newFits = fitParam ? fitParam.split(',').filter(Boolean) : [];
     const newDrops = dropParam ? dropParam.split(',').filter(Boolean) : [];
-    const newSizes = sizeParam ? sizeParam.split(',').filter(Boolean) : [];
 
     setFilters({
       categories: newCategories,
       fits: newFits,
-      drops: newDrops,
-      sizes: newSizes
+      drops: newDrops
     });
     setSearchQuery(searchParam);
     setSortOrder(sortParam);
@@ -119,9 +96,6 @@ export function Catalogo() {
     }
     if (newFilters.drops && newFilters.drops.length > 0) {
       params.set('drop', newFilters.drops.join(','));
-    }
-    if (newFilters.sizes && newFilters.sizes.length > 0) {
-      params.set('tamanho', newFilters.sizes.join(','));
     }
     if (newSearch && newSearch.trim()) {
       params.set('search', newSearch.trim());
@@ -149,19 +123,21 @@ export function Catalogo() {
     setCurrentPage(1);
   };
 
-  // Simulação de carregamento assíncrono para paginação e filtros
+  // Transição suave para paginação e filtros
   useEffect(() => {
     setIsLoading(true);
     const timer = setTimeout(() => {
       setIsLoading(false);
-    }, 250);
+    }, 200);
     return () => clearTimeout(timer);
   }, [filters, searchQuery, itemsPerPage, sortOrder, currentPage]);
 
   const handleReset = () => {
-    const emptyFilters = { categories: [], fits: [], drops: [], sizes: [] };
+    const emptyFilters = { categories: [], fits: [], drops: [] };
     setFilters(emptyFilters);
     setSearchQuery('');
+    setPriceRange([0, 10000]);
+    setOnlyInStock(false);
     setSortOrder('newest');
     setCurrentPage(1);
     setSearchParams({}, { replace: true });
@@ -179,30 +155,10 @@ export function Catalogo() {
   };
 
   // Remoções individuais de filtros (chips)
-  const removeCategory = (cat) => {
-    const updated = (filters.categories || []).filter(c => c !== cat);
-    const newFilters = { ...filters, categories: updated };
-    setFilters(newFilters);
-    applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
-  };
-
   const removeFit = (fit) => {
-    const updated = (filters.fits || []).filter(f => f !== fit);
+    const norm = normalizeFitSlug(fit);
+    const updated = (filters.fits || []).filter(f => normalizeFitSlug(f) !== norm && f !== fit);
     const newFilters = { ...filters, fits: updated };
-    setFilters(newFilters);
-    applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
-  };
-
-  const removeDrop = (drop) => {
-    const updated = (filters.drops || []).filter(d => d !== drop);
-    const newFilters = { ...filters, drops: updated };
-    setFilters(newFilters);
-    applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
-  };
-
-  const removeSize = (size) => {
-    const updated = (filters.sizes || []).filter(s => s !== size);
-    const newFilters = { ...filters, sizes: updated };
     setFilters(newFilters);
     applyUrlParams(newFilters, searchQuery, sortOrder, 1, itemsPerPage);
   };
@@ -212,57 +168,96 @@ export function Catalogo() {
     applyUrlParams(filters, searchQuery, newOrder, currentPage, itemsPerPage);
   };
 
-  const handlePerPageChange = (newPerPage) => {
-    setItemsPerPage(newPerPage);
-    setCurrentPage(1);
-    applyUrlParams(filters, searchQuery, sortOrder, 1, newPerPage);
-  };
-
   // Motor de Filtragem e Ordenação Multi-Critério
   const filteredProducts = useMemo(() => {
-    return products.filter((product) => {
-      // Ignora brindes da listagem geral de vestuário se type for brinde
-      if (product.type === 'brinde') return false;
+    return products
+      .filter((product) => {
+        // Ignora brindes da listagem geral de vestuário se type for brinde
+        if (product.type === 'brinde') return false;
 
-      // 1. Busca textual confirmada
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchName = product.name?.toLowerCase().includes(q);
-        const matchDesc = product.description?.toLowerCase().includes(q);
-        const matchTag = product.customBadge?.toLowerCase().includes(q) || product.tag?.toLowerCase().includes(q);
-        if (!matchName && !matchDesc && !matchTag) return false;
-      }
-      // 2. Categorias (Multi-Seleção: OR)
-      if (filters.categories && filters.categories.length > 0) {
-        if (!filters.categories.includes(product.category?.toLowerCase())) return false;
-      }
-      // 3. Modelagens (Multi-Seleção: OR)
-      if (filters.fits && filters.fits.length > 0) {
-        if (!filters.fits.includes(product.fit?.toLowerCase())) return false;
-      }
-      // 4. Drops (Multi-Seleção: OR)
-      if (filters.drops && filters.drops.length > 0) {
-        if (!filters.drops.includes(product.drop?.toLowerCase())) return false;
-      }
-      // 5. Tamanhos (Multi-Seleção: Se o produto tiver qualquer um dos tamanhos selecionados com estoque)
-      if (filters.sizes && filters.sizes.length > 0) {
-        const hasMatchingSize = (product.sizes && product.sizes.some(sz => filters.sizes.includes(sz))) ||
-          (product.stock && filters.sizes.some(sz => Number(product.stock[sz]) > 0));
-        if (!hasMatchingSize) return false;
-      }
-      return true;
-    }).sort((a, b) => {
-      if (sortOrder === 'price-low') return Number(a.price || 0) - Number(b.price || 0);
-      if (sortOrder === 'price-high') return Number(b.price || 0) - Number(a.price || 0);
-      return (b.isRelease ? 1 : 0) - (a.isRelease ? 1 : 0);
-    });
-  }, [products, filters, searchQuery, sortOrder]);
+        // 1. Busca textual confirmada
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase();
+          const matchName = product.name?.toLowerCase().includes(q);
+          const matchDesc = product.description?.toLowerCase().includes(q);
+          const matchTag =
+            product.customBadge?.toLowerCase().includes(q) ||
+            product.tag?.toLowerCase().includes(q);
+          if (!matchName && !matchDesc && !matchTag) return false;
+        }
+        // 2. Categorias (Multi-Seleção: OR)
+        if (filters.categories && filters.categories.length > 0) {
+          if (!filters.categories.includes(product.category?.toLowerCase())) return false;
+        }
+        // 3. Modelagens Dinâmicas (Multi-Seleção: OR)
+        if (filters.fits && filters.fits.length > 0) {
+          let productFits = [];
+          if (Array.isArray(product.fits) && product.fits.length > 0) {
+            productFits = product.fits;
+          } else if (Array.isArray(product.availableFits) && product.availableFits.length > 0) {
+            productFits = product.availableFits;
+          } else if (product.fit) {
+            const norm = normalizeFitSlug(product.fit);
+            if (norm === 'oversized') {
+              productFits = ['Oversized Heavy', 'Oversized Clássica'];
+            } else {
+              productFits = [product.fit];
+            }
+          } else {
+            productFits = ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
+          }
+
+          const matchFit = filters.fits.some((f) => {
+            const filterNorm = normalizeFitSlug(f);
+            return productFits.some((pf) => {
+              const pfNorm = normalizeFitSlug(pf);
+              if (filterNorm === pfNorm) return true;
+              if (filterNorm === 'oversized' && (pfNorm === 'oversized_heavy' || pfNorm === 'oversized_classica')) return true;
+              if (pfNorm === 'oversized' && (filterNorm === 'oversized_heavy' || filterNorm === 'oversized_classica')) return true;
+              return false;
+            });
+          });
+          if (!matchFit) return false;
+        }
+        // 4. Drops (Multi-Seleção: OR)
+        if (filters.drops && filters.drops.length > 0) {
+          if (!filters.drops.includes(product.drop?.toLowerCase())) return false;
+        }
+        // 5. Faixa de preço
+        const itemPrice = Number(product.discountPrice || product.price || 0);
+        if (priceRange && (itemPrice < priceRange[0] || itemPrice > priceRange[1])) {
+          return false;
+        }
+        // 7. Apenas em estoque
+        if (onlyInStock) {
+          const outOfStock =
+            (product.stock !== undefined && typeof product.stock !== 'object' && Number(product.stock) <= 0) ||
+            (product.stock &&
+              typeof product.stock === 'object' &&
+              Object.values(product.stock).reduce((a, b) => a + (Number(b) || 0), 0) <= 0) ||
+            (product.totalStock !== undefined && Number(product.totalStock) <= 0);
+          if (outOfStock) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortOrder === 'price-low') return Number(a.price || 0) - Number(b.price || 0);
+        if (sortOrder === 'price-high') return Number(b.price || 0) - Number(a.price || 0);
+
+        // Ordem Curada da Marca definida no CMS (Drag and Drop / Posição Oficial)
+        const orderA = a.catalogOrder !== undefined && a.catalogOrder !== null && a.catalogOrder !== '' ? Number(a.catalogOrder) : 9999;
+        const orderB = b.catalogOrder !== undefined && b.catalogOrder !== null && b.catalogOrder !== '' ? Number(b.catalogOrder) : 9999;
+        if (orderA !== orderB) return orderA - orderB;
+
+        return (b.isRelease ? 1 : 0) - (a.isRelease ? 1 : 0);
+      });
+  }, [products, filters, searchQuery, sortOrder, priceRange, onlyInStock]);
 
   // Cálculo de Paginação
   const totalItems = filteredProducts.length;
   const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
 
-  // Ajuste se a página atual ultrapassar o total
   useEffect(() => {
     if (currentPage > totalPages) {
       setCurrentPage(1);
@@ -278,7 +273,6 @@ export function Catalogo() {
       setCurrentPage(newPage);
       applyUrlParams(filters, searchQuery, sortOrder, newPage, itemsPerPage);
 
-      // Rolagem suave com offset para o topo da lista de produtos
       if (topRef.current) {
         const headerOffset = 80;
         const elementPosition = topRef.current.getBoundingClientRect().top;
@@ -293,24 +287,59 @@ export function Catalogo() {
   };
 
   // Contagem de filtros ativos
-  const selectedCategories = filters.categories || [];
   const selectedFits = filters.fits || [];
-  const selectedDrops = filters.drops || [];
-  const selectedSizes = filters.sizes || [];
+  const activeFiltersCount =
+    selectedFits.length + (searchQuery.trim() ? 1 : 0);
+  const totalActiveWithSort = activeFiltersCount + (sortOrder !== 'newest' ? 1 : 0);
 
-  const activeFiltersCount = selectedCategories.length + selectedFits.length + selectedDrops.length + selectedSizes.length + (searchQuery.trim() ? 1 : 0);
+  // Categoria / modelagem selecionada estável para SEO (evita recálculos em busca, paginação ou sliders)
+  const selectedCategory = categorySlug || (selectedFits.length === 1 ? selectedFits[0] : '');
+
+  const seoTitle = useMemo(() => {
+    if (selectedCategory) {
+      return `${formatFitLabel(selectedCategory)} — Catálogo`;
+    }
+    return 'Catálogo Completo — Streetwear Autoral & Lotes Limitados';
+  }, [selectedCategory]);
+
+  const seoDescription = useMemo(() => {
+    if (selectedCategory) {
+      return `Explore peças ${formatFitLabel(selectedCategory)} da THR33 Streetwear. Modelagens autorais exclusivas e alta gramatura produzidas sob demanda.`;
+    }
+    return 'Confira a coleção completa da THR33 Streetwear. Camisetas Boxy, Oversized Heavyweight e peças exclusivas produzidas sob demanda.';
+  }, [selectedCategory]);
+
+  const breadcrumbsSchema = useMemo(() => {
+    const list = [
+      { name: 'Início', url: '/' },
+      { name: 'Catálogo', url: '/catalogo' }
+    ];
+    if (selectedCategory) {
+      list.push({
+        name: formatFitLabel(selectedCategory),
+        url: categorySlug ? `/categoria/${selectedCategory}` : `/catalogo?fit=${selectedCategory}`
+      });
+    }
+    return buildBreadcrumbSchema(list);
+  }, [selectedCategory, categorySlug]);
 
   return (
     <main className={styles.catalogPage} ref={topRef}>
+      <SEO
+        title={seoTitle}
+        description={seoDescription}
+        url={categorySlug ? `/categoria/${categorySlug}` : '/catalogo'}
+        jsonLd={breadcrumbsSchema}
+      />
       {/* HEADER DA PÁGINA COM BREADCRUMB DINÂMICO E VISÍVEL */}
       <header className={styles.header}>
         <div>
           <nav aria-label="Breadcrumb" className={styles.breadcrumbNav}>
             <Link to="/" className={styles.breadcrumbLink}>HOME</Link>
             <span className={styles.breadcrumbSeparator}>/</span>
-            <Link 
-              to="/catalogo" 
-              onClick={(e) => {
+            <Link
+              to="/catalogo"
+              onClick={() => {
                 if (activeFiltersCount > 0) {
                   handleReset();
                 }
@@ -320,29 +349,11 @@ export function Catalogo() {
               CATÁLOGO
             </Link>
 
-            {selectedCategories.length === 1 && (
+            {selectedFits.length === 1 && (
               <>
                 <span className={styles.breadcrumbSeparator}>/</span>
                 <span className={styles.breadcrumbActive}>
-                  {selectedCategories[0] === 'camisa' ? 'CAMISAS' : selectedCategories[0] === 'calca' ? 'CALÇAS' : selectedCategories[0] === 'jaqueta' ? 'JAQUETAS & HOODIES' : selectedCategories[0].toUpperCase()}
-                </span>
-              </>
-            )}
-
-            {selectedCategories.length > 1 && (
-              <>
-                <span className={styles.breadcrumbSeparator}>/</span>
-                <span className={styles.breadcrumbActive}>
-                  MÚLTIPLAS CATEGORIAS ({selectedCategories.length})
-                </span>
-              </>
-            )}
-
-            {selectedDrops.length === 1 && selectedCategories.length === 0 && (
-              <>
-                <span className={styles.breadcrumbSeparator}>/</span>
-                <span className={styles.breadcrumbActive}>
-                  {selectedDrops[0] === 'leak-two' ? 'LEAK TWO' : 'DROPS PASSADOS'}
+                  {formatFitLabel(selectedFits[0])}
                 </span>
               </>
             )}
@@ -350,52 +361,41 @@ export function Catalogo() {
 
           <h1 className={styles.title}>VESTUÁRIO & CONCEITO</h1>
         </div>
-
-        {/* CONTROLES DO TOPO: ITENS POR PÁGINA & ORDENAÇÃO */}
-        <div className={styles.topActions}>
-          <div className={styles.controlGroup}>
-            {/* ITENS POR PÁGINA */}
-            <div className={styles.selectWrapper}>
-              <label htmlFor="perPageSelect" className={styles.controlLabel}>EXIBIR:</label>
-              <select
-                id="perPageSelect"
-                className={styles.selectInput}
-                value={itemsPerPage}
-                onChange={(e) => handlePerPageChange(Number(e.target.value))}
-              >
-                <option value={6}>6 ITENS</option>
-                <option value={12}>12 ITENS</option>
-                <option value={24}>24 ITENS</option>
-              </select>
-            </div>
-
-            {/* ORDENAÇÃO */}
-            <div className={styles.selectWrapper}>
-              <label htmlFor="sortSelect" className={styles.controlLabel}>ORDENAR:</label>
-              <select 
-                id="sortSelect" 
-                className={styles.selectInput}
-                value={sortOrder}
-                onChange={(e) => handleSortChange(e.target.value)}
-              >
-                <option value="newest">LANÇAMENTOS</option>
-                <option value="price-low">MENOR PREÇO</option>
-                <option value="price-high">MAIOR PREÇO</option>
-              </select>
-            </div>
-          </div>
-        </div>
       </header>
 
-      {/* BOTÃO MOBILE PARA TOGGLE DE FILTROS */}
-      <div className={styles.mobileFilterBar}>
-        <button 
-          onClick={() => setIsMobileFilterOpen(!isMobileFilterOpen)} 
-          className={styles.mobileFilterToggle}
+      {/* BARRA SUPERIOR DE CONTROLE: BOTÃO BRUTALISTA DE GAVETA + CONTAGEM DE PEÇAS */}
+      <div className={styles.resultsHeader}>
+        <button
+          type="button"
+          onClick={() => setIsFilterDrawerOpen(true)}
+          className={styles.filterDrawerTrigger}
+          aria-label="Abrir gaveta de filtros e ordenação"
         >
-          <SlidersHorizontal size={16} />
-          <span>FILTROS {activeFiltersCount > 0 && `(${activeFiltersCount})`}</span>
+          <SlidersHorizontal size={15} />
+          <span>FILTRAR & ORDENAR</span>
+          {totalActiveWithSort > 0 && (
+            <span className={styles.filterTriggerBadge}>{totalActiveWithSort}</span>
+          )}
         </button>
+
+        <div className={styles.resultsMetaGroup}>
+          <div className={styles.resultsCount}>
+            {totalItems > 0 ? (
+              <>
+                EXIBINDO <strong>{startIndex + 1}–{endIndex}</strong> DE{' '}
+                <strong>{totalItems}</strong> PEÇAS
+              </>
+            ) : (
+              '0 PEÇAS ENCONTRADAS'
+            )}
+          </div>
+
+          {totalPages > 1 && (
+            <span className={styles.pageIndicatorMini}>
+              PÁGINA {currentPage} DE {totalPages}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* CHIPS DE FILTROS ATIVOS (MULTI-SELEÇÃO) */}
@@ -410,34 +410,10 @@ export function Catalogo() {
               </button>
             </span>
           )}
-          {selectedCategories.map(cat => (
-            <span key={cat} className={styles.filterChip}>
-              CATEGORIA: {cat === 'calca' ? 'CALÇA' : cat.toUpperCase()}
-              <button onClick={() => removeCategory(cat)} aria-label={`Remover categoria ${cat}`}>
-                <X size={12} />
-              </button>
-            </span>
-          ))}
-          {selectedFits.map(fit => (
+          {selectedFits.map((fit) => (
             <span key={fit} className={styles.filterChip}>
-              MODELAGEM: {fit.toUpperCase()}
+              MODELAGEM: {formatFitLabel(fit)}
               <button onClick={() => removeFit(fit)} aria-label={`Remover modelagem ${fit}`}>
-                <X size={12} />
-              </button>
-            </span>
-          ))}
-          {selectedDrops.map(drop => (
-            <span key={drop} className={styles.filterChip}>
-              DROP: {drop === 'leak-two' ? 'LEAK TWO' : 'DROPS PASSADOS'}
-              <button onClick={() => removeDrop(drop)} aria-label={`Remover drop ${drop}`}>
-                <X size={12} />
-              </button>
-            </span>
-          ))}
-          {selectedSizes.map(size => (
-            <span key={size} className={styles.filterChip}>
-              TAMANHO: {size}
-              <button onClick={() => removeSize(size)} aria-label={`Remover tamanho ${size}`}>
                 <X size={12} />
               </button>
             </span>
@@ -448,60 +424,36 @@ export function Catalogo() {
         </div>
       )}
 
-      {/* CORPO DO CATÁLOGO: SIDEBAR + GRADE DE PRODUTOS */}
-      <div className={styles.contentLayout}>
-        <div className={`${styles.sidebarWrapper} ${isMobileFilterOpen ? styles.sidebarMobileOpen : ''}`}>
-          <FilterSidebar 
-            filters={filters} 
-            setFilters={handleFiltersChange} 
-            onReset={handleReset} 
-            searchQuery={searchQuery}
-            onSearchSubmit={handleSearchSubmit}
-            onSearchClear={handleSearchClear}
-          />
-        </div>
+      {/* GAVETA LATERAL UNIFICADA (DESKTOP & MOBILE) */}
+      <FilterSidebar
+        products={products}
+        filters={filters}
+        setFilters={handleFiltersChange}
+        sortOrder={sortOrder}
+        onSortChange={handleSortChange}
+        onReset={handleReset}
+        searchQuery={searchQuery}
+        onSearchSubmit={handleSearchSubmit}
+        onSearchClear={handleSearchClear}
+        isOpen={isFilterDrawerOpen}
+        isMobileOpen={isFilterDrawerOpen}
+        onClose={() => setIsFilterDrawerOpen(false)}
+        onCloseMobile={() => setIsFilterDrawerOpen(false)}
+        totalResults={totalItems}
+      />
 
-        <section className={styles.productsArea}>
-          {/* BARRA DE CONTAGEM E STATUS */}
-          <div className={styles.resultsBar}>
-            <div className={styles.resultsCount}>
-              {totalItems > 0 ? (
-                <>EXIBINDO <strong>{startIndex + 1}–{endIndex}</strong> DE <strong>{totalItems}</strong> PEÇAS</>
-              ) : (
-                '0 PEÇAS ENCONTRADAS'
-              )}
-            </div>
-
-            {totalPages > 1 && (
-              <span className={styles.pageIndicatorMini}>
-                PÁGINA {currentPage} DE {totalPages}
-              </span>
-            )}
-          </div>
-
-          {/* SKELETON LOADING OU GRADE ANIMADA DE PRODUTOS */}
-          {isLoading ? (
-            <div className={styles.grid}>
-              {Array.from({ length: Math.min(itemsPerPage, totalItems || itemsPerPage) }).map((_, idx) => (
-                <ProductCardSkeleton key={idx} />
-              ))}
-            </div>
+      {/* CONTEÚDO PRINCIPAL 100% LARGURA: LOOKBOOK EDITORIAL SPLIT-SCREEN */}
+      <div className={styles.catalogLayout}>
+        <section className={styles.mainContent}>
+          {loadingProducts || isLoading ? (
+            <LookbookSplitSkeleton rows={2} startIndex={startIndex} />
           ) : paginatedProducts.length > 0 ? (
             <>
-              <motion.div 
-                key={`page-${currentPage}-${sortOrder}-${itemsPerPage}-${JSON.stringify(filters)}-${searchQuery}`}
-                variants={gridVariants}
-                initial="hidden"
-                animate="visible"
-                exit="exit"
-                className={styles.grid}
-              >
-                {paginatedProducts.map(product => (
-                  <motion.div key={product.id} variants={cardItemVariants}>
-                    <ProductCard product={product} />
-                  </motion.div>
-                ))}
-              </motion.div>
+              <LookbookSplitSection
+                products={paginatedProducts}
+                activeDiscounts={activeDiscounts}
+                startIndex={startIndex}
+              />
 
               {/* BARRA DE PAGINAÇÃO COMPLETA */}
               {totalPages > 1 && (
@@ -513,14 +465,16 @@ export function Catalogo() {
                     aria-label="Página anterior"
                   >
                     <ChevronLeft size={16} />
-                    <span>ANTERIOR</span>
+                    <span className={styles.pageBtnText}>ANTERIOR</span>
                   </button>
 
                   <div className={styles.pageNumbers}>
                     {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
                       <button
                         key={page}
-                        className={`${styles.pageNumberBtn} ${page === currentPage ? styles.activePageNumber : ''}`}
+                        className={`${styles.pageNumberBtn} ${
+                          page === currentPage ? styles.activePageNumber : ''
+                        }`}
                         onClick={() => handlePageChange(page)}
                         aria-label={`Ir para a página ${page}`}
                         aria-current={page === currentPage ? 'page' : undefined}
@@ -536,7 +490,7 @@ export function Catalogo() {
                     disabled={currentPage === totalPages}
                     aria-label="Próxima página"
                   >
-                    <span>PRÓXIMA</span>
+                    <span className={styles.pageBtnText}>PRÓXIMA</span>
                     <ChevronRight size={16} />
                   </button>
                 </div>
@@ -545,7 +499,9 @@ export function Catalogo() {
           ) : (
             <div className={styles.emptyState}>
               <p>Nenhuma peça encontrada com os filtros selecionados.</p>
-              <button onClick={handleReset} className={styles.resetBtn}>LIMPAR FILTROS</button>
+              <button onClick={handleReset} className={styles.resetBtn}>
+                LIMPAR FILTROS
+              </button>
             </div>
           )}
         </section>

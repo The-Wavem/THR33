@@ -20,13 +20,26 @@ export function ProtectedRoute({ children }) {
         fontSize: '0.85rem',
         textTransform: 'uppercase'
       }}>
-        VERIFICANDO AUTENTICAÇÃO // ATELIÊ THR33...
+        VERIFICANDO AUTENTICAÇÃO // THR33...
       </div>
     );
   }
 
-  // Se não estiver autenticado, redireciona para a tela de autenticação preservando a rota de origem
+  // Se não estiver autenticado, preserva link direto de cancelamento de e-mails para processar em /auth
   if (!isAuthenticated) {
+    const searchParams = new URLSearchParams(location.search);
+    const isUnsub = searchParams.get('unsubscribe') === '1';
+    const unsubEmail = searchParams.get('unsubscribeEmail');
+
+    if (isUnsub && unsubEmail) {
+      return (
+        <Navigate 
+          to={`/auth?unsubscribe=1&unsubscribeEmail=${encodeURIComponent(unsubEmail)}`} 
+          replace 
+        />
+      );
+    }
+
     return (
       <Navigate 
         to="/auth" 

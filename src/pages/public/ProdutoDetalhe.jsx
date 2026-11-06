@@ -1,12 +1,29 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Truck, Star, Plus, Heart, ShoppingBag, ArrowLeft, Check, Package } from 'lucide-react';
+import { 
+  Truck, Star, Plus, Heart, ShoppingBag, ArrowLeft, Check, Package, 
+  ShieldCheck, Flame, HelpCircle, Maximize2, X, ChevronLeft, ChevronRight, MapPin 
+} from 'lucide-react';
+import ProductCard from '../../components/catalog/ProductCard';
+import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
 import { catalogService } from '../../services/catalogService';
-import { seedService } from '../../services/seedService';
+import { reviewService } from '../../services/reviewService';
+import { shippingService } from '../../services/shippingService';
 import { useCart } from '../../context/CartContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { analyticsService } from '../../services/analyticsService';
+import { 
+  formatCategoryBadgeLabel,
+  getSizesForFit,
+  getMeasuresForFit,
+  OFFICIAL_MEASURES_TABLE,
+  normalizeFitSlug,
+  isUnicoFit,
+  sanitizeFitsList
+} from '../../utils/fitUtils';
+import { SEO } from '../../components/common/SEO';
+import { buildProductSchema, buildBreadcrumbSchema } from '../../utils/seoSchemas';
 import styles from './ProdutoDetalhe.module.css';
 
 const DEFAULT_SIZE_CHART = [
@@ -23,39 +40,14 @@ const DEFAULT_CARE_INSTRUCTIONS = [
   "Passar do avesso em temperatura média evitando a estampa."
 ];
 
-const DEFAULT_REVIEWS = [
-  { 
-    id: 1, 
-    author: "Lucas M.", 
-    rating: 5, 
-    date: "02/08/2026", 
-    variant: "Tamanho: M • Cor: Preto Piano",
-    comment: "Caimento impecável! O tecido é realmente pesado (heavyweight) e a gola é bem grossa, não deforma de jeito nenhum." 
-  },
-  { 
-    id: 2, 
-    author: "Gabriel S.", 
-    rating: 5, 
-    date: "28/07/2026", 
-    variant: "Tamanho: G • Cor: Off-White",
-    comment: "Modelagem Boxy autêntica. Ombros bem posicionados e entrega rápida aqui em Curitiba." 
-  },
-  { 
-    id: 3, 
-    author: "Matheus K.", 
-    rating: 5, 
-    date: "15/07/2026", 
-    variant: "Tamanho: M • Cor: Preto Piano",
-    comment: "Qualidade do algodão é absurda, muito superior a outras marcas nacionais. Vale cada centavo do investimento." 
-  }
-];
-
 export function ProdutoDetalhe({ onAddToCart }) {
   const { slug, id } = useParams();
   const currentParam = slug || id;
+  const navigate = useNavigate();
 
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [suggestedProducts, setSuggestedProducts] = useState([]);
 
   // Contextos
   const { addToCart } = useCart();
@@ -63,137 +55,369 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
   // Estados de Interação
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
-  const [selectedColor, setSelectedColor] = useState({ id: "preto", name: "Preto Piano", hex: "#0a0a0a" });
+  const [selectedColor, setSelectedColor] = useState(null);
   const [selectedSize, setSelectedSize] = useState('M');
+  const [selectedFit, setSelectedFit] = useState('Boxy');
   const [quantity, setQuantity] = useState(1);
   const [openAccordion, setOpenAccordion] = useState('measures');
   const [isAddedFeedback, setIsAddedFeedback] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const actionsRowRef = useRef(null);
+  const [showStickyBottomBar, setShowStickyBottomBar] = useState(false);
 
   // Cálculo de Frete
   const [cepInput, setCepInput] = useState('');
   const [shippingOptions, setShippingOptions] = useState(null);
+  const [destinationLocation, setDestinationLocation] = useState(null);
   const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
   const [shippingError, setShippingError] = useState(null);
 
+  // Avaliações Reais do Produto (Firestore)
+  const [approvedReviews, setApprovedReviews] = useState([]);
+  const [reviewsStats, setReviewsStats] = useState({
+    totalReviews: 0,
+    averageRating: 5.0,
+    recommendPercentage: 100
+  });
+  const [loadingReviews, setLoadingReviews] = useState(true);
+
+  // Carrega avaliações aprovadas reais do Firestore para o produto
   useEffect(() => {
+    async function loadApprovedReviews() {
+      if (!product?.id) return;
+      setLoadingReviews(true);
+      try {
+        const result = await reviewService.getApprovedReviewsByProduct(product.id, product.slug);
+        setApprovedReviews(result.reviews || []);
+        setReviewsStats({
+          totalReviews: result.totalReviews || 0,
+          averageRating: result.averageRating || 5.0,
+          recommendPercentage: result.recommendPercentage || 100
+        });
+      } catch (err) {
+        console.warn("Aviso ao carregar avaliações do produto:", err.message);
+        setApprovedReviews([]);
+      } finally {
+        setLoadingReviews(false);
+      }
+    }
+    loadApprovedReviews();
+  }, [product?.id, product?.slug]);
+
+  // Observer para ativar a barra de compra fixa inferior no mobile quando o botão principal sai da tela
+  useEffect(() => {
+    if (!actionsRowRef.current) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setShowStickyBottomBar(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+      },
+      { threshold: 0 }
+    );
+    observer.observe(actionsRowRef.current);
+    return () => observer.disconnect();
+  }, [product?.id]);
+
+  useEffect(() => {
+    let isMounted = true;
     async function loadProduct() {
       setLoading(true);
       try {
-        await seedService.seedCatalogIfEmpty();
+        // 1. Busca direta pelo produto por ID ou Slug (com resolução inteligente)
         let data = await catalogService.getProductById(currentParam);
         
-        if (!data) {
-          // Tenta carregar catálogo completo e encontrar por slug/id
+        // 2. Fallback buscando no catálogo completo caso slug ou ID seja variante
+        if (!data || (!data.name && !data.title)) {
           const all = await catalogService.getAllProducts();
           data = all.find(p => p.id === currentParam || p.slug === currentParam) || null;
         }
 
-        if (data) {
+        if (!isMounted) return;
+
+        if (data && (data.name || data.title) && data.price !== undefined) {
+          // Se o produto foi localizado mas a rota na URL é um ID interno ou slug anterior,
+          // atualiza suavemente a URL para o slug canônico atual
+          if (data.slug && data.slug !== currentParam && window.location.pathname !== `/produto/${data.slug}`) {
+            navigate(`/produto/${data.slug}`, { replace: true });
+          }
           setProduct(data);
-          // Determina tamanho padrão disponível
           let defaultSize = 'M';
-          if (data.stock && typeof data.stock === 'object') {
-            const firstAvail = ['PP', 'P', 'M', 'G', 'GG'].find(sz => Number(data.stock[sz] ?? 0) > 0);
+          if (data.unlimitedStock || data.isUnlimitedStock) {
+            defaultSize = 'M';
+          } else if (data.stock && typeof data.stock === 'object') {
+            const firstAvail = ['P', 'M', 'G', 'GG', 'EXG'].find(sz => Number(data.stock[sz] ?? 0) > 0);
             if (firstAvail) defaultSize = firstAvail;
           }
           setSelectedSize(defaultSize);
-          // Telemetria detalhada da peça
+
+          if (Array.isArray(data.colors) && data.colors.length > 0) {
+            setSelectedColor(data.colors[0]);
+          } else {
+            setSelectedColor({ id: 'preto', name: 'Preto', hex: '#000000' });
+          }
+
+          if (Array.isArray(data.imagesGallery) && data.imagesGallery.length > 0) {
+            const coverIdx = data.imagesGallery.findIndex(img => img.isCover);
+            setSelectedImageIndex(coverIdx >= 0 ? coverIdx : 0);
+          } else {
+            setSelectedImageIndex(0);
+          }
           analyticsService.trackProductView(data.id, data.name, data.category || 'camisa', data.fit || 'boxy', data.slug);
           analyticsService.trackPageView('produto_detalhe');
+        } else {
+          setProduct(null);
+          // Busca sugestões em destaque para exibir na tela 404
+          try {
+            const suggestions = await catalogService.getFeaturedProducts(4);
+            if (isMounted) setSuggestedProducts(suggestions || []);
+          } catch (featErr) {
+            console.warn("Aviso ao carregar sugestões 404:", featErr);
+          }
         }
       } catch (err) {
         console.error("Erro ao carregar produto:", err);
+        if (isMounted) {
+          setProduct(null);
+          try {
+            const suggestions = await catalogService.getFeaturedProducts(4);
+            if (isMounted) setSuggestedProducts(suggestions || []);
+          } catch (featErr) {
+            // Silencia erro secundário
+          }
+        }
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     }
+
     loadProduct();
+
+    return () => {
+      isMounted = false;
+    };
   }, [currentParam]);
 
-  // Consolidação da grade de estoque
+  const isUnlimitedStock = Boolean(product?.unlimitedStock || product?.isUnlimitedStock);
+
+  const isGiftCard = Boolean(
+    product?.isGiftCard || 
+    product?.category === 'gift-card' || 
+    String(product?.id || '').includes('vale-presente')
+  );
+
+  // Lista de modelagens disponíveis (suporta product.fits ou fallback padrão da marca)
+  const availableFits = useMemo(() => {
+    if (isGiftCard) return [];
+    let list = [];
+    if (Array.isArray(product?.fits) && product.fits.length > 0) {
+      list = product.fits;
+    } else if (Array.isArray(product?.availableFits) && product.availableFits.length > 0) {
+      list = product.availableFits;
+    } else {
+      list = product?.fit ? [product.fit] : ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
+    }
+
+    return sanitizeFitsList(list);
+  }, [product, isGiftCard]);
+
+  // Sincroniza a modelagem selecionada com o primeiro fit disponível do produto
+  useEffect(() => {
+    if (availableFits && availableFits.length > 0) {
+      if (product?.fit && availableFits.includes(product.fit)) {
+        setSelectedFit(product.fit);
+      } else {
+        setSelectedFit(availableFits[0]);
+      }
+    }
+  }, [availableFits, product?.fit]);
+
+  // Grade de tamanhos dinâmica conforme a modelagem selecionada
+  const activeSizes = useMemo(() => {
+    return getSizesForFit(selectedFit);
+  }, [selectedFit]);
+
+  // Se o cliente estava com 'EXG' selecionado e trocou para 'Boxy', ajusta para 'GG' (Boxy não tem EXG)
+  useEffect(() => {
+    if (selectedFit && String(selectedFit).toLowerCase().includes('boxy')) {
+      if (selectedSize === 'EXG') {
+        setSelectedSize('GG');
+      }
+    }
+  }, [selectedFit, selectedSize]);
+
+  // Consolidação da grade de estoque (com suporte a estoque individual por cor e modo ilimitado)
   const parsedStock = useMemo(() => {
+    if (isUnlimitedStock) {
+      return { P: 9999, M: 9999, G: 9999, GG: 9999, EXG: 9999 };
+    }
+    if (product?.hasColorStock && product?.colorStock && selectedColor?.id && product.colorStock[selectedColor.id]) {
+      const cStock = product.colorStock[selectedColor.id];
+      return {
+        P: Number(cStock.P ?? 0),
+        M: Number(cStock.M ?? 0),
+        G: Number(cStock.G ?? 0),
+        GG: Number(cStock.GG ?? 0),
+        EXG: Number(cStock.EXG ?? cStock.PP ?? 5)
+      };
+    }
     if (product?.stock && typeof product.stock === 'object') {
       return {
-        PP: Number(product.stock.PP ?? 0),
         P: Number(product.stock.P ?? 0),
         M: Number(product.stock.M ?? 0),
         G: Number(product.stock.G ?? 0),
-        GG: Number(product.stock.GG ?? 0)
+        GG: Number(product.stock.GG ?? 0),
+        EXG: Number(product.stock.EXG ?? product.stock.PP ?? 5)
       };
     }
     if (Array.isArray(product?.variants) && product.variants.length > 0) {
-      const s = { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
+      const s = { P: 0, M: 0, G: 0, GG: 0, EXG: 0 };
       product.variants.forEach(v => {
+        if (selectedColor?.id && v.colorId && v.colorId !== selectedColor.id) return;
         const sz = String(v.size || '').toUpperCase();
-        if (s[sz] !== undefined) s[sz] = Number(v.stock ?? v.inventory ?? 0);
+        if (s[sz] !== undefined) s[sz] = Number(v.stock_quantity ?? v.stock ?? v.inventory ?? 0);
       });
       return s;
     }
     if (Array.isArray(product?.sizes) && product.sizes.length > 0) {
-      const s = { PP: 0, P: 0, M: 0, G: 0, GG: 0 };
+      const s = { P: 0, M: 0, G: 0, GG: 0, EXG: 0 };
       product.sizes.forEach(sz => {
         const upper = String(sz).toUpperCase();
         if (s[upper] !== undefined) s[upper] = 10;
       });
       return s;
     }
-    return { PP: 2, P: 8, M: 12, G: 8, GG: 4 };
+    return { P: 0, M: 0, G: 0, GG: 0, EXG: 0 };
+  }, [product, isUnlimitedStock, selectedColor]);
+
+  const availableStock = isUnlimitedStock ? 9999 : (parsedStock[selectedSize] ?? 0);
+  const isAllOutOfStock = isUnlimitedStock ? false : Object.values(parsedStock).every(q => q <= 0);
+
+  // Dados consolidados do produto e galeria com suporte a vínculos de cor
+  const imagesGallery = useMemo(() => {
+    if (Array.isArray(product?.imagesGallery) && product.imagesGallery.length > 0) {
+      return product.imagesGallery;
+    }
+    if (Array.isArray(product?.images) && product.images.length > 0) {
+      return product.images.map((url, idx) => ({
+        id: `img_${idx}`,
+        url,
+        colorId: ''
+      }));
+    }
+    if (product?.image) {
+      return [{ id: 'img_0', url: product.image, colorId: '' }];
+    }
+    return [];
   }, [product]);
 
-  const availableStock = parsedStock[selectedSize] ?? 0;
-  const isAllOutOfStock = Object.values(parsedStock).every(q => q <= 0);
-
-  if (loading) {
-    return (
-      <main className={styles.container}>
-        <div style={{ textAlign: 'center', padding: '6rem 1rem', color: 'var(--text-secondary)' }}>
-          <Package size={32} style={{ animation: 'spin 1.5s linear infinite', margin: '0 auto 1rem' }} />
-          <p>Carregando detalhes da peça no Firestore...</p>
-        </div>
-      </main>
-    );
-  }
-
-  if (!product) {
-    return (
-      <main className={styles.container}>
-        <div style={{ textAlign: 'center', padding: '6rem 1rem' }}>
-          <h2 style={{ fontFamily: 'var(--font-heading)', fontSize: '1.8rem', marginBottom: '1rem' }}>PEÇA NÃO ENCONTRADA</h2>
-          <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>O produto que você procura não está disponível no estoque ou foi descontinuado.</p>
-          <Link to="/catalogo" style={{ background: 'var(--text-primary)', color: 'var(--bg-primary)', padding: '0.8rem 1.5rem', fontWeight: 800, textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
-            <ArrowLeft size={16} />
-            <span>VOLTAR AO CATÁLOGO</span>
-          </Link>
-        </div>
-      </main>
-    );
-  }
-
-  // Dados consolidados do produto
-  const images = product.images && product.images.length > 0 
-    ? product.images 
-    : [product.image || 'https://images.unsplash.com/photo-1521572267360-ee0c2909d518?q=80&w=800'];
+  const images = useMemo(() => imagesGallery.map(img => img.url), [imagesGallery]);
   
-  const colors = product.colors || [
-    { id: "preto", name: "Preto Piano", hex: "#0a0a0a" },
-    { id: "off-white", name: "Off-White", hex: "#f2f0eb" },
-    { id: "grafite", name: "Grafite Mineral", hex: "#262626" }
-  ];
+  const colors = Array.isArray(product?.colors) && product.colors.length > 0
+    ? product.colors
+    : null;
 
-  const sizeChart = product.sizeChart || DEFAULT_SIZE_CHART;
-  const careInstructions = product.careInstructions || DEFAULT_CARE_INSTRUCTIONS;
-  const reviews = product.reviews || DEFAULT_REVIEWS;
+  const handleSelectColor = (color) => {
+    setSelectedColor(color);
+    if (!color) return;
 
-  const priceNum = Number(product.price || 0);
-  const discountPriceNum = Number(product.discountPrice || 0);
-  const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product.discountActive !== false);
+    // Vinculação de imagem à cor: busca no carrossel a foto atrelada a esta cor
+    const linkedImageIdx = imagesGallery.findIndex(img => img.colorId === color.id);
+    if (linkedImageIdx >= 0) {
+      setSelectedImageIndex(linkedImageIdx);
+    }
+
+    // Se o produto gerencia estoque individual por cor, recalcula disponibilidade
+    if (product?.hasColorStock && product?.colorStock?.[color.id]) {
+      const colorSizes = product.colorStock[color.id];
+      if (Number(colorSizes[selectedSize] ?? 0) <= 0) {
+        const firstAvailable = activeSizes.find(sz => Number(colorSizes[sz] ?? 0) > 0);
+        if (firstAvailable) {
+          setSelectedSize(firstAvailable);
+        }
+      }
+    }
+  };
+
+  const sizeChart = product?.sizeChart || DEFAULT_SIZE_CHART;
+  const careInstructions = product?.careInstructions || DEFAULT_CARE_INSTRUCTIONS;
+
+  // Preço dinâmico reativo baseado na modelagem selecionada (fitPrices) ou no preço base
+  const priceNum = useMemo(() => {
+    if (!product) return 0;
+    if (product.fitPrices && typeof product.fitPrices === 'object') {
+      const slugKey = normalizeFitSlug(selectedFit);
+      if (product.fitPrices[slugKey] !== undefined && product.fitPrices[slugKey] !== null && Number(product.fitPrices[slugKey]) > 0) {
+        return Number(product.fitPrices[slugKey]);
+      }
+      if (product.fitPrices[selectedFit] !== undefined && product.fitPrices[selectedFit] !== null && Number(product.fitPrices[selectedFit]) > 0) {
+        return Number(product.fitPrices[selectedFit]);
+      }
+    }
+    return Number(product.price || product.priceNum || 0);
+  }, [product, selectedFit]);
+  const discountPriceNum = Number(product?.discountPrice || 0);
+  const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product?.discountActive !== false);
+  const hasFreeShipping = Boolean(product?.freeShipping || product?.hasFreeShipping);
   const effectivePrice = hasDiscount ? discountPriceNum : priceNum;
   const discountPercentage = hasDiscount ? Math.round(((priceNum - discountPriceNum) / priceNum) * 100) : 0;
 
-  const installmentsCount = product.installments || 3;
+  const installmentsCount = product?.installments || 3;
   const installmentValue = (effectivePrice / installmentsCount).toFixed(2).replace('.', ',');
 
-  const isFavorite = isInWishlist(product.id);
+  const isFavorite = product?.id ? isInWishlist(product.id) : false;
+
+  const productSeoData = useMemo(() => {
+    if (!product) return null;
+    const name = product.name || product.title || 'Camiseta Streetwear THR33';
+    const desc =
+      product.description ||
+      `Camiseta ${name} com modelagem exclusiva THR33, alta gramatura e corte premium. Produção sob demanda for the few.`;
+    const image = product.image || (Array.isArray(product.images) && product.images[0]) || '';
+    const rawPrice = effectivePrice || Number(product.discountPrice || product.price || 0);
+
+    const isOutOfStock =
+      product.inStock === false ||
+      product.active === false ||
+      (product.totalStock !== undefined && Number(product.totalStock) === 0);
+
+    const productSchema = buildProductSchema(product, approvedReviews);
+    const breadcrumbSchema = buildBreadcrumbSchema([
+      { name: 'Início', url: '/' },
+      { name: 'Catálogo', url: '/catalogo' },
+      { name: name, url: `/produto/${product.slug || product.id}` }
+    ]);
+
+    const combinedJsonLd = [];
+    if (productSchema) combinedJsonLd.push(productSchema);
+    if (breadcrumbSchema) combinedJsonLd.push(breadcrumbSchema);
+
+    return {
+      title: `${name} | THR33 Streetwear`,
+      description: desc,
+      image,
+      url: `/produto/${product.slug || product.id}`,
+      type: 'product',
+      productMeta: {
+        price: rawPrice.toFixed(2),
+        currency: 'BRL',
+        availability: isOutOfStock ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock'
+      },
+      jsonLd: combinedJsonLd
+    };
+  }, [
+    product?.id,
+    product?.slug,
+    product?.name,
+    product?.title,
+    product?.price,
+    product?.discountPrice,
+    product?.inStock,
+    product?.active,
+    product?.totalStock,
+    product?.image,
+    approvedReviews.length
+  ]);
 
   const handlePrevImage = () => {
     setSelectedImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
@@ -203,99 +427,373 @@ export function ProdutoDetalhe({ onAddToCart }) {
     setSelectedImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
   };
 
+  // Gesto de Swipe / Arrastar Touch no Carrossel de Imagens (Mobile e Desktop)
+  const touchStartXRef = useRef(0);
+  const touchStartYRef = useRef(0);
+  const touchStartTimeRef = useRef(0);
+  const isSwipingRef = useRef(false);
+
+  const handleTouchStart = (e) => {
+    if (e.touches && e.touches.length === 1) {
+      touchStartXRef.current = e.touches[0].clientX;
+      touchStartYRef.current = e.touches[0].clientY;
+      touchStartTimeRef.current = Date.now();
+      isSwipingRef.current = false;
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (!e.touches || e.touches.length !== 1) return;
+    const deltaX = e.touches[0].clientX - touchStartXRef.current;
+    const deltaY = e.touches[0].clientY - touchStartYRef.current;
+
+    // Se o movimento horizontal for predominante em relacao ao vertical, marca como swipe
+    if (Math.abs(deltaX) > 10 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      isSwipingRef.current = true;
+    }
+  };
+
+  const handleTouchEnd = (e) => {
+    if (!e.changedTouches || e.changedTouches.length === 0) return;
+    const deltaX = e.changedTouches[0].clientX - touchStartXRef.current;
+    const deltaY = e.changedTouches[0].clientY - touchStartYRef.current;
+
+    // Distancia minima para acionar a troca de imagem (35px)
+    if (Math.abs(deltaX) > 35 && Math.abs(deltaX) > Math.abs(deltaY)) {
+      if (deltaX < 0) {
+        handleNextImage();
+      } else {
+        handlePrevImage();
+      }
+    }
+
+    // Mantem isSwiping ativo por 150ms para evitar que o clique no container dispare zoom de tela cheia
+    if (isSwipingRef.current) {
+      setTimeout(() => {
+        isSwipingRef.current = false;
+      }, 150);
+    }
+  };
+
+  // Bloqueio de scroll da página (eixo Y) e atalhos de teclado (Esc, Setas) para modal de tela cheia
+  useEffect(() => {
+    if (!isFullscreen) return;
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setIsFullscreen(false);
+      } else if (e.key === 'ArrowLeft') {
+        setSelectedImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+      } else if (e.key === 'ArrowRight') {
+        setSelectedImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+      }
+    };
+
+    const originalBodyOverflow = document.body.style.overflow;
+    const originalHtmlOverflow = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalBodyOverflow;
+      document.documentElement.style.overflow = originalHtmlOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isFullscreen, images.length]);
+
   const handleCepChange = (e) => {
     const raw = e.target.value.replace(/\D/g, '').slice(0, 8);
     const formatted = raw.length > 5 ? `${raw.slice(0, 5)}-${raw.slice(5)}` : raw;
     setCepInput(formatted);
   };
 
-  const handleCalculateShipping = (e) => {
+  const handleCalculateShipping = async (e) => {
     e.preventDefault();
     const cleanCep = cepInput.replace(/\D/g, '');
     
     if (cleanCep.length !== 8) {
       setShippingError('Digite um CEP válido com 8 dígitos.');
       setShippingOptions(null);
+      setDestinationLocation(null);
+      return;
+    }
+
+    if (/^(\d)\1{7}$/.test(cleanCep) || parseInt(cleanCep.substring(0, 5), 10) < 1000) {
+      setShippingError('CEP inexistente ou inválido. Digite um CEP brasileiro válido.');
+      setShippingOptions(null);
+      setDestinationLocation(null);
       return;
     }
 
     setShippingError(null);
     setIsCalculatingShipping(true);
 
-    setTimeout(() => {
+    try {
+      const items = [{
+        id: product?.id || product?.slug || 'item_1',
+        name: product?.name || 'Peça THR33',
+        price: effectivePrice,
+        quantity: quantity || 1,
+        freeShipping: hasFreeShipping
+      }];
+      const result = await shippingService.calculateShipping(cleanCep, items, effectivePrice * (quantity || 1));
+      if (result.options && result.options.length > 0) {
+        setShippingOptions(result.options);
+        setDestinationLocation(result.destinationLocation || null);
+      } else {
+        setShippingError('Nenhuma opção de entrega encontrada para este CEP.');
+        setShippingOptions(null);
+        setDestinationLocation(null);
+      }
+    } catch (err) {
+      setShippingError(err.message || 'Falha ao cotar frete.');
+      setShippingOptions(null);
+      setDestinationLocation(null);
+    } finally {
       setIsCalculatingShipping(false);
-      const isCuritiba = cleanCep.startsWith('80') || cleanCep.startsWith('81') || cleanCep.startsWith('82') || cleanCep.startsWith('83');
-      
-      setShippingOptions([
-        {
-          id: 'sedex',
-          name: 'SEDEX EXPRESSO',
-          deadline: isCuritiba ? 'Chega amanhã' : '1 a 3 dias úteis',
-          price: isCuritiba ? 14.90 : 28.50
-        },
-        {
-          id: 'pac',
-          name: 'PAC STANDARD',
-          deadline: isCuritiba ? '2 a 3 dias úteis' : '5 a 8 dias úteis',
-          price: isCuritiba ? 9.90 : 18.90
-        },
-        {
-          id: 'retirada',
-          name: 'RETIRADA ATELIÊ (CURITIBA)',
-          deadline: 'Disponível em 24h',
-          price: 0
-        }
-      ]);
-    }, 400);
+    }
   };
 
   const handleAddToCart = () => {
     if (availableStock <= 0) return;
     
+    const linkedImg = selectedColor?.id 
+      ? imagesGallery.find(img => img.colorId === selectedColor.id)?.url 
+      : null;
+    const currentImg = linkedImg || images[selectedImageIndex] || product?.image;
+
+    const finalColor = selectedColor || (colors && colors[0]) || { id: 'preto', name: 'Preto', hex: '#000000' };
+
     const cartProduct = {
       ...product,
       price: effectivePrice,
       originalPrice: priceNum,
-      color: selectedColor || product.color || 'Preto Piano',
-      category: product.category || 'camisa'
+      image: currentImg,
+      color: finalColor,
+      fit: selectedFit,
+      category: product?.category || 'camisa',
+      freeShipping: hasFreeShipping
     };
 
     if (onAddToCart) {
-      onAddToCart(cartProduct, selectedSize, quantity, selectedColor);
+      onAddToCart(cartProduct, selectedSize, quantity, finalColor, selectedFit);
     } else {
-      addToCart(cartProduct, selectedSize, quantity, selectedColor);
+      addToCart(cartProduct, selectedSize, quantity, finalColor, selectedFit);
     }
+
 
     setIsAddedFeedback(true);
     setTimeout(() => setIsAddedFeedback(false), 2500);
   };
 
+  if (loading) {
+    return (
+      <main className={styles.container}>
+        <div className={styles.loadingWrapper} aria-live="polite">
+          <div className={styles.loadingCard}>
+            <div className={styles.loadingSpinnerContainer}>
+              <div className={styles.loadingSpinnerRing} />
+              <Package size={24} className={styles.loadingIcon} />
+            </div>
+            <div className={styles.loadingBadge}>
+              <span className={styles.loadingDot} />
+              <span>THR33 // STREETWEAR CURITIBA</span>
+            </div>
+            <h2 className={styles.loadingTitle}>CONSULTANDO ACERVO</h2>
+            <p className={styles.loadingSubtitle}>
+              Sincronizando especificações técnicas, grade de medidas e disponibilidade em estoque.
+            </p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  if (!product) {
+    return (
+      <main className={styles.container}>
+        <SEO title="Peça Não Encontrada | THR33 Streetwear" noindex={true} />
+        <div className={styles.notFoundWrapper}>
+          <motion.div 
+            className={styles.notFoundCard}
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+          >
+            <div className={styles.notFoundBadgeRow}>
+              <span className={styles.notFoundBadge}>
+                <span className={styles.notFoundDot} />
+                PEÇA NÃO LOCALIZADA // ACERVO THR33
+              </span>
+            </div>
+
+            <h1 className={styles.notFoundCode}>404</h1>
+
+            <h2 className={styles.notFoundTitle}>PEÇA NÃO ENCONTRADA OU FORA DE CATÁLOGO</h2>
+
+            {currentParam && (
+              <div className={styles.notFoundParamBadge}>
+                <span className={styles.paramLabel}>REFERÊNCIA BUSCADA:</span>
+                <code className={styles.paramValue}>/produto/{currentParam}</code>
+              </div>
+            )}
+
+            <p className={styles.notFoundText}>
+              A peça que você tentou acessar não foi localizada em nosso acervo ativo. Ela pode pertencer a um drop anterior já encerrado, ter tido seu link atualizado ou estar temporariamente indisponível. Nossas coleções contam com tiragens limitadas e cortes exclusivos.
+            </p>
+
+            <div className={styles.notFoundActions}>
+              <button 
+                type="button" 
+                onClick={() => navigate(-1)} 
+                className={styles.notFoundBackBtn}
+                title="Voltar à página anterior"
+              >
+                <ArrowLeft size={16} />
+                <span>VOLTAR</span>
+              </button>
+
+              <Link to="/catalogo" className={styles.notFoundPrimaryBtn}>
+                <ShoppingBag size={16} />
+                <span>EXPLORAR CATÁLOGO</span>
+              </Link>
+
+              <Link to="/sobre" className={styles.notFoundSecondaryBtn}>
+                <Flame size={16} />
+                <span>LANÇAMENTOS VIP</span>
+              </Link>
+            </div>
+
+            <div className={styles.notFoundSupport}>
+              <span>Procurava uma edição específica ou modelo sob demanda?</span>
+              <Link to="/suporte" className={styles.notFoundSupportLink}>
+                <HelpCircle size={14} />
+                <span>Fale com o Suporte</span>
+              </Link>
+            </div>
+          </motion.div>
+
+          {/* GRADE DE RECOMENDAÇÕES DA VITRINE PARA RECUPERAÇÃO DO CLIENTE */}
+          {suggestedProducts.length > 0 && (
+            <section className={styles.suggestionsSection} aria-label="Peças recomendadas">
+              <header className={styles.suggestionsHeader}>
+                <span className={styles.suggestionsSuperTitle}>RECOMENDAÇÕES // FOR THE FEW</span>
+                <h3 className={styles.suggestionsTitle}>OUTRAS PEÇAS EM DESTAQUE NO CATÁLOGO</h3>
+              </header>
+
+              <div className={styles.suggestionsGrid}>
+                {suggestedProducts.map((suggested) => (
+                  <ProductCard key={suggested.id} product={suggested} />
+                ))}
+              </div>
+            </section>
+          )}
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className={styles.container}>
+      {productSeoData && (
+        <SEO
+          title={productSeoData.title}
+          description={productSeoData.description}
+          image={productSeoData.image}
+          url={productSeoData.url}
+          type="product"
+          productMeta={productSeoData.productMeta}
+          jsonLd={productSeoData.jsonLd}
+        />
+      )}
       {/* NAVEGAÇÃO BREADCRUMB */}
       <nav aria-label="Breadcrumb" className={styles.breadcrumb}>
         <Link to="/" className={styles.breadcrumbLink}>HOME</Link>
         <span className={styles.breadcrumbSeparator}>/</span>
         <Link to="/catalogo" className={styles.breadcrumbLink}>CATÁLOGO</Link>
         <span className={styles.breadcrumbSeparator}>/</span>
-        <span className={styles.breadcrumbActive}>{product.name.toUpperCase()}</span>
+        <span className={styles.breadcrumbActive}>{String(product?.name || product?.title || 'PRODUTO').toUpperCase()}</span>
       </nav>
 
       {/* GRADE PRINCIPAL: GALERIA + INFOS DE COMPRA */}
       <div className={styles.productGrid}>
         {/* GALERIA DE IMAGENS */}
         <section className={styles.gallerySection} aria-label="Galeria de fotos do produto">
-          <div className={styles.mainImageWrapper}>
-            <button onClick={handlePrevImage} className={`${styles.navArrow} ${styles.prevArrow}`} aria-label="Imagem anterior">
-              &#10094;
-            </button>
-            <img 
+          <div 
+            className={styles.mainImageWrapper}
+            onClick={() => {
+              if (isSwipingRef.current) return;
+              setIsFullscreen(true);
+            }}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsFullscreen(true); } }}
+            aria-label="Clique para ampliar a imagem em tela cheia"
+          >
+            {/* FAIXA TRANSVERSAL DIAGONAL NO CANTO SUPERIOR (FRETE GRÁTIS) */}
+            {hasFreeShipping && (
+              <div className={styles.cornerRibbonWrapper} title="Peça com Frete Grátis">
+                <div className={styles.cornerRibbon}>
+                  FRETE GRÁTIS
+                </div>
+              </div>
+            )}
+
+            {images.length > 1 && (
+              <button 
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handlePrevImage(); }} 
+                className={`${styles.navArrow} ${styles.prevArrow}`} 
+                aria-label="Imagem anterior"
+              >
+                <ChevronLeft size={18} />
+              </button>
+            )}
+            <ImageWithSkeleton 
               src={images[selectedImageIndex] || images[0]} 
-              alt={`${product.name} - Foto ${selectedImageIndex + 1}`} 
+              alt={`${product?.name || product?.title || 'Produto'} - Foto ${selectedImageIndex + 1}`} 
+              aspectRatio="3/4"
+              objectFit="cover"
+              priority={true}
               className={styles.mainImage}
+              style={{ width: '100%', height: '100%', backgroundColor: '#000000' }}
+              imgStyle={{ objectFit: 'cover', objectPosition: 'center top' }}
             />
-            <button onClick={handleNextImage} className={`${styles.navArrow} ${styles.nextArrow}`} aria-label="Próxima imagem">
-              &#10095;
+            {images.length > 1 && (
+              <button 
+                type="button"
+                onClick={(e) => { e.stopPropagation(); handleNextImage(); }} 
+                className={`${styles.navArrow} ${styles.nextArrow}`} 
+                aria-label="Próxima imagem"
+              >
+                <ChevronRight size={18} />
+              </button>
+            )}
+
+            {/* INDICADOR DISCRETO DE PÁGINAS NO MOBILE */}
+            {images.length > 1 && (
+              <div className={styles.mobileDotsIndicator} aria-hidden="true">
+                {images.map((_, idx) => (
+                  <span 
+                    key={idx} 
+                    className={`${styles.mobileDot} ${idx === selectedImageIndex ? styles.mobileDotActive : ''}`} 
+                  />
+                ))}
+              </div>
+            )}
+            <button 
+              type="button" 
+              className={styles.expandBadge} 
+              onClick={(e) => { e.stopPropagation(); setIsFullscreen(true); }}
+              aria-label="Abrir imagem em tela cheia"
+              title="Clique para ampliar em detalhes"
+            >
+              <Maximize2 size={14} />
+              <span>AMPLIAR</span>
             </button>
           </div>
 
@@ -307,7 +805,14 @@ export function ProdutoDetalhe({ onAddToCart }) {
                 onClick={() => setSelectedImageIndex(idx)}
                 aria-label={`Selecionar foto ${idx + 1}`}
               >
-                <img src={img} alt={`Miniatura ${idx + 1}`} />
+                <ImageWithSkeleton 
+                  src={img} 
+                  alt={`Miniatura ${idx + 1}`} 
+                  aspectRatio="3/4" 
+                  objectFit="cover"
+                  style={{ width: '100%', height: '100%', backgroundColor: '#000000' }} 
+                  imgStyle={{ objectFit: 'cover', objectPosition: 'center top' }}
+                />
               </button>
             ))}
           </div>
@@ -317,10 +822,12 @@ export function ProdutoDetalhe({ onAddToCart }) {
         <section className={styles.infoSection}>
           <div className={styles.headerInfo}>
             <div className={styles.badgeRow}>
-              <span className={styles.fitBadge}>{(product.fit || 'boxy').toUpperCase()} FIT</span>
-              <span className={styles.dropBadge}>{product.drop === 'leak-two' ? 'LEAK TWO' : (product.drop?.toUpperCase() || 'DROP EXCLUSIVO')}</span>
+              <span className={styles.categoryBadge}>{formatCategoryBadgeLabel(product?.category)}</span>
+              {product?.customBadge && (
+                <span className={styles.fitBadge}>{product.customBadge}</span>
+              )}
             </div>
-            <h1 className={styles.title}>{product.name}</h1>
+            <h1 className={styles.title}>{product?.name || product?.title || 'Produto THR33'}</h1>
             
             {/* Bloco de Preços */}
             <div className={styles.priceContainer}>
@@ -347,39 +854,63 @@ export function ProdutoDetalhe({ onAddToCart }) {
             </div>
           </div>
 
+          {/* SELETOR DE MODELAGEM (FIT) */}
+          {!isGiftCard && availableFits && availableFits.length > 0 && (
+            <div className={styles.fitSelectorBlock}>
+              <div className={styles.selectorHeader}>
+                <span className={styles.selectorLabel}>MODELAGEM:</span>
+                <span className={styles.selectedValue}>{selectedFit}</span>
+              </div>
+              <div className={styles.fitOptionsRow}>
+                {availableFits.map((fitOption) => (
+                  <button
+                    key={fitOption}
+                    type="button"
+                    onClick={() => setSelectedFit(fitOption)}
+                    className={`${styles.fitOptionBtn} ${selectedFit === fitOption ? styles.fitOptionBtnActive : ''}`}
+                  >
+                    {fitOption}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* SELETOR DE COR */}
-          <div className={styles.colorSelector}>
-            <div className={styles.selectorHeader}>
-              <span className={styles.selectorLabel}>COR:</span>
-              <span className={styles.selectedValue}>{selectedColor.name}</span>
+          {colors && colors.length > 0 && (
+            <div className={styles.colorSelector}>
+              <div className={styles.selectorHeader}>
+                <span className={styles.selectorLabel}>COR:</span>
+                <span className={styles.selectedValue}>{selectedColor?.name || selectedColor?.id || 'Padrão'}</span>
+              </div>
+              <div className={styles.colorSwatches}>
+                {colors.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className={`${styles.colorBtn} ${selectedColor?.id === c.id ? styles.activeColor : ''}`}
+                    onClick={() => handleSelectColor(c)}
+                    style={{ backgroundColor: c.hex }}
+                    title={c.name}
+                    aria-label={`Cor ${c.name}`}
+                  />
+                ))}
+              </div>
             </div>
-            <div className={styles.colorSwatches}>
-              {colors.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={`${styles.colorBtn} ${selectedColor.id === c.id ? styles.activeColor : ''}`}
-                  onClick={() => setSelectedColor(c)}
-                  style={{ backgroundColor: c.hex }}
-                  title={c.name}
-                  aria-label={`Cor ${c.name}`}
-                />
-              ))}
-            </div>
-          </div>
+          )}
 
           {/* SELETOR DE TAMANHO */}
           <div className={styles.sizeSelector}>
             <div className={styles.selectorHeader}>
               <span className={styles.selectorLabel}>TAMANHO:</span>
               <span className={styles.selectedValue}>
-                TAM {selectedSize} {availableStock <= 0 ? '(ESGOTADO)' : ''}
+                {selectedSize} {!isUnlimitedStock && availableStock <= 0 ? '(ESGOTADO)' : ''}
               </span>
             </div>
             <div className={styles.sizeOptions}>
-              {['PP', 'P', 'M', 'G', 'GG'].map((size) => {
+              {activeSizes.map((size) => {
                 const stockQty = parsedStock[size] ?? 0;
-                const isOutOfStock = stockQty <= 0;
+                const isOutOfStock = !isUnlimitedStock && stockQty <= 0;
 
                 return (
                   <button
@@ -388,7 +919,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
                     disabled={isOutOfStock}
                     className={`${styles.sizeBtn} ${selectedSize === size ? styles.activeSize : ''} ${isOutOfStock ? styles.disabledSize : ''}`}
                     onClick={() => !isOutOfStock && setSelectedSize(size)}
-                    title={isOutOfStock ? `Tamanho ${size} ESGOTADO` : `Tamanho ${size} (${stockQty} un. em estoque)`}
+                    title={isUnlimitedStock ? `Tamanho ${size}` : (isOutOfStock ? `Tamanho ${size} ESGOTADO` : `Tamanho ${size} (${stockQty} un. em estoque)`)}
                     aria-label={`Tamanho ${size} ${isOutOfStock ? 'Esgotado' : ''}`}
                   >
                     <span>{size}</span>
@@ -397,22 +928,24 @@ export function ProdutoDetalhe({ onAddToCart }) {
                 );
               })}
             </div>
-            <small className={`${styles.stockNotice} ${availableStock <= 0 ? styles.stockNoticeAlert : ''}`}>
-              {availableStock > 0 
-                ? `${availableStock} unidades disponíveis no tamanho ${selectedSize}` 
-                : isAllOutOfStock
-                  ? 'Todos os tamanhos estão esgotados no momento.'
-                  : `Tamanho ${selectedSize} esgotado no estoque.`}
-            </small>
+            {!isUnlimitedStock && (
+              <small className={`${styles.stockNotice} ${availableStock <= 0 ? styles.stockNoticeAlert : ''}`}>
+                {availableStock > 0 
+                  ? `${availableStock} unidades disponíveis no tamanho ${selectedSize}` 
+                  : isAllOutOfStock
+                    ? 'Todos os tamanhos estão esgotados no momento.'
+                    : `Tamanho ${selectedSize} esgotado no estoque.`}
+              </small>
+            )}
           </div>
 
           {/* Bloco de Ações e Quantidade */}
-          <div className={styles.actionsRow}>
+          <div ref={actionsRowRef} className={styles.actionsRow}>
             <div className={styles.quantityControl}>
               <button 
                 type="button" 
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                disabled={quantity <= 1 || availableStock === 0}
+                disabled={quantity <= 1 || (!isUnlimitedStock && availableStock === 0)}
                 aria-label="Diminuir quantidade"
               >
                 -
@@ -420,8 +953,8 @@ export function ProdutoDetalhe({ onAddToCart }) {
               <span className={styles.quantityValue}>{quantity}</span>
               <button 
                 type="button" 
-                onClick={() => setQuantity(Math.min(availableStock, quantity + 1))}
-                disabled={quantity >= availableStock || availableStock === 0}
+                onClick={() => setQuantity(isUnlimitedStock ? quantity + 1 : Math.min(availableStock, quantity + 1))}
+                disabled={!isUnlimitedStock && (quantity >= availableStock || availableStock === 0)}
                 aria-label="Aumentar quantidade"
               >
                 +
@@ -430,17 +963,17 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
             <button 
               type="button"
-              className={`${styles.addToBagButton} ${isAddedFeedback ? styles.addedSuccess : ''} ${availableStock <= 0 ? styles.disabledBagBtn : ''}`}
+              className={`${styles.addToBagButton} ${isAddedFeedback ? styles.addedSuccess : ''} ${(!isUnlimitedStock && availableStock <= 0) ? styles.disabledBagBtn : ''}`}
               onClick={handleAddToCart}
-              disabled={availableStock <= 0}
+              disabled={!isUnlimitedStock && availableStock <= 0}
             >
               <ShoppingBag size={18} />
               <span>
                 {isAddedFeedback 
                   ? 'ADICIONADO À SACOLA!' 
-                  : availableStock > 0 
-                    ? 'ADICIONAR À SACOLA' 
-                    : 'TAMANHO ESGOTADO'}
+                  : (!isUnlimitedStock && availableStock <= 0) 
+                    ? 'TAMANHO ESGOTADO' 
+                    : 'ADICIONAR À SACOLA'}
               </span>
             </button>
 
@@ -457,6 +990,12 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
           {/* CÁLCULO DE FRETE COMPACTO */}
           <div className={styles.shippingCalculator}>
+            {hasFreeShipping && (
+              <div className={styles.freeShippingPdpHighlight}>
+                <span>ESTA PEÇA CONTA COM FRETE GRÁTIS // THR33 OFICIAL</span>
+              </div>
+            )}
+
             <div className={styles.shippingHeader}>
               <div className={styles.shippingTitleGroup}>
                 <Truck size={16} />
@@ -472,14 +1011,16 @@ export function ProdutoDetalhe({ onAddToCart }) {
               </a>
             </div>
 
-            <form onSubmit={handleCalculateShipping} className={styles.shippingFormCompact}>
+            <form onSubmit={handleCalculateShipping} className={styles.shippingFormCompact} noValidate>
               <input 
                 type="text" 
+                inputMode="numeric"
                 placeholder="00000-000" 
                 value={cepInput}
                 onChange={handleCepChange}
                 className={styles.shippingInputCompact}
                 maxLength={9}
+                aria-label="CEP para cálculo de frete"
               />
               <button type="submit" className={styles.shippingBtnCompact} disabled={isCalculatingShipping}>
                 {isCalculatingShipping ? '...' : 'CALCULAR'}
@@ -490,11 +1031,17 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
             {shippingOptions && (
               <div className={styles.shippingResultsCompact}>
+                {destinationLocation && (
+                  <div className={styles.destinationLocationBadge}>
+                    <MapPin size={12} />
+                    <span>Entrega para: <strong>{destinationLocation}</strong></span>
+                  </div>
+                )}
                 {shippingOptions.map(opt => (
                   <div key={opt.id} className={styles.shippingRowCompact}>
                     <div className={styles.shippingInfoCompact}>
                       <span className={styles.shippingNameCompact}>{opt.name}</span>
-                      <span className={styles.shippingDeadlineCompact}>{opt.deadline}</span>
+                      <span className={styles.shippingDeadlineCompact}>Produção + {opt.deadline}</span>
                     </div>
                     <span className={styles.shippingPriceCompact}>
                       {opt.price === 0 ? 'GRÁTIS' : `R$ ${opt.price.toFixed(2)}`}
@@ -572,26 +1119,59 @@ export function ProdutoDetalhe({ onAddToCart }) {
                     className={styles.accordionBodyWrapper}
                   >
                     <div className={styles.accordionBody}>
-                      <table className={styles.measuresTable}>
-                        <thead>
-                          <tr>
-                            <th>Tamanho</th>
-                            <th>Tórax</th>
-                            <th>Comprimento</th>
-                            <th>Manga</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sizeChart.map((row) => (
-                            <tr key={row.size}>
-                              <td><strong>{row.size}</strong></td>
-                              <td>{row.chest}</td>
-                              <td>{row.length}</td>
-                              <td>{row.sleeve}</td>
+                      <div style={{ marginBottom: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#FFFFFF', letterSpacing: '0.5px' }}>
+                          MEDIDAS OFICIAIS // {selectedFit?.toUpperCase() || 'OVERSIZED'}
+                        </span>
+                        <small style={{ fontSize: '0.68rem', color: '#a3a3a3' }}>
+                          Medidas da modelagem selecionada (tolerância têxtil de ±1,5 cm).
+                        </small>
+                      </div>
+
+                      <div className={styles.tableResponsiveWrapper}>
+                        <table className={styles.measuresTable}>
+                          <thead>
+                            <tr>
+                              <th>TAMANHO</th>
+                              <th>LARGURA</th>
+                              <th>COMPRIMENTO</th>
+                              <th>MANGA</th>
+                              <th>OMBRO</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {getMeasuresForFit(selectedFit).map((row) => {
+                              const isSelectedSize = row.size === selectedSize;
+                              return (
+                                <tr 
+                                  key={row.size} 
+                                  className={isSelectedSize ? styles.selectedMeasureRow : ''}
+                                  style={isSelectedSize ? { backgroundColor: 'rgba(255, 255, 255, 0.1)', fontWeight: 700 } : {}}
+                                >
+                                  <td><strong>{row.size} {isSelectedSize ? '●' : ''}</strong></td>
+                                  <td>{row.largura}</td>
+                                  <td>{row.comprimento}</td>
+                                  <td>{row.manga}</td>
+                                  <td>{row.ombro}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* GUIA DE COMO MEDIR */}
+                      <div style={{ marginTop: '1rem', padding: '0.85rem', background: '#0a0a0a', border: '1px solid #262626', borderRadius: '3px' }}>
+                        <strong style={{ fontSize: '0.72rem', color: '#ffffff', display: 'block', marginBottom: '0.4rem', letterSpacing: '0.5px' }}>
+                          📐 GUIA: COMO MEDIR SUA PEÇA
+                        </strong>
+                        <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.68rem', color: '#a3a3a3', lineHeight: 1.6 }}>
+                          <li><strong>Largura:</strong> Medida em linha reta de axila a axila com a peça esticada.</li>
+                          <li><strong>Comprimento:</strong> Do ponto mais alto do ombro (junto à gola) até a barra inferior.</li>
+                          <li><strong>Manga:</strong> Da costura do ombro até a extremidade do punho.</li>
+                          <li><strong>Ombro:</strong> Da costura de um ombro à costura do outro ombro.</li>
+                        </ul>
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -641,7 +1221,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
         </section>
       </div>
 
-      {/* SEÇÃO DEDICADA DE AVALIAÇÕES */}
+      {/* SEÇÃO DEDICADA DE AVALIAÇÕES REAIS (SEM MOCKS) */}
       <section className={styles.reviewsSection} aria-label="Avaliações dos clientes">
         <header className={styles.reviewsHeader}>
           <div className={styles.reviewsTitleGroup}>
@@ -649,45 +1229,200 @@ export function ProdutoDetalhe({ onAddToCart }) {
             <h2 className={styles.reviewsMainTitle}>AVALIAÇÕES DA COMUNIDADE</h2>
           </div>
 
-          <div className={styles.ratingSummaryCard}>
-            <div className={styles.ratingScore}>5.0</div>
-            <div className={styles.ratingMeta}>
-              <div className={styles.starsRow} aria-label="Nota 5 de 5 estrelas">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} size={15} fill="#ffffff" color="#ffffff" />
-                ))}
+          {approvedReviews.length > 0 && (
+            <div className={styles.ratingSummaryCard}>
+              <div className={styles.ratingScore}>{reviewsStats.averageRating.toFixed(1)}</div>
+              <div className={styles.ratingMeta}>
+                <div className={styles.starsRow} aria-label={`Nota ${reviewsStats.averageRating} de 5 estrelas`}>
+                  {[...Array(5)].map((_, i) => (
+                    <Star 
+                      key={i} 
+                      size={15} 
+                      fill={i < Math.round(reviewsStats.averageRating) ? "#ffffff" : "none"} 
+                      color={i < Math.round(reviewsStats.averageRating) ? "#ffffff" : "#525252"} 
+                    />
+                  ))}
+                </div>
+                <span className={styles.recommendText}>
+                  {reviewsStats.recommendPercentage}% dos compradores recomendam ({reviewsStats.totalReviews} {reviewsStats.totalReviews === 1 ? 'avaliação' : 'avaliações'})
+                </span>
               </div>
-              <span className={styles.recommendText}>100% dos compradores recomendam</span>
             </div>
-          </div>
+          )}
         </header>
 
         {/* GRADE DE COMENTÁRIOS DOS CLIENTES */}
         <div className={styles.reviewsGrid}>
-          {reviews.map((rev) => (
-            <article key={rev.id} className={styles.reviewCardItem}>
-              <div className={styles.reviewCardTop}>
-                <strong className={styles.reviewAuthor}>{rev.author}</strong>
-                <span className={styles.reviewDate}>{rev.date}</span>
-              </div>
+          {approvedReviews.length > 0 ? (
+            approvedReviews.map((rev) => (
+              <article key={rev.id} className={styles.reviewCardItem}>
+                <div className={styles.reviewCardTop}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                    <strong className={styles.reviewAuthor}>{rev.author}</strong>
+                    <span className={styles.verifiedBuyerTag}>
+                      <ShieldCheck size={11} />
+                      COMPRADOR VERIFICADO
+                    </span>
+                  </div>
+                  <span className={styles.reviewDate}>
+                    {rev.createdAt ? new Date(rev.createdAt).toLocaleDateString('pt-BR') : 'Recente'}
+                  </span>
+                </div>
 
-              <div className={styles.reviewStars}>
-                {[...Array(rev.rating || 5)].map((_, i) => (
-                  <Star key={i} size={12} fill="#ffffff" color="#ffffff" />
-                ))}
-              </div>
+                <div className={styles.reviewStars}>
+                  {[...Array(5)].map((_, i) => (
+                    <Star 
+                      key={i} 
+                      size={12} 
+                      fill={i < (rev.rating || 5) ? "#ffffff" : "none"} 
+                      color={i < (rev.rating || 5) ? "#ffffff" : "#525252"} 
+                    />
+                  ))}
+                </div>
 
-              {rev.variant && (
-                <span className={styles.reviewVariantTag}>{rev.variant}</span>
-              )}
+                {rev.variant && (
+                  <span className={styles.reviewVariantTag}>{rev.variant}</span>
+                )}
 
-              <blockquote className={styles.reviewText}>
-                "{rev.comment}"
-              </blockquote>
-            </article>
-          ))}
+                <blockquote className={styles.reviewText}>
+                  "{rev.comment}"
+                </blockquote>
+              </article>
+            ))
+          ) : (
+            <div className={styles.emptyReviewsBox}>
+              <h3 className={styles.emptyReviewsTitle}>NENHUMA AVALIAÇÃO AINDA</h3>
+              <p className={styles.emptyReviewsText}>
+                Esta peça é produzida sob demanda com alto padrão têxtil. Seja um dos primeiros clientes a adquirir e avaliar o caimento após a entrega confirmada.
+              </p>
+            </div>
+          )}
         </div>
       </section>
+
+      {/* MODAL LIGHTBOX EM TELA CHEIA */}
+      <AnimatePresence>
+        {isFullscreen && (
+          <motion.div 
+            className={styles.lightboxOverlay}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            onClick={() => setIsFullscreen(false)}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Visualização de imagem em tela cheia"
+          >
+            <div className={styles.lightboxHeader} onClick={(e) => e.stopPropagation()}>
+              <div className={styles.lightboxInfo}>
+                <span className={styles.lightboxTitle}>{product?.name || product?.title || 'PRODUTO THR33'}</span>
+                <span className={styles.lightboxCounter}>{selectedImageIndex + 1} / {images.length}</span>
+              </div>
+              <button 
+                type="button" 
+                className={styles.lightboxCloseBtn} 
+                onClick={() => setIsFullscreen(false)}
+                aria-label="Fechar tela cheia"
+                title="Fechar (Esc)"
+              >
+                <X size={22} />
+              </button>
+            </div>
+
+            <div 
+              className={styles.lightboxContent}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              {images.length > 1 && (
+                <button 
+                  type="button"
+                  className={`${styles.lightboxArrow} ${styles.lightboxPrev}`}
+                  onClick={(e) => { e.stopPropagation(); handlePrevImage(); }}
+                  aria-label="Imagem anterior"
+                  title="Anterior (Seta esquerda)"
+                >
+                  <ChevronLeft size={32} />
+                </button>
+              )}
+
+              <motion.img 
+                key={selectedImageIndex}
+                src={images[selectedImageIndex] || images[0]}
+                alt={`${product?.name || product?.title || 'Produto'} - Foto ${selectedImageIndex + 1}`}
+                className={styles.lightboxImage}
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ duration: 0.18 }}
+                onClick={(e) => e.stopPropagation()}
+              />
+
+              {images.length > 1 && (
+                <button 
+                  type="button"
+                  className={`${styles.lightboxArrow} ${styles.lightboxNext}`}
+                  onClick={(e) => { e.stopPropagation(); handleNextImage(); }}
+                  aria-label="Próxima imagem"
+                  title="Próxima (Seta direita)"
+                >
+                  <ChevronRight size={32} />
+                </button>
+              )}
+            </div>
+
+            {images.length > 1 && (
+              <div className={styles.lightboxThumbnails} onClick={(e) => e.stopPropagation()}>
+                {images.map((img, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    className={`${styles.lightboxThumbBtn} ${idx === selectedImageIndex ? styles.activeLightboxThumb : ''}`}
+                    onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(idx); }}
+                    aria-label={`Ver foto ${idx + 1}`}
+                  >
+                    <ImageWithSkeleton 
+                  src={img} 
+                  alt={`Miniatura ${idx + 1}`} 
+                  aspectRatio="3/4" 
+                  objectFit="cover"
+                  style={{ width: '100%', height: '100%', backgroundColor: '#000000' }} 
+                  imgStyle={{ objectFit: 'cover', objectPosition: 'center top' }}
+                />
+                  </button>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* BARRA FIXA FLUTUANTE DE COMPRA NO RODAPÉ MOBILE (STICKY MOBILE CTA) */}
+      {showStickyBottomBar && (
+        <aside className={styles.mobileStickyBuyBar} aria-label="Ações rápidas de compra">
+          <div className={styles.stickyBuyInfo}>
+            <span className={styles.stickyBuyTitle}>{product?.name || product?.title || 'Camiseta THR33'}</span>
+            <div className={styles.stickyBuyMeta}>
+              <span className={styles.stickyBuyBadge}>{selectedFit} • {selectedSize}</span>
+              <strong className={styles.stickyBuyPrice}>
+                R$ {(hasDiscount ? discountPriceNum : priceNum).toFixed(2).replace('.', ',')}
+              </strong>
+            </div>
+          </div>
+          <button 
+            type="button" 
+            onClick={handleAddToCart}
+            disabled={!isUnlimitedStock && availableStock <= 0}
+            className={styles.stickyBuyBtn}
+            aria-label="Adicionar à sacola"
+          >
+            <ShoppingBag size={15} />
+            <span>{isAddedFeedback ? 'ADICIONADO!' : 'COMPRAR'}</span>
+          </button>
+        </aside>
+      )}
     </main>
   );
 }

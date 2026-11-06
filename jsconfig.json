@@ -9,7 +9,8 @@
       "@sections/*": ["src/sections/*"],
       "@services/*": ["src/services/*"],
       "@hooks/*": ["src/hooks/*"],
-      "@theme/*": ["src/theme/*"]
+      "@theme/*": ["src/theme/*"],
+      "@assets/*": ["src/assets/*"]
     }
   },
   "include": ["src"]

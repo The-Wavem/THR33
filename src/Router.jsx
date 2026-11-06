@@ -1,5 +1,5 @@
-import React, { Suspense } from 'react';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import React, { Suspense, useEffect } from 'react';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import { PublicLayout } from './layouts/PublicLayout';
 import { PrivateLayout } from './layouts/PrivateLayout';
 import { ProtectedRoute } from './components/common/ProtectedRoute';
@@ -10,15 +10,17 @@ import { CartDrawer } from './components/cart/CartDrawer';
 import { useCart } from './context/CartContext';
 import { useAuth } from './context/AuthContext';
 import { lazyWithRetry } from './utils/lazyWithRetry';
+import { analyticsService } from './services/analyticsService';
 
 // LAZY LOADING DAS PÁGINAS (CODE-SPLITTING EM CHUNKS SOB DEMANDA)
 const Home = lazyWithRetry(() => import('./pages/public/Home').then(m => ({ default: m.Home || m.default })));
 const Catalogo = lazyWithRetry(() => import('./pages/public/Catalogo').then(m => ({ default: m.Catalogo || m.default })));
 const ProdutoDetalhe = lazyWithRetry(() => import('./pages/public/ProdutoDetalhe').then(m => ({ default: m.ProdutoDetalhe || m.default })));
-const Lancamentos = lazyWithRetry(() => import('./pages/public/Lancamentos').then(m => ({ default: m.Lancamentos || m.default })));
+// (Lancamentos removido - redireciona para catalogo)
 const Checkout = lazyWithRetry(() => import('./pages/public/Checkout').then(m => ({ default: m.Checkout || m.default })));
 const Auth = lazyWithRetry(() => import('./pages/public/Auth').then(m => ({ default: m.Auth || m.default })));
 const Sobre = lazyWithRetry(() => import('./pages/public/Sobre').then(m => ({ default: m.Sobre || m.default })));
+const ComoFuncionaEntrega = lazyWithRetry(() => import('./pages/public/ComoFuncionaEntrega').then(m => ({ default: m.ComoFuncionaEntrega || m.default })));
 const Suporte = lazyWithRetry(() => import('./pages/public/Suporte').then(m => ({ default: m.Suporte || m.default })));
 const Politicas = lazyWithRetry(() => import('./pages/public/Politicas').then(m => ({ default: m.Politicas || m.default })));
 const GuiaTamanhos = lazyWithRetry(() => import('./pages/public/GuiaTamanhos').then(m => ({ default: m.GuiaTamanhos || m.default })));
@@ -37,12 +39,19 @@ const CmsProdutos = lazyWithRetry(() => import('./pages/admin/CmsProdutos').then
 const CmsDescontos = lazyWithRetry(() => import('./pages/admin/CmsDescontos').then(m => ({ default: m.CmsDescontos || m.default })));
 const CmsVitrine = lazyWithRetry(() => import('./pages/admin/CmsVitrine').then(m => ({ default: m.CmsVitrine || m.default })));
 const CmsPedidos = lazyWithRetry(() => import('./pages/admin/CmsPedidos').then(m => ({ default: m.CmsPedidos || m.default })));
+const CmsSuporte = lazyWithRetry(() => import('./pages/admin/CmsSuporte').then(m => ({ default: m.CmsSuporte || m.default })));
+const CmsAvaliacoes = lazyWithRetry(() => import('./pages/admin/CmsAvaliacoes').then(m => ({ default: m.CmsAvaliacoes || m.default })));
 
 export function AppRoutes() {
   const navigate = useNavigate();
   const location = useLocation();
   const { totalItemsCount, setIsCartOpen, addToCart } = useCart();
   const { user, logout, loading } = useAuth();
+
+  // Captura automática de UTM em qualquer mudança de rota/URL
+  useEffect(() => {
+    analyticsService.checkAndTrackUtm();
+  }, [location]);
 
   const handleOpenAuth = (originPath = null, tab = 'login') => {
     const from = originPath || location.pathname;
@@ -54,7 +63,7 @@ export function AppRoutes() {
       {/* ROLAGEM AUTOMÁTICA PARA O TOPO EM MUDANÇAS DE ROTA */}
       <ScrollToTop />
 
-      <Suspense fallback={<LoadingScreen message="CARREGANDO ATELIÊ // FOR THE FEW" />}>
+      <Suspense fallback={<LoadingScreen message="CARREGANDO THR33 // FOR THE FEW" />}>
         <Routes>
           {/* ROTAS PÚBLICAS GLOBAIS */}
           <Route 
@@ -71,7 +80,7 @@ export function AppRoutes() {
             <Route path="/" element={<Home onAddToCart={addToCart} onOpenCart={() => setIsCartOpen(true)} />} />
             
             {/* ROTA LANÇAMENTOS VIP */}
-            <Route path="/lancamentos" element={<Lancamentos onAddToCart={addToCart} onOpenAuthModal={handleOpenAuth} user={user} />} />
+            <Route path="/lancamentos" element={<Navigate to="/catalogo" replace />} />
             
             {/* ROTA PRINCIPAL E ROTA DINÂMICA DE CATEGORIA */}
             <Route path="/catalogo" element={<Catalogo onAddToCart={addToCart} />} />
@@ -86,6 +95,7 @@ export function AppRoutes() {
 
             {/* ROTAS INSTITUCIONAIS: SOBRE, SUPORTE, POLÍTICAS, GUIA DE TAMANHOS & FAVORITOS */}
             <Route path="/sobre" element={<Sobre />} />
+            <Route path="/como-funciona-a-entrega" element={<ComoFuncionaEntrega />} />
             <Route path="/suporte" element={<Suporte />} />
             <Route path="/politicas" element={<Politicas />} />
             <Route path="/guia-de-tamanhos" element={<GuiaTamanhos />} />
@@ -116,7 +126,7 @@ export function AppRoutes() {
             {/* ROTA DE CHECKOUT (SOMENTE CLIENTES AUTENTICADOS) */}
             <Route path="/checkout" element={<Checkout user={user} onOpenAuthModal={handleOpenAuth} />} />
 
-            {/* PAINEL TÁTICO PASSAPORTE ATELIÊ */}
+            {/* PAINEL TÁTICO PASSAPORTE THR33 */}
             <Route path="/perfil" element={<Perfil defaultTab="dados" />} />
             <Route path="/minha-conta" element={<Perfil defaultTab="pedidos" />} />
             <Route path="/meus-pedidos" element={<Perfil defaultTab="pedidos" />} />
@@ -142,6 +152,8 @@ export function AppRoutes() {
             <Route path="descontos" element={<CmsDescontos />} />
             <Route path="vitrine" element={<CmsVitrine />} />
             <Route path="pedidos" element={<CmsPedidos />} />
+            <Route path="suporte" element={<CmsSuporte />} />
+            <Route path="avaliacoes" element={<CmsAvaliacoes />} />
           </Route>
 
           {/* ALIAS DE CONVENIÊNCIA PARA /admin */}
@@ -161,6 +173,8 @@ export function AppRoutes() {
             <Route path="descontos" element={<CmsDescontos />} />
             <Route path="vitrine" element={<CmsVitrine />} />
             <Route path="pedidos" element={<CmsPedidos />} />
+            <Route path="suporte" element={<CmsSuporte />} />
+            <Route path="avaliacoes" element={<CmsAvaliacoes />} />
           </Route>
         </Routes>
       </Suspense>

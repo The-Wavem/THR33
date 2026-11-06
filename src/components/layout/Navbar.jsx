@@ -1,12 +1,47 @@
 import React, { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { User, ShoppingBag, Heart, LogOut, Package, ArrowRight, Gift, ShieldCheck } from 'lucide-react';
+import { 
+  User, 
+  ShoppingBag, 
+  Heart, 
+  LogOut, 
+  Package, 
+  ArrowRight, 
+  Gift, 
+  ShieldCheck,
+  X,
+  ChevronDown,
+  ChevronRight
+} from 'lucide-react';
 import { useCart } from '../../context/CartContext';
 import { useAuth } from '../../context/AuthContext';
 import { useWishlist } from '../../context/WishlistContext';
 import { preloadRoute } from '../../utils/preloader';
 import styles from './Navbar.module.css';
+
+function InstagramIcon({ size = 20, className }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <rect width="20" height="20" x="2" y="2" rx="5" ry="5" />
+      <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" x2="17.51" y1="6.5" y2="6.5" />
+    </svg>
+  );
+}
+
+
 
 // Variantes suaves de animação para os dropdowns (rápido, fluído e elegante)
 const dropdownMotionVariants = {
@@ -39,10 +74,37 @@ const dropdownMotionVariants = {
   }
 };
 
+// Palavras da rotação refinada da marca
+const BRAND_ROTATION_ITEMS = [
+  { id: 'brand', text: 'THR33', isBrand: true },
+  { id: 'creed', text: 'FOR THE FEW', isBrand: false }
+];
+
 export function Navbar({ onOpenCart }) {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isMobileCategoriesOpen, setIsMobileCategoriesOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [isCatalogDropdownOpen, setIsCatalogDropdownOpen] = useState(false);
+  const [logoSlideIndex, setLogoSlideIndex] = useState(0);
+
+  // Timer suave de 6 segundos para alternar entre a marca e o manifesto
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLogoSlideIndex(prev => (prev + 1) % BRAND_ROTATION_ITEMS.length);
+    }, 6000);
+    return () => clearInterval(timer);
+  }, []);
+
+  // Trava scroll do body quando menu mobile estiver aberto
+  useEffect(() => {
+    if (isMobileMenuOpen) {
+      const prevOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = prevOverflow;
+      };
+    }
+  }, [isMobileMenuOpen]);
 
   const dropdownTimerRef = useRef(null);
   const profileWrapperRef = useRef(null);
@@ -125,7 +187,8 @@ export function Navbar({ onOpenCart }) {
   };
 
   return (
-    <header className={styles.header}>
+    <>
+      <header className={styles.header}>
       <div className={styles.container}>
         {/* Mobile Toggle */}
         <button 
@@ -137,19 +200,36 @@ export function Navbar({ onOpenCart }) {
           <span className={styles.hamburger}></span>
         </button>
 
-        {/* Logo */}
+        {/* Logo com Troca Lisa, Clean e Diferenciada (THR33 / FOR THE FEW) */}
         <Link 
           to="/" 
           className={styles.logo} 
           aria-label="THR33 Home"
           onMouseEnter={() => preloadRoute('/')}
+          onTouchStart={() => preloadRoute('/')}
         >
-          <span className={styles.logoText}>THR33</span>
-          <span className={styles.logoSub}>FOR THE FEW</span>
+          <div className={styles.logoRollFrame}>
+            <AnimatePresence initial={false}>
+              <motion.span
+                key={BRAND_ROTATION_ITEMS[logoSlideIndex].id}
+                initial={{ y: 18, opacity: 0, filter: 'blur(3px)' }}
+                animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
+                exit={{ y: -18, opacity: 0, filter: 'blur(3px)' }}
+                transition={{ duration: 0.75, ease: [0.16, 1, 0.3, 1] }}
+                className={`${styles.logoItem} ${
+                  BRAND_ROTATION_ITEMS[logoSlideIndex].isBrand 
+                    ? styles.logoText 
+                    : styles.logoCreedText
+                }`}
+              >
+                {BRAND_ROTATION_ITEMS[logoSlideIndex].text}
+              </motion.span>
+            </AnimatePresence>
+          </div>
         </Link>
 
         {/* Links de Navegação com Preloading no Hover */}
-        <nav className={`${styles.nav} ${isMobileMenuOpen ? styles.navOpen : ''}`}>
+        <nav className={styles.nav}>
           <NavLink 
             to="/" 
             className={({ isActive }) => isActive ? `${styles.link} ${styles.active}` : styles.link}
@@ -202,52 +282,27 @@ export function Navbar({ onOpenCart }) {
                       className={styles.dropdownMainHeader}
                       onClick={() => setIsCatalogDropdownOpen(false)}
                     >
-                      <span>VER TODAS AS PEÇAS</span>
+                      <span>TODAS AS CAMISETAS</span>
                       <ArrowRight size={13} />
                     </Link>
 
                     <hr className={styles.divider} />
-
-                    <span className={styles.categoryHeading}>CATEGORIAS</span>
+                    <span className={styles.categoryHeading}>MODELAGENS</span>
 
                     <Link 
-                      to="/catalogo?categoria=camisa" 
+                      to="/catalogo?modelagem=boxy" 
                       className={styles.dropdownLink}
                       onClick={() => setIsCatalogDropdownOpen(false)}
                     >
-                      Camisetas & Boxy
+                      Boxy Fit
                     </Link>
 
                     <Link 
-                      to="/catalogo?categoria=calca" 
+                      to="/catalogo?modelagem=oversized" 
                       className={styles.dropdownLink}
                       onClick={() => setIsCatalogDropdownOpen(false)}
                     >
-                      Calças Streetwear
-                    </Link>
-
-                    <Link 
-                      to="/catalogo?categoria=bermuda" 
-                      className={styles.dropdownLink}
-                      onClick={() => setIsCatalogDropdownOpen(false)}
-                    >
-                      Bermudas & Shorts
-                    </Link>
-
-                    <Link 
-                      to="/catalogo?categoria=moletom" 
-                      className={styles.dropdownLink}
-                      onClick={() => setIsCatalogDropdownOpen(false)}
-                    >
-                      Moletons & Hoodies
-                    </Link>
-
-                    <Link 
-                      to="/catalogo?categoria=acessorio" 
-                      className={styles.dropdownLink}
-                      onClick={() => setIsCatalogDropdownOpen(false)}
-                    >
-                      Acessórios
+                      Oversized Heavy & Clássica
                     </Link>
 
                     <hr className={styles.divider} />
@@ -270,16 +325,6 @@ export function Navbar({ onOpenCart }) {
               )}
             </AnimatePresence>
           </div>
-
-          <NavLink 
-            to="/drops-passados" 
-            className={({ isActive }) => isActive ? `${styles.link} ${styles.active}` : styles.link}
-            onClick={() => setIsMobileMenuOpen(false)}
-            onMouseEnter={() => preloadRoute('/drops-passados')}
-            onTouchStart={() => preloadRoute('/drops-passados')}
-          >
-            Drops Passados
-          </NavLink>
           
           <NavLink 
             to="/sobre" 
@@ -303,14 +348,23 @@ export function Navbar({ onOpenCart }) {
               onTouchStart={() => preloadRoute('/cms')}
             >
               <ShieldCheck size={13} className={styles.adminNavIcon} />
-              <span>Painel CMS</span>
-              <span className={styles.adminNavBadge}>ADM</span>
+              <span>Painel WEM</span>
             </NavLink>
           )}
         </nav>
 
         {/* Ações / Ícones do Usuário */}
         <div className={styles.actions}>
+          <a 
+            href="https://www.instagram.com/madebythr33" 
+            target="_blank" 
+            rel="noreferrer" 
+            className={`${styles.actionBtn} ${styles.instagramHeaderLink}`}
+            aria-label="Instagram Oficial da THR33"
+            title="Instagram Oficial"
+          >
+            <InstagramIcon size={20} />
+          </a>
           <Link 
             to="/favoritos" 
             className={styles.actionBtn} 
@@ -375,7 +429,7 @@ export function Navbar({ onOpenCart }) {
                           >
                             <div className={styles.adminHighlightLeft}>
                               <ShieldCheck size={14} className={styles.adminIconGlow} />
-                              <span>PAINEL CMS ENGINE</span>
+                              <span>WEM</span>
                             </div>
                             <span className={styles.adminBadgePill}>ADM</span>
                           </Link>
@@ -390,7 +444,7 @@ export function Navbar({ onOpenCart }) {
                         onMouseEnter={() => preloadRoute('/perfil')}
                       >
                         <User size={14} />
-                        <span>Minha Conta / Perfil</span>
+                        <span>Minha Conta & Carteira</span>
                       </Link>
 
                       <Link 
@@ -454,7 +508,257 @@ export function Navbar({ onOpenCart }) {
         </div>
       </div>
     </header>
-  );
+
+    {/* DRAWER DESLIZANTE MOBILE COM BACKDROP (PORTAL DIRETAMENTE NO BODY) */}
+    {typeof document !== 'undefined' && createPortal(
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <div className={styles.mobileDrawerWrapper}>
+            <motion.div 
+              className={styles.mobileBackdrop}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              aria-hidden="true"
+            />
+
+            <motion.aside 
+              className={styles.mobileDrawer}
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 300 }}
+              aria-label="Menu de Navegação Mobile"
+            >
+              {/* TOPO DO DRAWER */}
+              <div className={styles.drawerHeader}>
+                <Link 
+                  to="/" 
+                  className={styles.drawerLogo} 
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <span className={styles.logoText}>THR33</span>
+                </Link>
+
+                <button 
+                  type="button" 
+                  className={styles.drawerCloseBtn}
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  aria-label="Fechar menu"
+                >
+                  <X size={22} />
+                </button>
+              </div>
+
+              {/* CONTEÚDO ROLÁVEL */}
+              <div className={styles.drawerBody}>
+                {/* BLOCO DE USUÁRIO / AUTENTICAÇÃO */}
+                <div className={styles.drawerUserSection}>
+                  {isAuthenticated ? (
+                    <div className={styles.drawerUserCard}>
+                      <div className={styles.drawerUserInfo}>
+                        <p className={styles.drawerUserName}>
+                          Olá, <strong>{currentUser?.name?.split(' ')[0] || 'Usuário'}</strong>
+                        </p>
+                        <span className={styles.drawerUserEmail}>{currentUser?.email}</span>
+                      </div>
+                      <div className={styles.drawerUserActions}>
+                        <Link 
+                          to="/perfil" 
+                          className={styles.drawerUserBtn}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          <User size={15} />
+                          <span>Minha Conta & Carteira</span>
+                        </Link>
+                        {isAdmin && (
+                          <Link 
+                            to="/cms" 
+                            className={styles.drawerAdminBtn}
+                            onClick={() => setIsMobileMenuOpen(false)}
+                          >
+                            <ShieldCheck size={15} />
+                            <span>CMS</span>
+                          </Link>
+                        )}
+                        <button 
+                          type="button" 
+                          onClick={() => {
+                            handleLogout();
+                            setIsMobileMenuOpen(false);
+                          }} 
+                          className={styles.drawerLogoutBtn}
+                        >
+                          <LogOut size={15} />
+                          <span>Sair</span>
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className={styles.drawerAuthCard}>
+                      <p className={styles.drawerAuthTitle}>ACESSAR CONTA</p>
+                      <div className={styles.drawerAuthRow}>
+                        <Link 
+                          to="/auth?mode=login" 
+                          className={styles.drawerPrimaryAuth}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          Entrar
+                        </Link>
+                        <Link 
+                          to="/auth?mode=register" 
+                          className={styles.drawerSecondaryAuth}
+                          onClick={() => setIsMobileMenuOpen(false)}
+                        >
+                          Criar Conta
+                        </Link>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* LINKS DE NAVEGAÇÃO */}
+                <nav className={styles.drawerNav}>
+                  <NavLink 
+                    to="/" 
+                    className={({ isActive }) => `${styles.drawerLink} ${isActive ? styles.drawerLinkActive : ''}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <span>Início</span>
+                    <ChevronRight size={16} className={styles.drawerChevron} />
+                  </NavLink>
+
+                  {/* ITEM CATÁLOGO COM ACORDEÃO */}
+                  <div className={styles.drawerCatalogGroup}>
+                    <div className={styles.drawerCatalogHeaderRow}>
+                      <NavLink 
+                        to="/catalogo" 
+                        className={({ isActive }) => `${styles.drawerLink} ${isActive ? styles.drawerLinkActive : ''}`}
+                        onClick={() => setIsMobileMenuOpen(false)}
+                      >
+                        <span>Catálogo Completo</span>
+                      </NavLink>
+                      <button 
+                        type="button" 
+                        className={styles.drawerExpandBtn}
+                        onClick={() => setIsMobileCategoriesOpen(prev => !prev)}
+                        aria-label="Expandir categorias do catálogo"
+                        aria-expanded={isMobileCategoriesOpen}
+                      >
+                        <ChevronDown 
+                          size={18} 
+                          className={`${styles.drawerExpandIcon} ${isMobileCategoriesOpen ? styles.drawerExpandIconOpen : ''}`} 
+                        />
+                      </button>
+                    </div>
+
+                    {isMobileCategoriesOpen && (
+                      <div className={styles.drawerSubLinks}>
+                        <Link 
+                          to="/catalogo" 
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={styles.drawerSubLink}
+                        >
+                          Todas as Camisetas
+                        </Link>
+                        <Link 
+                          to="/catalogo?modelagem=boxy" 
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={styles.drawerSubLink}
+                        >
+                          Boxy Fit
+                        </Link>
+                        <Link 
+                          to="/catalogo?modelagem=oversized" 
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={styles.drawerSubLink}
+                        >
+                          Oversized Heavy & Clássica
+                        </Link>
+                        <Link 
+                          to="/brindes" 
+                          onClick={() => setIsMobileMenuOpen(false)}
+                          className={`${styles.drawerSubLink} ${styles.drawerSubHighlight}`}
+                        >
+                          <Gift size={14} />
+                          <span>Vales & Brindes</span>
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+
+                  <NavLink 
+                    to="/como-funciona-a-entrega" 
+                    className={({ isActive }) => `${styles.drawerLink} ${isActive ? styles.drawerLinkActive : ''}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <span>Como Funciona a Entrega</span>
+                    <ChevronRight size={16} className={styles.drawerChevron} />
+                  </NavLink>
+
+                  <NavLink 
+                    to="/sobre" 
+                    className={({ isActive }) => `${styles.drawerLink} ${isActive ? styles.drawerLinkActive : ''}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <span>Sobre a THR33</span>
+                    <ChevronRight size={16} className={styles.drawerChevron} />
+                  </NavLink>
+
+                  <NavLink 
+                    to="/favoritos" 
+                    className={({ isActive }) => `${styles.drawerLink} ${isActive ? styles.drawerLinkActive : ''}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <div className={styles.drawerIconLabel}>
+                      <Heart size={16} />
+                      <span>Favoritos</span>
+                    </div>
+                    {favoritesCount > 0 && (
+                      <span className={styles.drawerCountBadge}>{favoritesCount}</span>
+                    )}
+                  </NavLink>
+
+                  <NavLink 
+                    to="/suporte" 
+                    className={({ isActive }) => `${styles.drawerLink} ${isActive ? styles.drawerLinkActive : ''}`}
+                    onClick={() => setIsMobileMenuOpen(false)}
+                  >
+                    <span>Suporte & Trocas</span>
+                    <ChevronRight size={16} className={styles.drawerChevron} />
+                  </NavLink>
+                </nav>
+              </div>
+
+              {/* FOOTER FIXO DO DRAWER */}
+              <div className={styles.drawerFooter}>
+                <button 
+                  type="button" 
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    handleCartClick();
+                  }}
+                  className={styles.drawerCartAction}
+                >
+                  <div className={styles.drawerCartLeft}>
+                    <ShoppingBag size={18} />
+                    <span>VER CARRINHO</span>
+                  </div>
+                  <span className={styles.drawerCartBadge}>
+                    {totalItemsCount} {totalItemsCount === 1 ? 'item' : 'itens'}
+                  </span>
+                </button>
+              </div>
+            </motion.aside>
+          </div>
+        )}
+      </AnimatePresence>,
+      document.body
+    )}
+  </>
+);
 }
 
 export default Navbar;

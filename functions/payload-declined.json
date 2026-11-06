@@ -1,0 +1,24 @@
+{
+  "id": "ORDE_F1188D90-34E6-4A73-A3B9-45F4D3C4B642",
+  "reference_id": "PEDIDO-TESTE-101",
+  "created_at": "2026-10-01T08:35:00.000-03:00",
+  "charges": [
+    {
+      "id": "CHAR_E7202392-D864-4691-84D6-70809FD02341",
+      "reference_id": "PEDIDO-TESTE-101",
+      "status": "DECLINED",
+      "created_at": "2026-10-01T08:35:02.000-03:00",
+      "amount": {
+        "value": 15990,
+        "currency": "BRL"
+      },
+      "payment_response": {
+        "code": "40002",
+        "message": "Cartao recusado pelo emissor"
+      },
+      "payment_method": {
+        "type": "CREDIT_CARD"
+      }
+    }
+  ]
+}
