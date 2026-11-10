@@ -229,112 +229,159 @@ export const pagbankService = {
           let resolvedAuthId = cardData?.authenticationId || null;
           const encCardStr = cardEncrypted || cardData?.encryptedCard || '';
 
-          // Se nao for token mock de homologacao, tenta iniciar desafio 3DS 2.0 do PagBank automaticamente
+          // Se nao for token mock de homologacao, tenta iniciar desafio 3DS 2.0 do PagBank obrigatoriamente
           if (!resolvedAuthId && encCardStr && !encCardStr.startsWith('MOCK_ENC_')) {
             try {
               const pagSeguroSdk = typeof window !== 'undefined' ? (window.PagSeguro || window.Pagseguro) : null;
-              if (pagSeguroSdk?.authenticate3DS) {
-                // 1. Pre-valida estoque no servidor e gera uma sessao 3DS limpa (cada sessao 3DS e de uso unico por desafio)
-                const sessionRes = await createPagBankOrderFn({
-                  action: 'create3dsSession',
-                  items: (items || []).map((item, idx) => ({
-                    id: String(item.id || item.slug || `item_${idx}`),
-                    name: String(item.name || 'Camiseta THR33').slice(0, 64),
-                    quantity: Number(item.quantity) || 1,
-                    size: item.size || 'M'
-                  }))
-                });
-
-                if (sessionRes?.data?.success && sessionRes.data.session) {
-                  const targetEnv = sessionRes.data.env || (IS_SANDBOX ? 'SANDBOX' : 'PROD');
-                  pagSeguroSdk.setUp({
-                    session: sessionRes.data.session,
-                    env: targetEnv
-                  });
-                }
-
-                const cleanPhone = (customer?.phone || '').replace(/\D/g, '');
-                const area = cleanPhone.length >= 10 ? cleanPhone.slice(0, 2) : '41';
-                let phoneNum = cleanPhone.length >= 10 ? cleanPhone.slice(2) : '999999999';
-                if (phoneNum.length > 9) phoneNum = phoneNum.slice(-9);
-                if (phoneNum.length < 8) phoneNum = '99999999';
-
-                const cleanCep = (shippingAddress?.cep || '80420000').replace(/\D/g, '').padEnd(8, '0').slice(0, 8);
-                const cleanState = (shippingAddress?.state || 'PR').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 2) || 'PR';
-                const cleanNumber = String(shippingAddress?.number || '333').replace(/\D/g, '') || '333';
-                const cleanComplement = shippingAddress?.complement ? String(shippingAddress.complement).trim().slice(0, 40) : '';
-                const sanitizedCustomerName = sanitizePagBankName(customer?.name || cardData?.holder, cardData?.holder);
-
-                const auth3dsResult = await pagSeguroSdk.authenticate3DS({
-                  data: {
-                    customer: {
-                      name: sanitizedCustomerName,
-                      email: customer?.email || 'cliente@thr33.com',
-                      phones: [{ country: '55', area, number: phoneNum, type: 'MOBILE' }]
-                    },
-                    paymentMethod: {
-                      type: 'DEBIT_CARD',
-                      installments: 1,
-                      card: {
-                        encrypted: encCardStr
-                      }
-                    },
-                    amount: {
-                      value: Math.max(100, Math.round(Number(totalAmount || 0) * 100)),
-                      currency: 'BRL'
-                    },
-                    billingAddress: {
-                      street: String(shippingAddress?.street || 'Rua Comendador Araujo').slice(0, 100),
-                      number: cleanNumber,
-                      ...(cleanComplement ? { complement: cleanComplement } : {}),
-                      regionCode: cleanState,
-                      country: 'BRA',
-                      city: String(shippingAddress?.city || 'Curitiba').slice(0, 50),
-                      postalCode: cleanCep
-                    },
-                    dataOnly: false
-                  }
-                });
-
-                if (auth3dsResult?.status === 'AUTH_NOT_SUPPORTED') {
-                  throw new Error('BANK_3DS_NOT_SUPPORTED: O banco emissor informou que este cartão não está habilitado para compras online na função Débito. Libere compras online no débito (ou use o Cartão Virtual) no app do seu banco, ou utilize PIX / Cartão de Crédito.');
-                }
-
-                if (auth3dsResult?.status === 'CHANGE_PAYMENT_METHOD') {
-                  throw new Error('BANK_3DS_REJECTED: O banco emissor bloqueou temporariamente a autenticação 3DS deste cartão no débito (muitas tentativas seguidas ou bloqueio de segurança do emissor) e solicitou o uso de outro método de pagamento (PIX ou Cartão de Crédito).');
-                }
-
-                if (auth3dsResult?.status === 'REJECTED' || auth3dsResult?.status === 'FAILURE' || auth3dsResult?.status === 'CANCELLED') {
-                  throw new Error('BANK_3DS_REJECTED: A autenticação de segurança 3DS foi recusada ou cancelada pelo banco emissor. Verifique o aplicativo do seu banco ou tente outro método de pagamento.');
-                }
-
-                if (auth3dsResult?.id) {
-                  resolvedAuthId = auth3dsResult.id;
-                }
+              if (!pagSeguroSdk?.authenticate3DS) {
+                throw new Error('BANK_3DS_ERROR: O módulo de autenticação 3DS do PagBank não pôde ser carregado no navegador. Verifique sua conexão ou utilize PIX / Cartão de Crédito.');
               }
+
+              // 1. Pre-valida estoque no servidor e gera uma sessao 3DS limpa (cada sessao 3DS e de uso unico por desafio)
+              const sessionRes = await createPagBankOrderFn({
+                action: 'create3dsSession',
+                items: (items || []).map((item, idx) => ({
+                  id: String(item.id || item.slug || `item_${idx}`),
+                  name: String(item.name || 'Camiseta THR33').slice(0, 64),
+                  quantity: Number(item.quantity) || 1,
+                  size: item.size || 'M'
+                }))
+              });
+
+              if (!sessionRes?.data?.success || !sessionRes?.data?.session) {
+                throw new Error('BANK_3DS_ERROR: Não foi possível inicializar a sessão de segurança 3DS junto ao PagBank. Tente novamente em instantes ou escolha PIX / Cartão de Crédito.');
+              }
+
+              const targetEnv = sessionRes.data.env || (IS_SANDBOX ? 'SANDBOX' : 'PROD');
+              pagSeguroSdk.setUp({
+                session: sessionRes.data.session,
+                env: targetEnv
+              });
+
+              const cleanPhone = String(customer?.phone || '').replace(/\D/g, '');
+              const area = (cleanPhone.length >= 10 ? cleanPhone.slice(0, 2) : '41').replace(/\D/g, '');
+              let phoneNum = (cleanPhone.length >= 10 ? cleanPhone.slice(2) : '999999999').replace(/\D/g, '');
+              if (phoneNum.length > 9) phoneNum = phoneNum.slice(-9);
+              if (phoneNum.length < 8) phoneNum = '99999999';
+
+              const cleanCep = String(shippingAddress?.cep || shippingAddress?.postalCode || '80420000')
+                .replace(/\D/g, '')
+                .padEnd(8, '0')
+                .slice(0, 8);
+              const cleanState = String(shippingAddress?.state || shippingAddress?.regionCode || 'PR')
+                .trim()
+                .toUpperCase()
+                .replace(/[^A-Z]/g, '')
+                .slice(0, 2) || 'PR';
+              const cleanNumber = (shippingAddress?.number ? String(shippingAddress.number).trim() : '') || 'S/N';
+              const cleanComplement = (shippingAddress?.complement ? String(shippingAddress.complement).trim().slice(0, 40) : '') || 'S/C';
+              const cleanStreet = (shippingAddress?.street ? String(shippingAddress.street).trim().slice(0, 100) : '') || 'Rua Comendador Araujo';
+              const cleanCity = (shippingAddress?.city ? String(shippingAddress.city).trim().slice(0, 50) : '') || 'Curitiba';
+              const sanitizedCustomerName = sanitizePagBankName(customer?.name || cardData?.holder, cardData?.holder);
+              const amountInCents = Math.max(100, Math.round(Number(totalAmount || 0) * 100));
+
+              const auth3dsResult = await pagSeguroSdk.authenticate3DS({
+                data: {
+                  customer: {
+                    name: sanitizedCustomerName,
+                    email: (customer?.email || 'cliente@thr33.com').trim(),
+                    phones: [{ country: '55', area, number: phoneNum, type: 'MOBILE' }]
+                  },
+                  paymentMethod: {
+                    type: 'DEBIT_CARD',
+                    installments: 1,
+                    card: {
+                      encrypted: encCardStr
+                    }
+                  },
+                  amount: {
+                    value: amountInCents,
+                    currency: 'BRL'
+                  },
+                  billingAddress: {
+                    street: cleanStreet,
+                    number: cleanNumber,
+                    complement: cleanComplement,
+                    regionCode: cleanState,
+                    country: 'BRA',
+                    city: cleanCity,
+                    postalCode: cleanCep
+                  },
+                  dataOnly: false
+                }
+              });
+
+              console.log('[PagBank 3DS] Resultado authenticate3DS:', {
+                status: auth3dsResult?.status,
+                id: auth3dsResult?.id
+              });
+
+              if (auth3dsResult?.status === 'CHANGE_PAYMENT_METHOD') {
+                throw new Error('BANK_3DS_REJECTED: O banco emissor não autorizou o débito online para este cartão (CHANGE_PAYMENT_METHOD) e solicitou o uso de outro método de pagamento (PIX ou Cartão de Crédito).');
+              }
+
+              if (auth3dsResult?.status === 'AUTH_NOT_SUPPORTED' && !auth3dsResult?.id) {
+                throw new Error('BANK_3DS_NOT_SUPPORTED: O banco emissor informou que este cartão não está habilitado para compras online na função Débito. Libere compras online no débito (ou use o Cartão Virtual) no app do seu banco, ou utilize PIX / Cartão de Crédito.');
+              }
+
+              if (auth3dsResult?.status === 'REJECTED' || auth3dsResult?.status === 'FAILURE' || auth3dsResult?.status === 'CANCELLED') {
+                throw new Error('BANK_3DS_REJECTED: O banco emissor não autorizou o débito online (autenticação 3DS recusada ou cancelada). Verifique o aplicativo do seu banco ou tente outro método de pagamento.');
+              }
+
+              const validStatuses = ['AUTH_FLOW_COMPLETED', 'AUTH_NOT_SUPPORTED', 'AUTHENTICATED'];
+              if (!auth3dsResult || !auth3dsResult.id || (auth3dsResult.status && !validStatuses.includes(auth3dsResult.status))) {
+                throw new Error('BANK_3DS_ERROR: O banco emissor não autorizou o débito online (token 3DS ausente ou status não autenticado). Verifique o app do seu banco ou utilize PIX / Cartão de Crédito.');
+              }
+
+              resolvedAuthId = auth3dsResult.id;
             } catch (auth3dsErr) {
-              const err3dsMsg = String(auth3dsErr?.message || auth3dsErr?.details || auth3dsErr || '');
+              let err3dsMsg = '';
+              const sdkErrorMessages = auth3dsErr?.errorMessages || auth3dsErr?.detail?.errorMessages || auth3dsErr?.data?.errorMessages;
+              if (typeof auth3dsErr === 'string') {
+                err3dsMsg = auth3dsErr;
+              } else if (Array.isArray(sdkErrorMessages) && sdkErrorMessages.length > 0) {
+                const details = sdkErrorMessages
+                  .map(e => `${e.parameterName || 'campo'}: ${e.description || e.message || e.code}`)
+                  .join(', ');
+                err3dsMsg = `Dados inválidos para autenticação 3DS (${details}). Verifique seu endereço e telefone de cadastro.`;
+              } else {
+                err3dsMsg = String(auth3dsErr?.message || auth3dsErr?.details || '');
+              }
+
               if (
                 err3dsMsg.includes('Estoque insuficiente') ||
                 err3dsMsg.includes('não foi encontrado no catálogo')
               ) {
                 throw new Error(err3dsMsg);
               }
-              if (err3dsMsg.includes('BANK_3DS_NOT_SUPPORTED:') || err3dsMsg.includes('BANK_3DS_REJECTED:')) {
+              if (
+                err3dsMsg.includes('BANK_3DS_NOT_SUPPORTED:') ||
+                err3dsMsg.includes('BANK_3DS_REJECTED:') ||
+                err3dsMsg.includes('BANK_3DS_ERROR:')
+              ) {
                 throw new Error(err3dsMsg.replace(/^BANK_3DS_[A-Z_]+:\s*/, ''));
               }
-              console.warn("Aviso no desafio 3DS do Cartão de Débito:", err3dsMsg);
-
-              // Em produção, não prosseguir sem autenticação 3DS no débito pois a API PagBank rejeitará
-              if (!IS_SANDBOX && !resolvedAuthId) {
-                throw new Error('Não foi possível concluir a autenticação 3DS do Cartão de Débito junto ao banco emissor. Verifique no app do seu banco se o cartão está liberado para compras online no débito (ou utilize o Cartão Virtual do app), ou escolha PIX / Cartão de Crédito.');
+              if (err3dsMsg.includes('Dados inválidos para autenticação 3DS')) {
+                throw new Error(err3dsMsg);
               }
+
+              console.warn("Erro no desafio 3DS do Cartão de Débito:", auth3dsErr);
+
+              // Interrompe imediatamente o fluxo no Débito sem chamar createPagBankOrder sem o token 3DS
+              throw new Error(
+                'Não foi possível concluir a autenticação 3DS do Cartão de Débito junto ao banco emissor. Verifique os dados do endereço/cartão e se o cartão está liberado para compras online no débito no app do seu banco, ou escolha PIX / Cartão de Crédito.'
+              );
             }
+          }
+
+          if (!resolvedAuthId && !encCardStr.startsWith('MOCK_ENC_')) {
+            throw new Error(
+              'O banco emissor não autorizou o débito online (autenticação 3DS obrigatória não concluída). Tente novamente ou utilize PIX / Cartão de Crédito.'
+            );
           }
 
           paymentMethodPayload = {
             type: 'DEBIT_CARD',
-            installments: 1,
             cardEncrypted: encCardStr,
             holderName: sanitizePagBankName(cardData?.holder || customer?.name, cardData?.holder),
             authenticationId: resolvedAuthId
@@ -375,16 +422,14 @@ export const pagbankService = {
               serviceName: String(rawOrderData?.serviceName || ''),
               shippingDeadline: String(rawOrderData?.shippingDeadline || rawOrderData?.deadline || ''),
               address: {
-                street: shippingAddress.street || 'Rua',
-                number: shippingAddress.number || '1',
-                ...(shippingAddress.complement && shippingAddress.complement.trim() !== ''
-                  ? { complement: shippingAddress.complement.trim().slice(0, 40) }
-                  : {}),
-                neighborhood: shippingAddress.neighborhood || shippingAddress.locality || 'Centro',
-                city: shippingAddress.city || 'Curitiba',
-                state: shippingAddress.state || 'PR',
-                cep: (shippingAddress.cep || '80000000').replace(/\D/g, ''),
-                ibge: shippingAddress.ibge || ''
+                street: (shippingAddress?.street ? String(shippingAddress.street).trim() : '') || 'Rua',
+                number: (shippingAddress?.number ? String(shippingAddress.number).trim() : '') || 'S/N',
+                complement: (shippingAddress?.complement ? String(shippingAddress.complement).trim().slice(0, 40) : '') || 'S/C',
+                neighborhood: (shippingAddress?.neighborhood || shippingAddress?.locality || 'Centro').trim(),
+                city: (shippingAddress?.city ? String(shippingAddress.city).trim() : '') || 'Curitiba',
+                state: (shippingAddress?.state ? String(shippingAddress.state).trim().toUpperCase() : '') || 'PR',
+                cep: String(shippingAddress?.cep || '80000000').replace(/\D/g, ''),
+                ibge: shippingAddress?.ibge || ''
               }
             },
             paymentMethod: paymentMethodPayload,
@@ -394,28 +439,7 @@ export const pagbankService = {
             totalAmount: Number(totalAmount !== undefined ? totalAmount : 0)
           };
 
-          let res = null;
-          try {
-            res = await createPagBankOrderFn(baseCallablePayload);
-          } catch (firstErr) {
-            const firstMsg = String(firstErr?.message || firstErr?.details || '');
-            // Caso a Cloud Function em producao ainda nao tenha recebido o deploy do tipo DEBIT_CARD,
-            // reenvia em modo compativel 1x a vista para processar no gateway PagBank sem bloquear o checkout
-            if (paymentMethod === 'Cartão de Débito' && firstMsg.includes('Metodo de pagamento invalido')) {
-              console.warn('Cloud Function em versao anterior para DEBIT_CARD; processando em 1x a vista compativel...');
-              res = await createPagBankOrderFn({
-                ...baseCallablePayload,
-                paymentMethod: {
-                  type: 'CREDIT_CARD',
-                  installments: 1,
-                  cardEncrypted: paymentMethodPayload.cardEncrypted,
-                  holderName: paymentMethodPayload.holderName
-                }
-              });
-            } else {
-              throw firstErr;
-            }
-          }
+          const res = await createPagBankOrderFn(baseCallablePayload);
 
           if (res?.data?.success) {
             const data = res.data;
@@ -450,19 +474,30 @@ export const pagbankService = {
       const cleanLastDigits = String(cardData?.lastDigits || cardData?.number || '').replace(/\D/g, '').slice(-4);
       const isTestCard = cleanLastDigits === '1111' || cleanLastDigits === '5100' || cleanLastDigits === '4444';
 
-      if (errMsg.includes("Estoque insuficiente") || errMsg.includes("não encontrado no catálogo") || errMsg.includes("não está habilitado para compras online") || errMsg.includes("autenticação de segurança 3DS")) {
-        throw new Error(errMsg);
-      }
       if (errMsg.includes("buyer email must not be equals to merchant email")) {
         throw new Error("O e-mail do comprador não pode ser igual ao e-mail cadastrado na conta PagBank do lojista. Por favor, informe outro e-mail na Etapa 1.");
       }
+
+      if (
+        paymentMethod === 'Cartão de Débito' ||
+        errMsg.includes("Estoque insuficiente") ||
+        errMsg.includes("não encontrado no catálogo") ||
+        errMsg.includes("não está habilitado para compras online") ||
+        errMsg.includes("autenticação de segurança 3DS") ||
+        errMsg.includes("autenticação 3DS") ||
+        errMsg.includes("3DS")
+      ) {
+        const details = String(callErr.details || callErr.message || "");
+        if (paymentMethod === 'Cartão de Débito' && (details.toLowerCase().includes("authentication_method") || details.toLowerCase().includes("threeds"))) {
+          throw new Error("Não foi possível concluir a autenticação 3DS do Cartão de Débito junto ao banco emissor. Verifique no app do seu banco se o cartão está liberado para compras online no débito (ou use o Cartão Virtual), ou escolha PIX / Cartão de Crédito.");
+        }
+        throw new Error(errMsg || "Não foi possível concluir a autenticação 3DS do Cartão de Débito.");
+      }
+
       if (!isSandboxMode() && !isTestCard) {
         const details = String(callErr.details || callErr.message || "");
         if (details.toLowerCase().includes("whitelist")) {
           throw new Error("Sua conta PagBank requer liberação de Whitelist em Produção para a API de Pedidos. Conclua a solicitação de homologação no portal PagBank Developers ou ative o Sandbox para testes.");
-        }
-        if (paymentMethod === 'Cartão de Débito' && (details.toLowerCase().includes("authentication_method") || details.toLowerCase().includes("threeds") || details.toLowerCase().includes("3ds"))) {
-          throw new Error("Não foi possível concluir a autenticação 3DS do Cartão de Débito junto ao banco emissor. Verifique no app do seu banco se o cartão está liberado para compras online no débito (ou use o Cartão Virtual), ou escolha PIX / Cartão de Crédito.");
         }
         throw new Error(callErr.message || "Erro ao conectar ao gateway PagBank");
       }
@@ -498,16 +533,14 @@ export const pagbankService = {
     if (!isDigitalOnlyOrder && shippingAddress) {
       orderPayload.shipping = {
         address: {
-          street: shippingAddress.street || 'Rua',
-          number: String(shippingAddress.number || '1').trim(),
-          locality: shippingAddress.neighborhood || 'Centro',
-          city: shippingAddress.city || 'Curitiba',
-          region_code: (shippingAddress.state || 'PR').toUpperCase().slice(0, 2),
+          street: (shippingAddress.street ? String(shippingAddress.street).trim() : '') || 'Rua',
+          number: (shippingAddress.number ? String(shippingAddress.number).trim() : '') || 'S/N',
+          complement: (shippingAddress.complement ? String(shippingAddress.complement).trim().slice(0, 40) : '') || 'S/C',
+          locality: (shippingAddress.neighborhood ? String(shippingAddress.neighborhood).trim() : '') || 'Centro',
+          city: (shippingAddress.city ? String(shippingAddress.city).trim() : '') || 'Curitiba',
+          region_code: (shippingAddress.state || 'PR').trim().toUpperCase().slice(0, 2),
           country: 'BRA',
-          postal_code: (shippingAddress.cep || '80000000').replace(/\D/g, '').padEnd(8, '0').slice(0, 8),
-          ...(shippingAddress.complement && shippingAddress.complement.trim() !== ''
-            ? { complement: shippingAddress.complement.trim().slice(0, 40) }
-            : {})
+          postal_code: String(shippingAddress.cep || '80000000').replace(/\D/g, '').padEnd(8, '0').slice(0, 8)
         }
       };
     }

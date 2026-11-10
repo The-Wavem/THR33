@@ -152,12 +152,15 @@ export function Hero({ bannerData, isLoading = false, children }) {
     setTimerKey((k) => k + 1);
   };
 
-  // Pré-carregamento imediato de todas as imagens (Desktop e Mobile) do carrossel
+  // Pré-carregamento imediato das imagens do carrossel respeitando o viewport atual e a rota Home
   useEffect(() => {
     if (!Array.isArray(slides) || slides.length === 0) return;
 
+    const isHomeRoute =
+      typeof window !== 'undefined' && (window.location.pathname === '/' || window.location.pathname === '');
     const isMobileViewport =
       typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
+    const injectedLinks = [];
 
     slides.forEach((s, idx) => {
       const slideKey = s.id || `slide_${idx}`;
@@ -192,31 +195,39 @@ export function Hero({ bannerData, isLoading = false, children }) {
             }
           }).catch(() => {});
         }
+
+        // Injeta <link rel="preload"> apenas na Home e exclusivamente para a variante do viewport atual (evita warning em /checkout)
+        if (isHomeRoute && idx === 0 && typeof document !== 'undefined') {
+          try {
+            const selector = `link[rel="preload"][href="${CSS.escape(primaryUrl)}"]`;
+            if (!document.querySelector(selector)) {
+              const link = document.createElement('link');
+              link.rel = 'preload';
+              link.as = 'image';
+              link.href = primaryUrl;
+              if (mobileUrl && desktopUrl) {
+                link.media = isMobileViewport ? '(max-width: 768px)' : '(min-width: 769px)';
+              }
+              link.fetchPriority = 'high';
+              document.head.appendChild(link);
+              injectedLinks.push(link);
+            }
+          } catch {
+            // Ignora seletor inválido
+          }
+        }
       } else if (primaryUrl) {
         markSlideLoaded(slideKey);
       }
+    });
 
-      // Pré-carrega também a variante secundária em background
-      [desktopUrl, mobileUrl].forEach((url) => {
-        if (url && typeof url === 'string' && !url.match(/\.(mp4|webm|ogg)$/i)) {
-          if (typeof document !== 'undefined') {
-            try {
-              const selector = `link[rel="preload"][href="${CSS.escape(url)}"]`;
-              if (!document.querySelector(selector)) {
-                const link = document.createElement('link');
-                link.rel = 'preload';
-                link.as = 'image';
-                link.href = url;
-                if (idx === 0) link.fetchPriority = 'high';
-                document.head.appendChild(link);
-              }
-            } catch {
-              // Ignora seletor inválido
-            }
-          }
+    return () => {
+      injectedLinks.forEach((link) => {
+        if (link && link.parentNode) {
+          link.parentNode.removeChild(link);
         }
       });
-    });
+    };
   }, [slides, markSlideLoaded]);
 
   // Timer automático para o carrossel ir mudando sozinho

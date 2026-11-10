@@ -271,27 +271,25 @@ exports.createOrder = onRequest(
           });
         }
         const isDebit = paymentMethod.type === "DEBIT_CARD";
+        const sanitizedHolderName = sanitizePagBankName(
+          paymentMethod.holderName || customer.name,
+          paymentMethod.holderName
+        );
         orderPayload.charges[0].payment_method = isDebit
           ? {
               type: "DEBIT_CARD",
-              soft_descriptor: "THR33",
               card: {
                 encrypted: paymentMethod.cardEncrypted,
-                store: false,
-              },
-              holder: {
-                name: (
-                  paymentMethod.holderName ||
-                  customer.name ||
-                  "TITULAR DO CARTAO"
-                ).toUpperCase(),
-                tax_id: cleanTaxId,
+                holder: {
+                  name: sanitizedHolderName,
+                  tax_id: cleanTaxId,
+                },
               },
               ...(paymentMethod.authenticationId
                 ? {
                     authentication_method: {
                       type: "THREEDS",
-                      id: paymentMethod.authenticationId,
+                      id: String(paymentMethod.authenticationId).trim(),
                     },
                   }
                 : {}),
@@ -304,13 +302,13 @@ exports.createOrder = onRequest(
               card: {
                 encrypted: paymentMethod.cardEncrypted,
                 store: false,
+                holder: {
+                  name: sanitizedHolderName,
+                  tax_id: cleanTaxId,
+                },
               },
               holder: {
-                name: (
-                  paymentMethod.holderName ||
-                  customer.name ||
-                  "TITULAR DO CARTAO"
-                ).toUpperCase(),
+                name: sanitizedHolderName,
                 tax_id: cleanTaxId,
               },
             };
@@ -1375,6 +1373,10 @@ exports.createPagBankOrder = onCall(
         );
       }
       const isDebit = paymentMethod.type === "DEBIT_CARD";
+      const sanitizedHolderName = sanitizePagBankName(
+        paymentMethod.holderName || customer.name,
+        paymentMethod.holderName
+      );
       chargePayload = {
         reference_id: `CHAR_${referenceId}`,
         amount: {
@@ -1384,23 +1386,18 @@ exports.createPagBankOrder = onCall(
         payment_method: isDebit
           ? {
               type: "DEBIT_CARD",
-              soft_descriptor: "THR33",
               card: {
                 encrypted: paymentMethod.cardEncrypted,
-                store: false,
-              },
-              holder: {
-                name: sanitizePagBankName(
-                  paymentMethod.holderName || customer.name,
-                  paymentMethod.holderName
-                ),
-                tax_id: formattedTaxId,
+                holder: {
+                  name: sanitizedHolderName,
+                  tax_id: formattedTaxId,
+                },
               },
               ...(paymentMethod.authenticationId
                 ? {
                     authentication_method: {
                       type: "THREEDS",
-                      id: paymentMethod.authenticationId,
+                      id: String(paymentMethod.authenticationId).trim(),
                     },
                   }
                 : {}),
@@ -1413,12 +1410,13 @@ exports.createPagBankOrder = onCall(
               card: {
                 encrypted: paymentMethod.cardEncrypted,
                 store: false,
+                holder: {
+                  name: sanitizedHolderName,
+                  tax_id: formattedTaxId,
+                },
               },
               holder: {
-                name: sanitizePagBankName(
-                  paymentMethod.holderName || customer.name,
-                  paymentMethod.holderName
-                ),
+                name: sanitizedHolderName,
                 tax_id: formattedTaxId,
               },
             },
@@ -1438,31 +1436,24 @@ exports.createPagBankOrder = onCall(
     const isOnlyDigital = Boolean(isOnlyDigitalOrder);
 
     // Endereco de entrega fisico formatado estritamente conforme PagBank Orders API
-    // Se complement for vazio, omitir chave para evitar erro 40002 (must not be blank)
     const shippingAddressPayload = !isOnlyDigital && shipping?.address ? {
-      street: String(shipping.address.street || "Rua").slice(0, 100),
-      number: String(shipping.address.number || "0").trim().slice(0, 20),
-      locality: String(
+      street: (String(shipping.address.street || "").trim() || "Rua").slice(0, 100),
+      number: (String(shipping.address.number || "").trim() || "S/N").slice(0, 20),
+      complement: (String(shipping.address.complement || "").trim() || "S/C").slice(0, 40),
+      locality: (String(
         shipping.address.neighborhood ||
         shipping.address.locality ||
-        "Centro"
-      ).slice(0, 60),
-      city: String(shipping.address.city || "Curitiba").slice(0, 50),
-      region_code: String(
+        ""
+      ).trim() || "Centro").slice(0, 60),
+      city: (String(shipping.address.city || "").trim() || "Curitiba").slice(0, 50),
+      region_code: (String(
         shipping.address.state ||
         shipping.address.region_code ||
-        "PR"
-      ).toUpperCase().slice(0, 2),
+        ""
+      ).trim().toUpperCase() || "PR").slice(0, 2),
       country: "BRA",
       postal_code: cleanCep.padEnd(8, "0").slice(0, 8),
     } : null;
-
-    if (shippingAddressPayload) {
-      const compStr = String(shipping?.address?.complement || "").trim();
-      if (compStr.length > 0) {
-        shippingAddressPayload.complement = compStr.slice(0, 40);
-      }
-    }
 
     const orderPayload = {
       reference_id: referenceId,
@@ -1597,26 +1588,33 @@ exports.createPagBankOrder = onCall(
 
           const errorMessages = error.response?.data?.error_messages;
           if (Array.isArray(errorMessages) && errorMessages.length > 0) {
+            logger.error("PagBank Order Error Messages detalhadas:", JSON.stringify(errorMessages));
             const mappedMessages = errorMessages.map((e) => {
-              const param = String(e.parameter_name || "").toLowerCase();
-              const desc = String(e.description || "").toLowerCase();
+              const rawParam = String(e.parameter_name || "").trim();
+              const param = rawParam.toLowerCase();
+              const rawDesc = String(e.description || "").trim();
+              const desc = rawDesc.toLowerCase();
+              const paramSuffix = rawParam ? ` (${rawParam})` : "";
 
               if (param.includes("customer.name") || param.includes("holder.name") || desc.includes("name")) {
-                return "O nome completo informado é inválido para o PagBank (não utilize números no nome e informe nome e sobrenome composto apenas por letras).";
+                return `O nome completo informado é inválido para o PagBank (não utilize números no nome e informe nome e sobrenome composto apenas por letras)${paramSuffix}.`;
               }
               if (param.includes("tax_id") || desc.includes("tax_id") || desc.includes("cpf") || desc.includes("cnpj")) {
-                return "O CPF/CNPJ informado não é válido junto ao PagBank ou à Receita Federal.";
+                return `O CPF/CNPJ informado não é válido junto ao PagBank ou à Receita Federal${paramSuffix}.`;
               }
               if (param.includes("authentication_method") || desc.includes("authentication_method") || desc.includes("3ds")) {
-                return "O banco emissor exige autenticação de segurança 3DS para Cartão de Débito. Verifique se compras online no débito estão liberadas no app do seu banco ou tente Cartão de Crédito / PIX.";
+                return `O banco emissor exige autenticação de segurança 3DS para Cartão de Débito. Verifique se compras online no débito estão liberadas no app do seu banco ou tente Cartão de Crédito / PIX${paramSuffix}.`;
               }
               if (param.includes("billing_address") || param.includes("shipping.address") || desc.includes("address") || desc.includes("complement")) {
-                return "O endereço possui campos inválidos ou em branco. Verifique os dados de entrega.";
+                return `O endereço possui campos inválidos ou em branco. Verifique os dados de entrega${paramSuffix}.`;
               }
               if (param.includes("phones") || desc.includes("phone")) {
-                return "O telefone/WhatsApp informado é inválido. Preencha o DDD de 2 dígitos e o número de 8 ou 9 dígitos.";
+                return `O telefone/WhatsApp informado é inválido. Preencha o DDD de 2 dígitos e o número de 8 ou 9 dígitos${paramSuffix}.`;
               }
-              return e.description || e.parameter_name || "Parâmetro inválido na transação";
+              if (rawDesc && rawParam) {
+                return `${rawDesc} (${rawParam})`;
+              }
+              return rawDesc || rawParam || "Parâmetro inválido na transação";
             });
 
             throw new HttpsError("invalid-argument", mappedMessages.join(" | "));

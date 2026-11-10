@@ -952,23 +952,25 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
 
     setIsProcessing(true);
 
+    const rawActiveAddr = activeAddress || addressForm || {};
     const addressToSave = isOnlyGiftCardsInCart ? {
-      cep: '80020-310',
+      cep: '80020310',
       street: 'Entrega Digital Instantânea',
       number: '1',
       neighborhood: 'Digital',
-      city: clientData.city || user?.city || 'Curitiba',
-      state: clientData.state || user?.state || 'PR',
+      city: (clientData.city || user?.city || 'Curitiba').trim(),
+      state: (clientData.state || user?.state || 'PR').trim().toUpperCase(),
       complement: 'Liberado instantaneamente em Meus Pedidos'
-    } : (activeAddress || {
-      cep: addressForm.cep || '80420-000',
-      street: addressForm.street || 'Rua Comendador Araújo',
-      number: addressForm.number || '333',
-      neighborhood: addressForm.neighborhood || 'Batel',
-      city: addressForm.city || 'Curitiba',
-      state: addressForm.state || 'PR',
-      complement: addressForm.complement ? addressForm.complement.trim() : ''
-    });
+    } : {
+      ...rawActiveAddr,
+      cep: String(rawActiveAddr.cep || addressForm.cep || '80420000').replace(/\D/g, ''),
+      street: String(rawActiveAddr.street || addressForm.street || 'Rua Comendador Araújo').trim() || 'Rua Comendador Araújo',
+      number: String(rawActiveAddr.number || addressForm.number || '').trim() || 'S/N',
+      neighborhood: String(rawActiveAddr.neighborhood || addressForm.neighborhood || 'Batel').trim() || 'Batel',
+      city: String(rawActiveAddr.city || addressForm.city || 'Curitiba').trim() || 'Curitiba',
+      state: String(rawActiveAddr.state || addressForm.state || 'PR').trim().toUpperCase() || 'PR',
+      complement: String(rawActiveAddr.complement ?? addressForm.complement ?? '').trim() || 'S/C'
+    };
 
     const orderRefId = `THR-${Date.now()}`;
 
@@ -1197,13 +1199,15 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
       } catch (gatewayErr) {
         console.warn("Aviso ao processar gateway PagBank:", gatewayErr.message);
         let userMessage = gatewayErr.message || 'Erro temporário de conexão com o PagBank. Tente novamente em instantes.';
-        if (userMessage.includes("40002") || userMessage.includes("buyer email must not be equals to merchant email") || userMessage.includes("auto-compra")) {
+        if (userMessage.includes("buyer email must not be equals to merchant email") || userMessage.includes("auto-compra")) {
           userMessage = "O PagBank não permite auto-compra com cartão (o comprador/titular do cartão não pode ser o mesmo titular ou dados cadastrados na conta PagBank da loja). Para testar compras com cartão em produção, utilize o cartão de outra pessoa ou realize o pagamento via PIX.";
         }
 
         let cat = 'ERRO_GATEWAY';
-        if (userMessage.includes("40002") || userMessage.includes("buyer email")) {
+        if (userMessage.includes("40002") || userMessage.includes("buyer email") || userMessage.includes("Dados inválidos")) {
           cat = 'ERRO_VALIDACAO';
+        } else if (userMessage.includes("3DS")) {
+          cat = 'ERRO_3DS';
         } else if (gatewayErr.message?.toLowerCase().includes("timeout") || gatewayErr.message?.toLowerCase().includes("network")) {
           cat = 'ERRO_GATEWAY';
         } else if (gatewayErr.message?.toLowerCase().includes("cvv") || gatewayErr.message?.toLowerCase().includes("cartão")) {
@@ -1426,14 +1430,15 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
             );
 
             if (!addressExists) {
+              const rawComp = addressToSave.complement && addressToSave.complement !== 'S/C' ? addressToSave.complement : '';
               const newAddressFromCheckout = {
                 id: `addr_${Date.now()}`,
-                title: addressToSave.complement ? `Apto ${addressToSave.complement}` : `Endereço ${addressToSave.neighborhood || 'Entrega'}`,
+                title: rawComp ? `Apto ${rawComp}` : `Endereço ${addressToSave.neighborhood || 'Entrega'}`,
                 label: `Endereço (${addressToSave.neighborhood || 'Entrega'})`,
                 cep: addressToSave.cep || '',
                 street: addressToSave.street || '',
                 number: addressToSave.number || '',
-                complement: addressToSave.complement || '',
+                complement: rawComp,
                 neighborhood: addressToSave.neighborhood || '',
                 city: addressToSave.city || 'Curitiba',
                 state: addressToSave.state || 'PR',
@@ -2471,6 +2476,22 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                         </div>
                         {paymentMethod === 'Cartão de Crédito' && <CheckCircle2 size={15} className={styles.methodCheck} />}
                       </button>
+
+                      <button 
+                        type="button" 
+                        onClick={() => {
+                          setPaymentMethod('Cartão de Débito');
+                          setInstallments(1);
+                          if (paymentError) setPaymentError(null);
+                        }}
+                        className={`${styles.methodPillBtn} ${paymentMethod === 'Cartão de Débito' ? styles.activeMethodPill : ''}`}
+                      >
+                        <div className={styles.methodContent}>
+                          <CreditCard size={15} />
+                          <span><strong>Cartão de Débito</strong> (À vista)</span>
+                        </div>
+                        {paymentMethod === 'Cartão de Débito' && <CheckCircle2 size={15} className={styles.methodCheck} />}
+                      </button>
                     </div>
 
                     {/* FORMULÁRIO DE CARTÃO TRANSPARENTE LIMPO (CRÉDITO OU DÉBITO - PADRÃO PRODUÇÃO) */}
@@ -2573,20 +2594,22 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
                           </div>
                         </div>
 
-                        {/* CONDICAO DE PAGAMENTO: PARCELAMENTO (CREDITO) */}
-                        <div className={styles.fieldGroup}>
-                          <label htmlFor="ccInstallments">PARCELAMENTO NO PAGBANK *</label>
-                          <select
-                            id="ccInstallments"
-                            value={installments}
-                            onChange={(e) => setInstallments(Number(e.target.value))}
-                            className={styles.styledSelect}
-                          >
-                            <option value={1}>1x de R$ {finalAmountToPay.toFixed(2)} (à vista sem juros)</option>
-                            <option value={2}>2x de R$ {(finalAmountToPay / 2).toFixed(2)} sem juros</option>
-                            <option value={3}>3x de R$ {(finalAmountToPay / 3).toFixed(2)} sem juros</option>
-                          </select>
-                        </div>
+                        {/* CONDICAO DE PAGAMENTO: PARCELAMENTO (EXCLUSIVO PARA CREDITO) */}
+                        {paymentMethod === 'Cartão de Crédito' && (
+                          <div className={styles.fieldGroup}>
+                            <label htmlFor="ccInstallments">PARCELAMENTO NO PAGBANK *</label>
+                            <select
+                              id="ccInstallments"
+                              value={installments}
+                              onChange={(e) => setInstallments(Number(e.target.value))}
+                              className={styles.styledSelect}
+                            >
+                              <option value={1}>1x de R$ {finalAmountToPay.toFixed(2)} (à vista sem juros)</option>
+                              <option value={2}>2x de R$ {(finalAmountToPay / 2).toFixed(2)} sem juros</option>
+                              <option value={3}>3x de R$ {(finalAmountToPay / 3).toFixed(2)} sem juros</option>
+                            </select>
+                          </div>
+                        )}
 
                         <div className={styles.securityFooterNotice}>
                           <ShieldCheck size={14} />
