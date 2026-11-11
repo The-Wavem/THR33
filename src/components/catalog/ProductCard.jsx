@@ -1,14 +1,14 @@
 import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Heart } from 'lucide-react';
+import { Heart, Flame } from 'lucide-react';
 import { useWishlist } from '../../context/WishlistContext';
 import { analyticsService } from '../../services/analyticsService';
-import { formatFitBadgeLabel, formatCategoryBadgeLabel } from '../../utils/fitUtils';
+import { formatCategoryBadgeLabel } from '../../utils/fitUtils';
 import ImageWithSkeleton from '../ui/ImageWithSkeleton';
 import { preloadRoute } from '../../utils/preloader';
 import styles from './ProductCard.module.css';
 
-export function ProductCard({ product }) {
+export function ProductCard({ product, rank = null }) {
   const [imageLoaded, setImageLoaded] = useState(false);
   const { isFavorite, toggleFavorite } = useWishlist();
   
@@ -19,6 +19,7 @@ export function ProductCard({ product }) {
   const discountPriceNum = Number(product.discountPrice || 0);
   const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product.discountActive !== false);
   const hasFreeShipping = Boolean(product.freeShipping || product.hasFreeShipping);
+  const isTop3 = typeof rank === 'number' && rank >= 1 && rank <= 3;
 
   // Faixa de preço considerando modelagens (fitPrices)
   const priceRange = useMemo(() => {
@@ -63,7 +64,7 @@ export function ProductCard({ product }) {
 
   return (
     <article 
-      className={styles.card}
+      className={`${styles.card} ${isTop3 ? `${styles.topSellerCard} ${styles[`topSellerRank${rank}`]}` : ''}`}
       onMouseEnter={() => preloadRoute('/produto/' + productId)}
       onTouchStart={() => preloadRoute('/produto/' + productId)}
     >
@@ -77,11 +78,14 @@ export function ProductCard({ product }) {
           </div>
         )}
 
-        {hasDiscount ? (
-          <span className={`${styles.promoBadge} ${hasFreeShipping ? styles.promoBadgeWithRibbon : ''}`}>PROMOÇÃO</span>
-        ) : (product.customBadge && product.customBadge.trim()) ? (
-          <span className={`${styles.badge} ${hasFreeShipping ? styles.promoBadgeWithRibbon : ''}`}>{product.customBadge.trim()}</span>
-        ) : null}
+        {/* SELO NO CANTO SUPERIOR ESQUERDO (PROMO / BADGE) */}
+        <div className={`${styles.topLeftBadgesStack} ${hasFreeShipping ? styles.promoBadgeWithRibbon : ''}`}>
+          {hasDiscount ? (
+            <span className={styles.promoBadge}>PROMOÇÃO</span>
+          ) : (product.customBadge && product.customBadge.trim()) ? (
+            <span className={styles.badge}>{product.customBadge.trim()}</span>
+          ) : null}
+        </div>
         
         {/* Link direto da Imagem para a PDP com troca suave ao passar o mouse */}
         <Link 
@@ -149,6 +153,12 @@ export function ProductCard({ product }) {
         <div className={styles.details}>
           <div className={styles.tagsRow}>
             <span className={styles.categoryTag}>{formatCategoryBadgeLabel(product.category)}</span>
+            {isTop3 && (
+              <span className={styles.topSellerMetaTag}>
+                <Flame size={11} />
+                <span>TOP {rank}</span>
+              </span>
+            )}
           </div>
           
           <h3 className={styles.productName}>{product.name}</h3>

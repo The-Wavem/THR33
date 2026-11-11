@@ -20,7 +20,8 @@ import {
   OFFICIAL_MEASURES_TABLE,
   normalizeFitSlug,
   isUnicoFit,
-  sanitizeFitsList
+  sanitizeFitsList,
+  getFitTechnicalSpecs
 } from '../../utils/fitUtils';
 import { SEO } from '../../components/common/SEO';
 import { buildProductSchema, buildBreadcrumbSchema } from '../../utils/seoSchemas';
@@ -34,10 +35,10 @@ const DEFAULT_SIZE_CHART = [
 ];
 
 const DEFAULT_CARE_INSTRUCTIONS = [
-  "Lavar à mão ou na máquina em ciclo delicado com água fria.",
-  "Não utilizar alvejantes ou branqueadores ópticos.",
-  "Secar à sombra (não usar secadora).",
-  "Passar do avesso em temperatura média evitando a estampa."
+  "Lave sempre do avesso e de preferência com água fria.",
+  "Não use alvejantes.",
+  "Evite secadora (o calor pode encolher o algodão).",
+  "Passe o ferro do avesso e nunca diretamente sobre a estampa."
 ];
 
 export function ProdutoDetalhe({ onAddToCart }) {
@@ -59,7 +60,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
   const [selectedSize, setSelectedSize] = useState('M');
   const [selectedFit, setSelectedFit] = useState('Boxy');
   const [quantity, setQuantity] = useState(1);
-  const [openAccordion, setOpenAccordion] = useState('measures');
+  const [openAccordion, setOpenAccordion] = useState('description');
   const [isAddedFeedback, setIsAddedFeedback] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const actionsRowRef = useRef(null);
@@ -233,6 +234,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
   }, [availableFits, product?.fit]);
 
   // Grade de tamanhos dinâmica conforme a modelagem selecionada
+  const currentFitSpecs = useMemo(() => getFitTechnicalSpecs(selectedFit || product?.fit), [selectedFit, product?.fit]);
   const activeSizes = useMemo(() => {
     return getSizesForFit(selectedFit);
   }, [selectedFit]);
@@ -876,6 +878,17 @@ export function ProdutoDetalhe({ onAddToCart }) {
             </div>
           )}
 
+          {!isGiftCard && currentFitSpecs && (
+            <div style={{ padding: '0.65rem 0.85rem', background: 'rgba(255, 255, 255, 0.03)', borderLeft: '2px solid rgba(255, 255, 255, 0.5)', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+              <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#ffffff', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
+                {currentFitSpecs.name} • {currentFitSpecs.gsmBadge}
+              </span>
+              <span style={{ fontSize: '0.76rem', color: 'rgba(255, 255, 255, 0.78)', lineHeight: 1.45 }}>
+                {currentFitSpecs.desc}
+              </span>
+            </div>
+          )}
+
           {/* SELETOR DE COR */}
           {colors && colors.length > 0 && (
             <div className={styles.colorSelector}>
@@ -1083,7 +1096,48 @@ export function ProdutoDetalhe({ onAddToCart }) {
                     className={styles.accordionBodyWrapper}
                   >
                     <div className={styles.accordionBody}>
-                      <p>{product.description || "Modelagem exclusiva THR33 com acabamento premium e alta densidade."}</p>
+                      {product.description &&
+                        !product.description.toLowerCase().includes('modelagem exclusiva thr33 com acabamento premium') && (
+                          <p style={{ marginBottom: '1rem' }}>{product.description}</p>
+                        )}
+
+                      {!isGiftCard && currentFitSpecs && (
+                        <div
+                          style={{
+                            padding: '1rem 1.1rem',
+                            background: 'rgba(255, 255, 255, 0.03)',
+                            border: '1px solid rgba(255, 255, 255, 0.12)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.75rem'
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.6rem' }}>
+                            <strong style={{ fontSize: '0.78rem', color: '#ffffff', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                              MODELAGEM: {currentFitSpecs.name}
+                            </strong>
+                            <span style={{ fontSize: '0.66rem', fontWeight: 800, letterSpacing: '1px', padding: '0.2rem 0.55rem', background: 'rgba(255, 255, 255, 0.1)', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
+                              {currentFitSpecs.gsmBadge}
+                            </span>
+                          </div>
+
+                          <p style={{ margin: 0, fontSize: '0.84rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.6 }}>
+                            {currentFitSpecs.desc}
+                          </p>
+
+                          <ul style={{ listStyle: 'none', margin: 0, padding: '0.65rem 0 0', borderTop: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                            {currentFitSpecs.specs.map(([label, val]) => (
+                              <li key={label} style={{ fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.78)', lineHeight: 1.5 }}>
+                                <strong style={{ color: '#ffffff' }}>{label}:</strong> {val}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+
+                      {isGiftCard && (
+                        <p>{product.description || 'Vale-presente oficial THR33 Streetwear com liberação digital.'}</p>
+                      )}
                     </div>
                   </motion.div>
                 )}

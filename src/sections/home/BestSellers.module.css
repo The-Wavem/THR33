@@ -42,8 +42,11 @@
 
 .productsGrid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1.5rem;
+  grid-template-columns: repeat(3, minmax(0, 350px));
+  justify-content: center;
+  gap: 1.75rem;
+  max-width: 1120px;
+  margin: 0 auto;
 }
 
 .ctaContainer {
@@ -85,7 +88,8 @@
 
 @media (max-width: 1024px) {
   .productsGrid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 1.25rem;
   }
 }
 
@@ -106,6 +110,12 @@
   .productsGrid {
     grid-template-columns: repeat(2, 1fr) !important;
     gap: 10px !important;
+  }
+
+  .productsGrid > :nth-child(3):last-child {
+    grid-column: 1 / -1;
+    width: calc(50% - 5px);
+    justify-self: center;
   }
 
   .ctaContainer {

@@ -16,37 +16,57 @@ import {
 } from 'lucide-react';
 import { SEO } from '../../components/common/SEO';
 import { buildFaqSchema } from '../../utils/seoSchemas';
+import { OFFICIAL_FAQ_ITEMS } from '../../components/common/DropFaq';
 import styles from './Suporte.module.css';
 
 const FAQ_DATA = [
+  ...OFFICIAL_FAQ_ITEMS,
   {
+    category: "Envio & Prazos",
     question: "Como funciona a produção sob demanda em parceria com a Savvy Print?",
-    answer: "Operamos 100% online com lotes periódicos para garantir padrão máximo de malha e estamparia sem desperdício. Assim que o pagamento é confirmado via PagBank, seu pedido entra no lote da nossa parceira oficial homologada (Savvy Print), que confecciona e despacha sua peça diretamente para o seu endereço com código de rastreio. A THR33 assume 100% da responsabilidade do pedido até a entrega em suas mãos."
+    answer: "Operamos 100% online com lotes periódicos para garantir padrão máximo de malha e estamparia DTG sem desperdício. Assim que o pagamento é confirmado via PagBank, seu pedido entra no lote da nossa parceira oficial homologada (Savvy Print), que confecciona e despacha sua peça diretamente para o seu endereço com código de rastreio. A THR33 assume 100% da responsabilidade do pedido até a entrega em suas mãos."
   },
   {
+    category: "Envio & Prazos",
     question: "O que acontece se meu pacote atrasar ou for extraviado pelos Correios?",
     answer: "Você nunca sai no prejuízo comprando na THR33. Caso os Correios ou a transportadora confirmem extravio, perda ou roubo de carga na rota, você escolhe imediatamente entre o envio de uma nova peça idêntica sem nenhum custo adicional ou o reembolso integral (100%) do valor pago."
   },
   {
-    question: "Como solicitar troca, devolução (7 dias) ou acionar garantia de defeito (30 dias)?",
-    answer: "Conforme o Código de Defesa do Consumidor (Art. 49), você tem até 7 dias corridos após o recebimento para devolver ou trocar por arrependimento/tamanho, e até 30 dias corridos em caso de defeito de fabricação. Basta chamar nossa equipe no WhatsApp (+55 41 8841-0374), no Direct (@madebythr33) ou pelo e-mail contato.thr33@gmail.com informando o número do pedido. Na 1ª troca ou devolução, o frete reverso é por nossa conta."
-  },
-  {
+    category: "Pagamentos & Segurança",
     question: "Quais são os prazos de reembolso para PIX, Cartão de Crédito e Cartão de Débito?",
     answer: "Após o recebimento e conferência da peça devolvida (em até 3 dias úteis): pagamentos via PIX são estornados em 24h a 48h úteis na mesma conta; pagamentos via Cartão de Crédito têm o estorno solicitado imediatamente ao PagBank (constando em 1 a 2 faturas seguintes conforme o banco emissor); e pagamentos via Cartão de Débito são reembolsados via transferência/PIX em até 3 dias úteis."
   },
   {
-    question: "Qual a diferença entre Boxy Fit e Oversized Heavy?",
-    answer: "A modelagem Boxy possui corte quadrado levemente mais estruturado no comprimento com ombros deslocados e gola canelada encorpada. A Oversized Heavy possui gramatura pesada com caimento amplo no tórax e mangas mais alongadas."
-  },
-  {
-    question: "Como usar um Cupom Exclusivo VIP vinculado à minha conta?",
-    answer: "Quando a THR33 libera um cupom exclusivo vinculado ao seu e-mail de cadastro, ele aparece automaticamente dentro da sua página Meu Perfil na seção 'Meus Cupons Exclusivos VIP'. Basta clicar em 'Copiar & Usar Meu Cupom VIP' e aplicar no carrinho ou checkout."
+    category: "Produtos & Qualidade",
+    question: "Qual a diferença entre Boxy Fit, Oversized Heavy e Oversized Clássica?",
+    answer: "A modelagem Boxy Fit (220g/m²) possui corte contemporâneo mais curto no comprimento com ombros caídos e largura equilibrada. A Oversized Heavy (260g/m²) possui malha pesada 100% algodão com caimento reto e estruturado que não marca o corpo. Já a Oversized Clássica (190g/m²) usa algodão penteado fio 30.1 encorpado de toque macio para uso diário. Todas contam com estampa DTG de alta definição com toque zero."
   }
 ];
 
+function renderFaqAnswerText(text) {
+  if (!text || !text.includes('•')) {
+    return <p>{text}</p>;
+  }
+  const parts = text.split('•').map((s) => s.trim()).filter(Boolean);
+  const intro = parts[0];
+  const bullets = parts.slice(1);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.55rem' }}>
+      {intro && <p style={{ margin: 0 }}>{intro}</p>}
+      {bullets.length > 0 && (
+        <ul style={{ margin: 0, paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
+          {bullets.map((bullet, idx) => (
+            <li key={idx}>{bullet}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export function Suporte() {
-  const [openFaq, setOpenFaq] = useState(null);
+  const [openFaq, setOpenFaq] = useState(0);
 
   // Form de Sugestão/Report
   const [feedback, setFeedback] = useState({
@@ -176,9 +196,9 @@ export function Suporte() {
             <Mail size={24} strokeWidth={1.8} />
           </div>
           <h3>E-MAIL & INSTAGRAM</h3>
-          <p>Suporte oficial via contato.thr33@gmail.com ou Direct em @madebythr33.</p>
+          <p>Suporte oficial via contato@lojathr33.com.br / contato.thr33@gmail.com ou Direct em @madebythr33.</p>
           <span className={styles.hours}>Resposta em até 24h úteis</span>
-          <a href="mailto:contato.thr33@gmail.com" className={styles.channelBtn}>
+          <a href="mailto:contato@lojathr33.com.br" className={styles.channelBtn}>
             ENVIAR E-MAIL
           </a>
         </motion.div>
@@ -217,7 +237,14 @@ export function Suporte() {
                   onClick={() => setOpenFaq(isOpen ? null : idx)}
                   aria-expanded={isOpen}
                 >
-                  <span className={isOpen ? styles.activeQuestionText : ''}>{item.question}</span>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', textAlign: 'left' }}>
+                    {item.category && (
+                      <span style={{ fontSize: '0.65rem', fontFamily: 'monospace', letterSpacing: '1.2px', textTransform: 'uppercase', color: 'rgba(255,255,255,0.52)' }}>
+                        {item.category}
+                      </span>
+                    )}
+                    <span className={isOpen ? styles.activeQuestionText : ''}>{item.question || item.q}</span>
+                  </div>
                   <motion.span 
                     className={styles.chevron}
                     animate={{ rotate: isOpen ? 180 : 0 }}
@@ -239,7 +266,7 @@ export function Suporte() {
                       style={{ overflow: 'hidden' }}
                     >
                       <div className={styles.faqAnswer}>
-                        <p>{item.answer}</p>
+                        {renderFaqAnswerText(item.answer || item.a)}
                       </div>
                     </motion.div>
                   )}

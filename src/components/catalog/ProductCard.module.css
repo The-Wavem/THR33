@@ -3,7 +3,7 @@
   border: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
-  transition: border-color var(--transition-fast), transform var(--transition-fast);
+  transition: border-color var(--transition-fast), transform var(--transition-fast), box-shadow var(--transition-fast);
   height: 100%;
   position: relative;
   min-width: 0;
@@ -12,6 +12,29 @@
 
 .card:hover {
   border-color: var(--border-active);
+}
+
+/* DESTAQUE VISUAL TOP 3 MAIS VENDIDOS (STREETWEAR MINIMALISTA) */
+.topSellerCard {
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+}
+
+.topSellerRank1 {
+  border-color: rgba(255, 255, 255, 0.48);
+  box-shadow: 0 10px 32px rgba(255, 255, 255, 0.06);
+}
+
+.topSellerCard::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, #ffffff 0%, rgba(255, 255, 255, 0.25) 100%);
+  z-index: 6;
+  pointer-events: none;
 }
 
 .imageWrapper {
@@ -49,36 +72,84 @@
   100% { background-position: -200% 0; }
 }
 
-.badge {
+.topLeftBadgesStack {
   position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  z-index: 2;
+  top: 0.7rem;
+  left: 0.7rem;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.35rem;
+  pointer-events: none;
+  transition: top var(--transition-fast);
+}
+
+.promoBadgeWithRibbon {
+  top: 5.35rem !important;
+}
+
+.rankBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  background-color: rgba(10, 10, 10, 0.92);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  color: #ffffff;
+  font-size: 0.62rem;
+  font-weight: 800;
+  padding: 0.22rem 0.55rem 0.22rem 0.28rem;
+  letter-spacing: 0.9px;
+  text-transform: uppercase;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.65);
+}
+
+.rankBadge1 {
+  border-color: #ffffff;
+  background-color: rgba(8, 8, 8, 0.96);
+}
+
+.rankNumberPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #ffffff;
+  color: #080808;
+  font-family: var(--font-heading, sans-serif);
+  font-size: 0.62rem;
+  font-weight: 900;
+  padding: 0.12rem 0.36rem;
+  letter-spacing: 0.5px;
+  line-height: 1;
+}
+
+.rankBadge1 .rankNumberPill {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+.rankLabelText {
+  line-height: 1;
+}
+
+.badge {
   background-color: var(--text-primary);
   color: var(--bg-primary);
   font-size: 0.65rem;
   font-weight: 800;
   padding: 0.25rem 0.6rem;
   letter-spacing: 1px;
-  transition: top var(--transition-fast);
 }
 
 .promoBadge {
-  position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  z-index: 2;
   background-color: #ff0055;
   color: #ffffff;
   font-size: 0.65rem;
   font-weight: 800;
   padding: 0.25rem 0.6rem;
   letter-spacing: 1px;
-  transition: top var(--transition-fast);
-}
-
-.promoBadgeWithRibbon {
-  top: 5.35rem !important;
 }
 
 /* FAIXA TRANSVERSAL DIAGONAL NO CANTO SUPERIOR (CORNER RIBBON FRETE GRÁTIS) */
@@ -256,7 +327,9 @@
 
 .tagsRow {
   display: flex;
-  gap: 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
   font-size: 0.65rem;
   font-weight: 600;
   letter-spacing: 1px;
@@ -265,6 +338,19 @@
 .categoryTag {
   color: var(--text-secondary);
   text-transform: uppercase;
+}
+
+.topSellerMetaTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.22rem;
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  padding: 0.1rem 0.4rem;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.8px;
 }
 
 .fitTag {
@@ -370,9 +456,24 @@
     padding-bottom: 2px;
   }
 
-  .badge, .promoBadge {
+  .topLeftBadgesStack {
     top: 0.4rem;
     left: 0.4rem;
+    gap: 0.25rem;
+  }
+
+  .rankBadge {
+    font-size: 0.54rem;
+    padding: 0.18rem 0.42rem 0.18rem 0.22rem;
+    gap: 0.28rem;
+  }
+
+  .rankNumberPill {
+    font-size: 0.54rem;
+    padding: 0.1rem 0.28rem;
+  }
+
+  .badge, .promoBadge {
     font-size: 0.58rem;
     padding: 0.2rem 0.45rem;
   }

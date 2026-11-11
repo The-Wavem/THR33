@@ -7,7 +7,9 @@ import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../../services/firebaseConfig';
 import { getVitrineSettings, fetchProducts } from '../../services/catalogService';
 import { analyticsService } from '../../services/analyticsService';
+import { OFFICIAL_FIT_SPECS } from '../../utils/fitUtils';
 import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
+import DropFaq from '../../components/common/DropFaq';
 import { SEO } from '../../components/common/SEO';
 import styles from './Sobre.module.css';
 
@@ -16,44 +18,9 @@ import largoDaOrdemBg2 from '@assets/images/largo-da-ordem-bg2.jpeg';
 
 const INITIAL_REAL_REEL_FRAMES = [largoDaOrdemBg, largoDaOrdemBg2];
 
-const FITS = [
-  {
-    id: 'heavy',
-    name: 'Oversized Heavy',
-    desc: 'Malha 100% algodão de gramatura pesada (260g/m²). Proporciona caimento reto e estruturado que não marca o corpo, ideal para o clima frio e chuvoso de Curitiba.',
-    specs: [
-      ['Gramatura', '260g/m² Heavy Weight'],
-      ['Gola', 'Canelada 2x1 de 3cm reforçada'],
-      ['Estampa', 'Silk/DTF em escala máxima até 40x50 cm'],
-      ['Acabamento', 'Pesponto duplo ombro a ombro']
-    ],
-    shape: { shoulder: 108, body: 80, length: 185, sleeve: 56 }
-  },
-  {
-    id: 'classic',
-    name: 'Oversized Clássica',
-    desc: 'Algodão penteado fio 30.1 encorpado (190g/m²). Toque macio com caimento amplo tradicional para uso diário.',
-    specs: [
-      ['Gramatura', '190g/m² Algodão Penteado'],
-      ['Gola', 'Ribana reforçada de 2.5cm'],
-      ['Estampa', 'Impressão ampla 40x50 cm ou peito 15x20 cm'],
-      ['Acabamento', 'Costura reforçada com fita interna']
-    ],
-    shape: { shoulder: 104, body: 76, length: 182, sleeve: 52 }
-  },
-  {
-    id: 'boxy',
-    name: 'Boxy Fit',
-    desc: 'Modelagem contemporânea mais curta no comprimento com ombros caídos e largura equilibrada.',
-    specs: [
-      ['Gramatura', '220g/m² Algodão Estruturado'],
-      ['Gola', 'Gola canelada de 3cm'],
-      ['Estampa', 'Proporção frontal 35x40 cm ou detalhe 15x20 cm'],
-      ['Acabamento', 'Barra larga e caimento solto']
-    ],
-    shape: { shoulder: 112, body: 84, length: 155, sleeve: 60 }
-  }
-];
+const FITS = OFFICIAL_FIT_SPECS;
+
+const GIFT_OR_BRINDE_REGEX = /vale[-_\s]?presente|gift[-_\s]?card|giftcard|\/brindes|brinde/i;
 
 export function Sobre() {
   const heroSectionRef = useRef(null);
@@ -69,7 +36,7 @@ export function Sobre() {
   useEffect(() => {
     analyticsService.trackPageView('sobre');
 
-    // Busca imagens reais do Firestore (settings/sobre, settings/home, settings/vitrine ou produtos reais)
+    // Busca imagens reais do Firestore (settings/sobre, settings/home, settings/vitrine ou produtos reais, excluindo Gift Cards e Brindes)
     async function loadRealGalleryFrames() {
       try {
         const [sobreSnap, homeSnap, vitrineData, products] = await Promise.all([
@@ -79,11 +46,13 @@ export function Sobre() {
           fetchProducts().catch(() => [])
         ]);
 
-        const isCleanUrl = (url) =>
+        const isCleanNonGiftUrl = (url, metaContext = '') =>
           Boolean(url) &&
           typeof url === 'string' &&
           !url.includes('images.unsplash.com') &&
-          !url.includes('picsum.photos');
+          !url.includes('picsum.photos') &&
+          !GIFT_OR_BRINDE_REGEX.test(url) &&
+          !GIFT_OR_BRINDE_REGEX.test(metaContext);
 
         const collected = [];
 
@@ -91,7 +60,8 @@ export function Sobre() {
         if (Array.isArray(sobreData?.galleryImages)) {
           sobreData.galleryImages.forEach((img) => {
             const u = typeof img === 'string' ? img : img?.url || img?.image;
-            if (isCleanUrl(u)) collected.push(u);
+            const meta = typeof img === 'object' ? `${img?.title || ''} ${img?.alt || ''} ${img?.link || ''}` : '';
+            if (isCleanNonGiftUrl(u, meta)) collected.push(u);
           });
         }
 
@@ -99,20 +69,30 @@ export function Sobre() {
         if (Array.isArray(homeData?.galleryImages)) {
           homeData.galleryImages.forEach((img) => {
             const u = typeof img === 'string' ? img : img?.url || img?.image;
-            if (isCleanUrl(u)) collected.push(u);
+            const meta = typeof img === 'object' ? `${img?.title || ''} ${img?.alt || ''} ${img?.link || ''}` : '';
+            if (isCleanNonGiftUrl(u, meta)) collected.push(u);
           });
         }
 
         if (Array.isArray(vitrineData?.bentoGrid)) {
           vitrineData.bentoGrid.forEach((card) => {
             const u = card?.imageUrl || card?.image;
-            if (isCleanUrl(u)) collected.push(u);
+            const meta = `${card?.title || ''} ${card?.subtitle || ''} ${card?.link || ''} ${card?.category || ''}`;
+            if (isCleanNonGiftUrl(u, meta)) collected.push(u);
           });
         }
 
         if (Array.isArray(products)) {
           products
-            .filter((p) => p && p.type !== 'brinde' && p.category !== 'gift-card')
+            .filter((p) => {
+              if (!p) return false;
+              if (p.isGiftCard || p.type === 'brinde') return false;
+              const cat = String(p.category || '').toLowerCase();
+              if (cat === 'gift-card' || cat === 'brinde' || cat === 'brindes') return false;
+              const combinedText = `${p.id || ''} ${p.slug || ''} ${p.name || ''} ${p.title || ''} ${cat}`;
+              if (GIFT_OR_BRINDE_REGEX.test(combinedText)) return false;
+              return true;
+            })
             .slice(0, 4)
             .forEach((p) => {
               const candidate =
@@ -120,7 +100,9 @@ export function Sobre() {
                 p.secondaryImage ||
                 (Array.isArray(p.images) && p.images[1]) ||
                 p.image;
-              if (isCleanUrl(candidate)) collected.push(candidate);
+              if (isCleanNonGiftUrl(candidate, `${p.name || ''} ${p.slug || ''}`)) {
+                collected.push(candidate);
+              }
             });
         }
 
@@ -129,22 +111,34 @@ export function Sobre() {
         ).slice(0, 6);
 
         if (uniqueReal.length > 0) {
+          // Pre-carrega todas as imagens em background antes de atualizar o carrossel para evitar qualquer piscar
+          await Promise.all(
+            uniqueReal.map(
+              (src) =>
+                new Promise((resolve) => {
+                  const img = new Image();
+                  img.onload = () => resolve(src);
+                  img.onerror = () => resolve(null);
+                  img.src = src;
+                })
+            )
+          );
           setReelFrames(uniqueReal);
         }
-      } catch (err) {
-        console.warn('Utilizando imagens locais oficiais na galeria Sobre:', err.message);
+      } catch {
+        // Mantém os frames locais oficiais caso offline
       }
     }
 
     loadRealGalleryFrames();
   }, []);
 
-  // Loop visual discreto (estilo GIF P&B urbano) com fotos reais
+  // Loop visual suave com crossfade entre fotos reais (sem desmontar elementos de imagem)
   useEffect(() => {
     if (!reelFrames || reelFrames.length <= 1) return;
     const timer = setInterval(() => {
       setFrameIndex((prev) => (prev + 1) % reelFrames.length);
-    }, 2400);
+    }, 3400);
     return () => clearInterval(timer);
   }, [reelFrames]);
 
@@ -265,8 +259,7 @@ export function Sobre() {
         setIs3DLoaded(true);
       },
       undefined,
-      (err) => {
-        console.warn('Fallback 3D ativado:', err);
+      () => {
         const fallbackGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.18, 48);
         const fallbackMat = new THREE.MeshStandardMaterial({
           color: 0xcccccc,
@@ -370,13 +363,13 @@ export function Sobre() {
   }, []);
 
   const currentFit = FITS.find((f) => f.id === activeFitId) || FITS[0];
-  const currentReelSrc = reelFrames[frameIndex % reelFrames.length] || largoDaOrdemBg;
+  const activeFrameIdx = frameIndex % (reelFrames.length || 1);
 
   return (
     <div className={styles.pageWrapper}>
       <SEO
         title="Manifesto Curitiba & Essência Urbana | THR33 Streetwear"
-        description="Conheça a história da THR33 Streetwear. Nascida no Largo da Ordem em Curitiba, unindo modelagens Boxy pesadas, arquitetura brutalista e produção sob demanda."
+        description="Conheça a história da THR33 Streetwear. Nascida no Largo da Ordem em Curitiba, unindo modelagens Boxy pesadas, estamparia DTG, arquitetura brutalista e produção sob demanda."
         url="/sobre"
       />
       {/* =========================================================================
@@ -439,7 +432,7 @@ export function Sobre() {
       </section>
 
       {/* =========================================================================
-          2. RESTANTE DO CONTEÚDO DA PÁGINA (HISTÓRIA, MODELAGENS, MEDIDAS)
+          2. RESTANTE DO CONTEÚDO DA PÁGINA (HISTÓRIA, MODELAGENS, MEDIDAS, FAQ)
           ========================================================================= */}
       <div className={styles.mainContentContainer}>
         {/* HISTÓRIA: A RUA COMO NOSSA ESSÊNCIA COM PARALLAX NO REEL */}
@@ -461,14 +454,21 @@ export function Sobre() {
             <div className={styles.splitSection}>
               <div className={styles.motionBox}>
                 <motion.div
-                  style={{ y: manifestoReelParallaxY, width: '100%', height: '124%' }}
+                  className={styles.reelStackContainer}
+                  style={{ y: manifestoReelParallaxY }}
                 >
-                  <ImageWithSkeleton
-                    src={currentReelSrc}
-                    alt="Produção THR33 Curitiba"
-                    className={styles.motionImage}
-                    style={{ width: '100%', height: '100%' }}
-                  />
+                  {reelFrames.map((frameSrc, idx) => (
+                    <img
+                      key={frameSrc}
+                      src={frameSrc}
+                      alt={`Produção THR33 Curitiba ${idx + 1}`}
+                      loading={idx === 0 ? 'eager' : 'lazy'}
+                      decoding="async"
+                      className={`${styles.motionImage} ${styles.reelSlideLayer} ${
+                        idx === activeFrameIdx ? styles.reelSlideActive : styles.reelSlideHidden
+                      }`}
+                    />
+                  ))}
                 </motion.div>
               </div>
 
@@ -655,7 +655,10 @@ export function Sobre() {
           </div>
         </section>
 
-        {/* 5. RODAPÉ DE AÇÃO DIRETO */}
+        {/* 5. FAQ (TOGGLE ACCORDION) + BOTÃO DE REDIRECIONAMENTO PARA SUPORTE & DIRETRIZES */}
+        <DropFaq embedded={true} showSupportCta={true} />
+
+        {/* 6. RODAPÉ DE AÇÃO DIRETO */}
         <section className={styles.footerBanner}>
           <div className={styles.textColumn}>
             <h2 className={styles.sectionTitle}>COMPROMISSO COM A QUALIDADE</h2>

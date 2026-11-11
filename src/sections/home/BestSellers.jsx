@@ -6,8 +6,27 @@ import ProductCard from '../../components/catalog/ProductCard';
 import ProductCardSkeleton from '../../components/catalog/ProductCardSkeleton';
 import styles from './BestSellers.module.css';
 
+function sortBestSellers(list) {
+  return [...list]
+    .filter((p) => p && p.type !== 'brinde' && p.category !== 'gift-card')
+    .sort((a, b) => {
+      const salesA = Number(a.purchases ?? a.salesCount ?? a.sales ?? 0);
+      const salesB = Number(b.purchases ?? b.salesCount ?? b.sales ?? 0);
+      if (salesB !== salesA) return salesB - salesA;
+      const featA = a.isFeatured ? 1 : 0;
+      const featB = b.isFeatured ? 1 : 0;
+      if (featB !== featA) return featB - featA;
+      return Number(b.views ?? 0) - Number(a.views ?? 0);
+    })
+    .slice(0, 3);
+}
+
 export function BestSellers({ products: initialProducts, isLoading = false }) {
-  const [products, setProducts] = useState(initialProducts || []);
+  const [products, setProducts] = useState(() =>
+    Array.isArray(initialProducts) && initialProducts.length > 0
+      ? sortBestSellers(initialProducts)
+      : []
+  );
   const [loading, setLoading] = useState(
     isLoading || (!initialProducts || initialProducts.length === 0)
   );
@@ -19,9 +38,7 @@ export function BestSellers({ products: initialProducts, isLoading = false }) {
     }
 
     if (Array.isArray(initialProducts) && initialProducts.length > 0) {
-      setProducts(
-        initialProducts.filter((p) => p && p.type !== 'brinde' && p.category !== 'gift-card')
-      );
+      setProducts(sortBestSellers(initialProducts));
       setLoading(false);
       return;
     }
@@ -30,18 +47,8 @@ export function BestSellers({ products: initialProducts, isLoading = false }) {
       setLoading(true);
       try {
         const all = await catalogService.getAllProducts();
-        const vestuario = (Array.isArray(all) ? all : [])
-          .filter((p) => p && p.type !== 'brinde' && p.category !== 'gift-card')
-          .sort((a, b) => {
-            const salesA = Number(a.purchases ?? a.salesCount ?? a.sales ?? 0);
-            const salesB = Number(b.purchases ?? b.salesCount ?? b.sales ?? 0);
-            if (salesB !== salesA) return salesB - salesA;
-            const featA = a.isFeatured ? 1 : 0;
-            const featB = b.isFeatured ? 1 : 0;
-            if (featB !== featA) return featB - featA;
-            return Number(b.views ?? 0) - Number(a.views ?? 0);
-          });
-        setProducts(vestuario);
+        const topThree = sortBestSellers(Array.isArray(all) ? all : []);
+        setProducts(topThree);
       } catch (err) {
         console.error('Erro ao carregar mais vendidos:', err);
         setProducts([]);
@@ -70,7 +77,7 @@ export function BestSellers({ products: initialProducts, isLoading = false }) {
         </div>
 
         <div className={styles.productsGrid}>
-          {Array.from({ length: 4 }).map((_, idx) => (
+          {Array.from({ length: 3 }).map((_, idx) => (
             <ProductCardSkeleton key={idx} />
           ))}
         </div>
@@ -78,7 +85,8 @@ export function BestSellers({ products: initialProducts, isLoading = false }) {
     );
   }
 
-  if (!products || products.length === 0) return null;
+  const topProducts = products.slice(0, 3);
+  if (topProducts.length === 0) return null;
 
   return (
     <section className={styles.section}>
@@ -97,8 +105,12 @@ export function BestSellers({ products: initialProducts, isLoading = false }) {
       </div>
 
       <div className={styles.productsGrid}>
-        {products.map((product) => (
-          <ProductCard key={product.id || product.slug} product={product} />
+        {topProducts.map((product, index) => (
+          <ProductCard
+            key={product.id || product.slug}
+            product={product}
+            rank={index + 1}
+          />
         ))}
       </div>
 

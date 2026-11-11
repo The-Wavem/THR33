@@ -16,6 +16,70 @@ export const GLOBAL_CATALOG_SIZES = ['P', 'M', 'G', 'GG', 'EXG'];
 export const OVERSIZED_SIZES = ['P', 'M', 'G', 'GG', 'EXG'];
 export const BOXY_SIZES = ['P', 'M', 'G', 'GG'];
 
+/**
+ * Especificações Técnicas Oficiais das Modelagens THR33 (Página Sobre & PDP)
+ */
+export const OFFICIAL_FIT_SPECS = [
+  {
+    id: 'heavy',
+    slug: 'oversized_heavy',
+    name: 'Oversized Heavy',
+    gsmBadge: '260g/m² HEAVY WEIGHT',
+    desc: 'Malha 100% algodão de gramatura pesada (260g/m²). Proporciona caimento reto e estruturado que não marca o corpo, ideal para o clima frio e chuvoso de Curitiba.',
+    specs: [
+      ['Gramatura', '260g/m² Heavy Weight'],
+      ['Gola', 'Canelada 2x1 de 3cm reforçada'],
+      ['Estampa', 'DTG (Direct to Garment / Impressão Digital) de alta definição com toque zero'],
+      ['Acabamento', 'Pesponto duplo ombro a ombro']
+    ],
+    shape: { shoulder: 108, body: 80, length: 185, sleeve: 56 }
+  },
+  {
+    id: 'classic',
+    slug: 'oversized_classica',
+    name: 'Oversized Clássica',
+    gsmBadge: '190g/m² ALGODÃO PENTEADO',
+    desc: 'Algodão penteado fio 30.1 encorpado (190g/m²). Toque macio com caimento amplo tradicional para uso diário.',
+    specs: [
+      ['Gramatura', '190g/m² Algodão Penteado'],
+      ['Gola', 'Ribana reforçada de 2.5cm'],
+      ['Estampa', 'DTG (Direct to Garment / Impressão Digital) de alta definição com toque zero'],
+      ['Acabamento', 'Costura reforçada com fita interna']
+    ],
+    shape: { shoulder: 104, body: 76, length: 182, sleeve: 52 }
+  },
+  {
+    id: 'boxy',
+    slug: 'boxy',
+    name: 'Boxy Fit',
+    gsmBadge: '220g/m² ALGODÃO ESTRUTURADO',
+    desc: 'Modelagem contemporânea mais curta no comprimento com ombros caídos e largura equilibrada.',
+    specs: [
+      ['Gramatura', '220g/m² Algodão Estruturado'],
+      ['Gola', 'Gola canelada de 3cm'],
+      ['Estampa', 'DTG (Direct to Garment / Impressão Digital) de alta definição com toque zero'],
+      ['Acabamento', 'Barra larga e caimento solto']
+    ],
+    shape: { shoulder: 112, body: 84, length: 155, sleeve: 60 }
+  }
+];
+
+export const getFitTechnicalSpecs = (fit) => {
+  if (!fit) return OFFICIAL_FIT_SPECS[0];
+  const s = String(fit)
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+  if (s.includes('boxy')) {
+    return OFFICIAL_FIT_SPECS[2];
+  }
+  if (s.includes('classica') || s.includes('classic') || s.includes('190')) {
+    return OFFICIAL_FIT_SPECS[1];
+  }
+  return OFFICIAL_FIT_SPECS[0];
+};
+
 export const OFFICIAL_MEASURES_TABLE = {
   oversized: [
     { size: 'P', largura: '54 cm', comprimento: '71 cm', manga: '24 cm', ombro: '19 cm' },
