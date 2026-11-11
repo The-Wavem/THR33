@@ -22,6 +22,45 @@ const FITS = OFFICIAL_FIT_SPECS;
 
 const GIFT_OR_BRINDE_REGEX = /vale[-_\s]?presente|gift[-_\s]?card|giftcard|\/brindes|brinde/i;
 
+let cachedBadgeArrayBuffer = null;
+let pendingBadgeFetch = null;
+
+async function fetchThr33BadgeArrayBuffer() {
+  if (cachedBadgeArrayBuffer && cachedBadgeArrayBuffer.byteLength > 100) {
+    return cachedBadgeArrayBuffer;
+  }
+  if (pendingBadgeFetch) {
+    return pendingBadgeFetch;
+  }
+
+  pendingBadgeFetch = (async () => {
+    const urlsToTry = ['/models/thr33-badge.glb', `/models/thr33-badge.glb?v=${Date.now()}`];
+    for (const url of urlsToTry) {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) continue;
+        const buf = await res.arrayBuffer();
+        if (buf && buf.byteLength > 100) {
+          const magic = new TextDecoder().decode(new Uint8Array(buf, 0, 4));
+          if (magic === 'glTF') {
+            cachedBadgeArrayBuffer = buf;
+            return buf;
+          }
+        }
+      } catch {
+        // Tenta a próxima URL com cache-buster
+      }
+    }
+    throw new Error('Não foi possível carregar /models/thr33-badge.glb');
+  })();
+
+  try {
+    return await pendingBadgeFetch;
+  } finally {
+    pendingBadgeFetch = null;
+  }
+}
+
 export function Sobre() {
   const heroSectionRef = useRef(null);
   const manifestoSectionRef = useRef(null);
@@ -213,64 +252,71 @@ export function Sobre() {
     const group = new THREE.Group();
     scene.add(group);
 
-    // Carregamento do modelo oficial da logo THR33 (.glb)
+    let isDisposed = false;
+
+    // Carregamento direto via ArrayBuffer do modelo oficial da logo THR33 (/models/thr33-badge.glb)
     const loader = new GLTFLoader();
 
-    loader.load(
-      '/models/thr33-badge.glb',
-      (gltf) => {
-        const model = gltf.scene;
+    fetchThr33BadgeArrayBuffer()
+      .then((arrayBuffer) => {
+        if (isDisposed) return;
+        loader.parse(
+          arrayBuffer.slice(0),
+          '/models/',
+          (gltf) => {
+            if (isDisposed) return;
+            const model = gltf.scene;
 
-        // 1. Orientação em pé de frente para a câmera (+90° no eixo X)
-        model.rotation.x = Math.PI / 2;
-        model.updateMatrixWorld(true);
+            // 1. Orientação em pé de frente para a câmera (+90° no eixo X)
+            model.rotation.x = Math.PI / 2;
+            model.updateMatrixWorld(true);
 
-        // 2. Material nobre: titânio / prata escovada de alto brilho especular
-        model.traverse((child) => {
-          if (child.isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-            child.material = new THREE.MeshStandardMaterial({
-              color: 0xe5e5e5,
-              metalness: 0.9,
-              roughness: 0.2,
-              envMapIntensity: 1.6
+            // 2. Material nobre: titânio / prata escovada de alto brilho especular
+            model.traverse((child) => {
+              if (child.isMesh) {
+                if (child.geometry && !child.geometry.attributes.normal) {
+                  child.geometry.computeVertexNormals();
+                }
+                child.castShadow = true;
+                child.receiveShadow = true;
+                child.material = new THREE.MeshStandardMaterial({
+                  color: 0xe5e5e5,
+                  metalness: 0.9,
+                  roughness: 0.2,
+                  envMapIntensity: 1.6,
+                  side: THREE.DoubleSide
+                });
+              }
             });
+
+            // 3. ESCALA PRIMEIRO (Garante proporção segura sem quebrar o centro)
+            const boxInitial = new THREE.Box3().setFromObject(model);
+            const sizeInitial = boxInitial.getSize(new THREE.Vector3());
+            const maxDim = Math.max(sizeInitial.x, sizeInitial.y, sizeInitial.z);
+            const targetScale = 3.35 / (maxDim || 1);
+            model.scale.setScalar(targetScale);
+            model.updateMatrixWorld(true);
+
+            // 4. AGORA CENTRALIZA NO ESPAÇO ESCALADO EXATO
+            const boxScaled = new THREE.Box3().setFromObject(model);
+            const centerScaled = boxScaled.getCenter(new THREE.Vector3());
+            model.position.x -= centerScaled.x;
+            model.position.y -= centerScaled.y;
+            model.position.z -= centerScaled.z;
+            model.updateMatrixWorld(true);
+
+            group.clear();
+            group.add(model);
+            setIs3DLoaded(true);
+          },
+          () => {
+            if (!isDisposed) setIs3DLoaded(true);
           }
-        });
-
-        // 3. ESCALA PRIMEIRO (Garante proporção segura sem quebrar o centro)
-        const boxInitial = new THREE.Box3().setFromObject(model);
-        const sizeInitial = boxInitial.getSize(new THREE.Vector3());
-        const maxDim = Math.max(sizeInitial.x, sizeInitial.y, sizeInitial.z);
-        const targetScale = 3.35 / (maxDim || 1);
-        model.scale.setScalar(targetScale);
-        model.updateMatrixWorld(true);
-
-        // 4. AGORA CENTRALIZA NO ESPAÇO ESCALADO EXATO
-        const boxScaled = new THREE.Box3().setFromObject(model);
-        const centerScaled = boxScaled.getCenter(new THREE.Vector3());
-        model.position.x -= centerScaled.x;
-        model.position.y -= centerScaled.y;
-        model.position.z -= centerScaled.z;
-        model.updateMatrixWorld(true);
-
-        group.add(model);
-        setIs3DLoaded(true);
-      },
-      undefined,
-      () => {
-        const fallbackGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.18, 48);
-        const fallbackMat = new THREE.MeshStandardMaterial({
-          color: 0xcccccc,
-          metalness: 0.85,
-          roughness: 0.25
-        });
-        const fallbackMesh = new THREE.Mesh(fallbackGeo, fallbackMat);
-        group.add(fallbackMesh);
-        setIs3DLoaded(true);
-      }
-    );
+        );
+      })
+      .catch(() => {
+        if (!isDisposed) setIs3DLoaded(true);
+      });
 
     // Controle interativo unificado para Mouse & Touch Mobile
     let isPointerDown = false;
@@ -353,6 +399,7 @@ export function Sobre() {
     animate();
 
     return () => {
+      isDisposed = true;
       cancelAnimationFrame(frameId);
       ro.disconnect();
       container.removeEventListener('pointerdown', onPointerDown);

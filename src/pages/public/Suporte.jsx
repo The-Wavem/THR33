@@ -196,9 +196,9 @@ export function Suporte() {
             <Mail size={24} strokeWidth={1.8} />
           </div>
           <h3>E-MAIL & INSTAGRAM</h3>
-          <p>Suporte oficial via contato@lojathr33.com.br / contato.thr33@gmail.com ou Direct em @madebythr33.</p>
+          <p>Suporte oficial via contato.thr33@gmail.com ou Direct em @madebythr33.</p>
           <span className={styles.hours}>Resposta em até 24h úteis</span>
-          <a href="mailto:contato@lojathr33.com.br" className={styles.channelBtn}>
+          <a href="mailto:contato.thr33@gmail.com.br" className={styles.channelBtn}>
             ENVIAR E-MAIL
           </a>
         </motion.div>

@@ -16,8 +16,6 @@
   letter-spacing: 2px;
   color: var(--text-muted);
   display: inline-block;
-  border: 1px solid var(--border-color);
-  background: var(--bg-card);
   padding: 0.35rem 0.75rem;
   margin-bottom: 0.6rem;
 }

@@ -1,19 +1,33 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Truck, Star, Plus, Heart, ShoppingBag, ArrowLeft, Check, Package, 
-  ShieldCheck, Flame, HelpCircle, Maximize2, X, ChevronLeft, ChevronRight, MapPin 
-} from 'lucide-react';
-import ProductCard from '../../components/catalog/ProductCard';
-import ImageWithSkeleton from '../../components/ui/ImageWithSkeleton';
-import { catalogService } from '../../services/catalogService';
-import { reviewService } from '../../services/reviewService';
-import { shippingService } from '../../services/shippingService';
-import { useCart } from '../../context/CartContext';
-import { useWishlist } from '../../context/WishlistContext';
-import { analyticsService } from '../../services/analyticsService';
-import { 
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useParams, Link, useNavigate } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Truck,
+  Star,
+  Plus,
+  Heart,
+  ShoppingBag,
+  ArrowLeft,
+  Check,
+  Package,
+  ShieldCheck,
+  Flame,
+  HelpCircle,
+  Maximize2,
+  X,
+  ChevronLeft,
+  ChevronRight,
+  MapPin,
+} from "lucide-react";
+import ProductCard from "../../components/catalog/ProductCard";
+import ImageWithSkeleton from "../../components/ui/ImageWithSkeleton";
+import { catalogService } from "../../services/catalogService";
+import { reviewService } from "../../services/reviewService";
+import { shippingService } from "../../services/shippingService";
+import { useCart } from "../../context/CartContext";
+import { useWishlist } from "../../context/WishlistContext";
+import { analyticsService } from "../../services/analyticsService";
+import {
   formatCategoryBadgeLabel,
   getSizesForFit,
   getMeasuresForFit,
@@ -21,24 +35,27 @@ import {
   normalizeFitSlug,
   isUnicoFit,
   sanitizeFitsList,
-  getFitTechnicalSpecs
-} from '../../utils/fitUtils';
-import { SEO } from '../../components/common/SEO';
-import { buildProductSchema, buildBreadcrumbSchema } from '../../utils/seoSchemas';
-import styles from './ProdutoDetalhe.module.css';
+  getFitTechnicalSpecs,
+} from "../../utils/fitUtils";
+import { SEO } from "../../components/common/SEO";
+import {
+  buildProductSchema,
+  buildBreadcrumbSchema,
+} from "../../utils/seoSchemas";
+import styles from "./ProdutoDetalhe.module.css";
 
 const DEFAULT_SIZE_CHART = [
   { size: "P", chest: "56 cm", length: "70 cm", sleeve: "22 cm" },
   { size: "M", chest: "58 cm", length: "72 cm", sleeve: "23 cm" },
   { size: "G", chest: "60 cm", length: "74 cm", sleeve: "24 cm" },
-  { size: "GG", chest: "62 cm", length: "76 cm", sleeve: "25 cm" }
+  { size: "GG", chest: "62 cm", length: "76 cm", sleeve: "25 cm" },
 ];
 
 const DEFAULT_CARE_INSTRUCTIONS = [
   "Lave sempre do avesso e de preferência com água fria.",
   "Não use alvejantes.",
   "Evite secadora (o calor pode encolher o algodão).",
-  "Passe o ferro do avesso e nunca diretamente sobre a estampa."
+  "Passe o ferro do avesso e nunca diretamente sobre a estampa.",
 ];
 
 export function ProdutoDetalhe({ onAddToCart }) {
@@ -57,17 +74,17 @@ export function ProdutoDetalhe({ onAddToCart }) {
   // Estados de Interação
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [selectedColor, setSelectedColor] = useState(null);
-  const [selectedSize, setSelectedSize] = useState('M');
-  const [selectedFit, setSelectedFit] = useState('Boxy');
+  const [selectedSize, setSelectedSize] = useState("M");
+  const [selectedFit, setSelectedFit] = useState("Boxy");
   const [quantity, setQuantity] = useState(1);
-  const [openAccordion, setOpenAccordion] = useState('description');
+  const [openAccordion, setOpenAccordion] = useState("description");
   const [isAddedFeedback, setIsAddedFeedback] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const actionsRowRef = useRef(null);
   const [showStickyBottomBar, setShowStickyBottomBar] = useState(false);
 
   // Cálculo de Frete
-  const [cepInput, setCepInput] = useState('');
+  const [cepInput, setCepInput] = useState("");
   const [shippingOptions, setShippingOptions] = useState(null);
   const [destinationLocation, setDestinationLocation] = useState(null);
   const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
@@ -78,7 +95,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
   const [reviewsStats, setReviewsStats] = useState({
     totalReviews: 0,
     averageRating: 5.0,
-    recommendPercentage: 100
+    recommendPercentage: 100,
   });
   const [loadingReviews, setLoadingReviews] = useState(true);
 
@@ -88,12 +105,15 @@ export function ProdutoDetalhe({ onAddToCart }) {
       if (!product?.id) return;
       setLoadingReviews(true);
       try {
-        const result = await reviewService.getApprovedReviewsByProduct(product.id, product.slug);
+        const result = await reviewService.getApprovedReviewsByProduct(
+          product.id,
+          product.slug,
+        );
         setApprovedReviews(result.reviews || []);
         setReviewsStats({
           totalReviews: result.totalReviews || 0,
           averageRating: result.averageRating || 5.0,
-          recommendPercentage: result.recommendPercentage || 100
+          recommendPercentage: result.recommendPercentage || 100,
         });
       } catch (err) {
         console.warn("Aviso ao carregar avaliações do produto:", err.message);
@@ -110,9 +130,11 @@ export function ProdutoDetalhe({ onAddToCart }) {
     if (!actionsRowRef.current) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        setShowStickyBottomBar(!entry.isIntersecting && entry.boundingClientRect.top < 0);
+        setShowStickyBottomBar(
+          !entry.isIntersecting && entry.boundingClientRect.top < 0,
+        );
       },
-      { threshold: 0 }
+      { threshold: 0 },
     );
     observer.observe(actionsRowRef.current);
     return () => observer.disconnect();
@@ -125,11 +147,13 @@ export function ProdutoDetalhe({ onAddToCart }) {
       try {
         // 1. Busca direta pelo produto por ID ou Slug (com resolução inteligente)
         let data = await catalogService.getProductById(currentParam);
-        
+
         // 2. Fallback buscando no catálogo completo caso slug ou ID seja variante
         if (!data || (!data.name && !data.title)) {
           const all = await catalogService.getAllProducts();
-          data = all.find(p => p.id === currentParam || p.slug === currentParam) || null;
+          data =
+            all.find((p) => p.id === currentParam || p.slug === currentParam) ||
+            null;
         }
 
         if (!isMounted) return;
@@ -137,15 +161,21 @@ export function ProdutoDetalhe({ onAddToCart }) {
         if (data && (data.name || data.title) && data.price !== undefined) {
           // Se o produto foi localizado mas a rota na URL é um ID interno ou slug anterior,
           // atualiza suavemente a URL para o slug canônico atual
-          if (data.slug && data.slug !== currentParam && window.location.pathname !== `/produto/${data.slug}`) {
+          if (
+            data.slug &&
+            data.slug !== currentParam &&
+            window.location.pathname !== `/produto/${data.slug}`
+          ) {
             navigate(`/produto/${data.slug}`, { replace: true });
           }
           setProduct(data);
-          let defaultSize = 'M';
+          let defaultSize = "M";
           if (data.unlimitedStock || data.isUnlimitedStock) {
-            defaultSize = 'M';
-          } else if (data.stock && typeof data.stock === 'object') {
-            const firstAvail = ['P', 'M', 'G', 'GG', 'EXG'].find(sz => Number(data.stock[sz] ?? 0) > 0);
+            defaultSize = "M";
+          } else if (data.stock && typeof data.stock === "object") {
+            const firstAvail = ["P", "M", "G", "GG", "EXG"].find(
+              (sz) => Number(data.stock[sz] ?? 0) > 0,
+            );
             if (firstAvail) defaultSize = firstAvail;
           }
           setSelectedSize(defaultSize);
@@ -153,17 +183,26 @@ export function ProdutoDetalhe({ onAddToCart }) {
           if (Array.isArray(data.colors) && data.colors.length > 0) {
             setSelectedColor(data.colors[0]);
           } else {
-            setSelectedColor({ id: 'preto', name: 'Preto', hex: '#000000' });
+            setSelectedColor({ id: "preto", name: "Preto", hex: "#000000" });
           }
 
-          if (Array.isArray(data.imagesGallery) && data.imagesGallery.length > 0) {
-            const coverIdx = data.imagesGallery.findIndex(img => img.isCover);
+          if (
+            Array.isArray(data.imagesGallery) &&
+            data.imagesGallery.length > 0
+          ) {
+            const coverIdx = data.imagesGallery.findIndex((img) => img.isCover);
             setSelectedImageIndex(coverIdx >= 0 ? coverIdx : 0);
           } else {
             setSelectedImageIndex(0);
           }
-          analyticsService.trackProductView(data.id, data.name, data.category || 'camisa', data.fit || 'boxy', data.slug);
-          analyticsService.trackPageView('produto_detalhe');
+          analyticsService.trackProductView(
+            data.id,
+            data.name,
+            data.category || "camisa",
+            data.fit || "boxy",
+            data.slug,
+          );
+          analyticsService.trackPageView("produto_detalhe");
         } else {
           setProduct(null);
           // Busca sugestões em destaque para exibir na tela 404
@@ -199,12 +238,14 @@ export function ProdutoDetalhe({ onAddToCart }) {
     };
   }, [currentParam]);
 
-  const isUnlimitedStock = Boolean(product?.unlimitedStock || product?.isUnlimitedStock);
+  const isUnlimitedStock = Boolean(
+    product?.unlimitedStock || product?.isUnlimitedStock,
+  );
 
   const isGiftCard = Boolean(
-    product?.isGiftCard || 
-    product?.category === 'gift-card' || 
-    String(product?.id || '').includes('vale-presente')
+    product?.isGiftCard ||
+    product?.category === "gift-card" ||
+    String(product?.id || "").includes("vale-presente"),
   );
 
   // Lista de modelagens disponíveis (suporta product.fits ou fallback padrão da marca)
@@ -213,10 +254,15 @@ export function ProdutoDetalhe({ onAddToCart }) {
     let list = [];
     if (Array.isArray(product?.fits) && product.fits.length > 0) {
       list = product.fits;
-    } else if (Array.isArray(product?.availableFits) && product.availableFits.length > 0) {
+    } else if (
+      Array.isArray(product?.availableFits) &&
+      product.availableFits.length > 0
+    ) {
       list = product.availableFits;
     } else {
-      list = product?.fit ? [product.fit] : ['Oversized Heavy', 'Oversized Clássica', 'Boxy'];
+      list = product?.fit
+        ? [product.fit]
+        : ["Oversized Heavy", "Oversized Clássica", "Boxy"];
     }
 
     return sanitizeFitsList(list);
@@ -234,16 +280,19 @@ export function ProdutoDetalhe({ onAddToCart }) {
   }, [availableFits, product?.fit]);
 
   // Grade de tamanhos dinâmica conforme a modelagem selecionada
-  const currentFitSpecs = useMemo(() => getFitTechnicalSpecs(selectedFit || product?.fit), [selectedFit, product?.fit]);
+  const currentFitSpecs = useMemo(
+    () => getFitTechnicalSpecs(selectedFit || product?.fit),
+    [selectedFit, product?.fit],
+  );
   const activeSizes = useMemo(() => {
     return getSizesForFit(selectedFit);
   }, [selectedFit]);
 
   // Se o cliente estava com 'EXG' selecionado e trocou para 'Boxy', ajusta para 'GG' (Boxy não tem EXG)
   useEffect(() => {
-    if (selectedFit && String(selectedFit).toLowerCase().includes('boxy')) {
-      if (selectedSize === 'EXG') {
-        setSelectedSize('GG');
+    if (selectedFit && String(selectedFit).toLowerCase().includes("boxy")) {
+      if (selectedSize === "EXG") {
+        setSelectedSize("GG");
       }
     }
   }, [selectedFit, selectedSize]);
@@ -253,37 +302,44 @@ export function ProdutoDetalhe({ onAddToCart }) {
     if (isUnlimitedStock) {
       return { P: 9999, M: 9999, G: 9999, GG: 9999, EXG: 9999 };
     }
-    if (product?.hasColorStock && product?.colorStock && selectedColor?.id && product.colorStock[selectedColor.id]) {
+    if (
+      product?.hasColorStock &&
+      product?.colorStock &&
+      selectedColor?.id &&
+      product.colorStock[selectedColor.id]
+    ) {
       const cStock = product.colorStock[selectedColor.id];
       return {
         P: Number(cStock.P ?? 0),
         M: Number(cStock.M ?? 0),
         G: Number(cStock.G ?? 0),
         GG: Number(cStock.GG ?? 0),
-        EXG: Number(cStock.EXG ?? cStock.PP ?? 5)
+        EXG: Number(cStock.EXG ?? cStock.PP ?? 5),
       };
     }
-    if (product?.stock && typeof product.stock === 'object') {
+    if (product?.stock && typeof product.stock === "object") {
       return {
         P: Number(product.stock.P ?? 0),
         M: Number(product.stock.M ?? 0),
         G: Number(product.stock.G ?? 0),
         GG: Number(product.stock.GG ?? 0),
-        EXG: Number(product.stock.EXG ?? product.stock.PP ?? 5)
+        EXG: Number(product.stock.EXG ?? product.stock.PP ?? 5),
       };
     }
     if (Array.isArray(product?.variants) && product.variants.length > 0) {
       const s = { P: 0, M: 0, G: 0, GG: 0, EXG: 0 };
-      product.variants.forEach(v => {
-        if (selectedColor?.id && v.colorId && v.colorId !== selectedColor.id) return;
-        const sz = String(v.size || '').toUpperCase();
-        if (s[sz] !== undefined) s[sz] = Number(v.stock_quantity ?? v.stock ?? v.inventory ?? 0);
+      product.variants.forEach((v) => {
+        if (selectedColor?.id && v.colorId && v.colorId !== selectedColor.id)
+          return;
+        const sz = String(v.size || "").toUpperCase();
+        if (s[sz] !== undefined)
+          s[sz] = Number(v.stock_quantity ?? v.stock ?? v.inventory ?? 0);
       });
       return s;
     }
     if (Array.isArray(product?.sizes) && product.sizes.length > 0) {
       const s = { P: 0, M: 0, G: 0, GG: 0, EXG: 0 };
-      product.sizes.forEach(sz => {
+      product.sizes.forEach((sz) => {
         const upper = String(sz).toUpperCase();
         if (s[upper] !== undefined) s[upper] = 10;
       });
@@ -292,39 +348,52 @@ export function ProdutoDetalhe({ onAddToCart }) {
     return { P: 0, M: 0, G: 0, GG: 0, EXG: 0 };
   }, [product, isUnlimitedStock, selectedColor]);
 
-  const availableStock = isUnlimitedStock ? 9999 : (parsedStock[selectedSize] ?? 0);
-  const isAllOutOfStock = isUnlimitedStock ? false : Object.values(parsedStock).every(q => q <= 0);
+  const availableStock = isUnlimitedStock
+    ? 9999
+    : (parsedStock[selectedSize] ?? 0);
+  const isAllOutOfStock = isUnlimitedStock
+    ? false
+    : Object.values(parsedStock).every((q) => q <= 0);
 
   // Dados consolidados do produto e galeria com suporte a vínculos de cor
   const imagesGallery = useMemo(() => {
-    if (Array.isArray(product?.imagesGallery) && product.imagesGallery.length > 0) {
+    if (
+      Array.isArray(product?.imagesGallery) &&
+      product.imagesGallery.length > 0
+    ) {
       return product.imagesGallery;
     }
     if (Array.isArray(product?.images) && product.images.length > 0) {
       return product.images.map((url, idx) => ({
         id: `img_${idx}`,
         url,
-        colorId: ''
+        colorId: "",
       }));
     }
     if (product?.image) {
-      return [{ id: 'img_0', url: product.image, colorId: '' }];
+      return [{ id: "img_0", url: product.image, colorId: "" }];
     }
     return [];
   }, [product]);
 
-  const images = useMemo(() => imagesGallery.map(img => img.url), [imagesGallery]);
-  
-  const colors = Array.isArray(product?.colors) && product.colors.length > 0
-    ? product.colors
-    : null;
+  const images = useMemo(
+    () => imagesGallery.map((img) => img.url),
+    [imagesGallery],
+  );
+
+  const colors =
+    Array.isArray(product?.colors) && product.colors.length > 0
+      ? product.colors
+      : null;
 
   const handleSelectColor = (color) => {
     setSelectedColor(color);
     if (!color) return;
 
     // Vinculação de imagem à cor: busca no carrossel a foto atrelada a esta cor
-    const linkedImageIdx = imagesGallery.findIndex(img => img.colorId === color.id);
+    const linkedImageIdx = imagesGallery.findIndex(
+      (img) => img.colorId === color.id,
+    );
     if (linkedImageIdx >= 0) {
       setSelectedImageIndex(linkedImageIdx);
     }
@@ -333,7 +402,9 @@ export function ProdutoDetalhe({ onAddToCart }) {
     if (product?.hasColorStock && product?.colorStock?.[color.id]) {
       const colorSizes = product.colorStock[color.id];
       if (Number(colorSizes[selectedSize] ?? 0) <= 0) {
-        const firstAvailable = activeSizes.find(sz => Number(colorSizes[sz] ?? 0) > 0);
+        const firstAvailable = activeSizes.find(
+          (sz) => Number(colorSizes[sz] ?? 0) > 0,
+        );
         if (firstAvailable) {
           setSelectedSize(firstAvailable);
         }
@@ -342,41 +413,64 @@ export function ProdutoDetalhe({ onAddToCart }) {
   };
 
   const sizeChart = product?.sizeChart || DEFAULT_SIZE_CHART;
-  const careInstructions = product?.careInstructions || DEFAULT_CARE_INSTRUCTIONS;
+  const careInstructions =
+    product?.careInstructions || DEFAULT_CARE_INSTRUCTIONS;
 
   // Preço dinâmico reativo baseado na modelagem selecionada (fitPrices) ou no preço base
   const priceNum = useMemo(() => {
     if (!product) return 0;
-    if (product.fitPrices && typeof product.fitPrices === 'object') {
+    if (product.fitPrices && typeof product.fitPrices === "object") {
       const slugKey = normalizeFitSlug(selectedFit);
-      if (product.fitPrices[slugKey] !== undefined && product.fitPrices[slugKey] !== null && Number(product.fitPrices[slugKey]) > 0) {
+      if (
+        product.fitPrices[slugKey] !== undefined &&
+        product.fitPrices[slugKey] !== null &&
+        Number(product.fitPrices[slugKey]) > 0
+      ) {
         return Number(product.fitPrices[slugKey]);
       }
-      if (product.fitPrices[selectedFit] !== undefined && product.fitPrices[selectedFit] !== null && Number(product.fitPrices[selectedFit]) > 0) {
+      if (
+        product.fitPrices[selectedFit] !== undefined &&
+        product.fitPrices[selectedFit] !== null &&
+        Number(product.fitPrices[selectedFit]) > 0
+      ) {
         return Number(product.fitPrices[selectedFit]);
       }
     }
     return Number(product.price || product.priceNum || 0);
   }, [product, selectedFit]);
   const discountPriceNum = Number(product?.discountPrice || 0);
-  const hasDiscount = Boolean(discountPriceNum > 0 && discountPriceNum < priceNum && product?.discountActive !== false);
-  const hasFreeShipping = Boolean(product?.freeShipping || product?.hasFreeShipping);
+  const hasDiscount = Boolean(
+    discountPriceNum > 0 &&
+    discountPriceNum < priceNum &&
+    product?.discountActive !== false,
+  );
+  const hasFreeShipping = Boolean(
+    product?.freeShipping || product?.hasFreeShipping,
+  );
   const effectivePrice = hasDiscount ? discountPriceNum : priceNum;
-  const discountPercentage = hasDiscount ? Math.round(((priceNum - discountPriceNum) / priceNum) * 100) : 0;
+  const discountPercentage = hasDiscount
+    ? Math.round(((priceNum - discountPriceNum) / priceNum) * 100)
+    : 0;
 
   const installmentsCount = product?.installments || 3;
-  const installmentValue = (effectivePrice / installmentsCount).toFixed(2).replace('.', ',');
+  const installmentValue = (effectivePrice / installmentsCount)
+    .toFixed(2)
+    .replace(".", ",");
 
   const isFavorite = product?.id ? isInWishlist(product.id) : false;
 
   const productSeoData = useMemo(() => {
     if (!product) return null;
-    const name = product.name || product.title || 'Camiseta Streetwear THR33';
+    const name = product.name || product.title || "Camiseta Streetwear THR33";
     const desc =
       product.description ||
       `Camiseta ${name} com modelagem exclusiva THR33, alta gramatura e corte premium. Produção sob demanda for the few.`;
-    const image = product.image || (Array.isArray(product.images) && product.images[0]) || '';
-    const rawPrice = effectivePrice || Number(product.discountPrice || product.price || 0);
+    const image =
+      product.image ||
+      (Array.isArray(product.images) && product.images[0]) ||
+      "";
+    const rawPrice =
+      effectivePrice || Number(product.discountPrice || product.price || 0);
 
     const isOutOfStock =
       product.inStock === false ||
@@ -385,9 +479,9 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
     const productSchema = buildProductSchema(product, approvedReviews);
     const breadcrumbSchema = buildBreadcrumbSchema([
-      { name: 'Início', url: '/' },
-      { name: 'Catálogo', url: '/catalogo' },
-      { name: name, url: `/produto/${product.slug || product.id}` }
+      { name: "Início", url: "/" },
+      { name: "Catálogo", url: "/catalogo" },
+      { name: name, url: `/produto/${product.slug || product.id}` },
     ]);
 
     const combinedJsonLd = [];
@@ -399,13 +493,15 @@ export function ProdutoDetalhe({ onAddToCart }) {
       description: desc,
       image,
       url: `/produto/${product.slug || product.id}`,
-      type: 'product',
+      type: "product",
       productMeta: {
         price: rawPrice.toFixed(2),
-        currency: 'BRL',
-        availability: isOutOfStock ? 'https://schema.org/OutOfStock' : 'https://schema.org/InStock'
+        currency: "BRL",
+        availability: isOutOfStock
+          ? "https://schema.org/OutOfStock"
+          : "https://schema.org/InStock",
       },
-      jsonLd: combinedJsonLd
+      jsonLd: combinedJsonLd,
     };
   }, [
     product?.id,
@@ -418,15 +514,19 @@ export function ProdutoDetalhe({ onAddToCart }) {
     product?.active,
     product?.totalStock,
     product?.image,
-    approvedReviews.length
+    approvedReviews.length,
   ]);
 
   const handlePrevImage = () => {
-    setSelectedImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+    setSelectedImageIndex((prev) =>
+      prev === 0 ? images.length - 1 : prev - 1,
+    );
   };
 
   const handleNextImage = () => {
-    setSelectedImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+    setSelectedImageIndex((prev) =>
+      prev === images.length - 1 ? 0 : prev + 1,
+    );
   };
 
   // Gesto de Swipe / Arrastar Touch no Carrossel de Imagens (Mobile e Desktop)
@@ -482,47 +582,57 @@ export function ProdutoDetalhe({ onAddToCart }) {
     if (!isFullscreen) return;
 
     const handleKeyDown = (e) => {
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         setIsFullscreen(false);
-      } else if (e.key === 'ArrowLeft') {
-        setSelectedImageIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
-      } else if (e.key === 'ArrowRight') {
-        setSelectedImageIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+      } else if (e.key === "ArrowLeft") {
+        setSelectedImageIndex((prev) =>
+          prev === 0 ? images.length - 1 : prev - 1,
+        );
+      } else if (e.key === "ArrowRight") {
+        setSelectedImageIndex((prev) =>
+          prev === images.length - 1 ? 0 : prev + 1,
+        );
       }
     };
 
     const originalBodyOverflow = document.body.style.overflow;
     const originalHtmlOverflow = document.documentElement.style.overflow;
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
-    window.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       document.body.style.overflow = originalBodyOverflow;
       document.documentElement.style.overflow = originalHtmlOverflow;
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener("keydown", handleKeyDown);
     };
   }, [isFullscreen, images.length]);
 
   const handleCepChange = (e) => {
-    const raw = e.target.value.replace(/\D/g, '').slice(0, 8);
-    const formatted = raw.length > 5 ? `${raw.slice(0, 5)}-${raw.slice(5)}` : raw;
+    const raw = e.target.value.replace(/\D/g, "").slice(0, 8);
+    const formatted =
+      raw.length > 5 ? `${raw.slice(0, 5)}-${raw.slice(5)}` : raw;
     setCepInput(formatted);
   };
 
   const handleCalculateShipping = async (e) => {
     e.preventDefault();
-    const cleanCep = cepInput.replace(/\D/g, '');
-    
+    const cleanCep = cepInput.replace(/\D/g, "");
+
     if (cleanCep.length !== 8) {
-      setShippingError('Digite um CEP válido com 8 dígitos.');
+      setShippingError("Digite um CEP válido com 8 dígitos.");
       setShippingOptions(null);
       setDestinationLocation(null);
       return;
     }
 
-    if (/^(\d)\1{7}$/.test(cleanCep) || parseInt(cleanCep.substring(0, 5), 10) < 1000) {
-      setShippingError('CEP inexistente ou inválido. Digite um CEP brasileiro válido.');
+    if (
+      /^(\d)\1{7}$/.test(cleanCep) ||
+      parseInt(cleanCep.substring(0, 5), 10) < 1000
+    ) {
+      setShippingError(
+        "CEP inexistente ou inválido. Digite um CEP brasileiro válido.",
+      );
       setShippingOptions(null);
       setDestinationLocation(null);
       return;
@@ -532,24 +642,30 @@ export function ProdutoDetalhe({ onAddToCart }) {
     setIsCalculatingShipping(true);
 
     try {
-      const items = [{
-        id: product?.id || product?.slug || 'item_1',
-        name: product?.name || 'Peça THR33',
-        price: effectivePrice,
-        quantity: quantity || 1,
-        freeShipping: hasFreeShipping
-      }];
-      const result = await shippingService.calculateShipping(cleanCep, items, effectivePrice * (quantity || 1));
+      const items = [
+        {
+          id: product?.id || product?.slug || "item_1",
+          name: product?.name || "Peça THR33",
+          price: effectivePrice,
+          quantity: quantity || 1,
+          freeShipping: hasFreeShipping,
+        },
+      ];
+      const result = await shippingService.calculateShipping(
+        cleanCep,
+        items,
+        effectivePrice * (quantity || 1),
+      );
       if (result.options && result.options.length > 0) {
         setShippingOptions(result.options);
         setDestinationLocation(result.destinationLocation || null);
       } else {
-        setShippingError('Nenhuma opção de entrega encontrada para este CEP.');
+        setShippingError("Nenhuma opção de entrega encontrada para este CEP.");
         setShippingOptions(null);
         setDestinationLocation(null);
       }
     } catch (err) {
-      setShippingError(err.message || 'Falha ao cotar frete.');
+      setShippingError(err.message || "Falha ao cotar frete.");
       setShippingOptions(null);
       setDestinationLocation(null);
     } finally {
@@ -559,13 +675,15 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
   const handleAddToCart = () => {
     if (availableStock <= 0) return;
-    
-    const linkedImg = selectedColor?.id 
-      ? imagesGallery.find(img => img.colorId === selectedColor.id)?.url 
-      : null;
-    const currentImg = linkedImg || images[selectedImageIndex] || product?.image;
 
-    const finalColor = selectedColor || (colors && colors[0]) || { id: 'preto', name: 'Preto', hex: '#000000' };
+    const linkedImg = selectedColor?.id
+      ? imagesGallery.find((img) => img.colorId === selectedColor.id)?.url
+      : null;
+    const currentImg =
+      linkedImg || images[selectedImageIndex] || product?.image;
+
+    const finalColor = selectedColor ||
+      (colors && colors[0]) || { id: "preto", name: "Preto", hex: "#000000" };
 
     const cartProduct = {
       ...product,
@@ -574,8 +692,8 @@ export function ProdutoDetalhe({ onAddToCart }) {
       image: currentImg,
       color: finalColor,
       fit: selectedFit,
-      category: product?.category || 'camisa',
-      freeShipping: hasFreeShipping
+      category: product?.category || "camisa",
+      freeShipping: hasFreeShipping,
     };
 
     if (onAddToCart) {
@@ -583,7 +701,6 @@ export function ProdutoDetalhe({ onAddToCart }) {
     } else {
       addToCart(cartProduct, selectedSize, quantity, finalColor, selectedFit);
     }
-
 
     setIsAddedFeedback(true);
     setTimeout(() => setIsAddedFeedback(false), 2500);
@@ -604,7 +721,8 @@ export function ProdutoDetalhe({ onAddToCart }) {
             </div>
             <h2 className={styles.loadingTitle}>CONSULTANDO ACERVO</h2>
             <p className={styles.loadingSubtitle}>
-              Sincronizando especificações técnicas, grade de medidas e disponibilidade em estoque.
+              Sincronizando especificações técnicas, grade de medidas e
+              disponibilidade em estoque.
             </p>
           </div>
         </div>
@@ -617,11 +735,11 @@ export function ProdutoDetalhe({ onAddToCart }) {
       <main className={styles.container}>
         <SEO title="Peça Não Encontrada | THR33 Streetwear" noindex={true} />
         <div className={styles.notFoundWrapper}>
-          <motion.div 
+          <motion.div
             className={styles.notFoundCard}
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.35, ease: 'easeOut' }}
+            transition={{ duration: 0.35, ease: "easeOut" }}
           >
             <div className={styles.notFoundBadgeRow}>
               <span className={styles.notFoundBadge}>
@@ -632,23 +750,30 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
             <h1 className={styles.notFoundCode}>404</h1>
 
-            <h2 className={styles.notFoundTitle}>PEÇA NÃO ENCONTRADA OU FORA DE CATÁLOGO</h2>
+            <h2 className={styles.notFoundTitle}>
+              PEÇA NÃO ENCONTRADA OU FORA DE CATÁLOGO
+            </h2>
 
             {currentParam && (
               <div className={styles.notFoundParamBadge}>
                 <span className={styles.paramLabel}>REFERÊNCIA BUSCADA:</span>
-                <code className={styles.paramValue}>/produto/{currentParam}</code>
+                <code className={styles.paramValue}>
+                  /produto/{currentParam}
+                </code>
               </div>
             )}
 
             <p className={styles.notFoundText}>
-              A peça que você tentou acessar não foi localizada em nosso acervo ativo. Ela pode pertencer a um drop anterior já encerrado, ter tido seu link atualizado ou estar temporariamente indisponível. Nossas coleções contam com tiragens limitadas e cortes exclusivos.
+              A peça que você tentou acessar não foi localizada em nosso acervo
+              ativo. Ela pode pertencer a um drop anterior já encerrado, ter
+              tido seu link atualizado ou estar temporariamente indisponível.
+              Nossas coleções contam com tiragens limitadas e cortes exclusivos.
             </p>
 
             <div className={styles.notFoundActions}>
-              <button 
-                type="button" 
-                onClick={() => navigate(-1)} 
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
                 className={styles.notFoundBackBtn}
                 title="Voltar à página anterior"
               >
@@ -668,7 +793,9 @@ export function ProdutoDetalhe({ onAddToCart }) {
             </div>
 
             <div className={styles.notFoundSupport}>
-              <span>Procurava uma edição específica ou modelo sob demanda?</span>
+              <span>
+                Procurava uma edição específica ou modelo sob demanda?
+              </span>
               <Link to="/suporte" className={styles.notFoundSupportLink}>
                 <HelpCircle size={14} />
                 <span>Fale com o Suporte</span>
@@ -678,10 +805,17 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
           {/* GRADE DE RECOMENDAÇÕES DA VITRINE PARA RECUPERAÇÃO DO CLIENTE */}
           {suggestedProducts.length > 0 && (
-            <section className={styles.suggestionsSection} aria-label="Peças recomendadas">
+            <section
+              className={styles.suggestionsSection}
+              aria-label="Peças recomendadas"
+            >
               <header className={styles.suggestionsHeader}>
-                <span className={styles.suggestionsSuperTitle}>RECOMENDAÇÕES // FOR THE FEW</span>
-                <h3 className={styles.suggestionsTitle}>OUTRAS PEÇAS EM DESTAQUE NO CATÁLOGO</h3>
+                <span className={styles.suggestionsSuperTitle}>
+                  RECOMENDAÇÕES // FOR THE FEW
+                </span>
+                <h3 className={styles.suggestionsTitle}>
+                  OUTRAS PEÇAS EM DESTAQUE NO CATÁLOGO
+                </h3>
               </header>
 
               <div className={styles.suggestionsGrid}>
@@ -711,18 +845,27 @@ export function ProdutoDetalhe({ onAddToCart }) {
       )}
       {/* NAVEGAÇÃO BREADCRUMB */}
       <nav aria-label="Breadcrumb" className={styles.breadcrumb}>
-        <Link to="/" className={styles.breadcrumbLink}>HOME</Link>
+        <Link to="/" className={styles.breadcrumbLink}>
+          HOME
+        </Link>
         <span className={styles.breadcrumbSeparator}>/</span>
-        <Link to="/catalogo" className={styles.breadcrumbLink}>CATÁLOGO</Link>
+        <Link to="/catalogo" className={styles.breadcrumbLink}>
+          CATÁLOGO
+        </Link>
         <span className={styles.breadcrumbSeparator}>/</span>
-        <span className={styles.breadcrumbActive}>{String(product?.name || product?.title || 'PRODUTO').toUpperCase()}</span>
+        <span className={styles.breadcrumbActive}>
+          {String(product?.name || product?.title || "PRODUTO").toUpperCase()}
+        </span>
       </nav>
 
       {/* GRADE PRINCIPAL: GALERIA + INFOS DE COMPRA */}
       <div className={styles.productGrid}>
         {/* GALERIA DE IMAGENS */}
-        <section className={styles.gallerySection} aria-label="Galeria de fotos do produto">
-          <div 
+        <section
+          className={styles.gallerySection}
+          aria-label="Galeria de fotos do produto"
+        >
+          <div
             className={styles.mainImageWrapper}
             onClick={() => {
               if (isSwipingRef.current) return;
@@ -733,43 +876,59 @@ export function ProdutoDetalhe({ onAddToCart }) {
             onTouchEnd={handleTouchEnd}
             role="button"
             tabIndex={0}
-            onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setIsFullscreen(true); } }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") {
+                e.preventDefault();
+                setIsFullscreen(true);
+              }
+            }}
             aria-label="Clique para ampliar a imagem em tela cheia"
           >
             {/* FAIXA TRANSVERSAL DIAGONAL NO CANTO SUPERIOR (FRETE GRÁTIS) */}
             {hasFreeShipping && (
-              <div className={styles.cornerRibbonWrapper} title="Peça com Frete Grátis">
-                <div className={styles.cornerRibbon}>
-                  FRETE GRÁTIS
-                </div>
+              <div
+                className={styles.cornerRibbonWrapper}
+                title="Peça com Frete Grátis"
+              >
+                <div className={styles.cornerRibbon}>FRETE GRÁTIS</div>
               </div>
             )}
 
             {images.length > 1 && (
-              <button 
+              <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); handlePrevImage(); }} 
-                className={`${styles.navArrow} ${styles.prevArrow}`} 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handlePrevImage();
+                }}
+                className={`${styles.navArrow} ${styles.prevArrow}`}
                 aria-label="Imagem anterior"
               >
                 <ChevronLeft size={18} />
               </button>
             )}
-            <ImageWithSkeleton 
-              src={images[selectedImageIndex] || images[0]} 
-              alt={`${product?.name || product?.title || 'Produto'} - Foto ${selectedImageIndex + 1}`} 
+            <ImageWithSkeleton
+              src={images[selectedImageIndex] || images[0]}
+              alt={`${product?.name || product?.title || "Produto"} - Foto ${selectedImageIndex + 1}`}
               aspectRatio="3/4"
               objectFit="cover"
               priority={true}
               className={styles.mainImage}
-              style={{ width: '100%', height: '100%', backgroundColor: '#000000' }}
-              imgStyle={{ objectFit: 'cover', objectPosition: 'center top' }}
+              style={{
+                width: "100%",
+                height: "100%",
+                backgroundColor: "#000000",
+              }}
+              imgStyle={{ objectFit: "cover", objectPosition: "center top" }}
             />
             {images.length > 1 && (
-              <button 
+              <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); handleNextImage(); }} 
-                className={`${styles.navArrow} ${styles.nextArrow}`} 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleNextImage();
+                }}
+                className={`${styles.navArrow} ${styles.nextArrow}`}
                 aria-label="Próxima imagem"
               >
                 <ChevronRight size={18} />
@@ -780,17 +939,20 @@ export function ProdutoDetalhe({ onAddToCart }) {
             {images.length > 1 && (
               <div className={styles.mobileDotsIndicator} aria-hidden="true">
                 {images.map((_, idx) => (
-                  <span 
-                    key={idx} 
-                    className={`${styles.mobileDot} ${idx === selectedImageIndex ? styles.mobileDotActive : ''}`} 
+                  <span
+                    key={idx}
+                    className={`${styles.mobileDot} ${idx === selectedImageIndex ? styles.mobileDotActive : ""}`}
                   />
                 ))}
               </div>
             )}
-            <button 
-              type="button" 
-              className={styles.expandBadge} 
-              onClick={(e) => { e.stopPropagation(); setIsFullscreen(true); }}
+            <button
+              type="button"
+              className={styles.expandBadge}
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsFullscreen(true);
+              }}
               aria-label="Abrir imagem em tela cheia"
               title="Clique para ampliar em detalhes"
             >
@@ -803,17 +965,24 @@ export function ProdutoDetalhe({ onAddToCart }) {
             {images.map((img, idx) => (
               <button
                 key={idx}
-                className={`${styles.thumbBtn} ${idx === selectedImageIndex ? styles.activeThumb : ''}`}
+                className={`${styles.thumbBtn} ${idx === selectedImageIndex ? styles.activeThumb : ""}`}
                 onClick={() => setSelectedImageIndex(idx)}
                 aria-label={`Selecionar foto ${idx + 1}`}
               >
-                <ImageWithSkeleton 
-                  src={img} 
-                  alt={`Miniatura ${idx + 1}`} 
-                  aspectRatio="3/4" 
+                <ImageWithSkeleton
+                  src={img}
+                  alt={`Miniatura ${idx + 1}`}
+                  aspectRatio="3/4"
                   objectFit="cover"
-                  style={{ width: '100%', height: '100%', backgroundColor: '#000000' }} 
-                  imgStyle={{ objectFit: 'cover', objectPosition: 'center top' }}
+                  style={{
+                    width: "100%",
+                    height: "100%",
+                    backgroundColor: "#000000",
+                  }}
+                  imgStyle={{
+                    objectFit: "cover",
+                    objectPosition: "center top",
+                  }}
                 />
               </button>
             ))}
@@ -824,22 +993,26 @@ export function ProdutoDetalhe({ onAddToCart }) {
         <section className={styles.infoSection}>
           <div className={styles.headerInfo}>
             <div className={styles.badgeRow}>
-              <span className={styles.categoryBadge}>{formatCategoryBadgeLabel(product?.category)}</span>
+              <span className={styles.categoryBadge}>
+                {formatCategoryBadgeLabel(product?.category)}
+              </span>
               {product?.customBadge && (
                 <span className={styles.fitBadge}>{product.customBadge}</span>
               )}
             </div>
-            <h1 className={styles.title}>{product?.name || product?.title || 'Produto THR33'}</h1>
-            
+            <h1 className={styles.title}>
+              {product?.name || product?.title || "Produto THR33"}
+            </h1>
+
             {/* Bloco de Preços */}
             <div className={styles.priceContainer}>
               {hasDiscount ? (
                 <div className={styles.discountPriceWrapper}>
                   <span className={styles.originalPriceStriked}>
-                    R$ {priceNum.toFixed(2).replace('.', ',')}
+                    R$ {priceNum.toFixed(2).replace(".", ",")}
                   </span>
                   <span className={styles.currentPriceHighlight}>
-                    R$ {discountPriceNum.toFixed(2).replace('.', ',')}
+                    R$ {discountPriceNum.toFixed(2).replace(".", ",")}
                   </span>
                   <span className={styles.discountBadge}>
                     -{discountPercentage}% OFF
@@ -847,7 +1020,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
                 </div>
               ) : (
                 <span className={styles.currentPrice}>
-                  R$ {priceNum.toFixed(2).replace('.', ',')}
+                  R$ {priceNum.toFixed(2).replace(".", ",")}
                 </span>
               )}
               <span className={styles.installments}>
@@ -869,7 +1042,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
                     key={fitOption}
                     type="button"
                     onClick={() => setSelectedFit(fitOption)}
-                    className={`${styles.fitOptionBtn} ${selectedFit === fitOption ? styles.fitOptionBtnActive : ''}`}
+                    className={`${styles.fitOptionBtn} ${selectedFit === fitOption ? styles.fitOptionBtnActive : ""}`}
                   >
                     {fitOption}
                   </button>
@@ -879,11 +1052,34 @@ export function ProdutoDetalhe({ onAddToCart }) {
           )}
 
           {!isGiftCard && currentFitSpecs && (
-            <div style={{ padding: '0.65rem 0.85rem', background: 'rgba(255, 255, 255, 0.03)', borderLeft: '2px solid rgba(255, 255, 255, 0.5)', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
-              <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#ffffff', letterSpacing: '0.8px', textTransform: 'uppercase' }}>
+            <div
+              style={{
+                padding: "0.65rem 0.85rem",
+                background: "rgba(255, 255, 255, 0.03)",
+                borderLeft: "2px solid rgba(255, 255, 255, 0.5)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.2rem",
+              }}
+            >
+              <span
+                style={{
+                  fontSize: "0.68rem",
+                  fontWeight: 800,
+                  color: "#ffffff",
+                  letterSpacing: "0.8px",
+                  textTransform: "uppercase",
+                }}
+              >
                 {currentFitSpecs.name} • {currentFitSpecs.gsmBadge}
               </span>
-              <span style={{ fontSize: '0.76rem', color: 'rgba(255, 255, 255, 0.78)', lineHeight: 1.45 }}>
+              <span
+                style={{
+                  fontSize: "0.76rem",
+                  color: "rgba(255, 255, 255, 0.78)",
+                  lineHeight: 1.45,
+                }}
+              >
                 {currentFitSpecs.desc}
               </span>
             </div>
@@ -894,14 +1090,16 @@ export function ProdutoDetalhe({ onAddToCart }) {
             <div className={styles.colorSelector}>
               <div className={styles.selectorHeader}>
                 <span className={styles.selectorLabel}>COR:</span>
-                <span className={styles.selectedValue}>{selectedColor?.name || selectedColor?.id || 'Padrão'}</span>
+                <span className={styles.selectedValue}>
+                  {selectedColor?.name || selectedColor?.id || "Padrão"}
+                </span>
               </div>
               <div className={styles.colorSwatches}>
                 {colors.map((c) => (
                   <button
                     key={c.id}
                     type="button"
-                    className={`${styles.colorBtn} ${selectedColor?.id === c.id ? styles.activeColor : ''}`}
+                    className={`${styles.colorBtn} ${selectedColor?.id === c.id ? styles.activeColor : ""}`}
                     onClick={() => handleSelectColor(c)}
                     style={{ backgroundColor: c.hex }}
                     title={c.name}
@@ -917,7 +1115,8 @@ export function ProdutoDetalhe({ onAddToCart }) {
             <div className={styles.selectorHeader}>
               <span className={styles.selectorLabel}>TAMANHO:</span>
               <span className={styles.selectedValue}>
-                {selectedSize} {!isUnlimitedStock && availableStock <= 0 ? '(ESGOTADO)' : ''}
+                {selectedSize}{" "}
+                {!isUnlimitedStock && availableStock <= 0 ? "(ESGOTADO)" : ""}
               </span>
             </div>
             <div className={styles.sizeOptions}>
@@ -930,10 +1129,16 @@ export function ProdutoDetalhe({ onAddToCart }) {
                     key={size}
                     type="button"
                     disabled={isOutOfStock}
-                    className={`${styles.sizeBtn} ${selectedSize === size ? styles.activeSize : ''} ${isOutOfStock ? styles.disabledSize : ''}`}
+                    className={`${styles.sizeBtn} ${selectedSize === size ? styles.activeSize : ""} ${isOutOfStock ? styles.disabledSize : ""}`}
                     onClick={() => !isOutOfStock && setSelectedSize(size)}
-                    title={isUnlimitedStock ? `Tamanho ${size}` : (isOutOfStock ? `Tamanho ${size} ESGOTADO` : `Tamanho ${size} (${stockQty} un. em estoque)`)}
-                    aria-label={`Tamanho ${size} ${isOutOfStock ? 'Esgotado' : ''}`}
+                    title={
+                      isUnlimitedStock
+                        ? `Tamanho ${size}`
+                        : isOutOfStock
+                          ? `Tamanho ${size} ESGOTADO`
+                          : `Tamanho ${size} (${stockQty} un. em estoque)`
+                    }
+                    aria-label={`Tamanho ${size} ${isOutOfStock ? "Esgotado" : ""}`}
                   >
                     <span>{size}</span>
                     {isOutOfStock && <span className={styles.outOfStockLine} />}
@@ -942,11 +1147,13 @@ export function ProdutoDetalhe({ onAddToCart }) {
               })}
             </div>
             {!isUnlimitedStock && (
-              <small className={`${styles.stockNotice} ${availableStock <= 0 ? styles.stockNoticeAlert : ''}`}>
-                {availableStock > 0 
-                  ? `${availableStock} unidades disponíveis no tamanho ${selectedSize}` 
+              <small
+                className={`${styles.stockNotice} ${availableStock <= 0 ? styles.stockNoticeAlert : ""}`}
+              >
+                {availableStock > 0
+                  ? `${availableStock} unidades disponíveis no tamanho ${selectedSize}`
                   : isAllOutOfStock
-                    ? 'Todos os tamanhos estão esgotados no momento.'
+                    ? "Todos os tamanhos estão esgotados no momento."
                     : `Tamanho ${selectedSize} esgotado no estoque.`}
               </small>
             )}
@@ -955,49 +1162,66 @@ export function ProdutoDetalhe({ onAddToCart }) {
           {/* Bloco de Ações e Quantidade */}
           <div ref={actionsRowRef} className={styles.actionsRow}>
             <div className={styles.quantityControl}>
-              <button 
-                type="button" 
+              <button
+                type="button"
                 onClick={() => setQuantity(Math.max(1, quantity - 1))}
-                disabled={quantity <= 1 || (!isUnlimitedStock && availableStock === 0)}
+                disabled={
+                  quantity <= 1 || (!isUnlimitedStock && availableStock === 0)
+                }
                 aria-label="Diminuir quantidade"
               >
                 -
               </button>
               <span className={styles.quantityValue}>{quantity}</span>
-              <button 
-                type="button" 
-                onClick={() => setQuantity(isUnlimitedStock ? quantity + 1 : Math.min(availableStock, quantity + 1))}
-                disabled={!isUnlimitedStock && (quantity >= availableStock || availableStock === 0)}
+              <button
+                type="button"
+                onClick={() =>
+                  setQuantity(
+                    isUnlimitedStock
+                      ? quantity + 1
+                      : Math.min(availableStock, quantity + 1),
+                  )
+                }
+                disabled={
+                  !isUnlimitedStock &&
+                  (quantity >= availableStock || availableStock === 0)
+                }
                 aria-label="Aumentar quantidade"
               >
                 +
               </button>
             </div>
 
-            <button 
+            <button
               type="button"
-              className={`${styles.addToBagButton} ${isAddedFeedback ? styles.addedSuccess : ''} ${(!isUnlimitedStock && availableStock <= 0) ? styles.disabledBagBtn : ''}`}
+              className={`${styles.addToBagButton} ${isAddedFeedback ? styles.addedSuccess : ""} ${!isUnlimitedStock && availableStock <= 0 ? styles.disabledBagBtn : ""}`}
               onClick={handleAddToCart}
               disabled={!isUnlimitedStock && availableStock <= 0}
             >
               <ShoppingBag size={18} />
               <span>
-                {isAddedFeedback 
-                  ? 'ADICIONADO À SACOLA!' 
-                  : (!isUnlimitedStock && availableStock <= 0) 
-                    ? 'TAMANHO ESGOTADO' 
-                    : 'ADICIONAR À SACOLA'}
+                {isAddedFeedback
+                  ? "ADICIONADO À SACOLA!"
+                  : !isUnlimitedStock && availableStock <= 0
+                    ? "TAMANHO ESGOTADO"
+                    : "ADICIONAR À SACOLA"}
               </span>
             </button>
 
-            <button 
+            <button
               type="button"
-              className={`${styles.wishlistButton} ${isFavorite ? styles.favorited : ''}`}
+              className={`${styles.wishlistButton} ${isFavorite ? styles.favorited : ""}`}
               onClick={() => toggleWishlist(product)}
-              title={isFavorite ? "Remover dos favoritos" : "Salvar nos favoritos"}
+              title={
+                isFavorite ? "Remover dos favoritos" : "Salvar nos favoritos"
+              }
               aria-label="Favoritar produto"
             >
-              <Heart size={18} fill={isFavorite ? "#ef4444" : "none"} stroke={isFavorite ? "#ef4444" : "currentColor"} />
+              <Heart
+                size={18}
+                fill={isFavorite ? "#ef4444" : "none"}
+                stroke={isFavorite ? "#ef4444" : "currentColor"}
+              />
             </button>
           </div>
 
@@ -1012,52 +1236,72 @@ export function ProdutoDetalhe({ onAddToCart }) {
             <div className={styles.shippingHeader}>
               <div className={styles.shippingTitleGroup}>
                 <Truck size={16} />
-                <span className={styles.shippingTitle}>SIMULAR FRETE E PRAZO</span>
+                <span className={styles.shippingTitle}>
+                  SIMULAR FRETE E PRAZO
+                </span>
               </div>
-              <a 
-                href="https://buscacepinter.correios.com.br/app/endereco/index.php" 
-                target="_blank" 
-                rel="noreferrer" 
+              <a
+                href="https://buscacepinter.correios.com.br/app/endereco/index.php"
+                target="_blank"
+                rel="noreferrer"
                 className={styles.cepLink}
               >
                 Não sei meu CEP
               </a>
             </div>
 
-            <form onSubmit={handleCalculateShipping} className={styles.shippingFormCompact} noValidate>
-              <input 
-                type="text" 
+            <form
+              onSubmit={handleCalculateShipping}
+              className={styles.shippingFormCompact}
+              noValidate
+            >
+              <input
+                type="text"
                 inputMode="numeric"
-                placeholder="00000-000" 
+                placeholder="00000-000"
                 value={cepInput}
                 onChange={handleCepChange}
                 className={styles.shippingInputCompact}
                 maxLength={9}
                 aria-label="CEP para cálculo de frete"
               />
-              <button type="submit" className={styles.shippingBtnCompact} disabled={isCalculatingShipping}>
-                {isCalculatingShipping ? '...' : 'CALCULAR'}
+              <button
+                type="submit"
+                className={styles.shippingBtnCompact}
+                disabled={isCalculatingShipping}
+              >
+                {isCalculatingShipping ? "..." : "CALCULAR"}
               </button>
             </form>
 
-            {shippingError && <p className={styles.errorMsg}>{shippingError}</p>}
+            {shippingError && (
+              <p className={styles.errorMsg}>{shippingError}</p>
+            )}
 
             {shippingOptions && (
               <div className={styles.shippingResultsCompact}>
                 {destinationLocation && (
                   <div className={styles.destinationLocationBadge}>
                     <MapPin size={12} />
-                    <span>Entrega para: <strong>{destinationLocation}</strong></span>
+                    <span>
+                      Entrega para: <strong>{destinationLocation}</strong>
+                    </span>
                   </div>
                 )}
-                {shippingOptions.map(opt => (
+                {shippingOptions.map((opt) => (
                   <div key={opt.id} className={styles.shippingRowCompact}>
                     <div className={styles.shippingInfoCompact}>
-                      <span className={styles.shippingNameCompact}>{opt.name}</span>
-                      <span className={styles.shippingDeadlineCompact}>Produção + {opt.deadline}</span>
+                      <span className={styles.shippingNameCompact}>
+                        {opt.name}
+                      </span>
+                      <span className={styles.shippingDeadlineCompact}>
+                        Produção + {opt.deadline}
+                      </span>
                     </div>
                     <span className={styles.shippingPriceCompact}>
-                      {opt.price === 0 ? 'GRÁTIS' : `R$ ${opt.price.toFixed(2)}`}
+                      {opt.price === 0
+                        ? "GRÁTIS"
+                        : `R$ ${opt.price.toFixed(2)}`}
                     </span>
                   </div>
                 ))}
@@ -1069,66 +1313,133 @@ export function ProdutoDetalhe({ onAddToCart }) {
           <div className={styles.accordions}>
             {/* Descrição */}
             <div className={styles.accordionItem}>
-              <button 
+              <button
                 type="button"
-                className={styles.accordionHeader} 
-                onClick={() => setOpenAccordion(openAccordion === 'description' ? null : 'description')}
-                aria-expanded={openAccordion === 'description'}
+                className={styles.accordionHeader}
+                onClick={() =>
+                  setOpenAccordion(
+                    openAccordion === "description" ? null : "description",
+                  )
+                }
+                aria-expanded={openAccordion === "description"}
               >
                 <span>DESCRIÇÃO E DETALHES</span>
-                <motion.span 
+                <motion.span
                   className={styles.accordionSign}
-                  animate={{ rotate: openAccordion === 'description' ? 45 : 0 }}
-                  transition={{ duration: 0.22, ease: 'easeInOut' }}
+                  animate={{ rotate: openAccordion === "description" ? 45 : 0 }}
+                  transition={{ duration: 0.22, ease: "easeInOut" }}
                 >
                   <Plus size={15} />
                 </motion.span>
               </button>
-              
+
               <AnimatePresence initial={false}>
-                {openAccordion === 'description' && (
-                  <motion.div 
+                {openAccordion === "description" && (
+                  <motion.div
                     key="desc-body"
                     initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
+                    animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.28, ease: [0.04, 0.62, 0.23, 0.98] }}
+                    transition={{
+                      duration: 0.28,
+                      ease: [0.04, 0.62, 0.23, 0.98],
+                    }}
                     className={styles.accordionBodyWrapper}
                   >
                     <div className={styles.accordionBody}>
                       {product.description &&
-                        !product.description.toLowerCase().includes('modelagem exclusiva thr33 com acabamento premium') && (
-                          <p style={{ marginBottom: '1rem' }}>{product.description}</p>
+                        !product.description
+                          .toLowerCase()
+                          .includes(
+                            "modelagem exclusiva thr33 com acabamento premium",
+                          ) && (
+                          <p style={{ marginBottom: "1rem" }}>
+                            {product.description}
+                          </p>
                         )}
 
                       {!isGiftCard && currentFitSpecs && (
                         <div
                           style={{
-                            padding: '1rem 1.1rem',
-                            background: 'rgba(255, 255, 255, 0.03)',
-                            border: '1px solid rgba(255, 255, 255, 0.12)',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '0.75rem'
+                            padding: "1rem 1.1rem",
+                            background: "rgba(255, 255, 255, 0.03)",
+                            border: "1px solid rgba(255, 255, 255, 0.12)",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "0.75rem",
                           }}
                         >
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', flexWrap: 'wrap', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '0.6rem' }}>
-                            <strong style={{ fontSize: '0.78rem', color: '#ffffff', letterSpacing: '1px', textTransform: 'uppercase' }}>
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "space-between",
+                              gap: "0.5rem",
+                              flexWrap: "wrap",
+                              borderBottom:
+                                "1px solid rgba(255, 255, 255, 0.08)",
+                              paddingBottom: "0.6rem",
+                            }}
+                          >
+                            <strong
+                              style={{
+                                fontSize: "0.78rem",
+                                color: "#ffffff",
+                                letterSpacing: "1px",
+                                textTransform: "uppercase",
+                              }}
+                            >
                               MODELAGEM: {currentFitSpecs.name}
                             </strong>
-                            <span style={{ fontSize: '0.66rem', fontWeight: 800, letterSpacing: '1px', padding: '0.2rem 0.55rem', background: 'rgba(255, 255, 255, 0.1)', color: '#ffffff', border: '1px solid rgba(255, 255, 255, 0.2)' }}>
+                            <span
+                              style={{
+                                fontSize: "0.66rem",
+                                fontWeight: 800,
+                                letterSpacing: "1px",
+                                padding: "0.2rem 0.55rem",
+                                color: "#ffffff",
+                                textTransform: "uppercase",
+                              }}
+                            >
                               {currentFitSpecs.gsmBadge}
                             </span>
                           </div>
 
-                          <p style={{ margin: 0, fontSize: '0.84rem', color: 'rgba(255, 255, 255, 0.85)', lineHeight: 1.6 }}>
+                          <p
+                            style={{
+                              margin: 0,
+                              fontSize: "0.84rem",
+                              color: "rgba(255, 255, 255, 0.85)",
+                              lineHeight: 1.6,
+                            }}
+                          >
                             {currentFitSpecs.desc}
                           </p>
 
-                          <ul style={{ listStyle: 'none', margin: 0, padding: '0.65rem 0 0', borderTop: '1px solid rgba(255, 255, 255, 0.08)', display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                          <ul
+                            style={{
+                              listStyle: "none",
+                              margin: 0,
+                              padding: "0.65rem 0 0",
+                              borderTop: "1px solid rgba(255, 255, 255, 0.08)",
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: "0.45rem",
+                            }}
+                          >
                             {currentFitSpecs.specs.map(([label, val]) => (
-                              <li key={label} style={{ fontSize: '0.82rem', color: 'rgba(255, 255, 255, 0.78)', lineHeight: 1.5 }}>
-                                <strong style={{ color: '#ffffff' }}>{label}:</strong> {val}
+                              <li
+                                key={label}
+                                style={{
+                                  fontSize: "0.82rem",
+                                  color: "rgba(255, 255, 255, 0.78)",
+                                  lineHeight: 1.5,
+                                }}
+                              >
+                                <strong style={{ color: "#ffffff" }}>
+                                  {label}:
+                                </strong>{" "}
+                                {val}
                               </li>
                             ))}
                           </ul>
@@ -1136,7 +1447,10 @@ export function ProdutoDetalhe({ onAddToCart }) {
                       )}
 
                       {isGiftCard && (
-                        <p>{product.description || 'Vale-presente oficial THR33 Streetwear com liberação digital.'}</p>
+                        <p>
+                          {product.description ||
+                            "Vale-presente oficial THR33 Streetwear com liberação digital."}
+                        </p>
                       )}
                     </div>
                   </motion.div>
@@ -1146,39 +1460,64 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
             {/* Tabela de Medidas */}
             <div className={styles.accordionItem}>
-              <button 
+              <button
                 type="button"
-                className={styles.accordionHeader} 
-                onClick={() => setOpenAccordion(openAccordion === 'measures' ? null : 'measures')}
-                aria-expanded={openAccordion === 'measures'}
+                className={styles.accordionHeader}
+                onClick={() =>
+                  setOpenAccordion(
+                    openAccordion === "measures" ? null : "measures",
+                  )
+                }
+                aria-expanded={openAccordion === "measures"}
               >
                 <span>TABELA DE MEDIDAS (CM)</span>
-                <motion.span 
+                <motion.span
                   className={styles.accordionSign}
-                  animate={{ rotate: openAccordion === 'measures' ? 45 : 0 }}
-                  transition={{ duration: 0.22, ease: 'easeInOut' }}
+                  animate={{ rotate: openAccordion === "measures" ? 45 : 0 }}
+                  transition={{ duration: 0.22, ease: "easeInOut" }}
                 >
                   <Plus size={15} />
                 </motion.span>
               </button>
 
               <AnimatePresence initial={false}>
-                {openAccordion === 'measures' && (
-                  <motion.div 
+                {openAccordion === "measures" && (
+                  <motion.div
                     key="measures-body"
                     initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
+                    animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.28, ease: [0.04, 0.62, 0.23, 0.98] }}
+                    transition={{
+                      duration: 0.28,
+                      ease: [0.04, 0.62, 0.23, 0.98],
+                    }}
                     className={styles.accordionBodyWrapper}
                   >
                     <div className={styles.accordionBody}>
-                      <div style={{ marginBottom: '0.85rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                        <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#FFFFFF', letterSpacing: '0.5px' }}>
-                          MEDIDAS OFICIAIS // {selectedFit?.toUpperCase() || 'OVERSIZED'}
+                      <div
+                        style={{
+                          marginBottom: "0.85rem",
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: "0.25rem",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "0.75rem",
+                            fontWeight: 700,
+                            color: "#FFFFFF",
+                            letterSpacing: "0.5px",
+                          }}
+                        >
+                          MEDIDAS OFICIAIS //{" "}
+                          {selectedFit?.toUpperCase() || "OVERSIZED"}
                         </span>
-                        <small style={{ fontSize: '0.68rem', color: '#a3a3a3' }}>
-                          Medidas da modelagem selecionada (tolerância têxtil de ±1,5 cm).
+                        <small
+                          style={{ fontSize: "0.68rem", color: "#a3a3a3" }}
+                        >
+                          Medidas da modelagem selecionada (tolerância têxtil de
+                          ±1,5 cm).
                         </small>
                       </div>
 
@@ -1197,12 +1536,28 @@ export function ProdutoDetalhe({ onAddToCart }) {
                             {getMeasuresForFit(selectedFit).map((row) => {
                               const isSelectedSize = row.size === selectedSize;
                               return (
-                                <tr 
-                                  key={row.size} 
-                                  className={isSelectedSize ? styles.selectedMeasureRow : ''}
-                                  style={isSelectedSize ? { backgroundColor: 'rgba(255, 255, 255, 0.1)', fontWeight: 700 } : {}}
+                                <tr
+                                  key={row.size}
+                                  className={
+                                    isSelectedSize
+                                      ? styles.selectedMeasureRow
+                                      : ""
+                                  }
+                                  style={
+                                    isSelectedSize
+                                      ? {
+                                          backgroundColor:
+                                            "rgba(255, 255, 255, 0.1)",
+                                          fontWeight: 700,
+                                        }
+                                      : {}
+                                  }
                                 >
-                                  <td><strong>{row.size} {isSelectedSize ? '●' : ''}</strong></td>
+                                  <td>
+                                    <strong>
+                                      {row.size} {isSelectedSize ? "●" : ""}
+                                    </strong>
+                                  </td>
                                   <td>{row.largura}</td>
                                   <td>{row.comprimento}</td>
                                   <td>{row.manga}</td>
@@ -1215,15 +1570,51 @@ export function ProdutoDetalhe({ onAddToCart }) {
                       </div>
 
                       {/* GUIA DE COMO MEDIR */}
-                      <div style={{ marginTop: '1rem', padding: '0.85rem', background: '#0a0a0a', border: '1px solid #262626', borderRadius: '3px' }}>
-                        <strong style={{ fontSize: '0.72rem', color: '#ffffff', display: 'block', marginBottom: '0.4rem', letterSpacing: '0.5px' }}>
+                      <div
+                        style={{
+                          marginTop: "1rem",
+                          padding: "0.85rem",
+                          background: "#0a0a0a",
+                          border: "1px solid #262626",
+                          borderRadius: "3px",
+                        }}
+                      >
+                        <strong
+                          style={{
+                            fontSize: "0.72rem",
+                            color: "#ffffff",
+                            display: "block",
+                            marginBottom: "0.4rem",
+                            letterSpacing: "0.5px",
+                          }}
+                        >
                           📐 GUIA: COMO MEDIR SUA PEÇA
                         </strong>
-                        <ul style={{ margin: 0, paddingLeft: '1.1rem', fontSize: '0.68rem', color: '#a3a3a3', lineHeight: 1.6 }}>
-                          <li><strong>Largura:</strong> Medida em linha reta de axila a axila com a peça esticada.</li>
-                          <li><strong>Comprimento:</strong> Do ponto mais alto do ombro (junto à gola) até a barra inferior.</li>
-                          <li><strong>Manga:</strong> Da costura do ombro até a extremidade do punho.</li>
-                          <li><strong>Ombro:</strong> Da costura de um ombro à costura do outro ombro.</li>
+                        <ul
+                          style={{
+                            margin: 0,
+                            paddingLeft: "1.1rem",
+                            fontSize: "0.68rem",
+                            color: "#a3a3a3",
+                            lineHeight: 1.6,
+                          }}
+                        >
+                          <li>
+                            <strong>Largura:</strong> Medida em linha reta de
+                            axila a axila com a peça esticada.
+                          </li>
+                          <li>
+                            <strong>Comprimento:</strong> Do ponto mais alto do
+                            ombro (junto à gola) até a barra inferior.
+                          </li>
+                          <li>
+                            <strong>Manga:</strong> Da costura do ombro até a
+                            extremidade do punho.
+                          </li>
+                          <li>
+                            <strong>Ombro:</strong> Da costura de um ombro à
+                            costura do outro ombro.
+                          </li>
                         </ul>
                       </div>
                     </div>
@@ -1234,30 +1625,35 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
             {/* Cuidados com a Peça */}
             <div className={styles.accordionItem}>
-              <button 
+              <button
                 type="button"
-                className={styles.accordionHeader} 
-                onClick={() => setOpenAccordion(openAccordion === 'care' ? null : 'care')}
-                aria-expanded={openAccordion === 'care'}
+                className={styles.accordionHeader}
+                onClick={() =>
+                  setOpenAccordion(openAccordion === "care" ? null : "care")
+                }
+                aria-expanded={openAccordion === "care"}
               >
                 <span>CUIDADOS COM A PEÇA</span>
-                <motion.span 
+                <motion.span
                   className={styles.accordionSign}
-                  animate={{ rotate: openAccordion === 'care' ? 45 : 0 }}
-                  transition={{ duration: 0.22, ease: 'easeInOut' }}
+                  animate={{ rotate: openAccordion === "care" ? 45 : 0 }}
+                  transition={{ duration: 0.22, ease: "easeInOut" }}
                 >
                   <Plus size={15} />
                 </motion.span>
               </button>
 
               <AnimatePresence initial={false}>
-                {openAccordion === 'care' && (
-                  <motion.div 
+                {openAccordion === "care" && (
+                  <motion.div
                     key="care-body"
                     initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
+                    animate={{ height: "auto", opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.28, ease: [0.04, 0.62, 0.23, 0.98] }}
+                    transition={{
+                      duration: 0.28,
+                      ease: [0.04, 0.62, 0.23, 0.98],
+                    }}
                     className={styles.accordionBodyWrapper}
                   >
                     <div className={styles.accordionBody}>
@@ -1276,29 +1672,52 @@ export function ProdutoDetalhe({ onAddToCart }) {
       </div>
 
       {/* SEÇÃO DEDICADA DE AVALIAÇÕES REAIS (SEM MOCKS) */}
-      <section className={styles.reviewsSection} aria-label="Avaliações dos clientes">
+      <section
+        className={styles.reviewsSection}
+        aria-label="Avaliações dos clientes"
+      >
         <header className={styles.reviewsHeader}>
           <div className={styles.reviewsTitleGroup}>
-            <span className={styles.reviewsSuperTitle}>FEEDBACK REAL // FOR THE FEW</span>
-            <h2 className={styles.reviewsMainTitle}>AVALIAÇÕES DA COMUNIDADE</h2>
+            <span className={styles.reviewsSuperTitle}>
+              FEEDBACK REAL // FOR THE FEW
+            </span>
+            <h2 className={styles.reviewsMainTitle}>
+              AVALIAÇÕES DA COMUNIDADE
+            </h2>
           </div>
 
           {approvedReviews.length > 0 && (
             <div className={styles.ratingSummaryCard}>
-              <div className={styles.ratingScore}>{reviewsStats.averageRating.toFixed(1)}</div>
+              <div className={styles.ratingScore}>
+                {reviewsStats.averageRating.toFixed(1)}
+              </div>
               <div className={styles.ratingMeta}>
-                <div className={styles.starsRow} aria-label={`Nota ${reviewsStats.averageRating} de 5 estrelas`}>
+                <div
+                  className={styles.starsRow}
+                  aria-label={`Nota ${reviewsStats.averageRating} de 5 estrelas`}
+                >
                   {[...Array(5)].map((_, i) => (
-                    <Star 
-                      key={i} 
-                      size={15} 
-                      fill={i < Math.round(reviewsStats.averageRating) ? "#ffffff" : "none"} 
-                      color={i < Math.round(reviewsStats.averageRating) ? "#ffffff" : "#525252"} 
+                    <Star
+                      key={i}
+                      size={15}
+                      fill={
+                        i < Math.round(reviewsStats.averageRating)
+                          ? "#ffffff"
+                          : "none"
+                      }
+                      color={
+                        i < Math.round(reviewsStats.averageRating)
+                          ? "#ffffff"
+                          : "#525252"
+                      }
                     />
                   ))}
                 </div>
                 <span className={styles.recommendText}>
-                  {reviewsStats.recommendPercentage}% dos compradores recomendam ({reviewsStats.totalReviews} {reviewsStats.totalReviews === 1 ? 'avaliação' : 'avaliações'})
+                  {reviewsStats.recommendPercentage}% dos compradores recomendam
+                  ({reviewsStats.totalReviews}{" "}
+                  {reviewsStats.totalReviews === 1 ? "avaliação" : "avaliações"}
+                  )
                 </span>
               </div>
             </div>
@@ -1311,25 +1730,35 @@ export function ProdutoDetalhe({ onAddToCart }) {
             approvedReviews.map((rev) => (
               <article key={rev.id} className={styles.reviewCardItem}>
                 <div className={styles.reviewCardTop}>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                    <strong className={styles.reviewAuthor}>{rev.author}</strong>
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "0.25rem",
+                    }}
+                  >
+                    <strong className={styles.reviewAuthor}>
+                      {rev.author}
+                    </strong>
                     <span className={styles.verifiedBuyerTag}>
                       <ShieldCheck size={11} />
                       COMPRADOR VERIFICADO
                     </span>
                   </div>
                   <span className={styles.reviewDate}>
-                    {rev.createdAt ? new Date(rev.createdAt).toLocaleDateString('pt-BR') : 'Recente'}
+                    {rev.createdAt
+                      ? new Date(rev.createdAt).toLocaleDateString("pt-BR")
+                      : "Recente"}
                   </span>
                 </div>
 
                 <div className={styles.reviewStars}>
                   {[...Array(5)].map((_, i) => (
-                    <Star 
-                      key={i} 
-                      size={12} 
-                      fill={i < (rev.rating || 5) ? "#ffffff" : "none"} 
-                      color={i < (rev.rating || 5) ? "#ffffff" : "#525252"} 
+                    <Star
+                      key={i}
+                      size={12}
+                      fill={i < (rev.rating || 5) ? "#ffffff" : "none"}
+                      color={i < (rev.rating || 5) ? "#ffffff" : "#525252"}
                     />
                   ))}
                 </div>
@@ -1345,9 +1774,13 @@ export function ProdutoDetalhe({ onAddToCart }) {
             ))
           ) : (
             <div className={styles.emptyReviewsBox}>
-              <h3 className={styles.emptyReviewsTitle}>NENHUMA AVALIAÇÃO AINDA</h3>
+              <h3 className={styles.emptyReviewsTitle}>
+                NENHUMA AVALIAÇÃO AINDA
+              </h3>
               <p className={styles.emptyReviewsText}>
-                Esta peça é produzida sob demanda com alto padrão têxtil. Seja um dos primeiros clientes a adquirir e avaliar o caimento após a entrega confirmada.
+                Esta peça é produzida sob demanda com alto padrão têxtil. Seja
+                um dos primeiros clientes a adquirir e avaliar o caimento após a
+                entrega confirmada.
               </p>
             </div>
           )}
@@ -1357,7 +1790,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
       {/* MODAL LIGHTBOX EM TELA CHEIA */}
       <AnimatePresence>
         {isFullscreen && (
-          <motion.div 
+          <motion.div
             className={styles.lightboxOverlay}
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -1368,14 +1801,21 @@ export function ProdutoDetalhe({ onAddToCart }) {
             aria-modal="true"
             aria-label="Visualização de imagem em tela cheia"
           >
-            <div className={styles.lightboxHeader} onClick={(e) => e.stopPropagation()}>
+            <div
+              className={styles.lightboxHeader}
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className={styles.lightboxInfo}>
-                <span className={styles.lightboxTitle}>{product?.name || product?.title || 'PRODUTO THR33'}</span>
-                <span className={styles.lightboxCounter}>{selectedImageIndex + 1} / {images.length}</span>
+                <span className={styles.lightboxTitle}>
+                  {product?.name || product?.title || "PRODUTO THR33"}
+                </span>
+                <span className={styles.lightboxCounter}>
+                  {selectedImageIndex + 1} / {images.length}
+                </span>
               </div>
-              <button 
-                type="button" 
-                className={styles.lightboxCloseBtn} 
+              <button
+                type="button"
+                className={styles.lightboxCloseBtn}
                 onClick={() => setIsFullscreen(false)}
                 aria-label="Fechar tela cheia"
                 title="Fechar (Esc)"
@@ -1384,17 +1824,20 @@ export function ProdutoDetalhe({ onAddToCart }) {
               </button>
             </div>
 
-            <div 
+            <div
               className={styles.lightboxContent}
               onTouchStart={handleTouchStart}
               onTouchMove={handleTouchMove}
               onTouchEnd={handleTouchEnd}
             >
               {images.length > 1 && (
-                <button 
+                <button
                   type="button"
                   className={`${styles.lightboxArrow} ${styles.lightboxPrev}`}
-                  onClick={(e) => { e.stopPropagation(); handlePrevImage(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePrevImage();
+                  }}
                   aria-label="Imagem anterior"
                   title="Anterior (Seta esquerda)"
                 >
@@ -1402,10 +1845,10 @@ export function ProdutoDetalhe({ onAddToCart }) {
                 </button>
               )}
 
-              <motion.img 
+              <motion.img
                 key={selectedImageIndex}
                 src={images[selectedImageIndex] || images[0]}
-                alt={`${product?.name || product?.title || 'Produto'} - Foto ${selectedImageIndex + 1}`}
+                alt={`${product?.name || product?.title || "Produto"} - Foto ${selectedImageIndex + 1}`}
                 className={styles.lightboxImage}
                 initial={{ opacity: 0, scale: 0.96 }}
                 animate={{ opacity: 1, scale: 1 }}
@@ -1415,10 +1858,13 @@ export function ProdutoDetalhe({ onAddToCart }) {
               />
 
               {images.length > 1 && (
-                <button 
+                <button
                   type="button"
                   className={`${styles.lightboxArrow} ${styles.lightboxNext}`}
-                  onClick={(e) => { e.stopPropagation(); handleNextImage(); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleNextImage();
+                  }}
                   aria-label="Próxima imagem"
                   title="Próxima (Seta direita)"
                 >
@@ -1428,23 +1874,36 @@ export function ProdutoDetalhe({ onAddToCart }) {
             </div>
 
             {images.length > 1 && (
-              <div className={styles.lightboxThumbnails} onClick={(e) => e.stopPropagation()}>
+              <div
+                className={styles.lightboxThumbnails}
+                onClick={(e) => e.stopPropagation()}
+              >
                 {images.map((img, idx) => (
                   <button
                     key={idx}
                     type="button"
-                    className={`${styles.lightboxThumbBtn} ${idx === selectedImageIndex ? styles.activeLightboxThumb : ''}`}
-                    onClick={(e) => { e.stopPropagation(); setSelectedImageIndex(idx); }}
+                    className={`${styles.lightboxThumbBtn} ${idx === selectedImageIndex ? styles.activeLightboxThumb : ""}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedImageIndex(idx);
+                    }}
                     aria-label={`Ver foto ${idx + 1}`}
                   >
-                    <ImageWithSkeleton 
-                  src={img} 
-                  alt={`Miniatura ${idx + 1}`} 
-                  aspectRatio="3/4" 
-                  objectFit="cover"
-                  style={{ width: '100%', height: '100%', backgroundColor: '#000000' }} 
-                  imgStyle={{ objectFit: 'cover', objectPosition: 'center top' }}
-                />
+                    <ImageWithSkeleton
+                      src={img}
+                      alt={`Miniatura ${idx + 1}`}
+                      aspectRatio="3/4"
+                      objectFit="cover"
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        backgroundColor: "#000000",
+                      }}
+                      imgStyle={{
+                        objectFit: "cover",
+                        objectPosition: "center top",
+                      }}
+                    />
                   </button>
                 ))}
               </div>
@@ -1455,25 +1914,35 @@ export function ProdutoDetalhe({ onAddToCart }) {
 
       {/* BARRA FIXA FLUTUANTE DE COMPRA NO RODAPÉ MOBILE (STICKY MOBILE CTA) */}
       {showStickyBottomBar && (
-        <aside className={styles.mobileStickyBuyBar} aria-label="Ações rápidas de compra">
+        <aside
+          className={styles.mobileStickyBuyBar}
+          aria-label="Ações rápidas de compra"
+        >
           <div className={styles.stickyBuyInfo}>
-            <span className={styles.stickyBuyTitle}>{product?.name || product?.title || 'Camiseta THR33'}</span>
+            <span className={styles.stickyBuyTitle}>
+              {product?.name || product?.title || "Camiseta THR33"}
+            </span>
             <div className={styles.stickyBuyMeta}>
-              <span className={styles.stickyBuyBadge}>{selectedFit} • {selectedSize}</span>
+              <span className={styles.stickyBuyBadge}>
+                {selectedFit} • {selectedSize}
+              </span>
               <strong className={styles.stickyBuyPrice}>
-                R$ {(hasDiscount ? discountPriceNum : priceNum).toFixed(2).replace('.', ',')}
+                R${" "}
+                {(hasDiscount ? discountPriceNum : priceNum)
+                  .toFixed(2)
+                  .replace(".", ",")}
               </strong>
             </div>
           </div>
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={handleAddToCart}
             disabled={!isUnlimitedStock && availableStock <= 0}
             className={styles.stickyBuyBtn}
             aria-label="Adicionar à sacola"
           >
             <ShoppingBag size={15} />
-            <span>{isAddedFeedback ? 'ADICIONADO!' : 'COMPRAR'}</span>
+            <span>{isAddedFeedback ? "ADICIONADO!" : "COMPRAR"}</span>
           </button>
         </aside>
       )}

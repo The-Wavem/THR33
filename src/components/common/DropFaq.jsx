@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, ArrowUpRight } from 'lucide-react';
@@ -105,12 +105,64 @@ function renderFormattedAnswer(text) {
 export function DropFaq({ embedded = false, showSupportCta = true }) {
   const [openIndex, setOpenIndex] = useState(0);
   const [selectedCategory, setSelectedCategory] = useState('TODAS');
+  const [isDraggingRow, setIsDraggingRow] = useState(false);
+
+  const filterRowRef = useRef(null);
+  const dragStateRef = useRef({
+    isDown: false,
+    startX: 0,
+    scrollLeft: 0,
+    moved: false
+  });
 
   const categories = ['TODAS', ...Array.from(new Set(OFFICIAL_FAQ_ITEMS.map((item) => item.category)))];
 
   const filteredItems = selectedCategory === 'TODAS'
     ? OFFICIAL_FAQ_ITEMS
     : OFFICIAL_FAQ_ITEMS.filter((item) => item.category === selectedCategory);
+
+  const handleRowMouseDown = (e) => {
+    const row = filterRowRef.current;
+    if (!row) return;
+    dragStateRef.current.isDown = true;
+    dragStateRef.current.moved = false;
+    dragStateRef.current.startX = e.pageX - row.offsetLeft;
+    dragStateRef.current.scrollLeft = row.scrollLeft;
+  };
+
+  const handleRowMouseMove = (e) => {
+    const row = filterRowRef.current;
+    if (!row || !dragStateRef.current.isDown) return;
+    const x = e.pageX - row.offsetLeft;
+    const walk = x - dragStateRef.current.startX;
+    if (Math.abs(walk) > 5) {
+      dragStateRef.current.moved = true;
+      if (!isDraggingRow) setIsDraggingRow(true);
+      row.scrollLeft = dragStateRef.current.scrollLeft - walk * 1.25;
+    }
+  };
+
+  const handleRowMouseEnd = () => {
+    dragStateRef.current.isDown = false;
+    if (isDraggingRow) setIsDraggingRow(false);
+  };
+
+  const handleSelectCategory = (cat, e) => {
+    if (dragStateRef.current.moved) {
+      dragStateRef.current.moved = false;
+      return;
+    }
+    setSelectedCategory(cat);
+    setOpenIndex(0);
+
+    if (e?.currentTarget && typeof e.currentTarget.scrollIntoView === 'function') {
+      e.currentTarget.scrollIntoView({
+        behavior: 'smooth',
+        inline: 'center',
+        block: 'nearest'
+      });
+    }
+  };
 
   return (
     <motion.section
@@ -121,13 +173,27 @@ export function DropFaq({ embedded = false, showSupportCta = true }) {
       className={`${styles.sectionContainer} ${embedded ? styles.embeddedContainer : ''}`}
     >
       <div className={styles.headerBlock}>
-        <h2 className={styles.sectionTitle}>PERGUNTAS FREQUENTES</h2>
+        <div className={styles.titleRow}>
+          <h2 className={styles.sectionTitle}>PERGUNTAS FREQUENTES</h2>
+          <span className={styles.mobileSwipeHint}>[ ← Arraste para ver opções → ]</span>
+        </div>
         <p className={styles.headerSubtitle}>
           Tire suas dúvidas sobre qualidade DTG, tabela de medidas, prazos de confecção sob demanda, trocas e pagamentos.
         </p>
 
-        {/* FILTROS POR CATEGORIA (MINIMALISTAS COM BARRA DESLIZANTE SUAVE) */}
-        <div className={styles.categoryFilterRow} role="tablist" aria-label="Filtrar dúvidas por categoria">
+        {/* FILTROS POR CATEGORIA (ARRASTÁVEIS NO MOBILE & TOUCH/MOUSE) */}
+        <div
+          ref={filterRowRef}
+          className={`${styles.categoryFilterRow} ${isDraggingRow ? styles.categoryFilterRowDragging : ''}`}
+          role="tablist"
+          aria-label="Filtrar dúvidas por categoria"
+          data-lenis-prevent
+          data-lenis-prevent-touch
+          onMouseDown={handleRowMouseDown}
+          onMouseMove={handleRowMouseMove}
+          onMouseUp={handleRowMouseEnd}
+          onMouseLeave={handleRowMouseEnd}
+        >
           {categories.map((cat) => {
             const isActive = selectedCategory === cat;
             return (
@@ -136,10 +202,7 @@ export function DropFaq({ embedded = false, showSupportCta = true }) {
                 type="button"
                 role="tab"
                 aria-selected={isActive}
-                onClick={() => {
-                  setSelectedCategory(cat);
-                  setOpenIndex(0);
-                }}
+                onClick={(e) => handleSelectCategory(cat, e)}
                 className={`${styles.categoryTab} ${isActive ? styles.categoryTabActive : ''}`}
               >
                 <span>{cat}</span>
