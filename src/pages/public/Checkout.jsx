@@ -1197,7 +1197,7 @@ export function Checkout({ user: propUser, onOpenAuthModal }) {
         pagbankData = pagbankRes.data;
         setPagbankResult(pagbankRes.data);
       } catch (gatewayErr) {
-        console.warn("Aviso ao processar gateway PagBank:", gatewayErr.message);
+        // Silenciado para nao expor logs de gateway no console
         let userMessage = gatewayErr.message || 'Erro temporário de conexão com o PagBank. Tente novamente em instantes.';
         if (userMessage.includes("buyer email must not be equals to merchant email") || userMessage.includes("auto-compra")) {
           userMessage = "O PagBank não permite auto-compra com cartão (o comprador/titular do cartão não pode ser o mesmo titular ou dados cadastrados na conta PagBank da loja). Para testar compras com cartão em produção, utilize o cartão de outra pessoa ou realize o pagamento via PIX.";

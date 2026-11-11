@@ -120,7 +120,7 @@ export const encryptCardData = async ({
         }
       }
     } catch (pkErr) {
-      console.warn("Aviso ao buscar chave publica da Cloud Function getPublicKey:", pkErr.message);
+      // Silenciado para nao expor logs no console
     }
   }
 
@@ -311,11 +311,6 @@ export const pagbankService = {
                 }
               });
 
-              console.log('[PagBank 3DS] Resultado authenticate3DS:', {
-                status: auth3dsResult?.status,
-                id: auth3dsResult?.id
-              });
-
               if (auth3dsResult?.status === 'CHANGE_PAYMENT_METHOD') {
                 throw new Error('BANK_3DS_REJECTED: O banco emissor não autorizou o débito online para este cartão (CHANGE_PAYMENT_METHOD) e solicitou o uso de outro método de pagamento (PIX ou Cartão de Crédito).');
               }
@@ -364,8 +359,6 @@ export const pagbankService = {
               if (err3dsMsg.includes('Dados inválidos para autenticação 3DS')) {
                 throw new Error(err3dsMsg);
               }
-
-              console.warn("Erro no desafio 3DS do Cartão de Débito:", auth3dsErr);
 
               // Interrompe imediatamente o fluxo no Débito sem chamar createPagBankOrder sem o token 3DS
               throw new Error(
@@ -624,7 +617,7 @@ export const pagbankService = {
           return { success: true, data: responseData, isSandbox: IS_SANDBOX };
         }
       } catch (err) {
-        console.warn("Modo Sandbox Fallback:", err.message);
+        // Silenciado para nao expor logs no console
       }
     }
 
