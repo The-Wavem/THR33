@@ -1056,7 +1056,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
               style={{
                 padding: "0.65rem 0.85rem",
                 background: "rgba(255, 255, 255, 0.03)",
-                borderLeft: "2px solid rgba(255, 255, 255, 0.5)",
+                borderLeft: "2px solid rgba(255, 255, 255, 0.5)", width: "100%", maxWidth: "100%", boxSizing: "border-box", minWidth: 0, overflowWrap: "break-word", wordBreak: "break-word",
                 display: "flex",
                 flexDirection: "column",
                 gap: "0.2rem",
@@ -1363,7 +1363,7 @@ export function ProdutoDetalhe({ onAddToCart }) {
                           style={{
                             padding: "1rem 1.1rem",
                             background: "rgba(255, 255, 255, 0.03)",
-                            border: "1px solid rgba(255, 255, 255, 0.12)",
+                            border: "1px solid rgba(255, 255, 255, 0.12)", width: "100%", maxWidth: "100%", boxSizing: "border-box", minWidth: 0, overflowWrap: "break-word", wordBreak: "break-word",
                             display: "flex",
                             flexDirection: "column",
                             gap: "0.75rem",

@@ -6,6 +6,8 @@
   color: var(--text-primary);
   background-color: var(--bg-primary);
   min-height: calc(100vh - var(--header-height));
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .welcomeHeader {
@@ -66,7 +68,10 @@
 /* GRADE PRINCIPAL */
 .profileGrid {
   display: grid;
-  grid-template-columns: 260px 1fr;
+  grid-template-columns: 260px minmax(0, 1fr);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   gap: 3rem;
   align-items: start;
 }
@@ -78,6 +83,16 @@
   gap: 0.4rem;
   border-right: 1px solid var(--border-color);
   padding-right: 1.5rem;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.tabContent {
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .tabLink {
@@ -126,6 +141,10 @@
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   padding: 2.25rem;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 1.75rem;
@@ -611,7 +630,7 @@
 
 .addressList {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr));
   gap: 1.25rem;
 }
 
@@ -640,6 +659,8 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   padding-bottom: 0.5rem;
   margin-bottom: 0.25rem;
+  flex-wrap: wrap;
+  gap: 0.4rem;
 }
 
 .defaultBadge {
@@ -1527,6 +1548,10 @@
   background-color: var(--bg-surface);
   border: 1px solid var(--border-color);
   padding: 2.25rem;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   max-width: 520px;
   width: 100%;
   display: flex;
@@ -1939,6 +1964,10 @@
   background-color: var(--bg-card);
   border: 1px solid var(--border-color);
   padding: 2.25rem;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
@@ -2160,6 +2189,324 @@
 @media (max-width: 480px) {
   .container { padding: 1rem 0.65rem calc(4rem + env(safe-area-inset-bottom, 0px)); }
   .pixModalBackdrop { padding: 0.75rem; }
+}
+
+@media (max-width: 850px) {
+  .profileGrid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.5rem;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .tabsNav,
+  .tabContent,
+  .panel,
+  .subPanel,
+  .walletCard,
+  .orderCard,
+  .addressCard,
+  .addressForm,
+  .emailPrefsBox,
+  .vipExclusiveBannerSection,
+  .dangerBox {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .panel,
+  .walletCard {
+    padding: 1.25rem 1rem;
+    gap: 1.25rem;
+  }
+
+  .orderCard,
+  .addressCard,
+  .addressForm,
+  .emailPrefsBox,
+  .vipExclusiveBannerSection,
+  .dangerBox {
+    padding: 1.15rem 0.95rem;
+  }
+
+  .formGrid,
+  .inputRow,
+  .inputRowTriple,
+  .detailsTwoCols,
+  .addressList {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .inputField,
+  .inputField input,
+  .inputField select,
+  .inputField textarea,
+  .selectInput,
+  .addressForm input,
+  .redeemForm input {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 640px) {
+  .title {
+    font-size: clamp(1.35rem, 6.5vw, 2rem);
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .headerActions {
+    width: 100%;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .helpBtn,
+  .logoutBtn {
+    flex: 1;
+    justify-content: center;
+    padding: 0.6rem 0.65rem;
+    font-size: 0.7rem;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .tabLink {
+    padding: 0.75rem 0.85rem;
+    font-size: 0.76rem;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    flex-wrap: wrap;
+  }
+
+  .emailPrefItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.65rem;
+  }
+
+  .emailPrefToggleBtn {
+    width: 100%;
+    text-align: center;
+    box-sizing: border-box;
+  }
+
+  .emailPrefActionsBar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .emailPrefMuteBtn,
+  .emailPrefReactivateBtn {
+    width: 100%;
+    text-align: center;
+    white-space: normal;
+    word-break: break-word;
+    box-sizing: border-box;
+    padding: 0.65rem 0.75rem;
+    font-size: 0.68rem;
+  }
+
+  .orderMeta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.65rem;
+  }
+
+  .statusBox {
+    align-items: flex-start;
+    width: 100%;
+  }
+
+  .orderItemRow,
+  .modalItemRow {
+    flex-wrap: wrap;
+    gap: 0.65rem;
+  }
+
+  .itemInfo,
+  .modalItemInfo {
+    min-width: calc(100% - 70px);
+  }
+
+  .reviewBtn,
+  .reviewPendingBadge {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+    box-sizing: border-box;
+  }
+
+  .orderFooter {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.75rem;
+  }
+
+  .orderFooterActions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .supportHelpBtn,
+  .viewDetailsBtn {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+  }
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 1rem 0.65rem calc(4rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  .panel,
+  .walletCard {
+    padding: 1rem 0.75rem;
+    gap: 1.1rem;
+  }
+
+  .orderCard,
+  .addressCard,
+  .addressForm,
+  .emailPrefsBox,
+  .vipExclusiveBannerSection,
+  .dangerBox {
+    padding: 0.9rem 0.7rem;
+  }
+
+  .panelHeader {
+    gap: 0.65rem;
+  }
+
+  .panelTitle {
+    font-size: 0.95rem;
+    letter-spacing: 1px;
+    word-break: break-word;
+  }
+
+  .subPanelTitle {
+    font-size: 0.82rem;
+    letter-spacing: 0.8px;
+    word-break: break-word;
+  }
+
+  .editBtn,
+  .addBtn {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+    padding: 0.6rem 0.75rem;
+    font-size: 0.72rem;
+  }
+
+  .formActions,
+  .formActionsBetween,
+  .btnGroup,
+  .formButtonRow {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+    gap: 0.6rem;
+  }
+
+  .saveBtn,
+  .cancelBtn,
+  .cancelFormBtn,
+  .redeemBtn,
+  .deleteAccountBtn {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+    box-sizing: border-box;
+    white-space: normal;
+    padding: 0.75rem 0.85rem;
+    font-size: 0.72rem;
+  }
+
+  .addrText {
+    font-size: 0.78rem;
+    word-break: break-word;
+    overflow-wrap: break-word;
+  }
+
+  .cardActions {
+    justify-content: space-between;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+  }
+
+  .balanceAmount {
+    font-size: 1.55rem;
+  }
+
+  .walletActionRow {
+    flex-direction: column;
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .useWalletCatalogBtn,
+  .buyMoreGiftsLink {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
+    box-sizing: border-box;
+  }
+
+  .vipTicketCard {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .vipTicketStub,
+  .vipTicketMain {
+    padding: 0.85rem 0.75rem;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  .vipTicketCode {
+    font-size: 1.05rem;
+    word-break: break-all;
+  }
+
+  .vipUseBtn {
+    white-space: normal;
+    text-align: center;
+    font-size: 0.68rem;
+    padding: 0.65rem 0.75rem;
+    box-sizing: border-box;
+  }
+
+  .giftCardCodeBadge {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .giftCardCodeBadge code {
+    font-size: 0.75rem;
+    word-break: break-all;
+  }
+
+  .orderFiscalSection {
+    padding: 0.75rem;
+  }
+
+  .viewDanfeLink {
+    width: 100%;
+    justify-content: center;
+    box-sizing: border-box;
+  }
 }
 
 /* ============================================================

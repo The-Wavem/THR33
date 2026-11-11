@@ -4,6 +4,9 @@
   padding: 2.5rem 1.5rem 6rem;
   color: var(--text-primary);
   background-color: var(--bg-primary);
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .breadcrumb {
@@ -250,6 +253,10 @@
   display: flex;
   flex-direction: column;
   gap: 1.6rem;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .headerInfo {
@@ -694,6 +701,9 @@
 .freeShippingPdpHighlight {
   color: #10b981;
   padding: 0.55rem 0.85rem;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   font-family: var(--font-body, 'Inter', -apple-system, BlinkMacSystemFont, sans-serif);
   font-size: 0.72rem;
   font-weight: 700;
@@ -758,6 +768,9 @@
   border: 1px solid var(--border-color);
   color: var(--text-primary);
   padding: 0.55rem 0.85rem;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   font-size: 0.8rem;
   font-family: var(--font-body);
   letter-spacing: 1px;
@@ -1030,7 +1043,7 @@
 /* Grade de Cards de Avaliações */
 .reviewsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: 1.5rem;
 }
 
@@ -1137,7 +1150,10 @@
 @media (max-width: 900px) {
   .productGrid {
     grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 2.5rem;
+    width: 100%;
+    max-width: 100%;
   }
 
   .gallerySection {
@@ -1258,7 +1274,7 @@
   /* Seletor de Modelagem (Fit) Responsivo - 2 Colunas Limpas */
   .fitOptionsRow {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 0.45rem;
     width: 100%;
   }
@@ -1281,7 +1297,7 @@
   /* Seletor de Tamanhos Mobile - 5 Colunas Proporcionais */
   .sizeOptions {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 0.35rem;
     width: 100%;
   }
@@ -1398,7 +1414,82 @@
   }
 
   .addToBagButton {
-    font-size: 0.76rem;
+    font-size: 0.72rem;
+    padding: 0 0.45rem;
+    gap: 0.35rem;
+    min-width: 0;
+    box-sizing: border-box;
+    height: 44px;
+  }
+
+  .actionsRow {
+    gap: 6px;
+  }
+
+  .wishlistButton {
+    width: 44px;
+    height: 44px;
+  }
+
+  .quantityControl {
+    height: 44px;
+    min-width: 70px;
+  }
+
+  .fitOptionBtn {
+    font-size: 0.65rem;
+    padding: 0.5rem 0.25rem;
+    letter-spacing: 0.2px;
+    min-height: 42px;
+    min-width: 0;
+    box-sizing: border-box;
+    word-break: break-word;
+    overflow-wrap: break-word;
+    line-height: 1.2;
+  }
+
+  .sizeOptions {
+    gap: 0.25rem;
+  }
+
+  .sizeBtn {
+    height: 42px;
+    font-size: 0.78rem;
+  }
+
+  .shippingCalculator {
+    padding: 0.75rem;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  .shippingHeader {
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+
+  .shippingBtnCompact {
+    padding: 0 0.7rem;
+    font-size: 0.68rem;
+    letter-spacing: 0.6px;
+  }
+
+  .reviewsGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mobileStickyBuyBar {
+    padding: 0.65rem 0.65rem calc(0.65rem + env(safe-area-inset-bottom, 0px));
+    gap: 0.5rem;
+    box-sizing: border-box;
+  }
+
+  .stickyBuyBtn {
+    padding: 0 0.8rem;
+    font-size: 0.72rem;
+    height: 40px;
   }
 }
 

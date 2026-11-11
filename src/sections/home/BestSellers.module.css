@@ -2,6 +2,9 @@
   max-width: 1280px;
   margin: 5rem auto;
   padding: 0 1.5rem;
+  width: 100%;
+  box-sizing: border-box;
+  overflow-x: hidden;
 }
 
 .header {
@@ -108,7 +111,7 @@
   }
 
   .productsGrid {
-    grid-template-columns: repeat(2, 1fr) !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     gap: 10px !important;
   }
 
@@ -132,5 +135,22 @@
 @media (max-width: 380px) {
   .section {
     padding: 0 0.65rem;
+  }
+
+  .title {
+    font-size: clamp(1.45rem, 7.5vw, 1.85rem);
+  }
+
+  .seeMoreLink {
+    font-size: 0.74rem;
+    letter-spacing: 1px;
+  }
+
+  .productsGrid {
+    gap: 8px !important;
+  }
+
+  .productsGrid > :nth-child(3):last-child {
+    width: calc(50% - 4px);
   }
 }

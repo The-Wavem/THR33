@@ -8,6 +8,8 @@
   position: relative;
   min-width: 0;
   width: 100%;
+  box-sizing: border-box;
+  overflow: hidden;
 }
 
 .card:hover {
@@ -319,6 +321,9 @@
 
 .details {
   padding: 1.15rem;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
@@ -413,6 +418,9 @@
   display: inline-flex;
   align-items: baseline;
   gap: 0.35rem;
+  flex-wrap: wrap;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .maxPriceNotice {
@@ -501,5 +509,61 @@
 
   .overlayActions {
     display: none !important;
+  }
+
+  .maxPriceNotice {
+    font-size: 0.68rem;
+    letter-spacing: 0.02em;
+  }
+
+  .priceRangeGroup {
+    gap: 0.15rem 0.25rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .details {
+    padding: 0.55rem 0.45rem;
+    gap: 0.2rem;
+  }
+
+  .tagsRow {
+    font-size: 0.52rem;
+    letter-spacing: 0.5px;
+    gap: 0.2rem;
+  }
+
+  .topSellerMetaTag {
+    font-size: 0.5rem;
+    padding: 0.08rem 0.3rem;
+    letter-spacing: 0.4px;
+    gap: 0.15rem;
+  }
+
+  .productName {
+    font-size: 0.76rem;
+    min-height: 2.5em;
+  }
+
+  .regularPrice,
+  .price,
+  .promoPrice {
+    font-size: 0.74rem;
+  }
+
+  .maxPriceNotice {
+    font-size: 0.62rem;
+    letter-spacing: 0;
+  }
+
+  .priceRangeGroup {
+    gap: 0.1rem 0.2rem;
+  }
+
+  .favoriteBtn {
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    min-height: 32px;
   }
 }
